@@ -9,6 +9,11 @@ const PUBLIC_ROUTES = ['/login', '/reset-password', '/pricing']
 // (so users can always access billing to manage/subscribe)
 const SUBSCRIPTION_SKIP = ['/billing', '/pricing']
 
+// Plan slugs: 'trial' | 'rbt' | 'bcba_starter' | 'bcba_pro'
+// Client limits per plan are defined in lib/stripe.ts (PLAN_LIMITS).
+// Enforcement happens client-side when adding clients because client
+// profiles are stored in localStorage, which is inaccessible here.
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request: { headers: request.headers },
@@ -54,11 +59,13 @@ export async function middleware(request: NextRequest) {
   if (user && !isPublic && !SUBSCRIPTION_SKIP.some((r) => pathname === r || pathname.startsWith(r + '/'))) {
     const { data: sub } = await supabase
       .from('subscriptions')
-      .select('status, trial_ends_at')
+      .select('status, plan, trial_ends_at')
       .eq('user_id', user.id)
       .maybeSingle()
 
     const now = new Date()
+
+    // Valid plans: rbt, bcba_starter, bcba_pro (active), or trial period not yet expired
     const hasActiveSub =
       sub &&
       (sub.status === 'active' ||

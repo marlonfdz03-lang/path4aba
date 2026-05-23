@@ -62,7 +62,7 @@ function LoginContent() {
         await fetch("/api/create-trial", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: signUpData.user.id, plan: profession === "BCBA" || profession === "BCaBA" ? "bcba" : "rbt" }),
+          body: JSON.stringify({ userId: signUpData.user.id, plan: "trial" }),
         });
       }
       setLoading(false);

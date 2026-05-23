@@ -12,17 +12,27 @@ export function getStripe(): Stripe {
   return stripeInstance
 }
 
-// Create these products/prices in your Stripe Dashboard and add the price IDs
-// to .env.local and Vercel:
-//   STRIPE_PRICE_RBT_MONTHLY, STRIPE_PRICE_RBT_YEARLY
-//   STRIPE_PRICE_BCBA_MONTHLY, STRIPE_PRICE_BCBA_YEARLY
-export const PRICES = {
+export type PlanKey = 'rbt' | 'bcba_starter' | 'bcba_pro'
+
+// Max clients per plan. Enforcement happens client-side (clients stored in localStorage).
+export const PLAN_LIMITS: Record<PlanKey | 'trial', number> = {
+  trial: 3,
+  rbt: 3,
+  bcba_starter: 15,
+  bcba_pro: Infinity,
+}
+
+export const PRICES: Record<PlanKey, { month: string; year: string }> = {
   rbt: {
     month: process.env.STRIPE_PRICE_RBT_MONTHLY!,
     year: process.env.STRIPE_PRICE_RBT_YEARLY!,
   },
-  bcba: {
-    month: process.env.STRIPE_PRICE_BCBA_MONTHLY!,
-    year: process.env.STRIPE_PRICE_BCBA_YEARLY!,
+  bcba_starter: {
+    month: process.env.STRIPE_PRICE_BCBA_STARTER_MONTHLY!,
+    year: process.env.STRIPE_PRICE_BCBA_STARTER_YEARLY!,
   },
-} as const
+  bcba_pro: {
+    month: process.env.STRIPE_PRICE_BCBA_PRO_MONTHLY!,
+    year: process.env.STRIPE_PRICE_BCBA_PRO_YEARLY!,
+  },
+}

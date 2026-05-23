@@ -5,42 +5,75 @@ export const dynamic = "force-dynamic";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import type { PlanKey } from "@/lib/stripe";
 
 const CHECK_ICON = (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="20 6 9 17 4 12" />
   </svg>
 );
 
-const PLANS = [
+const SOON_BADGE = (
+  <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full" style={{ background: "rgba(27,168,160,0.15)", color: "var(--teal)" }}>
+    Soon
+  </span>
+);
+
+type Plan = {
+  key: PlanKey;
+  name: string;
+  subtitle: string;
+  monthlyPrice: number;
+  yearlyPrice: number;
+  highlighted?: boolean;
+  badge?: string;
+  features: Array<{ label: string; soon?: boolean }>;
+};
+
+const PLANS: Plan[] = [
   {
-    key: "rbt" as const,
+    key: "rbt",
     name: "RBT",
+    subtitle: "For Registered Behavior Technicians running daily sessions.",
     monthlyPrice: 14.99,
     yearlyPrice: 149,
-    description: "Built for Registered Behavior Technicians running daily sessions.",
     features: [
-      "Unlimited session note generation",
-      "Note refinement with AI",
-      "Up to 10 client profiles",
-      "Schedule tracker",
-      "14-day free trial",
+      { label: "Generate unlimited session notes" },
+      { label: "Up to 3 client profiles" },
+      { label: "Note refinement with AI" },
+      { label: "Schedule tracker" },
+      { label: "14-day free trial" },
     ],
   },
   {
-    key: "bcba" as const,
-    name: "BCBA / BCaBA",
+    key: "bcba_starter",
+    name: "BCBA / BCaBA Starter",
+    subtitle: "For analysts supervising a growing caseload.",
     monthlyPrice: 29.99,
     yearlyPrice: 299,
-    description: "Everything an analyst needs to supervise, plan, and document.",
-    features: [
-      "Everything in RBT",
-      "Unlimited client profiles",
-      "Assessment PDF upload & parsing",
-      "Priority support",
-      "14-day free trial",
-    ],
     highlighted: true,
+    badge: "Most Popular",
+    features: [
+      { label: "Everything in RBT" },
+      { label: "Up to 15 client profiles" },
+      { label: "Assessment PDF upload & parsing" },
+      { label: "Priority support" },
+      { label: "14-day free trial" },
+    ],
+  },
+  {
+    key: "bcba_pro",
+    name: "BCBA / BCaBA Pro",
+    subtitle: "For analysts running a full practice with no limits.",
+    monthlyPrice: 39.99,
+    yearlyPrice: 399,
+    features: [
+      { label: "Everything in Starter" },
+      { label: "Unlimited client profiles" },
+      { label: "Reassessment tools", soon: true },
+      { label: "Multi-RBT management", soon: true },
+      { label: "14-day free trial" },
+    ],
   },
 ];
 
@@ -49,13 +82,12 @@ export default function PricingPage() {
   const [interval, setInterval] = useState<"month" | "year">("month");
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
-  function yearlySavings(plan: (typeof PLANS)[number]) {
-    const monthlyCost = plan.monthlyPrice * 12;
-    return Math.round(monthlyCost - plan.yearlyPrice);
+  function yearlySavings(plan: Plan) {
+    return Math.round(plan.monthlyPrice * 12 - plan.yearlyPrice);
   }
 
-  async function handleStart(plan: "rbt" | "bcba") {
-    setLoadingPlan(plan);
+  async function handleStart(planKey: PlanKey) {
+    setLoadingPlan(planKey);
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -67,10 +99,10 @@ export default function PricingPage() {
       const res = await fetch("/api/stripe/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan, interval, userId: user.id }),
+        body: JSON.stringify({ plan: planKey, interval, userId: user.id }),
       });
       const { url, error } = await res.json();
-      if (error || !url) throw new Error(error || "No checkout URL returned");
+      if (error || !url) throw new Error(error || "No checkout URL");
       window.location.href = url;
     } catch (err) {
       console.error("Checkout error:", err);
@@ -107,9 +139,9 @@ export default function PricingPage() {
       </div>
 
       {/* Hero */}
-      <div className="text-center py-14 px-6">
+      <div className="text-center py-12 px-6">
         <p className="text-[12px] uppercase tracking-widest font-semibold mb-3" style={{ color: "var(--teal)" }}>Pricing</p>
-        <h1 className="text-[34px] font-semibold leading-tight mb-3" style={{ color: "var(--text1)" }}>
+        <h1 className="text-[32px] font-semibold leading-tight mb-3" style={{ color: "var(--text1)" }}>
           Simple, transparent pricing
         </h1>
         <p className="text-[15px] max-w-sm mx-auto" style={{ color: "var(--text3)" }}>
@@ -132,7 +164,10 @@ export default function PricingPage() {
               {iv === "year" && (
                 <span
                   className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-                  style={{ background: interval === "year" ? "rgba(255,255,255,0.2)" : "var(--teal-light)", color: interval === "year" ? "white" : "var(--teal)" }}
+                  style={{
+                    background: interval === "year" ? "rgba(255,255,255,0.2)" : "var(--teal-light)",
+                    color: interval === "year" ? "white" : "var(--teal)",
+                  }}
                 >
                   SAVE
                 </span>
@@ -142,73 +177,84 @@ export default function PricingPage() {
         </div>
       </div>
 
-      {/* Plan cards */}
-      <div className="flex flex-col sm:flex-row gap-6 justify-center px-6 pb-16 max-w-3xl mx-auto w-full">
+      {/* Plan cards — 3 up */}
+      <div className="flex flex-col lg:flex-row gap-5 justify-center px-6 pb-16 max-w-5xl mx-auto w-full">
         {PLANS.map((plan) => {
           const price = interval === "month" ? plan.monthlyPrice : plan.yearlyPrice;
           const savings = yearlySavings(plan);
-          const isHighlighted = plan.highlighted;
+          const isHighlighted = !!plan.highlighted;
           const loading = loadingPlan === plan.key;
 
           return (
             <div
               key={plan.key}
-              className="flex-1 rounded-2xl overflow-hidden flex flex-col"
+              className="flex-1 rounded-2xl overflow-hidden flex flex-col relative"
               style={{
                 background: isHighlighted ? "var(--navy)" : "white",
                 border: isHighlighted ? "none" : "1px solid var(--border)",
-                boxShadow: isHighlighted ? "0 20px 60px rgba(13,43,78,0.25)" : "0 1px 4px rgba(0,0,0,0.06)",
+                boxShadow: isHighlighted
+                  ? "0 20px 60px rgba(13,43,78,0.22)"
+                  : "0 1px 4px rgba(0,0,0,0.05)",
               }}
             >
               {/* Gradient top bar */}
               <div className="h-[3px]" style={{ background: "linear-gradient(90deg, var(--teal), var(--sky))" }} />
 
+              {/* Most Popular badge */}
+              {plan.badge && (
+                <div className="absolute top-5 right-5">
+                  <span
+                    className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full"
+                    style={{ background: "rgba(27,168,160,0.22)", color: "#24BDB4" }}
+                  >
+                    {plan.badge}
+                  </span>
+                </div>
+              )}
+
               <div className="p-7 flex flex-col flex-1">
-                {/* Plan name */}
                 <p
-                  className="text-[12px] uppercase tracking-widest font-semibold mb-1"
-                  style={{ color: isHighlighted ? "rgba(255,255,255,0.55)" : "var(--text3)" }}
+                  className="text-[11px] uppercase tracking-widest font-semibold mb-1"
+                  style={{ color: isHighlighted ? "rgba(255,255,255,0.5)" : "var(--text3)" }}
                 >
                   {plan.name}
                 </p>
                 <p
-                  className="text-[13.5px] mb-6"
-                  style={{ color: isHighlighted ? "rgba(255,255,255,0.7)" : "var(--text3)" }}
+                  className="text-[13px] mb-6 leading-relaxed"
+                  style={{ color: isHighlighted ? "rgba(255,255,255,0.65)" : "var(--text3)" }}
                 >
-                  {plan.description}
+                  {plan.subtitle}
                 </p>
 
                 {/* Price */}
-                <div className="mb-1 flex items-end gap-1">
+                <div className="flex items-end gap-1 mb-1">
                   <span
-                    className="text-[44px] font-semibold leading-none"
+                    className="text-[42px] font-semibold leading-none"
                     style={{ color: isHighlighted ? "white" : "var(--text1)" }}
                   >
                     ${price}
                   </span>
                   <span
                     className="text-[13px] mb-1.5"
-                    style={{ color: isHighlighted ? "rgba(255,255,255,0.5)" : "var(--text3)" }}
+                    style={{ color: isHighlighted ? "rgba(255,255,255,0.45)" : "var(--text3)" }}
                   >
                     /{interval === "month" ? "mo" : "yr"}
                   </span>
                 </div>
 
-                {interval === "year" && (
-                  <p
-                    className="text-[12px] font-medium mb-6"
-                    style={{ color: isHighlighted ? "rgba(27,168,160,0.9)" : "var(--teal)" }}
-                  >
-                    Save ${savings}/year vs monthly
-                  </p>
-                )}
-                {interval === "month" && <div className="mb-6" />}
+                <div className="mb-6 h-5">
+                  {interval === "year" && (
+                    <p className="text-[12px] font-medium" style={{ color: isHighlighted ? "rgba(27,168,160,0.9)" : "var(--teal)" }}>
+                      Save ${savings}/year vs monthly
+                    </p>
+                  )}
+                </div>
 
                 {/* CTA */}
                 <button
                   onClick={() => handleStart(plan.key)}
                   disabled={!!loadingPlan}
-                  className="w-full py-3 rounded-xl text-[14px] font-semibold transition-opacity hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed mb-6"
+                  className="w-full py-3 rounded-xl text-[14px] font-semibold transition-opacity hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed mb-3"
                   style={{
                     background: isHighlighted ? "var(--teal)" : "var(--navy)",
                     color: "white",
@@ -218,28 +264,27 @@ export default function PricingPage() {
                 </button>
 
                 <p
-                  className="text-[11.5px] text-center mb-6"
-                  style={{ color: isHighlighted ? "rgba(255,255,255,0.4)" : "var(--text3)" }}
+                  className="text-[11px] text-center mb-6"
+                  style={{ color: isHighlighted ? "rgba(255,255,255,0.35)" : "var(--text3)" }}
                 >
                   14 days free · No credit card required
                 </p>
 
-                {/* Divider */}
                 <div
-                  className="h-px mb-6"
+                  className="h-px mb-5"
                   style={{ background: isHighlighted ? "rgba(255,255,255,0.1)" : "var(--border)" }}
                 />
 
                 {/* Features */}
-                <ul className="space-y-3 flex-1">
+                <ul className="space-y-2.5 flex-1">
                   {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2.5">
+                    <li key={f.label} className="flex items-start gap-2.5">
                       <span style={{ color: "var(--teal)", flexShrink: 0, marginTop: 1 }}>{CHECK_ICON}</span>
                       <span
-                        className="text-[13.5px]"
+                        className="text-[13px]"
                         style={{ color: isHighlighted ? "rgba(255,255,255,0.75)" : "var(--text2)" }}
                       >
-                        {f}
+                        {f.label}{f.soon ? SOON_BADGE : null}
                       </span>
                     </li>
                   ))}
@@ -252,7 +297,7 @@ export default function PricingPage() {
 
       {/* Footer note */}
       <p className="text-center text-[12px] pb-12" style={{ color: "var(--text3)" }}>
-        Questions? Email{" "}
+        Questions?{" "}
         <a href="mailto:support@path4aba.com" className="hover:underline" style={{ color: "var(--teal)" }}>
           support@path4aba.com
         </a>

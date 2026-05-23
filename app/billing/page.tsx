@@ -17,7 +17,8 @@ type Sub = {
 const PLAN_LABELS: Record<string, string> = {
   trial: "Free Trial",
   rbt: "RBT Plan",
-  bcba: "BCBA / BCaBA Plan",
+  bcba_starter: "BCBA / BCaBA Starter",
+  bcba_pro: "BCBA / BCaBA Pro",
 };
 
 const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
