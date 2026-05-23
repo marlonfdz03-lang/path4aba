@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
@@ -282,17 +283,7 @@ function LoginContent() {
         <div className="relative z-10 text-center max-w-sm">
           {/* Logo */}
           <div className="flex items-center justify-center gap-3 mb-10">
-            <svg width="48" height="48" viewBox="0 0 36 36" fill="none">
-              <defs>
-                <linearGradient id="rp-grad" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="#1BA8A0"/><stop offset="1" stopColor="#4AB5E3"/>
-                </linearGradient>
-              </defs>
-              <rect width="36" height="36" rx="9" fill="url(#rp-grad)"/>
-              <path d="M18 27s-9-5.8-9-12.5A6 6 0 0 1 18 9.5a6 6 0 0 1 9 5c0 6.7-9 12.5-9 12.5z" fill="white" fillOpacity="0.9"/>
-              <circle cx="14.5" cy="16" r="1.8" fill="url(#rp-grad)"/>
-              <circle cx="21.5" cy="19" r="1.8" fill="url(#rp-grad)"/>
-            </svg>
+            <Image src="/logo.png" alt="Path4ABA" width={48} height={48} />
             <p className="text-[22px] font-semibold">
               <span className="text-white">Path</span>
               <span style={{ color: "#24BDB4" }}>4</span>

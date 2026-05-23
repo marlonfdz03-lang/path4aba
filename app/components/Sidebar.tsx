@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { signOut } from "@/lib/auth";
@@ -74,17 +75,7 @@ const IconChevronUp = () => (
 function Logo() {
   return (
     <div className="flex items-center gap-3 px-4 py-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-      <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-        <defs>
-          <linearGradient id="logo-grad" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#1BA8A0"/><stop offset="1" stopColor="#4AB5E3"/>
-          </linearGradient>
-        </defs>
-        <rect width="36" height="36" rx="9" fill="url(#logo-grad)"/>
-        <path d="M18 27s-9-5.8-9-12.5A6 6 0 0 1 18 9.5a6 6 0 0 1 9 5c0 6.7-9 12.5-9 12.5z" fill="white" fillOpacity="0.9"/>
-        <circle cx="14.5" cy="16" r="1.8" fill="url(#logo-grad)"/>
-        <circle cx="21.5" cy="19" r="1.8" fill="url(#logo-grad)"/>
-      </svg>
+      <Image src="/logo.png" alt="Path4ABA logo" width={36} height={36} style={{ borderRadius: "6px" }} />
       <div>
         <p className="text-[15px] font-semibold leading-none">
           <span className="text-white">Path</span>

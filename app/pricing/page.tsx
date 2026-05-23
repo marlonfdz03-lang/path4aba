@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import type { PlanKey } from "@/lib/stripe";
@@ -116,17 +117,7 @@ export default function PricingPage() {
       {/* Header */}
       <div className="flex items-center justify-between px-8 h-16 bg-white" style={{ borderBottom: "1px solid var(--border)" }}>
         <div className="flex items-center gap-2.5">
-          <svg width="32" height="32" viewBox="0 0 36 36" fill="none">
-            <defs>
-              <linearGradient id="p-grad" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
-                <stop stopColor="#1BA8A0" /><stop offset="1" stopColor="#4AB5E3" />
-              </linearGradient>
-            </defs>
-            <rect width="36" height="36" rx="9" fill="url(#p-grad)" />
-            <path d="M18 27s-9-5.8-9-12.5A6 6 0 0 1 18 9.5a6 6 0 0 1 9 5c0 6.7-9 12.5-9 12.5z" fill="white" fillOpacity="0.9" />
-            <circle cx="14.5" cy="16" r="1.8" fill="url(#p-grad)" />
-            <circle cx="21.5" cy="19" r="1.8" fill="url(#p-grad)" />
-          </svg>
+          <Image src="/logo.png" alt="Path4ABA" width={32} height={32} style={{ borderRadius: "6px" }} />
           <span className="text-[17px] font-semibold">
             <span style={{ color: "var(--text1)" }}>Path</span>
             <span style={{ color: "var(--teal)" }}>4</span>
