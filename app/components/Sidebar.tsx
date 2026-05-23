@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { signOut } from "@/lib/auth";
@@ -72,10 +71,26 @@ const IconChevronUp = () => (
 
 // ── Logo ─────────────────────────────────────────────────────────────────────
 
+const LogoIcon = () => (
+  <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 28C16 28 4 21 4 12.5C4 8.9 6.9 6 10.5 6C12.8 6 14.8 7.2 16 9C17.2 7.2 19.2 6 21.5 6C25.1 6 28 8.9 28 12.5C28 21 16 28 16 28Z" fill="url(#puzzleGrad)"/>
+    <path d="M16 6V28M4 17H28" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8"/>
+    <circle cx="16" cy="13" r="2" fill="rgba(255,255,255,0.6)"/>
+    <circle cx="11" cy="19" r="1.5" fill="rgba(255,255,255,0.4)"/>
+    <circle cx="21" cy="19" r="1.5" fill="rgba(255,255,255,0.4)"/>
+    <defs>
+      <linearGradient id="puzzleGrad" x1="4" y1="6" x2="28" y2="28">
+        <stop offset="0%" stopColor="#1BA8A0"/>
+        <stop offset="100%" stopColor="#4AB5E3"/>
+      </linearGradient>
+    </defs>
+  </svg>
+);
+
 function Logo() {
   return (
     <div className="flex items-center gap-3 px-4 py-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-      <Image src="/logo.png" alt="Path4ABA logo" width={36} height={36} style={{ borderRadius: "6px" }} unoptimized />
+      <LogoIcon />
       <div>
         <p className="text-[15px] font-semibold leading-none">
           <span className="text-white">Path</span>
