@@ -283,7 +283,7 @@ function LoginContent() {
         <div className="relative z-10 text-center max-w-sm">
           {/* Logo */}
           <div className="flex items-center justify-center gap-3 mb-10">
-            <Image src="/logo.png" alt="Path4ABA" width={48} height={48} />
+            <Image src="/logo.png" alt="Path4ABA" width={48} height={48} unoptimized />
             <p className="text-[22px] font-semibold">
               <span className="text-white">Path</span>
               <span style={{ color: "#24BDB4" }}>4</span>

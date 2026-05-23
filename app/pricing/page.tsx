@@ -117,7 +117,7 @@ export default function PricingPage() {
       {/* Header */}
       <div className="flex items-center justify-between px-8 h-16 bg-white" style={{ borderBottom: "1px solid var(--border)" }}>
         <div className="flex items-center gap-2.5">
-          <Image src="/logo.png" alt="Path4ABA" width={32} height={32} style={{ borderRadius: "6px" }} />
+          <Image src="/logo.png" alt="Path4ABA" width={32} height={32} style={{ borderRadius: "6px" }} unoptimized />
           <span className="text-[17px] font-semibold">
             <span style={{ color: "var(--text1)" }}>Path</span>
             <span style={{ color: "var(--teal)" }}>4</span>

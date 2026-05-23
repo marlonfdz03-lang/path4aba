@@ -75,7 +75,7 @@ const IconChevronUp = () => (
 function Logo() {
   return (
     <div className="flex items-center gap-3 px-4 py-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-      <Image src="/logo.png" alt="Path4ABA logo" width={36} height={36} style={{ borderRadius: "6px" }} />
+      <Image src="/logo.png" alt="Path4ABA logo" width={36} height={36} style={{ borderRadius: "6px" }} unoptimized />
       <div>
         <p className="text-[15px] font-semibold leading-none">
           <span className="text-white">Path</span>
