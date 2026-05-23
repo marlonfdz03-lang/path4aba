@@ -53,7 +53,7 @@ function LoginContent() {
       const { error: authError } = await signIn(email, password);
       setLoading(false);
       if (authError) { setError("Invalid email or password. Please try again."); return; }
-      router.push("/clients");
+      router.push("/dashboard");
 
     } else if (mode === "signup") {
       if (password !== confirmPassword) { setError("Passwords do not match."); setLoading(false); return; }

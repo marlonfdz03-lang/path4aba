@@ -78,8 +78,12 @@ export async function middleware(request: NextRequest) {
           new Date(sub.trial_ends_at) > now))
 
     if (!hasActiveSub) {
-      // No subscription yet → send to onboarding to pick a plan
-      return NextResponse.redirect(new URL('/onboarding', request.url))
+      if (!sub) {
+        // Never signed up for a plan → choose plan first (no payment)
+        return NextResponse.redirect(new URL('/onboarding', request.url))
+      }
+      // Trial expired or subscription canceled → show payment/upgrade screen
+      return NextResponse.redirect(new URL('/pricing', request.url))
     }
   }
 
