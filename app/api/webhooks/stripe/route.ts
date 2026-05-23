@@ -3,6 +3,9 @@ import { getStripe } from '@/lib/stripe'
 import { supabaseServer } from '@/lib/supabaseServer'
 import Stripe from 'stripe'
 
+// Required so Next.js doesn't cache this route or pre-read the body
+export const dynamic = 'force-dynamic'
+
 function mapStripeStatus(status: string): 'active' | 'trialing' | 'canceled' | 'expired' {
   if (status === 'active') return 'active'
   if (status === 'trialing') return 'trialing'
