@@ -52,6 +52,32 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
+  const [promoInput, setPromoInput] = useState("");
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoApplied, setPromoApplied] = useState(false);
+  const [promoError, setPromoError] = useState("");
+
+  async function handleApplyPromo() {
+    if (!promoInput.trim()) return;
+    setPromoLoading(true);
+    setPromoError("");
+    setPromoApplied(false);
+
+    const res = await fetch("/api/validate-promo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: promoInput }),
+    });
+    const { valid, error } = await res.json();
+    setPromoLoading(false);
+
+    if (valid) {
+      setPromoApplied(true);
+    } else {
+      setPromoError(error || "Invalid promo code");
+    }
+  }
+
   async function handleSelectPlan(planKey: string) {
     setLoadingPlan(planKey);
 
@@ -61,7 +87,11 @@ export default function OnboardingPage() {
     await fetch("/api/create-trial", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: user.id, plan: planKey }),
+      body: JSON.stringify({
+        userId: user.id,
+        plan: planKey,
+        promoCode: promoApplied ? promoInput.toUpperCase().trim() : undefined,
+      }),
     });
 
     router.push("/dashboard");
@@ -91,7 +121,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* Plan cards */}
-      <div className="flex flex-col lg:flex-row gap-5 justify-center px-6 pb-16 max-w-5xl mx-auto w-full">
+      <div className="flex flex-col lg:flex-row gap-5 justify-center px-6 pb-8 max-w-5xl mx-auto w-full">
         {PLANS.map((plan) => {
           const isHighlighted = !!plan.highlighted;
           const loading = loadingPlan === plan.key;
@@ -126,7 +156,11 @@ export default function OnboardingPage() {
 
                 <p className="text-[28px] font-semibold mb-1" style={{ color: isHighlighted ? "white" : "var(--text1)" }}>
                   {plan.price}
+                  {promoApplied && <span className="text-[16px] ml-2 line-through opacity-50">${plan.price}</span>}
                 </p>
+                {promoApplied && (
+                  <p className="text-[13px] font-medium mb-1" style={{ color: "#1BA8A0" }}>$5 off your first month</p>
+                )}
                 <p className="text-[12px] mb-6" style={{ color: isHighlighted ? "rgba(255,255,255,0.4)" : "var(--text3)" }}>
                   after free trial
                 </p>
@@ -158,6 +192,48 @@ export default function OnboardingPage() {
             </div>
           );
         })}
+      </div>
+
+      {/* Promo code */}
+      <div className="flex justify-center pb-16 px-6">
+        <div className="w-full max-w-sm">
+          <p className="text-[13px] font-medium mb-2 text-center" style={{ color: "var(--text3)" }}>Have a promo code?</p>
+
+          {promoApplied ? (
+            <div className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-[13px] font-semibold" style={{ background: "#E6F9F5", border: "1px solid #A7F3D0", color: "#065F46" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Code applied! $5 off your first month
+            </div>
+          ) : (
+            <>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={promoInput}
+                  onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromoError(""); }}
+                  placeholder="e.g. PATH5"
+                  className="flex-1 border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 transition-colors uppercase"
+                  style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleApplyPromo(); } }}
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyPromo}
+                  disabled={promoLoading || !promoInput.trim()}
+                  className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  style={{ background: "var(--navy)" }}
+                >
+                  {promoLoading ? "…" : "Apply"}
+                </button>
+              </div>
+              {promoError && (
+                <p className="text-[12px] mt-2 text-center" style={{ color: "#DC2626" }}>{promoError}</p>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

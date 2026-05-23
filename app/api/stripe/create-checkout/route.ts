@@ -3,7 +3,7 @@ import { getStripe, PRICES } from '@/lib/stripe'
 import { supabaseServer } from '@/lib/supabaseServer'
 
 export async function POST(request: Request) {
-  const { plan, interval, userId } = await request.json()
+  const { plan, interval, userId, promoCode } = await request.json()
 
   if (!plan || !interval || !userId) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
 
   const origin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
-  const session = await getStripe().checkout.sessions.create({
+  const sessionParams: Parameters<ReturnType<typeof getStripe>['checkout']['sessions']['create']>[0] = {
     customer: customerId,
     mode: 'subscription',
     payment_method_types: ['card'],
@@ -42,8 +42,15 @@ export async function POST(request: Request) {
     subscription_data: { trial_period_days: 14 },
     success_url: `${origin}/dashboard?subscription=success`,
     cancel_url: `${origin}/pricing`,
-    metadata: { userId, plan },
-  })
+    metadata: { userId, plan, promoCode: promoCode || '' },
+  }
+
+  // Apply promo coupon if provided and env var is set
+  if (promoCode && process.env.STRIPE_PROMO_COUPON_ID) {
+    sessionParams.discounts = [{ coupon: process.env.STRIPE_PROMO_COUPON_ID }]
+  }
+
+  const session = await getStripe().checkout.sessions.create(sessionParams)
 
   return NextResponse.json({ url: session.url })
 }

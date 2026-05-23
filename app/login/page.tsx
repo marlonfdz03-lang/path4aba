@@ -67,7 +67,15 @@ function LoginContent() {
         } 
       });
       
-      if (authError) { setLoading(false); setError(authError.message); return; }
+      if (authError) {
+        setLoading(false);
+        if (authError.message.toLowerCase().includes("already registered") || authError.message.toLowerCase().includes("already exists")) {
+          setError("__duplicate__");
+        } else {
+          setError(authError.message);
+        }
+        return;
+      }
       if (signUpData.user) {
         localStorage.setItem("signup_email", email);
         setLoading(false);
@@ -192,10 +200,18 @@ function LoginContent() {
                 {redirectMessage}
               </p>
             )}
-            {error && (
+            {error && error !== "__duplicate__" && (
               <p className="text-[13px] rounded-xl px-4 py-3 border" style={{ background: "#FEF2F2", borderColor: "#FECACA", color: "#DC2626" }}>
                 {error}
               </p>
+            )}
+            {error === "__duplicate__" && (
+              <div className="text-[13px] rounded-xl px-4 py-3 border" style={{ background: "#FEF2F2", borderColor: "#FECACA", color: "#DC2626" }}>
+                An account with this email already exists.{" "}
+                <button type="button" onClick={() => switchMode("signin")} className="font-semibold underline hover:opacity-80">
+                  Sign in instead
+                </button>
+              </div>
             )}
             {success && (
               <p className="text-[13px] rounded-xl px-4 py-3 border" style={{ background: "#F0FDF4", borderColor: "#BBF7D0", color: "#15803D" }}>
