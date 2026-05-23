@@ -281,7 +281,11 @@ function LoginContent() {
 
         <div className="relative z-10 text-center max-w-sm">
           {/* Logo */}
-          <img src="/logo.png" alt="Path4ABA" style={{ width: "220px", marginBottom: "24px" }} />
+          <div style={{ textAlign: "center", marginBottom: "24px" }}>
+            <span style={{ fontSize: "32px", fontWeight: "700", color: "#ffffff", letterSpacing: "-0.5px" }}>
+              Path<span style={{ color: "#1BA8A0" }}>4</span>ABA
+            </span>
+          </div>
 
           {/* Tagline */}
           <h2 className="text-[26px] font-semibold leading-snug mb-4 text-white">
