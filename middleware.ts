@@ -3,11 +3,10 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 // Routes that don't require auth
-const PUBLIC_ROUTES = ['/login', '/reset-password', '/pricing']
+const PUBLIC_ROUTES = ['/login', '/verify-email', '/reset-password', '/pricing']
 
 // Routes that require auth but skip the subscription check
-// (so users can always access billing to manage/subscribe)
-const SUBSCRIPTION_SKIP = ['/billing', '/pricing']
+const SUBSCRIPTION_SKIP = ['/billing', '/pricing', '/onboarding']
 
 // Plan slugs: 'trial' | 'rbt' | 'bcba_starter' | 'bcba_pro'
 // Client limits per plan are defined in lib/stripe.ts (PLAN_LIMITS).
@@ -50,13 +49,19 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // 2. Authenticated + on login → send to clients
+  // 2. Authenticated + on login → send to dashboard
   if (user && pathname === '/login') {
-    return NextResponse.redirect(new URL('/clients', request.url))
+    return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
   // 3. Authenticated + not a skip route → check subscription
-  if (user && !isPublic && !SUBSCRIPTION_SKIP.some((r) => pathname === r || pathname.startsWith(r + '/'))) {
+  const isSubscriptionSkip = SUBSCRIPTION_SKIP.some((r) => pathname === r || pathname.startsWith(r + '/'))
+
+  // Grace period: if redirected back from Stripe with ?subscription=success,
+  // allow through so the success banner shows while the webhook updates the DB.
+  const isPostPayment = request.nextUrl.searchParams.get('subscription') === 'success'
+
+  if (user && !isPublic && !isSubscriptionSkip && !isPostPayment) {
     const { data: sub } = await supabase
       .from('subscriptions')
       .select('status, plan, trial_ends_at')
@@ -65,7 +70,6 @@ export async function middleware(request: NextRequest) {
 
     const now = new Date()
 
-    // Valid plans: rbt, bcba_starter, bcba_pro (active), or trial period not yet expired
     const hasActiveSub =
       sub &&
       (sub.status === 'active' ||
@@ -74,7 +78,8 @@ export async function middleware(request: NextRequest) {
           new Date(sub.trial_ends_at) > now))
 
     if (!hasActiveSub) {
-      return NextResponse.redirect(new URL('/pricing', request.url))
+      // No subscription yet → send to onboarding to pick a plan
+      return NextResponse.redirect(new URL('/onboarding', request.url))
     }
   }
 

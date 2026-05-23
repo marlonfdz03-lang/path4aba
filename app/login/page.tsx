@@ -24,7 +24,8 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectMessage = searchParams.get("message");
-  const [mode, setMode] = useState<Mode>("signin");
+  const initialMode = (searchParams.get("mode") as Mode) || "signin";
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -56,23 +57,31 @@ function LoginContent() {
 
     } else if (mode === "signup") {
       if (password !== confirmPassword) { setError("Passwords do not match."); setLoading(false); return; }
-      const { data: signUpData, error: authError } = await supabase.auth.signUp({ email, password, options: { data: { profession } } });
+      
+      // Sign up with password
+      const { data: signUpData, error: authError } = await supabase.auth.signUp({ 
+        email, 
+        password, 
+        options: { 
+          data: { profession },
+        } 
+      });
+      
       if (authError) { setLoading(false); setError(authError.message); return; }
       if (signUpData.user) {
-        await fetch("/api/create-trial", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: signUpData.user.id, plan: "trial" }),
-        });
+        localStorage.setItem("signup_email", email);
+        setLoading(false);
+        setSuccess("✅ Account created! Check your email for a verification code.");
+        setTimeout(() => { router.push("/verify-email"); }, 500);
+        return;
       }
       setLoading(false);
-      setSuccess("Check your email to confirm your account before signing in.");
 
     } else {
-      const { error: authError } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + "/reset-password" });
+      const { error: authError } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/reset-password` });
       setLoading(false);
       if (authError) { setError(authError.message); return; }
-      setSuccess("Check your email for a password reset link.");
+      setSuccess("✅ Check your email for a password reset link. (Check spam folder if you don't see it)");
     }
   }
 

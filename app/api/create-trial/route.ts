@@ -9,12 +9,12 @@ export async function POST(request: Request) {
 
   const { error } = await supabaseServer
     .from('subscriptions')
-    .insert({
+    .upsert({
       user_id: userId,
       plan: plan || 'trial',
       status: 'trialing',
       trial_ends_at: trialEndsAt,
-    })
+    }, { onConflict: 'user_id' })
 
   if (error) console.error('Trial creation error:', error)
 

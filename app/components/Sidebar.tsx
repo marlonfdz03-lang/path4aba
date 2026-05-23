@@ -168,7 +168,7 @@ export default function Sidebar() {
     });
   }, []);
 
-  if (pathname === "/login" || pathname === "/pricing") return null;
+  if (pathname === "/login" || pathname === "/pricing" || pathname === "/onboarding") return null;
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
