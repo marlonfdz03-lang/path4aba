@@ -281,26 +281,7 @@ function LoginContent() {
 
         <div className="relative z-10 text-center max-w-sm">
           {/* Logo */}
-          <div className="flex items-center justify-center gap-3 mb-10">
-            <svg width="48" height="48" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M16 28C16 28 4 21 4 12.5C4 8.9 6.9 6 10.5 6C12.8 6 14.8 7.2 16 9C17.2 7.2 19.2 6 21.5 6C25.1 6 28 8.9 28 12.5C28 21 16 28 16 28Z" fill="url(#loginPuzzleGrad)"/>
-              <path d="M16 6V28M4 17H28" stroke="rgba(255,255,255,0.4)" strokeWidth="0.8"/>
-              <circle cx="16" cy="13" r="2" fill="rgba(255,255,255,0.6)"/>
-              <circle cx="11" cy="19" r="1.5" fill="rgba(255,255,255,0.4)"/>
-              <circle cx="21" cy="19" r="1.5" fill="rgba(255,255,255,0.4)"/>
-              <defs>
-                <linearGradient id="loginPuzzleGrad" x1="4" y1="6" x2="28" y2="28">
-                  <stop offset="0%" stopColor="#1BA8A0"/>
-                  <stop offset="100%" stopColor="#4AB5E3"/>
-                </linearGradient>
-              </defs>
-            </svg>
-            <p className="text-[22px] font-semibold">
-              <span className="text-white">Path</span>
-              <span style={{ color: "#24BDB4" }}>4</span>
-              <span className="text-white">ABA</span>
-            </p>
-          </div>
+          <img src="/logo.png" alt="Path4ABA" style={{ width: "220px", marginBottom: "24px" }} />
 
           {/* Tagline */}
           <h2 className="text-[26px] font-semibold leading-snug mb-4 text-white">
