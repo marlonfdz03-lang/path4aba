@@ -105,21 +105,20 @@ export default function OnboardingPage() {
       ]);
 
       const data = await (res as Response).json();
-      if (!data.ok) {
+      if (!data.url) {
         setPlanError(data.error || "Something went wrong, please try again.");
         setLoadingPlan(null);
         return;
       }
+      // Redirect to Stripe Checkout — card collected but not charged until day 15
+      window.location.href = data.url;
     } catch (err) {
       const msg = err instanceof Error && err.message === "timeout"
         ? "Something went wrong, please try again."
         : "Network error, please try again.";
       setPlanError(msg);
       setLoadingPlan(null);
-      return;
     }
-
-    window.location.href = "/dashboard";
   }
 
   return (
@@ -204,11 +203,11 @@ export default function OnboardingPage() {
                   className="w-full py-3 rounded-xl text-[14px] font-semibold transition-opacity hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed mb-3"
                   style={{ background: isHighlighted ? "var(--teal)" : "var(--navy)", color: "white" }}
                 >
-                  {loading ? "Starting trial…" : "Start Free Trial"}
+                  {loading ? "Redirecting to checkout…" : "Start Free Trial"}
                 </button>
 
                 <p className="text-[11px] text-center mb-6" style={{ color: isHighlighted ? "rgba(255,255,255,0.35)" : "var(--text3)" }}>
-                  14 days free · No credit card required
+                  Your card will not be charged until your 14-day trial ends. Cancel anytime before day 15.
                 </p>
 
                 <div className="h-px mb-5" style={{ background: isHighlighted ? "rgba(255,255,255,0.1)" : "var(--border)" }} />

@@ -57,9 +57,11 @@ export async function middleware(request: NextRequest) {
   // 3. Authenticated + not a skip route → check subscription
   const isSubscriptionSkip = SUBSCRIPTION_SKIP.some((r) => pathname === r || pathname.startsWith(r + '/'))
 
-  // Grace period: if redirected back from Stripe with ?subscription=success,
-  // allow through so the success banner shows while the webhook updates the DB.
-  const isPostPayment = request.nextUrl.searchParams.get('subscription') === 'success'
+  // Grace period: allow through immediately after Stripe redirects back so the
+  // webhook has time to update the DB before the next middleware check.
+  const isPostPayment =
+    request.nextUrl.searchParams.get('subscription') === 'success' ||
+    request.nextUrl.searchParams.get('trial') === 'started'
 
   if (user && !isPublic && !isSubscriptionSkip && !isPostPayment) {
     const { data: sub } = await supabase
