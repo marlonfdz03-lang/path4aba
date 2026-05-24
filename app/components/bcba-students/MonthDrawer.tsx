@@ -88,6 +88,7 @@ export default function MonthDrawer({ monthYear, summary: initialSummary, fieldw
   const [loading, setLoading] = useState(true);
   const [signingMvf, setSigningMvf] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingSummary, setDownloadingSummary] = useState(false);
   const [downloadingSupervisionId, setDownloadingSupervisionId] = useState<string | null>(null);
   const [recalculating, setRecalculating] = useState(false);
 
@@ -134,6 +135,26 @@ export default function MonthDrawer({ monthYear, summary: initialSummary, fieldw
     await fetch(`/api/bcba-students/monthly/${monthYear}/mvf`, { method: "POST" });
     setSigningMvf(false);
     onMvfSigned();
+  }
+
+  async function handleDownloadSummary() {
+    setDownloadingSummary(true);
+    try {
+      const res = await fetch(`/api/bcba-students/monthly/${monthYear}/summary-pdf`);
+      if (!res.ok) throw new Error("PDF generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const safeName = traineeName.replace(/\s+/g, "-") || "Trainee";
+      a.download = `Monthly-Summary-${monthYear}-${safeName}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Monthly summary PDF failed:", e);
+    } finally {
+      setDownloadingSummary(false);
+    }
   }
 
   async function handleRecalculate() {
@@ -258,7 +279,8 @@ export default function MonthDrawer({ monthYear, summary: initialSummary, fieldw
         independentHoursOnDate,
         totalMonthHours: summary?.total_hours ?? 0,
       });
-      const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
+      const buf = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;
+          const blob = new Blob([buf], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -293,7 +315,8 @@ export default function MonthDrawer({ monthYear, summary: initialSummary, fieldw
         supervisionPct: summary.supervision_pct,
         isEligible: summary.is_eligible,
       });
-      const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
+      const buf = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;
+          const blob = new Blob([buf], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -339,6 +362,14 @@ export default function MonthDrawer({ monthYear, summary: initialSummary, fieldw
         <div className="flex items-center justify-between px-6 py-4 flex-shrink-0" style={{ borderBottom: "1px solid var(--border)" }}>
           <p className="text-[15px] font-semibold" style={{ color: "var(--text1)" }}>{monthLabel}</p>
           <div className="flex items-center gap-3">
+            <button
+              onClick={handleDownloadSummary}
+              disabled={downloadingSummary}
+              className="text-[12px] font-medium hover:opacity-80 disabled:opacity-40"
+              style={{ color: "var(--teal)" }}
+            >
+              {downloadingSummary ? "Generating…" : "Monthly Summary"}
+            </button>
             <button
               onClick={handleDownloadMvf}
               disabled={downloadingPdf || !summary || !profile}

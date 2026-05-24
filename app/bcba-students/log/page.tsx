@@ -91,7 +91,8 @@ export default function LogSessionPage() {
     try {
       const { generateSupervisionPdf } = await import("@/lib/bcba-students/generateSupervisionPdf");
       const pdfBytes = await generateSupervisionPdf(pdfData);
-      const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
+      const buf = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;
+      const blob = new Blob([buf], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
