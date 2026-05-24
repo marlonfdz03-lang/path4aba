@@ -94,6 +94,14 @@ export default function UploadAssessment() {
       return;
     }
 
+    const normalizeSetting = (setting: string): string => {
+      const s = (setting || '').toLowerCase();
+      if (s.includes('school')) return 'School';
+      if (s.includes('clinic')) return 'Clinic';
+      if (s.includes('community')) return 'Community';
+      return 'Home';
+    };
+
     const clientData = {
       id: newClient.id,
       created_by: user.id,
@@ -101,7 +109,7 @@ export default function UploadAssessment() {
       agency_id: '20000000-0000-0000-0000-000000000000',
       internal_code: newClient.id,
       diagnosis: [],
-      primary_setting: 'Home',
+      primary_setting: normalizeSetting(newClient.clinicalProfile?.primarySetting),
       clinical_profile: { name: newClient.clientName, ...newClient.clinicalProfile },
       active_behaviors: [],
     };
