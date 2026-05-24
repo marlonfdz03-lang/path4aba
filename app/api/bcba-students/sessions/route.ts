@@ -6,6 +6,16 @@ import { recalculateMonth } from '@/lib/bcba-students/recalculate-month'
 
 export const dynamic = 'force-dynamic'
 
+function timeToMins(t: string): number {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + m
+}
+
+function fmt12(t: string): string {
+  const [h, m] = t.split(':').map(Number)
+  return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
+}
+
 async function getUser() {
   const cookieStore = await cookies()
   const supabase = createServerClient(
@@ -78,6 +88,23 @@ export async function POST(req: Request) {
     return NextResponse.json({
       error: `This session would bring your total for ${monthLabel} to ${(currentMonthTotal + total).toFixed(2)} hours, exceeding the BACB maximum of 130 hours per month. You can log a maximum of ${remaining.toFixed(2)} more hours this month.`
     }, { status: 400 })
+  }
+
+  // Overlap check — no two sessions on the same date can share any time
+  const { data: daySessions } = await supabaseServer
+    .from('fieldwork_sessions')
+    .select('start_time, end_time')
+    .eq('user_id', user.id)
+    .eq('session_date', body.session_date)
+
+  const newStartMins = timeToMins(body.start_time as string)
+  const newEndMins   = timeToMins(body.end_time as string)
+  for (const s of (daySessions || [])) {
+    if (newStartMins < timeToMins(s.end_time) && newEndMins > timeToMins(s.start_time)) {
+      return NextResponse.json({
+        error: `This session overlaps with an existing session on this date (${fmt12(s.start_time)} – ${fmt12(s.end_time)}). Please adjust your times.`
+      }, { status: 400 })
+    }
   }
 
   const { data, error } = await supabaseServer

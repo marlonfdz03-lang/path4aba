@@ -32,6 +32,16 @@ function toDecimalHours(start: string, end: string): number {
   return Math.max(0, Math.round((mins / 60) * 100) / 100);
 }
 
+function toMins(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function fmt12(t: string): string {
+  const [h, m] = t.split(":").map(Number);
+  return `${h % 12 || 12}:${m.toString().padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+}
+
 export default function LogSessionForm({ fieldworkType, defaultSupervisorName = "", onSaved }: Props) {
   const today = new Date().toISOString().slice(0, 10);
 
@@ -49,6 +59,7 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
   const [warnings, setWarnings] = useState<string[]>([]);
   const [dailyHoursLogged, setDailyHoursLogged] = useState(0);
   const [monthlyHoursLogged, setMonthlyHoursLogged] = useState(0);
+  const [sessionsOnDate, setSessionsOnDate] = useState<Array<{ start_time: string; end_time: string }>>([]);
 
   const totalHours = toDecimalHours(startTime, endTime);
   const isSupervised = contactType !== "none";
@@ -62,13 +73,13 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
     fetch(`/api/bcba-students/sessions?monthYear=${monthYear}`)
       .then(r => r.json())
       .then(d => {
-        const sessions: Array<{ session_date: string; total_hours: number }> = d.sessions || [];
-        const dayTotal = sessions
-          .filter(s => s.session_date === date)
-          .reduce((sum, s) => sum + (s.total_hours || 0), 0);
+        const sessions: Array<{ session_date: string; start_time: string; end_time: string; total_hours: number }> = d.sessions || [];
+        const daySessions = sessions.filter(s => s.session_date === date);
+        const dayTotal = daySessions.reduce((sum, s) => sum + (s.total_hours || 0), 0);
         const monthTotal = sessions.reduce((sum, s) => sum + (s.total_hours || 0), 0);
         setDailyHoursLogged(Math.round(dayTotal * 100) / 100);
         setMonthlyHoursLogged(Math.round(monthTotal * 100) / 100);
+        setSessionsOnDate(daySessions);
       })
       .catch(() => {});
   }, [date]);
@@ -88,8 +99,18 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
         `You can log a maximum of ${remaining.toFixed(2)} more hours this month.`
       );
     }
+    if (startTime && endTime && totalHours > 0) {
+      const newStart = toMins(startTime);
+      const newEnd = toMins(endTime);
+      for (const s of sessionsOnDate) {
+        if (newStart < toMins(s.end_time) && newEnd > toMins(s.start_time)) {
+          w.push(`This session overlaps with an existing session on this date (${fmt12(s.start_time)} – ${fmt12(s.end_time)}). Please adjust your times.`);
+          break;
+        }
+      }
+    }
     setWarnings(w);
-  }, [activityType, totalHours, fieldworkType, monthlyHoursLogged, date]);
+  }, [activityType, totalHours, fieldworkType, monthlyHoursLogged, date, startTime, endTime, sessionsOnDate]);
 
   async function handleSave() {
     // Midnight crossing / same-time check
@@ -98,6 +119,16 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
     if (eh * 60 + em <= sh * 60 + sm) {
       setError("Sessions cannot cross midnight. A session must start and end within the same day (12:00 AM – 11:59 PM).");
       return;
+    }
+
+    // Overlap check
+    const newStart = toMins(startTime);
+    const newEnd = toMins(endTime);
+    for (const s of sessionsOnDate) {
+      if (newStart < toMins(s.end_time) && newEnd > toMins(s.start_time)) {
+        setError(`This session overlaps with an existing session on this date (${fmt12(s.start_time)} – ${fmt12(s.end_time)}). Please adjust your times.`);
+        return;
+      }
     }
 
     // Monthly 130-hour BACB limit check
