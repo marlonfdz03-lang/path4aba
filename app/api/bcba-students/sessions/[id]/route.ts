@@ -73,14 +73,20 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  const indep = Number(body.independent_hours ?? 0)
+  const sup = Number(body.supervised_hours ?? 0)
+  const newMonthYear = (body.session_date as string).slice(0, 7)
+
   const { data, error } = await supabaseServer
     .from('fieldwork_sessions')
     .update({
       session_date: body.session_date,
+      month_year: newMonthYear,
       start_time: body.start_time,
       end_time: body.end_time,
-      independent_hours: body.independent_hours,
-      supervised_hours: body.supervised_hours,
+      independent_hours: indep,
+      supervised_hours: sup,
+      total_hours: indep + sup,
       activity_type: body.activity_type,
       contact_type: body.contact_type,
       setting: body.setting ?? null,
@@ -94,12 +100,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const monthYear = (body.session_date as string).slice(0, 7)
-  await recalculateMonth(user.id, monthYear).catch(err => console.error('[sessions/put] recalculate error:', err))
+  await recalculateMonth(user.id, newMonthYear).catch(err => console.error('[sessions/put] recalculate error:', err))
 
   // If the session moved to a different month, recalculate the old month too
   const oldMonthYear = existing.month_year || existing.session_date.slice(0, 7)
-  if (oldMonthYear !== monthYear) {
+  if (oldMonthYear !== newMonthYear) {
     await recalculateMonth(user.id, oldMonthYear).catch(err => console.error('[sessions/put] old-month recalculate error:', err))
   }
 

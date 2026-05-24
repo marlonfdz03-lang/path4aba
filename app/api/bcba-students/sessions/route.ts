@@ -58,15 +58,22 @@ export async function POST(req: Request) {
     if (!body[f]) return NextResponse.json({ error: `Missing ${f}` }, { status: 400 })
   }
 
+  const monthYear = (body.session_date as string).slice(0, 7)
+  const indep = Number(body.independent_hours ?? 0)
+  const sup = Number(body.supervised_hours ?? 0)
+  const total = indep + sup
+
   const { data, error } = await supabaseServer
     .from('fieldwork_sessions')
     .insert({
       user_id: user.id,
       session_date: body.session_date,
+      month_year: monthYear,
       start_time: body.start_time,
       end_time: body.end_time,
-      independent_hours: body.independent_hours ?? 0,
-      supervised_hours: body.supervised_hours ?? 0,
+      independent_hours: indep,
+      supervised_hours: sup,
+      total_hours: total,
       activity_type: body.activity_type,
       contact_type: body.contact_type ?? 'none',
       setting: body.setting ?? null,
@@ -81,8 +88,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  console.log(`[sessions] inserted session for user=${user.id} month=${monthYear} indep=${indep} sup=${sup} total=${total}`)
+
   // Recalculate monthly summary — awaited so the summary is fresh before the response returns
-  const monthYear = (body.session_date as string).slice(0, 7)
   await recalculateMonth(user.id, monthYear).catch(err => console.error('[sessions] recalculate error:', err))
 
   return NextResponse.json({ session: data })

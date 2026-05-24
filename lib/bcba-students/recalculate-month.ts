@@ -29,6 +29,8 @@ export async function recalculateMonth(userId: string, monthYear: string): Promi
     return
   }
 
+  console.log(`[recalculate-month] user=${userId} month=${monthYear} found ${sessions?.length ?? 0} sessions:`, JSON.stringify(sessions?.map(s => ({ id: s.id, indep: s.independent_hours, sup: s.supervised_hours, total: s.total_hours }))))
+
   // Fetch fieldwork type from profile
   const { data: profile } = await supabase
     .from('fieldwork_profiles')
@@ -73,11 +75,15 @@ export async function recalculateMonth(userId: string, monthYear: string): Promi
     mvf_signed_at: existing?.mvf_signed_at ?? null,
   }
 
+  console.log(`[recalculate-month] upserting summary for month=${monthYear}: total_hours=${upsertData.total_hours} indep=${upsertData.total_independent_hours} sup=${upsertData.total_supervised_hours} eligible=${upsertData.is_eligible}`)
+
   const { error: upsertErr } = await supabase
     .from('fieldwork_monthly_summaries')
     .upsert(upsertData, { onConflict: 'user_id,month_year' })
 
   if (upsertErr) {
     console.error('[recalculate-month] upsert error:', upsertErr)
+  } else {
+    console.log(`[recalculate-month] upsert OK for month=${monthYear}`)
   }
 }

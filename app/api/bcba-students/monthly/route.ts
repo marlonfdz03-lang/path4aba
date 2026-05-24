@@ -33,7 +33,7 @@ export async function GET() {
 
   if (sessErr) return NextResponse.json({ error: sessErr.message }, { status: 500 })
 
-  const monthsWithSessions = [...new Set((sessionMonths || []).map(r => r.month_year as string))]
+  const monthsWithSessions = [...new Set((sessionMonths || []).map(r => r.month_year as string).filter(Boolean))]
 
   if (monthsWithSessions.length === 0) {
     return NextResponse.json({ summaries: [] })
