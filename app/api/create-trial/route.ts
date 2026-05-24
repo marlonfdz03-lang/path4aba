@@ -49,8 +49,16 @@ export async function POST(request: Request) {
     console.log('[create-trial] Created Stripe customer:', customerId)
   }
 
-  const origin = process.env.NEXT_PUBLIC_APP_URL
-    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+  const FALLBACK = 'https://path4aba-git-main-marlonfdz03-langs-projects.vercel.app'
+  const successUrl = process.env.NEXT_PUBLIC_APP_URL
+    ? `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?trial=started`
+    : `${FALLBACK}/dashboard?trial=started`
+  const cancelUrl = process.env.NEXT_PUBLIC_APP_URL
+    ? `${process.env.NEXT_PUBLIC_APP_URL}/onboarding`
+    : `${FALLBACK}/onboarding`
+
+  console.log('[create-trial] APP URL env:', process.env.NEXT_PUBLIC_APP_URL)
+  console.log('[create-trial] Success URL:', successUrl)
 
   const sessionParams: Parameters<ReturnType<typeof getStripe>['checkout']['sessions']['create']>[0] = {
     customer: customerId,
@@ -59,8 +67,8 @@ export async function POST(request: Request) {
     payment_method_collection: 'always',
     line_items: [{ price: priceId, quantity: 1 }],
     subscription_data: { trial_period_days: 7 },
-    success_url: `${origin}/dashboard?trial=started`,
-    cancel_url: `${origin}/onboarding`,
+    success_url: successUrl,
+    cancel_url: cancelUrl,
     metadata: { userId, plan, promoCode: promoCode || '' },
   }
 
