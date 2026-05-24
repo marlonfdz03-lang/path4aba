@@ -58,13 +58,15 @@ function LoginContent() {
     } else if (mode === "signup") {
       if (password !== confirmPassword) { setError("Passwords do not match."); setLoading(false); return; }
       
-      // Sign up with password
-      const { data: signUpData, error: authError } = await supabase.auth.signUp({ 
-        email, 
-        password, 
-        options: { 
+      // NOTE: Supabase Dashboard must be configured to send OTP codes, not magic links.
+      // Authentication → Providers → Email → disable "Confirm email" link, enable OTP (6-digit code).
+      const { data: signUpData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: undefined, // disable magic link — forces OTP code delivery
           data: { profession },
-        } 
+        }
       });
       
       if (authError) {

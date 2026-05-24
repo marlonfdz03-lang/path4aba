@@ -59,11 +59,18 @@ export async function middleware(request: NextRequest) {
 
   // Grace period: allow through immediately after Stripe redirects back so the
   // webhook has time to update the DB before the next middleware check.
+  // We use a short-lived cookie so the grace period survives client-side navigation.
   const isPostPayment =
     request.nextUrl.searchParams.get('subscription') === 'success' ||
     request.nextUrl.searchParams.get('trial') === 'started'
 
-  if (user && !isPublic && !isSubscriptionSkip && !isPostPayment) {
+  if (isPostPayment) {
+    response.cookies.set('trial_grace', '1', { maxAge: 300, path: '/', httpOnly: true, sameSite: 'lax' })
+  }
+
+  const hasGraceCookie = request.cookies.get('trial_grace')?.value === '1'
+
+  if (user && !isPublic && !isSubscriptionSkip && !isPostPayment && !hasGraceCookie) {
     const { data: sub } = await supabase
       .from('subscriptions')
       .select('status, plan, trial_ends_at')
