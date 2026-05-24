@@ -10,6 +10,7 @@ import { type FieldworkType } from "@/lib/bcba-students/calculations";
 import DashboardMetrics from "@/app/components/bcba-students/DashboardMetrics";
 import ProgressBars from "@/app/components/bcba-students/ProgressBars";
 import ComplianceChecklist from "@/app/components/bcba-students/ComplianceChecklist";
+import ComplianceGuide from "@/app/components/bcba-students/ComplianceGuide";
 
 interface Profile {
   fieldwork_type: FieldworkType;
@@ -149,6 +150,9 @@ export default function BCBAStudentsDashboard() {
 
         {/* Compliance checklist */}
         <ComplianceChecklist month={currentMonth} fieldworkType={fieldworkType} />
+
+        {/* BACB Compliance Guide — collapsible info panel */}
+        <ComplianceGuide />
 
         {/* Quick links */}
         <div className="grid grid-cols-2 gap-4">
