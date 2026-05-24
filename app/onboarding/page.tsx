@@ -159,7 +159,7 @@ export default function OnboardingPage() {
                   {promoApplied && <span className="text-[16px] ml-2 line-through opacity-50">${plan.price}</span>}
                 </p>
                 {promoApplied && (
-                  <p className="text-[13px] font-medium mb-1" style={{ color: "#1BA8A0" }}>$5 off your first month</p>
+                  <p className="text-[13px] font-medium mb-1" style={{ color: "#1BA8A0" }}>$5 off every month, forever</p>
                 )}
                 <p className="text-[12px] mb-6" style={{ color: isHighlighted ? "rgba(255,255,255,0.4)" : "var(--text3)" }}>
                   after free trial
@@ -204,7 +204,7 @@ export default function OnboardingPage() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
-              Code applied! $5 off your first month
+              Code applied! $5 off every month while your subscription is active
             </div>
           ) : (
             <>
