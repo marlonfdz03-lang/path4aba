@@ -13,7 +13,7 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  function handleDeleteClient(clientId: string) {
+  async function handleDeleteClient(clientId: string) {
     const confirmDelete = window.confirm(
       "Are you sure you want to delete this client profile?"
     );
@@ -21,6 +21,7 @@ export default function ClientsPage() {
     if (!confirmDelete) return;
 
     deleteClientProfile(clientId);
+    await supabase.from("clients").delete().eq("id", clientId);
 
     setClients((prev) =>
       prev.filter(
@@ -30,31 +31,27 @@ export default function ClientsPage() {
   }
 
   useEffect(() => {
-    const storedClients =
-      getClientProfiles();
-
-    setClients(storedClients);
-
-    // Test Supabase connection - fetch behaviors
-    const testSupabaseConnection = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('behaviors')
-          .select('*');
-        
-        if (error) {
-          console.error('❌ Supabase error:', error.message);
-        } else {
-          console.log('✅ Supabase connection successful. Behaviors fetched:', data);
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from("clients")
+          .select("id, client_name, clinical_profile")
+          .eq("rbt_id", user.id);
+        if (data && data.length > 0) {
+          setClients(data.map(row => ({
+            id: row.id,
+            clientName: row.client_name,
+            clinicalProfile: row.clinical_profile,
+          })));
+          setLoaded(true);
+          return;
         }
-      } catch (err) {
-        console.error('❌ Connection error:', err);
       }
-    };
-
-    testSupabaseConnection();
-
-    setLoaded(true);
+      setClients(getClientProfiles());
+      setLoaded(true);
+    }
+    load();
   }, []);
 
   return (

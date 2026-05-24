@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { buildClinicalProfile } from "@/lib/buildClinicalProfile";
 import { saveClientProfile } from "@/lib/clientStorage";
+import { supabase } from "@/lib/supabase";
 
 export default function UploadAssessment() {
   const [clientName, setClientName] = useState("");
@@ -65,7 +66,7 @@ export default function UploadAssessment() {
     }
   }
 
-  function handleSaveClientProfile() {
+  async function handleSaveClientProfile() {
     if (!clientName.trim()) {
       alert("Please enter the client name first.");
       return;
@@ -83,6 +84,16 @@ export default function UploadAssessment() {
     };
 
     saveClientProfile(newClient);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from("clients").upsert({
+        id: newClient.id,
+        client_name: newClient.clientName,
+        clinical_profile: newClient.clinicalProfile,
+        rbt_id: user.id,
+      }, { onConflict: "id" });
+    }
 
     setSaved(true);
     setStatus("Client profile saved successfully.");

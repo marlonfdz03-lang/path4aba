@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { getClientProfiles } from "@/lib/clientStorage";
+import { supabase } from "@/lib/supabase";
 import { saveNote, getNotesByClientId, deleteNote } from "@/lib/noteStorage";
 
 const LOCATION_OPTIONS = [
@@ -201,14 +202,35 @@ export default function ClientProfilePage() {
   const [perfectedNote, setPerfectedNote] = useState("");
 
   useEffect(() => {
-    const clients = getClientProfiles();
-    const foundClient = clients.find((c: any) => c.id === params.id);
-    if (foundClient) {
-      setClient(foundClient);
-      setDailyNotes(getNotesByClientId(foundClient.id));
-      const raw = localStorage.getItem(`path4aba_saved_present_${foundClient.id}`);
-      if (raw) { try { setSavedPresent(JSON.parse(raw)); } catch {} }
+    async function load() {
+      const id = params.id as string;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from("clients")
+          .select("id, client_name, clinical_profile")
+          .eq("id", id)
+          .eq("rbt_id", user.id)
+          .maybeSingle();
+        if (data) {
+          const found = { id: data.id, clientName: data.client_name, clinicalProfile: data.clinical_profile };
+          setClient(found);
+          setDailyNotes(getNotesByClientId(found.id));
+          const raw = localStorage.getItem(`path4aba_saved_present_${found.id}`);
+          if (raw) { try { setSavedPresent(JSON.parse(raw)); } catch {} }
+          return;
+        }
+      }
+      const clients = getClientProfiles();
+      const foundClient = clients.find((c: any) => c.id === id);
+      if (foundClient) {
+        setClient(foundClient);
+        setDailyNotes(getNotesByClientId(foundClient.id));
+        const raw = localStorage.getItem(`path4aba_saved_present_${foundClient.id}`);
+        if (raw) { try { setSavedPresent(JSON.parse(raw)); } catch {} }
+      }
     }
+    load();
   }, [params.id]);
 
   if (!client) {
