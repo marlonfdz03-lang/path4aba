@@ -85,36 +85,90 @@ export default function LogSessionPage() {
   }
 
   const handleDownloadSupervisionForm = () => {
-    const sessionSupervisorName = pdfData?.supervisorName || supervisorName;
-    const contactType = savedSession ? (CONTACT_LABELS[savedSession.contact_type] || savedSession.contact_type) : '';
-    const duration = savedSession ? `${savedSession.start_time} – ${savedSession.end_time}` : '';
-
     const win = window.open('', '_blank');
-    if (!win) {
-      alert('Please allow popups for this site to download forms.');
-      return;
+    if (!win) { alert('Enable popups to download this form.'); return; }
+
+    const sd = pdfData?.sessionDate || savedSession?.session_date || '';
+    const sessionDate = sd
+      ? new Date(sd + 'T00:00:00').toLocaleDateString('en-US')
+      : new Date().toLocaleDateString('en-US');
+
+    function fmtT(t: string) {
+      const [h, m] = t.split(':').map(Number);
+      return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
     }
+    const st = pdfData?.startTime || savedSession?.start_time || '';
+    const et = pdfData?.endTime || savedSession?.end_time || '';
+    let duration = '___';
+    if (st && et) {
+      const [sh, sm] = st.split(':').map(Number);
+      const [eh, em] = et.split(':').map(Number);
+      const mins = (eh * 60 + em) - (sh * 60 + sm);
+      const h = Math.floor(mins / 60), m = mins % 60;
+      duration = `${fmtT(st)} – ${fmtT(et)} (${h}h${m > 0 ? ` ${m}min` : ''})`;
+    }
+
+    const ct = savedSession?.contact_type || '';
+    const ctLabel = CONTACT_LABELS[ct] || '___';
+    const groupNoteHtml = ct === 'group_supervision'
+      ? '<p style="font-size:11px;color:#666;margin-top:4px;font-style:italic;">Group supervision session — maximum 10 trainees per BACB requirements.</p>'
+      : '';
+
+    const superviseeNameValue = pdfData?.traineeName || traineeName || '___';
+    const supName = pdfData?.supervisorName || supervisorName || '___';
+    const indep = (savedSession?.independent_hours ?? 0).toFixed(2);
+    const sup = (savedSession?.supervised_hours ?? 0).toFixed(2);
+    const totalHoursAccumulated = (pdfData?.totalMonthHours ?? 0).toFixed(2);
+    const sessionNote = (pdfData?.sessionNote || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
     win.document.write(`
       <html>
         <head>
           <title>Supervision Meeting Form</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 40px; font-size: 13px; }
-            h1 { font-size: 18px; text-align: center; }
-            .field { margin: 16px 0; border-bottom: 1px solid #000; padding-bottom: 4px; }
-            .label { font-weight: bold; font-size: 11px; color: #555; }
-            @media print { body { font-family: Arial, sans-serif; font-size: 12px; } @page { margin: 1in; } }
+            body { font-family: Arial, sans-serif; padding: 40px; font-size: 13px; color: #000; }
+            h1 { font-size: 16px; text-align: center; font-weight: bold; margin-bottom: 4px; }
+            h2 { font-size: 13px; text-align: center; font-weight: normal; margin-bottom: 24px; }
+            .row { display: flex; gap: 40px; margin-bottom: 16px; }
+            .field { flex: 1; }
+            .label { font-size: 10px; font-weight: bold; color: #555; margin-bottom: 2px; }
+            .value { border-bottom: 1px solid #000; padding-bottom: 3px; min-height: 18px; }
+            .section { margin-top: 20px; margin-bottom: 8px; font-weight: bold; font-size: 12px; border-bottom: 2px solid #000; padding-bottom: 3px; }
+            .textarea { border: 1px solid #000; min-height: 80px; width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box; white-space: pre-wrap; }
+            .sig-row { display: flex; gap: 40px; margin-top: 32px; }
+            .sig { flex: 1; border-top: 1px solid #000; padding-top: 4px; font-size: 11px; }
+            @media print { body { padding: 0.5in; } }
           </style>
         </head>
         <body>
-          <h1>Supervision Meeting Form</h1>
-          <div class="field"><div class="label">Date of Supervision</div>${savedSession?.session_date || new Date().toLocaleDateString()}</div>
-          <div class="field"><div class="label">Supervisor Name</div>${sessionSupervisorName || '_______________'}</div>
-          <div class="field"><div class="label">Duration</div>${duration || '_______________'}</div>
-          <div class="field"><div class="label">Meeting Format</div>${contactType || '_______________'}</div>
-          <div class="field"><div class="label">Activities Conducted</div><br/><br/><br/></div>
-          <div class="field"><div class="label">Supervisor Signature</div><br/><br/></div>
-          <script>window.print();</script>
+          <h1>SUPERVISION MEETING FORM</h1>
+          <h2>BCBA Fieldwork Documentation — Path4ABA</h2>
+          <div class="row">
+            <div class="field"><div class="label">Name of Supervisee</div><div class="value">${superviseeNameValue}</div></div>
+            <div class="field"><div class="label">Certification Seeking</div><div class="value">${certificationTrack}</div></div>
+          </div>
+          <div class="row">
+            <div class="field"><div class="label">Date of Supervision</div><div class="value">${sessionDate}</div></div>
+            <div class="field"><div class="label">Duration of Supervision</div><div class="value">${duration}</div></div>
+          </div>
+          <div class="row">
+            <div class="field"><div class="label">Meeting Format</div><div class="value">${ctLabel}${groupNoteHtml}</div></div>
+            <div class="field"><div class="label">Total Hours Accumulated (This Month)</div><div class="value">${totalHoursAccumulated}</div></div>
+          </div>
+          <div class="row">
+            <div class="field"><div class="label">Independent Hours (this session)</div><div class="value">${indep}</div></div>
+            <div class="field"><div class="label">Supervised Hours (this session)</div><div class="value">${sup}</div></div>
+          </div>
+          <div class="section">Activities Conducted</div>
+          <div class="textarea">${sessionNote}</div>
+          <div class="section">Supervisee Performance Feedback</div>
+          <div class="textarea">&nbsp;</div>
+          <div class="section">Follow Up Information</div>
+          <div class="textarea">&nbsp;</div>
+          <div class="sig-row">
+            <div class="sig">Supervisor Name: ${supName}<br/><br/>Supervisor Signature: _____________________________ &nbsp;&nbsp; Date: ___________</div>
+          </div>
+          <script>window.print();<\/script>
         </body>
       </html>
     `);
@@ -180,12 +234,7 @@ export default function LogSessionPage() {
                     </div>
                   </div>
                   <button
-                    onClick={() => {
-                      const win = window.open('', '_blank');
-                      if (!win) { alert('Enable popups to download this form.'); return; }
-                      win.document.write('<html><body><h1>Supervision Meeting Form</h1><p>Date: ' + new Date().toLocaleDateString() + '</p><script>window.print();<\/script></body></html>');
-                      win.document.close();
-                    }}
+                    onClick={handleDownloadSupervisionForm}
                     className="mt-4 w-full py-2.5 rounded-xl text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
                     style={{ background: "var(--teal)" }}
                   >
