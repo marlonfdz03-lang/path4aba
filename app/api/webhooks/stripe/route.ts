@@ -61,19 +61,23 @@ export async function POST(req: Request) {
           return new Response('No userId', { status: 200 })
         }
 
+        const trialEnd = new Date()
+        trialEnd.setDate(trialEnd.getDate() + 7)
+        const trial_ends_at = trialEnd.toISOString()
+
         const { error } = await supabase
           .from('subscriptions')
           .upsert({
             user_id: userId,
             plan,
             status: 'trialing',
-            trial_ends_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-            stripe_customer_id: session.customer as string,
-            stripe_subscription_id: session.subscription as string,
+            trial_ends_at,
+            stripe_customer_id: session.customer?.toString() || null,
+            stripe_subscription_id: session.subscription?.toString() || null,
           }, { onConflict: 'user_id' })
 
         if (error) {
-          console.error('Supabase upsert error:', error)
+          console.error('Supabase upsert error:', JSON.stringify(error))
           return new Response('DB error: ' + error.message, { status: 500 })
         }
 
