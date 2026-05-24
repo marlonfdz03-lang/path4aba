@@ -79,10 +79,8 @@ function LoginContent() {
         return;
       }
       if (signUpData.user) {
-        localStorage.setItem("signup_email", email);
         setLoading(false);
-        setSuccess("✅ Account created! Check your email for a verification code.");
-        setTimeout(() => { router.push("/verify-email"); }, 500);
+        router.push("/onboarding");
         return;
       }
       setLoading(false);
