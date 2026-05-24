@@ -111,7 +111,6 @@ export default function OnboardingPage() {
 
       {/* Hero */}
       <div className="text-center py-10 px-6">
-        <p className="text-[12px] uppercase tracking-widest font-semibold mb-3" style={{ color: "var(--teal)" }}>Step 2 of 2</p>
         <h1 className="text-[28px] font-semibold leading-tight mb-3" style={{ color: "var(--text1)" }}>
           Choose your plan
         </h1>
