@@ -86,13 +86,24 @@ export default function UploadAssessment() {
     saveClientProfile(newClient);
 
     const { data: { user } } = await supabase.auth.getUser();
+    console.log('[upload] user.id:', user?.id);
+
     if (user) {
-      await supabase.from("clients").upsert({
+      const { error } = await supabase.from("clients").upsert({
         id: newClient.id,
+        rbt_id: user.id,
+        created_by: user.id,
         client_name: newClient.clientName,
         clinical_profile: newClient.clinicalProfile,
-        rbt_id: user.id,
       }, { onConflict: "id" });
+
+      if (error) {
+        console.error('[upload] Failed to save client to Supabase:', error);
+      } else {
+        console.log('[upload] Client saved to Supabase successfully:', newClient.id);
+      }
+    } else {
+      console.error('[upload] No authenticated user found — client NOT saved to Supabase');
     }
 
     setSaved(true);

@@ -3,7 +3,7 @@
 import { supabase } from "@/lib/supabase";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getClientProfiles, deleteClientProfile } from "@/lib/clientStorage";
+import { deleteClientProfile } from "@/lib/clientStorage";
 
 const AVATAR_COLORS = ["#1BA8A0", "#8B5CF6", "#F59E0B", "#EF4444", "#10B981"];
 
@@ -188,27 +188,34 @@ export default function ClientsPage() {
 
   useEffect(() => {
     async function load() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        const { data } = await supabase
-          .from("clients")
-          .select("id, client_name, clinical_profile")
-          .eq("rbt_id", user.id);
-        if (data && data.length > 0) {
-          setClients(
-            data.map((row) => ({
-              id: row.id,
-              clientName: row.client_name,
-              clinicalProfile: row.clinical_profile,
-            }))
-          );
-          setLoaded(true);
-          return;
-        }
+      const { data: { user } } = await supabase.auth.getUser();
+      console.log('[clients] user.id:', user?.id);
+
+      if (!user) {
+        console.log('[clients] No authenticated user, cannot fetch clients');
+        setLoaded(true);
+        return;
       }
-      setClients(getClientProfiles());
+
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, client_name, clinical_profile, created_at")
+        .eq("created_by", user.id)
+        .order("created_at", { ascending: false });
+
+      console.log('[clients] Supabase fetch result:', { count: data?.length, error, userId: user.id });
+
+      if (error) {
+        console.error('[clients] Supabase fetch error:', error);
+      }
+
+      setClients(
+        (data || []).map((row) => ({
+          id: row.id,
+          clientName: row.client_name,
+          clinicalProfile: row.clinical_profile,
+        }))
+      );
       setLoaded(true);
     }
     load();
