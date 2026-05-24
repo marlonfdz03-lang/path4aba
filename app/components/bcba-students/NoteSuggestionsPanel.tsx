@@ -35,6 +35,7 @@ export default function NoteSuggestionsPanel({ activityType, onSelect, onClose }
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState("");
+  const [similarityWarning, setSimilarityWarning] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -49,6 +50,7 @@ export default function NoteSuggestionsPanel({ activityType, onSelect, onClose }
   async function handleGenerate() {
     setGenerating(true);
     setGenerated("");
+    setSimilarityWarning(false);
     const res = await fetch("/api/bcba-students/generate-note", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -56,6 +58,7 @@ export default function NoteSuggestionsPanel({ activityType, onSelect, onClose }
     });
     const data = await res.json();
     setGenerated(data.note || "");
+    setSimilarityWarning(!!data.similarityWarning);
     setGenerating(false);
   }
 
@@ -131,6 +134,11 @@ export default function NoteSuggestionsPanel({ activityType, onSelect, onClose }
           {generated && (
             <div className="mb-3 rounded-xl p-4" style={{ background: "#F0FDF4", border: "1px solid #A7F3D0" }}>
               <p className="text-[13px] leading-relaxed mb-2" style={{ color: "#065F46" }}>{generated}</p>
+              {similarityWarning && (
+                <p className="text-[11px] px-3 py-2 rounded-lg mb-2" style={{ background: "#FFF8E1", color: "#92400E", border: "1px solid #FDE68A" }}>
+                  ⚠ This note is similar to a previous entry. Please review and modify before saving.
+                </p>
+              )}
               <button
                 onClick={() => onSelect(generated)}
                 className="text-[12px] font-semibold"

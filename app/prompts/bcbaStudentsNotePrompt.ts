@@ -9,6 +9,7 @@ NEVER use these phrases or anything similar:
 - 'individuals with developmental disorders'
 - 'observed strategies'
 - 'participated in'
+- 'observed patterns of behavior' — too generic; replace with specific clinical language
 - any language that sounds like coursework, practicum, or student reflection
 
 ALWAYS use this structure:
@@ -26,6 +27,13 @@ REQUIRED language patterns (use these, not variations):
 - 'supported data-based decisions'
 - 'assessed reinforcement procedures'
 - 'evaluated skill acquisition outcomes'
+
+NOTE ENDINGS — use one of these clinically specific closings (never 'observed patterns of behavior'):
+- '...to identify behavioral trends and variability across intervention phases'
+- '...to evaluate intervention outcomes and support treatment modifications'
+- '...to assess response patterns and guide data-based programming decisions'
+- '...to monitor treatment progress and evaluate consistency of responding'
+- '...to analyze variability in responding and determine whether protocol adjustments were warranted'
 
 OUTPUT FORMAT:
 - 2-3 sentences maximum
