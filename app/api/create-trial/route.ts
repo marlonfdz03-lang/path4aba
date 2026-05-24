@@ -49,16 +49,10 @@ export async function POST(request: Request) {
     console.log('[create-trial] Created Stripe customer:', customerId)
   }
 
-  const FALLBACK = 'https://path4aba-git-main-marlonfdz03-langs-projects.vercel.app'
-  const successUrl = process.env.NEXT_PUBLIC_APP_URL
-    ? `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?trial=started`
-    : `${FALLBACK}/dashboard?trial=started`
-  const cancelUrl = process.env.NEXT_PUBLIC_APP_URL
-    ? `${process.env.NEXT_PUBLIC_APP_URL}/onboarding`
-    : `${FALLBACK}/onboarding`
+  const successUrl = 'https://path4aba-git-main-marlonfdz03-langs-projects.vercel.app/dashboard?trial=started'
+  const cancelUrl = 'https://path4aba-git-main-marlonfdz03-langs-projects.vercel.app/onboarding'
 
-  console.log('[create-trial] APP URL env:', process.env.NEXT_PUBLIC_APP_URL)
-  console.log('[create-trial] Success URL:', successUrl)
+  console.log('[create-trial] Creating checkout with success URL:', successUrl)
 
   const sessionParams: Parameters<ReturnType<typeof getStripe>['checkout']['sessions']['create']>[0] = {
     customer: customerId,
