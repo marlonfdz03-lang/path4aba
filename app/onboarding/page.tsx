@@ -51,6 +51,7 @@ const PLANS: Plan[] = [
 export default function OnboardingPage() {
   const router = useRouter();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const [planError, setPlanError] = useState("");
 
   const [promoInput, setPromoInput] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
@@ -80,19 +81,43 @@ export default function OnboardingPage() {
 
   async function handleSelectPlan(planKey: string) {
     setLoadingPlan(planKey);
+    setPlanError("");
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push("/login"); return; }
 
-    await fetch("/api/create-trial", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: user.id,
-        plan: planKey,
-        promoCode: promoApplied ? promoInput.toUpperCase().trim() : undefined,
-      }),
-    });
+    const timeout = new Promise<Response>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout")), 10000)
+    );
+
+    try {
+      const res = await Promise.race([
+        fetch("/api/create-trial", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: user.id,
+            plan: planKey,
+            promoCode: promoApplied ? promoInput.toUpperCase().trim() : undefined,
+          }),
+        }),
+        timeout,
+      ]);
+
+      const data = await (res as Response).json();
+      if (!data.ok) {
+        setPlanError(data.error || "Something went wrong, please try again.");
+        setLoadingPlan(null);
+        return;
+      }
+    } catch (err) {
+      const msg = err instanceof Error && err.message === "timeout"
+        ? "Something went wrong, please try again."
+        : "Network error, please try again.";
+      setPlanError(msg);
+      setLoadingPlan(null);
+      return;
+    }
 
     router.push("/dashboard");
   }
@@ -118,6 +143,15 @@ export default function OnboardingPage() {
           14-day free trial — no credit card required. Cancel any time.
         </p>
       </div>
+
+      {/* Plan error */}
+      {planError && (
+        <div className="max-w-xl mx-auto px-6 mb-2 w-full">
+          <p className="text-[13px] rounded-xl px-4 py-3 border text-center" style={{ background: "#FEF2F2", borderColor: "#FECACA", color: "#DC2626" }}>
+            {planError}
+          </p>
+        </div>
+      )}
 
       {/* Plan cards */}
       <div className="flex flex-col lg:flex-row gap-5 justify-center px-6 pb-8 max-w-5xl mx-auto w-full">
