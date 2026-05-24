@@ -36,6 +36,9 @@ export interface SessionInput {
     deliveredWhen: string;
   }[];
   clinicalEvents?: string;
+  complianceLevel?: 'typical' | 'below_typical' | 'poor';
+  environmentalChangeDescription?: string;
+  missedHoursData?: { totalHours: number; reason: string };
   clientProfile?: {
     diagnosis: string[];
     setting: string;
@@ -61,6 +64,56 @@ export interface GeneratedNote {
   behaviorsDocumented: string[];
   replacementSkillsDocumented: string[];
   generatedAt: string;
+}
+
+function buildContextualFactors(input: SessionInput): string {
+  const blocks: string[] = [];
+
+  if (input.missedHoursData && input.missedHoursData.totalHours > 0) {
+    const { totalHours, reason } = input.missedHoursData;
+    blocks.push(
+      `MISSED HOURS CONTEXT — WEAVE NATURALLY INTO NOTE:\n` +
+      `This client missed ${totalHours} hour${totalHours !== 1 ? 's' : ''} of service in the past 7 days${reason ? ` due to ${reason}` : ''}. ` +
+      `Clinical context: when a client does not receive the full recommended hours of ABA therapy, behavioral gains may regress and maladaptive behaviors may increase in frequency and intensity. ` +
+      `Reflect this by documenting increased behavior frequency compared to baseline, reduced response to interventions, and slower task initiation. ` +
+      `Include one clinical statement noting that interruptions in service delivery can adversely impact behavioral progress. ` +
+      `Do NOT say the session went poorly — document it observationally. ` +
+      `Example language: "Following a gap in service delivery earlier this week, the client demonstrated increased frequency of [behavior] compared to recent baseline. Compliance with task demands required additional prompting, and initiation of preferred activities was delayed."`
+    );
+  }
+
+  if (input.environmentalChangeDescription && input.environmentalChangeDescription.trim()) {
+    blocks.push(
+      `ENVIRONMENTAL CHANGE CONTEXT — WEAVE NATURALLY INTO NOTE:\n` +
+      `The RBT reported the following environmental change during this session: ${input.environmentalChangeDescription.trim()}. ` +
+      `Clinical context: changes in the client's typical environment can disrupt established routines and increase behavioral reactivity. ` +
+      `Reflect this by documenting slightly reduced compliance compared to typical sessions, increased latency to task initiation, and behaviors occurring at higher frequency than recent sessions. ` +
+      `Do NOT say the session was bad — document it observationally. ` +
+      `Example language: "The presence of [environmental change] appeared to correlate with increased behavioral frequency during the first portion of the session. As the session progressed and the client habituated to the change, compliance improved moderately."`
+    );
+  }
+
+  if (input.complianceLevel === 'below_typical' || input.complianceLevel === 'poor') {
+    const level = input.complianceLevel === 'poor' ? 'poor' : 'below typical';
+    blocks.push(
+      `COMPLIANCE CONTEXT — WEAVE NATURALLY INTO NOTE:\n` +
+      `The RBT reported that the client's compliance was ${level} today. ` +
+      `The client demonstrated increased latency to instructions, did not initiate several activities independently, and required additional prompting throughout the session. ` +
+      `Reflect this observationally in the note without using mentalistic language. ` +
+      `Do NOT say the client "didn't want to" or "refused" — use observable language only. ` +
+      `Example language: "The client demonstrated increased latency to task demands throughout the session, requiring additional gestural and verbal prompting to initiate activities. Response to instructions was below the client's typical baseline, with compliance achieved following 2–3 prompt repetitions across most tasks."`
+    );
+  }
+
+  if (blocks.length === 0) return '';
+
+  return (
+    `\n\n═══════════════════════════════════════\n` +
+    `CONTEXTUAL CLINICAL FACTORS — MUST BE WOVEN NATURALLY INTO THE NOTE\n` +
+    `═══════════════════════════════════════\n\n` +
+    blocks.join('\n\n') +
+    `\n\nIMPORTANT: Do not list these factors as a separate section. Integrate them into the narrative of the note naturally. The note must still contain exactly 5 ABCs, still be one paragraph, and still read as professional clinical documentation.`
+  );
 }
 
 export async function generateSmartNote(input: SessionInput): Promise<GeneratedNote> {
@@ -158,7 +211,8 @@ export async function generateSmartNote(input: SessionInput): Promise<GeneratedN
     }
   };
 
-  // Step 5: Generate the note using the master prompt
+  // Step 5: Generate the note using the master prompt + contextual clinical factors
+  const contextualFactors = buildContextualFactors(input);
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',
     temperature: 0.4,
@@ -166,7 +220,7 @@ export async function generateSmartNote(input: SessionInput): Promise<GeneratedN
     messages: [
       {
         role: 'system',
-        content: MASTER_RBT_NOTE_PROMPT
+        content: MASTER_RBT_NOTE_PROMPT + contextualFactors
       },
       {
         role: 'user',

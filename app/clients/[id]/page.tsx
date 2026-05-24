@@ -174,6 +174,10 @@ export default function ClientProfilePage() {
   const [environmentalChange, setEnvironmentalChange] = useState(false);
   const [environmentalChangeDesc, setEnvironmentalChangeDesc] = useState("");
   const [medicationConsumed, setMedicationConsumed] = useState(false);
+  const [complianceLevel, setComplianceLevel] = useState<"typical" | "below_typical" | "poor">("typical");
+  const [missedHoursToggle, setMissedHoursToggle] = useState(false);
+  const [missedHoursCount, setMissedHoursCount] = useState("");
+  const [missedHoursReason, setMissedHoursReason] = useState("");
   const [selectedBehaviors, setSelectedBehaviors] = useState<string[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [generatedNote, setGeneratedNote] = useState("");
@@ -285,10 +289,12 @@ export default function ClientProfilePage() {
           ],
         },
       },
-      clinicalEvents: [
-        environmentalChange && environmentalChangeDesc ? `Environmental change reported: ${environmentalChangeDesc}` : "",
-        medicationConsumed ? "Medication consumed today." : "",
-      ].filter(Boolean).join(" "),
+      clinicalEvents: medicationConsumed ? "Medication consumed today." : "",
+      complianceLevel: complianceLevel !== "typical" ? complianceLevel : undefined,
+      environmentalChangeDescription: environmentalChange && environmentalChangeDesc ? environmentalChangeDesc : undefined,
+      missedHoursData: missedHoursToggle && missedHoursCount
+        ? { totalHours: parseFloat(missedHoursCount), reason: missedHoursReason }
+        : undefined,
     };
 
     try {
@@ -662,12 +668,69 @@ export default function ClientProfilePage() {
                     style={{ borderColor: "var(--border)", color: "var(--text1)" }}
                   />
                 )}
-                <div className="flex items-center justify-between py-3">
+                <div className="flex items-center justify-between py-3" style={{ borderBottom: "1px solid var(--border)" }}>
                   <div>
                     <p className="text-[13px] font-medium" style={{ color: "var(--text1)" }}>Medication Changes</p>
                     <p className="text-[11px]" style={{ color: "var(--text3)" }}>Was medication consumed or changed today?</p>
                   </div>
                   <Toggle checked={medicationConsumed} onChange={setMedicationConsumed} />
+                </div>
+
+                {/* Missed hours */}
+                <div className="flex items-center justify-between py-3" style={{ borderBottom: missedHoursToggle ? "none" : "1px solid var(--border)" }}>
+                  <div>
+                    <p className="text-[13px] font-medium" style={{ color: "var(--text1)" }}>Missed Sessions This Week</p>
+                    <p className="text-[11px]" style={{ color: "var(--text3)" }}>Did this client miss any scheduled hours in the last 7 days?</p>
+                  </div>
+                  <Toggle checked={missedHoursToggle} onChange={setMissedHoursToggle} />
+                </div>
+                {missedHoursToggle && (
+                  <div className="pb-3 space-y-2" style={{ borderBottom: "1px solid var(--border)" }}>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="number" min="0.5" max="40" step="0.5"
+                        value={missedHoursCount}
+                        onChange={(e) => setMissedHoursCount(e.target.value)}
+                        placeholder="Hours missed"
+                        className="w-32 border rounded-xl px-3 py-2 text-sm focus:outline-none"
+                        style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                      />
+                      <span className="text-[13px]" style={{ color: "var(--text3)" }}>hours missed</span>
+                    </div>
+                    <input
+                      type="text"
+                      value={missedHoursReason}
+                      onChange={(e) => setMissedHoursReason(e.target.value)}
+                      placeholder="Reason (e.g. illness, family travel)"
+                      className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none"
+                      style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                    />
+                  </div>
+                )}
+
+                {/* Compliance */}
+                <div className="py-3">
+                  <p className="text-[13px] font-medium mb-2" style={{ color: "var(--text1)" }}>Client Compliance Today</p>
+                  <div className="flex gap-2">
+                    {(["typical", "below_typical", "poor"] as const).map((level) => {
+                      const labels = { typical: "Typical", below_typical: "Below typical", poor: "Poor" };
+                      const isSelected = complianceLevel === level;
+                      return (
+                        <button
+                          key={level} type="button"
+                          onClick={() => setComplianceLevel(level)}
+                          className="flex-1 py-2 rounded-xl border text-[13px] font-medium transition-colors"
+                          style={{
+                            background: isSelected ? (level === "typical" ? "var(--teal)" : level === "below_typical" ? "#F59E0B" : "#DC2626") : "white",
+                            borderColor: isSelected ? (level === "typical" ? "var(--teal)" : level === "below_typical" ? "#F59E0B" : "#DC2626") : "var(--border)",
+                            color: isSelected ? "white" : "var(--text2)",
+                          }}
+                        >
+                          {labels[level]}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>

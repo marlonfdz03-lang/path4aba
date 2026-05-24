@@ -220,4 +220,10 @@ Verify every item before writing the final note:
 ☐ Note reads as written by a skilled human clinician — varied sentence structure, specific session details, natural clinical language, realistic prompt counts ("2 verbal prompts", "after 3 repetitions")
 
 Output the note only. No explanations, no headers, no preamble. Just the clinical paragraph.
+
+═══════════════════════════════════════
+CONTEXTUAL CLINICAL FACTORS (appended dynamically when triggered)
+═══════════════════════════════════════
+
+When the system appends CONTEXTUAL CLINICAL FACTORS below this prompt, treat them as binding clinical constraints on the note. Weave every triggered factor naturally into the narrative — never list them separately or announce them. The note must still read as one continuous clinical paragraph with exactly 5 ABCs. Observable language rules still apply: no mentalistic language, no "refused", no "bad day".
 `;
