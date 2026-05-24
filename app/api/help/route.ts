@@ -1,20 +1,12 @@
 import { NextResponse } from 'next/server'
+import OpenAI from 'openai'
 
 export const dynamic = 'force-dynamic'
 
-const SYSTEM_PROMPT = `You are a helpful support assistant for Path4ABA, a clinical documentation platform for ABA professionals (RBTs, BCBAs, and BCaBAs).
-
-Help users with:
-- Account issues (login, password reset, profile settings)
-- How to generate session notes using AI
-- How to upload assessment PDFs to create client profiles
-- How to add and manage clients
-- Billing questions (trial period, subscription plans, payment)
-- How to connect with a BCBA (sharing client code)
-- Schedule and missed hours tracking
-- BCBA supervision workflow (reviewing notes, supervision notes)
-
-Keep responses concise and practical. If the issue requires account-level access or cannot be resolved through guidance, tell the user to contact hello@path4abaapp.com.`
+const SYSTEM_PROMPT = `You are a helpful support assistant for Path4ABA, a clinical documentation platform for ABA professionals (RBTs, BCBAs, BCaBAs).
+Help users with: how to generate session notes, how to upload assessments, how to add clients, how to connect with a BCBA using a client code, billing and subscription questions, schedule tracking, how to refine notes, account issues.
+Keep answers short and clear.
+If you cannot resolve the issue, tell them to contact hello@path4abaapp.com`
 
 export async function POST(req: Request) {
   let body: { messages?: { role: string; content: string }[] }
@@ -29,38 +21,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Missing messages' }, { status: 400 })
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    return NextResponse.json({ error: 'Support chat is not configured.' }, { status: 503 })
-  }
-
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 512,
-        system: SYSTEM_PROMPT,
-        messages,
-      }),
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        ...messages as OpenAI.Chat.ChatCompletionMessageParam[],
+      ],
+      max_tokens: 500,
     })
 
-    if (!res.ok) {
-      const err = await res.text()
-      console.error('[help] Claude API error:', err)
-      return NextResponse.json({ error: 'Failed to get response. Please try again.' }, { status: 502 })
-    }
-
-    const data = await res.json()
-    const reply = data.content?.[0]?.text || ''
+    const reply = response.choices[0]?.message?.content || ''
     return NextResponse.json({ reply })
-  } catch (err) {
-    console.error('[help] fetch error:', err)
-    return NextResponse.json({ error: 'Network error. Please try again.' }, { status: 500 })
+  } catch (err: any) {
+    console.error('[help] OpenAI error:', err?.message)
+    return NextResponse.json({ error: 'Failed to get response. Please try again.' }, { status: 500 })
   }
 }
