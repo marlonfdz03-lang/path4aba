@@ -199,7 +199,7 @@ export default function ClientsPage() {
 
       const { data, error } = await supabase
         .from("clients")
-        .select("id, client_name, clinical_profile, created_at")
+        .select("id, clinical_profile, created_at")
         .or(`created_by.eq.${user.id},rbt_id.eq.${user.id},created_by.is.null`)
         .order("created_at", { ascending: false });
 
@@ -212,7 +212,7 @@ export default function ClientsPage() {
       setClients(
         (data || []).map((row) => ({
           id: row.id,
-          clientName: row.client_name,
+          clientName: row.clinical_profile?.name || 'Unnamed Client',
           clinicalProfile: row.clinical_profile,
         }))
       );

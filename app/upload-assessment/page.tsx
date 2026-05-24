@@ -100,10 +100,9 @@ export default function UploadAssessment() {
       rbt_id: user.id,
       agency_id: '20000000-0000-0000-0000-000000000000',
       internal_code: newClient.id,
-      client_name: newClient.clientName,
       diagnosis: [],
       primary_setting: 'Home',
-      clinical_profile: newClient.clinicalProfile,
+      clinical_profile: { name: newClient.clientName, ...newClient.clinicalProfile },
       active_behaviors: [],
     };
 
