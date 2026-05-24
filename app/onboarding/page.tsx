@@ -119,7 +119,7 @@ export default function OnboardingPage() {
       return;
     }
 
-    router.push("/dashboard");
+    window.location.href = "/dashboard";
   }
 
   return (
