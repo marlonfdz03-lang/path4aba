@@ -10,9 +10,11 @@ interface Session {
   start_time: string;
   end_time: string;
   total_hours: number;
+  independent_hours: number;
   activity_type: string;
   contact_type: string;
   session_note: string | null;
+  supervisor_name: string | null;
 }
 
 interface Summary {
@@ -32,6 +34,7 @@ interface Summary {
 
 interface Profile {
   fieldwork_type: string;
+  certification_track: string | null;
   supervisor_name: string | null;
   supervisor_bacb_id: string | null;
   state_of_fieldwork: string | null;
@@ -61,6 +64,9 @@ export default function MonthDrawer({ monthYear, summary, fieldworkType, profile
   const [loading, setLoading] = useState(true);
   const [signingMvf, setSigningMvf] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingSupervisionId, setDownloadingSupervisionId] = useState<string | null>(null);
+
+  const SUPERVISION_TYPES = new Set(["individual_supervision", "group_supervision", "client_observation"]);
 
   const monthLabel = new Date(monthYear + "-01").toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
@@ -76,6 +82,42 @@ export default function MonthDrawer({ monthYear, summary, fieldworkType, profile
     await fetch(`/api/bcba-students/monthly/${monthYear}/mvf`, { method: "POST" });
     setSigningMvf(false);
     onMvfSigned();
+  }
+
+  async function handleDownloadSupervisionPdf(session: Session) {
+    if (!profile) return;
+    setDownloadingSupervisionId(session.id);
+    try {
+      const { generateSupervisionPdf } = await import("@/lib/bcba-students/generateSupervisionPdf");
+      // Daily independent hours = sum of independent_hours from all sessions on that date
+      const independentHoursOnDate = sessions
+        .filter(s => s.session_date === session.session_date)
+        .reduce((sum, s) => sum + (s.independent_hours || 0), 0);
+      const pdfBytes = await generateSupervisionPdf({
+        traineeName,
+        certificationTrack: profile.certification_track || "BCBA",
+        sessionDate: session.session_date,
+        startTime: session.start_time,
+        endTime: session.end_time,
+        contactType: session.contact_type as "individual_supervision" | "group_supervision" | "client_observation",
+        sessionNote: session.session_note,
+        supervisorName: session.supervisor_name || profile.supervisor_name || "",
+        independentHoursOnDate,
+        totalMonthHours: summary?.total_hours ?? 0,
+      });
+      const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const safeName = traineeName.replace(/\s+/g, "-") || "Trainee";
+      a.download = `Supervision-Form-${session.session_date}-${safeName}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Supervision PDF failed:", e);
+    } finally {
+      setDownloadingSupervisionId(null);
+    }
   }
 
   async function handleDownloadMvf() {
@@ -209,9 +251,27 @@ export default function MonthDrawer({ monthYear, summary, fieldworkType, profile
                             {s.start_time} – {s.end_time} · {CONTACT_LABELS[s.contact_type] || s.contact_type}
                           </p>
                         </div>
-                        <div className="text-right">
-                          <p className="text-[13px] font-semibold" style={{ color: "var(--text1)" }}>{s.total_hours.toFixed(2)} hrs</p>
-                          <p className="text-[11px] capitalize" style={{ color: "var(--text3)" }}>{s.activity_type}</p>
+                        <div className="flex items-start gap-3">
+                          {SUPERVISION_TYPES.has(s.contact_type) && (
+                            <button
+                              onClick={() => handleDownloadSupervisionPdf(s)}
+                              disabled={downloadingSupervisionId === s.id}
+                              title="Download Supervision Form"
+                              className="flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-lg transition-opacity hover:opacity-80 disabled:opacity-40 flex-shrink-0"
+                              style={{ color: "var(--teal)", background: "rgba(27,168,160,0.08)", border: "1px solid rgba(27,168,160,0.2)" }}
+                            >
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
+                              </svg>
+                              {downloadingSupervisionId === s.id ? "…" : "Form"}
+                            </button>
+                          )}
+                          <div className="text-right">
+                            <p className="text-[13px] font-semibold" style={{ color: "var(--text1)" }}>{s.total_hours.toFixed(2)} hrs</p>
+                            <p className="text-[11px] capitalize" style={{ color: "var(--text3)" }}>{s.activity_type}</p>
+                          </div>
                         </div>
                       </div>
                       {s.session_note && (

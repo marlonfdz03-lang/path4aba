@@ -31,6 +31,7 @@ interface Summary {
 
 interface Profile {
   fieldwork_type: string;
+  certification_track: string | null;
   supervisor_name: string | null;
   supervisor_bacb_id: string | null;
   state_of_fieldwork: string | null;

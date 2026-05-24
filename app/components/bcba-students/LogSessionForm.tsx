@@ -4,10 +4,22 @@ import { useState, useEffect } from "react";
 import { BACB_RULES, type FieldworkType } from "@/lib/bcba-students/calculations";
 import NoteSuggestionsPanel from "./NoteSuggestionsPanel";
 
+export interface SavedSession {
+  id: string;
+  session_date: string;
+  start_time: string;
+  end_time: string;
+  contact_type: string;
+  independent_hours: number;
+  supervised_hours: number;
+  session_note: string | null;
+  supervisor_name: string | null;
+}
+
 interface Props {
   fieldworkType: FieldworkType;
   defaultSupervisorName?: string;
-  onSaved: () => void;
+  onSaved: (session: SavedSession) => void;
 }
 
 const SETTINGS = ["Office", "Client home", "School", "Telehealth/Zoom", "Community", "Other"];
@@ -106,7 +118,7 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Save failed");
-      onSaved();
+      onSaved(data.session);
     } catch (e: any) {
       setError(e.message);
       setSaving(false);
