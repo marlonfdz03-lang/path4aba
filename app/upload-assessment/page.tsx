@@ -85,26 +85,36 @@ export default function UploadAssessment() {
 
     saveClientProfile(newClient);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    console.log('[upload] user.id:', user?.id);
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    console.log('[upload] user:', user?.id, 'authError:', authError?.message);
 
-    if (user) {
-      const { error } = await supabase.from("clients").upsert({
-        id: newClient.id,
-        rbt_id: user.id,
-        created_by: user.id,
-        client_name: newClient.clientName,
-        clinical_profile: newClient.clinicalProfile,
-      }, { onConflict: "id" });
-
-      if (error) {
-        console.error('[upload] Failed to save client to Supabase:', error);
-      } else {
-        console.log('[upload] Client saved to Supabase successfully:', newClient.id);
-      }
-    } else {
-      console.error('[upload] No authenticated user found — client NOT saved to Supabase');
+    if (!user) {
+      console.error('[upload] No authenticated user found — cannot save client to Supabase');
+      alert('You must be logged in to save a client. Please refresh and sign in again.');
+      return;
     }
+
+    const clientData = {
+      id: newClient.id,
+      rbt_id: user.id,
+      created_by: user.id,
+      client_name: newClient.clientName,
+      clinical_profile: newClient.clinicalProfile,
+    };
+
+    console.log('[upload] Saving client to Supabase:', clientData);
+
+    const { data, error } = await supabase
+      .from("clients")
+      .upsert(clientData, { onConflict: "id" });
+
+    if (error) {
+      console.error('[upload] Supabase save error:', error);
+      alert('Error saving client: ' + error.message);
+      return;
+    }
+
+    console.log('[upload] Client saved successfully:', data);
 
     setSaved(true);
     setStatus("Client profile saved successfully.");
