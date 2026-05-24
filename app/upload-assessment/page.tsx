@@ -94,24 +94,12 @@ export default function UploadAssessment() {
       return;
     }
 
-    const normalizeSetting = (setting: string): string => {
-      const s = (setting || '').toLowerCase();
-      if (s.includes('school')) return 'School';
-      if (s.includes('clinic')) return 'Clinic';
-      if (s.includes('community')) return 'Community';
-      return 'Home';
-    };
-
     const clientData = {
       id: newClient.id,
       created_by: user.id,
       rbt_id: user.id,
-      agency_id: '20000000-0000-0000-0000-000000000000',
       internal_code: newClient.id,
-      diagnosis: [],
-      primary_setting: normalizeSetting(newClient.clinicalProfile?.primarySetting),
       clinical_profile: { name: newClient.clientName, ...newClient.clinicalProfile },
-      active_behaviors: [],
     };
 
     console.log('[upload] Saving client to Supabase:', clientData);
