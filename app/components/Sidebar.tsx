@@ -202,20 +202,6 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Tools group */}
-        <div>
-          <p
-            className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]"
-            style={{ color: "rgba(255,255,255,0.35)" }}
-          >
-            Tools
-          </p>
-          <div className="space-y-0.5">
-            <NavItem href="/generate-note" label="Generate Note" icon={IconFileText} active={isActive("/generate-note")} />
-            <NavItem href="/clients" label="Refine Note" icon={IconSparkles} active={false} />
-          </div>
-        </div>
-
         {/* Account group */}
         <div>
           <p
