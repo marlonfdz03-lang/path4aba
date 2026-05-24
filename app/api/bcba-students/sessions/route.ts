@@ -63,6 +63,23 @@ export async function POST(req: Request) {
   const sup = Number(body.supervised_hours ?? 0)
   const total = indep + sup
 
+  // Enforce BACB monthly maximum of 130 hours
+  const { data: existingSessions } = await supabaseServer
+    .from('fieldwork_sessions')
+    .select('total_hours')
+    .eq('user_id', user.id)
+    .eq('month_year', monthYear)
+
+  const currentMonthTotal = (existingSessions || []).reduce((sum, s) => sum + (Number(s.total_hours) || 0), 0)
+  const MONTHLY_MAX = 130
+  if (currentMonthTotal + total > MONTHLY_MAX) {
+    const remaining = Math.max(0, MONTHLY_MAX - currentMonthTotal)
+    const monthLabel = new Date(monthYear + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    return NextResponse.json({
+      error: `This session would bring your total for ${monthLabel} to ${(currentMonthTotal + total).toFixed(2)} hours, exceeding the BACB maximum of 130 hours per month. You can log a maximum of ${remaining.toFixed(2)} more hours this month.`
+    }, { status: 400 })
+  }
+
   const { data, error } = await supabaseServer
     .from('fieldwork_sessions')
     .insert({

@@ -48,13 +48,14 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
   const [showPanel, setShowPanel] = useState(false);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [dailyHoursLogged, setDailyHoursLogged] = useState(0);
+  const [monthlyHoursLogged, setMonthlyHoursLogged] = useState(0);
 
   const totalHours = toDecimalHours(startTime, endTime);
   const isSupervised = contactType !== "none";
   const supervisedHours = isSupervised ? totalHours : 0;
   const independentHours = isSupervised ? 0 : totalHours;
 
-  // Fetch existing sessions for the selected date to enforce daily 8-hour limit
+  // Fetch existing sessions for the selected date/month to enforce daily and monthly limits
   useEffect(() => {
     if (!date) return;
     const monthYear = date.slice(0, 7);
@@ -65,21 +66,30 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
         const dayTotal = sessions
           .filter(s => s.session_date === date)
           .reduce((sum, s) => sum + (s.total_hours || 0), 0);
+        const monthTotal = sessions.reduce((sum, s) => sum + (s.total_hours || 0), 0);
         setDailyHoursLogged(Math.round(dayTotal * 100) / 100);
+        setMonthlyHoursLogged(Math.round(monthTotal * 100) / 100);
       })
       .catch(() => {});
   }, [date]);
 
-  // Real-time warnings — simplified checks
+  // Real-time warnings
   useEffect(() => {
     const w: string[] = [];
-    if (fieldworkType === "supervised") {
-      if (activityType === "restricted") {
-        w.push("Adding restricted hours may reduce your cumulative unrestricted % below 60%. Verify your running total.");
-      }
+    if (fieldworkType === "supervised" && activityType === "restricted") {
+      w.push("Adding restricted hours may reduce your cumulative unrestricted % below 60%. Verify your running total.");
+    }
+    if (totalHours > 0 && monthlyHoursLogged + totalHours > 130) {
+      const monthLabel = new Date(date.slice(0, 7) + "-01").toLocaleDateString("en-US", { month: "long", year: "numeric" });
+      const remaining = Math.max(0, 130 - monthlyHoursLogged);
+      w.push(
+        `This session would bring your total for ${monthLabel} to ${(monthlyHoursLogged + totalHours).toFixed(2)} hours, ` +
+        `exceeding the BACB maximum of 130 hours per month. ` +
+        `You can log a maximum of ${remaining.toFixed(2)} more hours this month.`
+      );
     }
     setWarnings(w);
-  }, [activityType, contactType, totalHours, fieldworkType]);
+  }, [activityType, totalHours, fieldworkType, monthlyHoursLogged, date]);
 
   async function handleSave() {
     // Midnight crossing / same-time check
@@ -87,6 +97,18 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
     const [eh, em] = endTime.split(":").map(Number);
     if (eh * 60 + em <= sh * 60 + sm) {
       setError("Sessions cannot cross midnight. A session must start and end within the same day (12:00 AM – 11:59 PM).");
+      return;
+    }
+
+    // Monthly 130-hour BACB limit check
+    if (monthlyHoursLogged + totalHours > 130) {
+      const monthLabel = new Date(date.slice(0, 7) + "-01").toLocaleDateString("en-US", { month: "long", year: "numeric" });
+      const remaining = Math.max(0, 130 - monthlyHoursLogged);
+      setError(
+        `This session would bring your total for ${monthLabel} to ${(monthlyHoursLogged + totalHours).toFixed(2)} hours, ` +
+        `exceeding the BACB maximum of 130 hours per month. ` +
+        `You can log a maximum of ${remaining.toFixed(2)} more hours this month.`
+      );
       return;
     }
 
