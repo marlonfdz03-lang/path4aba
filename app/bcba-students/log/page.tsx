@@ -80,7 +80,8 @@ export default function LogSessionPage() {
         totalMonthHours: monthSummary?.total_hours ?? 0,
       });
     } else {
-      setTimeout(() => { router.push("/bcba-students"); }, 1500);
+      router.refresh();
+      router.push("/bcba-students");
     }
   }
 
@@ -174,13 +175,13 @@ export default function LogSessionPage() {
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <Link
-                    href="/bcba-students"
+                  <button
+                    onClick={() => { router.refresh(); router.push("/bcba-students"); }}
                     className="text-[13px] font-medium hover:underline"
                     style={{ color: "var(--text3)" }}
                   >
                     ← Back to Dashboard
-                  </Link>
+                  </button>
                   <button
                     onClick={() => { setSavedSession(null); setPdfData(null); }}
                     className="text-[13px] font-medium hover:underline"

@@ -27,7 +27,6 @@ function StatusBadge({ summary }: { summary: Summary }) {
   const now = new Date();
   const [y, m] = summary.month_year.split("-").map(Number);
   const isCurrentMonth = now.getFullYear() === y && now.getMonth() + 1 === m;
-  const isPast = new Date(y, m - 1, 1) < new Date(now.getFullYear(), now.getMonth(), 1);
 
   if (isCurrentMonth) {
     return <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "#EFF6FF", color: "#1D4ED8" }}>🔄 In progress</span>;
@@ -35,8 +34,8 @@ function StatusBadge({ summary }: { summary: Summary }) {
   if (summary.is_eligible) {
     return <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "#E6F9F5", color: "#065F46" }}>✅ Eligible</span>;
   }
-  if (!isPast) {
-    return <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "#FFF8E1", color: "#92400E" }}>⚠ At risk</span>;
+  if (summary.total_hours > 0) {
+    return <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "#F3F4F6", color: "#4B5563" }}>📋 Documented</span>;
   }
   return <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "#FEF2F2", color: "#DC2626" }}>❌ Ineligible</span>;
 }

@@ -81,9 +81,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // Recalculate monthly summary
+  // Recalculate monthly summary — awaited so the summary is fresh before the response returns
   const monthYear = (body.session_date as string).slice(0, 7)
-  recalculateMonth(user.id, monthYear).catch(err => console.error('[sessions] recalculate error:', err))
+  await recalculateMonth(user.id, monthYear).catch(err => console.error('[sessions] recalculate error:', err))
 
   return NextResponse.json({ session: data })
 }

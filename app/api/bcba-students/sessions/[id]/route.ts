@@ -47,7 +47,61 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const monthYear = session.month_year || session.session_date.slice(0, 7)
-  recalculateMonth(user.id, monthYear).catch(err => console.error('[sessions/delete] recalculate error:', err))
+  await recalculateMonth(user.id, monthYear).catch(err => console.error('[sessions/delete] recalculate error:', err))
 
   return NextResponse.json({ ok: true })
+}
+
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const user = await getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { id } = await params
+
+  let body: Record<string, unknown>
+  try { body = await req.json() } catch {
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+  }
+
+  // Verify ownership
+  const { data: existing } = await supabaseServer
+    .from('fieldwork_sessions')
+    .select('session_date, month_year')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const { data, error } = await supabaseServer
+    .from('fieldwork_sessions')
+    .update({
+      session_date: body.session_date,
+      start_time: body.start_time,
+      end_time: body.end_time,
+      independent_hours: body.independent_hours,
+      supervised_hours: body.supervised_hours,
+      activity_type: body.activity_type,
+      contact_type: body.contact_type,
+      setting: body.setting ?? null,
+      supervisor_name: body.supervisor_name ?? null,
+      session_note: body.session_note ?? null,
+    })
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .select()
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  const monthYear = (body.session_date as string).slice(0, 7)
+  await recalculateMonth(user.id, monthYear).catch(err => console.error('[sessions/put] recalculate error:', err))
+
+  // If the session moved to a different month, recalculate the old month too
+  const oldMonthYear = existing.month_year || existing.session_date.slice(0, 7)
+  if (oldMonthYear !== monthYear) {
+    await recalculateMonth(user.id, oldMonthYear).catch(err => console.error('[sessions/put] old-month recalculate error:', err))
+  }
+
+  return NextResponse.json({ session: data })
 }

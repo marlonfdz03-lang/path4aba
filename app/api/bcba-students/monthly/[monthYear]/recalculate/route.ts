@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabaseServer } from '@/lib/supabaseServer'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { recalculateMonth } from '@/lib/bcba-students/recalculate-month'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,31 +22,23 @@ async function getUser() {
   return user
 }
 
-export async function GET() {
+export async function POST(req: Request, { params }: { params: Promise<{ monthYear: string }> }) {
   const user = await getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Only return summaries for months that have at least one session logged
-  const { data: sessionMonths, error: sessErr } = await supabaseServer
-    .from('fieldwork_sessions')
-    .select('month_year')
-    .eq('user_id', user.id)
+  const { monthYear } = await params
 
-  if (sessErr) return NextResponse.json({ error: sessErr.message }, { status: 500 })
-
-  const monthsWithSessions = [...new Set((sessionMonths || []).map(r => r.month_year as string))]
-
-  if (monthsWithSessions.length === 0) {
-    return NextResponse.json({ summaries: [] })
-  }
+  await recalculateMonth(user.id, monthYear).catch(err => {
+    console.error('[recalculate] error:', err)
+  })
 
   const { data, error } = await supabaseServer
     .from('fieldwork_monthly_summaries')
     .select('*')
     .eq('user_id', user.id)
-    .in('month_year', monthsWithSessions)
-    .order('month_year', { ascending: false })
+    .eq('month_year', monthYear)
+    .maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ summaries: data || [] })
+  return NextResponse.json({ summary: data })
 }
