@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getClientProfiles, StoredClientProfile } from "@/lib/clientStorage";
+import { StoredClientProfile } from "@/lib/clientStorage";
+import { supabase } from "@/lib/supabase";
 
 const REASON_OPTIONS = [
   "Medical Appointment",
@@ -398,13 +399,68 @@ export default function SchedulePage() {
   const [clients, setClients] = useState<StoredClientProfile[]>([]);
   const [entries, setEntries] = useState<MissedEntry[]>([]);
   const [showClientId, setShowClientId] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    setClients(getClientProfiles());
     setEntries(loadEntries());
+
+    async function loadClients() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoaded(true); return; }
+
+      const profession = user.user_metadata?.profession as string | undefined;
+      const isBCBA = profession === 'BCBA' || profession === 'BCaBA';
+
+      let rows: any[] = [];
+
+      if (isBCBA) {
+        const { data: links } = await supabase
+          .from('bcba_clients')
+          .select('client_id')
+          .eq('bcba_id', user.id);
+
+        const ids = (links || []).map((l: any) => l.client_id);
+        if (ids.length > 0) {
+          const { data } = await supabase
+            .from('clients')
+            .select('id, clinical_profile')
+            .in('id', ids);
+          rows = data || [];
+        }
+      } else {
+        const { data } = await supabase
+          .from('clients')
+          .select('id, clinical_profile')
+          .or(`created_by.eq.${user.id},rbt_id.eq.${user.id}`);
+        rows = data || [];
+      }
+
+      // Deduplicate by id (OR filter can return same row twice)
+      const seen = new Set<string>();
+      const unique = rows.filter((row) => {
+        if (seen.has(row.id)) return false;
+        seen.add(row.id);
+        return true;
+      });
+
+      setClients(unique.map((row) => ({
+        id: row.id,
+        clientName: row.clinical_profile?.name || 'Unnamed Client',
+        clinicalProfile: row.clinical_profile,
+      })));
+      setLoaded(true);
+    }
+
+    loadClients();
   }, []);
 
   const activeClient = clients.find((c) => c.id === showClientId) ?? null;
+
+  if (!loaded) {
+    return <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)" }}>
+      <p className="text-[13px]" style={{ color: "var(--text3)" }}>Loading clients…</p>
+    </div>;
+  }
 
   if (activeClient) {
     return (
