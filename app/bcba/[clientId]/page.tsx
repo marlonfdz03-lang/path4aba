@@ -7,7 +7,15 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
-type BCBATab = "notes" | "schedule" | "supervision" | "reassessment";
+type BCBATab = "notes" | "schedule" | "supervision" | "parent_training" | "reassessment";
+
+const SUPERVISION_TYPE_LABELS: Record<string, string> = {
+  face_to_face: "Face-to-Face",
+  remote: "Remote",
+  individual_supervision: "Individual Supervision",
+  group_supervision: "Group Supervision",
+  client_observation: "Client Observation",
+};
 
 const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
   pending:  { bg: "#FFF8E1", color: "#92400E", label: "Pending" },
@@ -25,28 +33,39 @@ function Topbar({ clientName }: { clientName: string }) {
   );
 }
 
-function TabBar({ active, onChange }: { active: BCBATab; onChange: (t: BCBATab) => void }) {
-  const tabs: { id: BCBATab; label: string }[] = [
-    { id: "notes", label: "RBT Notes" },
-    { id: "schedule", label: "Schedule" },
-    { id: "supervision", label: "Supervision Notes" },
-    { id: "reassessment", label: "Reassessment Tools" },
+function TabBar({ active, onChange, isBCBAPro }: { active: BCBATab; onChange: (t: BCBATab) => void; isBCBAPro: boolean | null }) {
+  const tabs: { id: BCBATab; label: string; proOnly?: boolean }[] = [
+    { id: "notes",           label: "RBT Notes" },
+    { id: "schedule",        label: "Schedule" },
+    { id: "supervision",     label: "Supervision Notes" },
+    { id: "parent_training", label: "Parent Training" },
+    { id: "reassessment",    label: "Assessment Tools", proOnly: true },
   ];
   return (
-    <div className="flex border-b bg-white px-8" style={{ borderColor: "var(--border)" }}>
-      {tabs.map(t => (
-        <button
-          key={t.id}
-          onClick={() => onChange(t.id)}
-          className="px-4 py-3 text-[13px] font-medium border-b-2 transition-colors"
-          style={{
-            borderColor: active === t.id ? "var(--teal)" : "transparent",
-            color: active === t.id ? "var(--teal)" : "var(--text3)",
-          }}
-        >
-          {t.label}
-        </button>
-      ))}
+    <div className="flex border-b bg-white px-8 overflow-x-auto" style={{ borderColor: "var(--border)" }}>
+      {tabs.map(t => {
+        const isDisabled = t.proOnly && isBCBAPro === false;
+        return (
+          <button
+            key={t.id}
+            onClick={() => !isDisabled && onChange(t.id)}
+            disabled={isDisabled}
+            className="flex items-center gap-1.5 px-4 py-3 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap disabled:cursor-not-allowed"
+            style={{
+              borderColor: active === t.id ? "var(--teal)" : "transparent",
+              color: isDisabled ? "var(--text3)" : active === t.id ? "var(--teal)" : "var(--text3)",
+              opacity: isDisabled ? 0.6 : 1,
+            }}
+          >
+            {t.label}
+            {t.proOnly && isBCBAPro === false && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(27,168,160,0.12)", color: "var(--teal)" }}>
+                Pro
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -113,10 +132,12 @@ export default function BCBAClientPage() {
   const clientId = params.clientId as string;
 
   const [activeTab, setActiveTab] = useState<BCBATab>("notes");
+  const [isBCBAPro, setIsBCBAPro] = useState<boolean | null>(null);
 
   const [client, setClient] = useState<any>(null);
   const [notes, setNotes] = useState<any[]>([]);
   const [supervisionNotes, setSupervisionNotes] = useState<any[]>([]);
+  const [parentTrainingNotes, setParentTrainingNotes] = useState<any[]>([]);
   const [missingHours, setMissingHours] = useState<any[]>([]);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -124,6 +145,22 @@ export default function BCBAClientPage() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.push("/login"); return; }
+
+      // Check BCBA Pro plan
+      supabase
+        .from("subscriptions")
+        .select("status, plan, trial_ends_at")
+        .eq("user_id", data.user.id)
+        .maybeSingle()
+        .then(({ data: sub }) => {
+          const now = new Date();
+          const isPro =
+            sub?.plan === "bcba_pro" &&
+            (sub.status === "active" ||
+              (sub.status === "trialing" && sub.trial_ends_at && new Date(sub.trial_ends_at) > now));
+          setIsBCBAPro(!!isPro);
+        });
+
       loadAll(data.user.id);
     });
   }, [clientId]);
@@ -152,6 +189,15 @@ export default function BCBAClientPage() {
       .eq("bcba_id", userId)
       .order("session_date", { ascending: false });
     setSupervisionNotes(supNotes || []);
+
+    // Fetch parent training notes
+    const { data: ptNotes } = await supabase
+      .from("parent_training_notes")
+      .select("id, session_date, caregiver_name, caregiver_relation, note_text, status, created_at")
+      .eq("client_id", clientId)
+      .eq("bcba_id", userId)
+      .order("session_date", { ascending: false });
+    setParentTrainingNotes(ptNotes || []);
 
     // Fetch missing hours
     const hoursRes = await fetch(`/api/bcba/missing-hours?clientId=${clientId}`);
@@ -195,7 +241,7 @@ export default function BCBAClientPage() {
         </div>
       </div>
 
-      <TabBar active={activeTab} onChange={setActiveTab} />
+      <TabBar active={activeTab} onChange={setActiveTab} isBCBAPro={isBCBAPro} />
 
       <div className="px-8 py-6 max-w-4xl">
 
@@ -302,7 +348,7 @@ export default function BCBAClientPage() {
                 {supervisionNotes.map(sn => {
                   const isExpanded = expandedNoteId === sn.id;
                   const dateLabel = new Date(sn.session_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-                  const typeLabel = sn.supervision_type === "face_to_face" ? "Face-to-Face" : "Remote";
+                  const typeLabel = SUPERVISION_TYPE_LABELS[sn.supervision_type] || sn.supervision_type || "Supervision";
                   return (
                     <div key={sn.id} className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
                       <div className="flex items-start justify-between mb-2">
@@ -335,7 +381,67 @@ export default function BCBAClientPage() {
             )}
           </div>
         )}
-        {/* ── Reassessment Tools Tab ── */}
+
+        {/* ── Parent Training Tab ── */}
+        {activeTab === "parent_training" && (
+          <div>
+            <div className="flex justify-end mb-4">
+              <Link
+                href={`/bcba/${clientId}/parent-training-note`}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold text-white hover:opacity-90 transition-opacity"
+                style={{ background: "var(--teal)" }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                New Parent Training Note
+              </Link>
+            </div>
+            {parentTrainingNotes.length === 0 ? (
+              <p className="text-[13px]" style={{ color: "var(--text3)" }}>No parent training notes yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {parentTrainingNotes.map(pt => {
+                  const isExpanded = expandedNoteId === pt.id;
+                  const dateLabel = new Date(pt.session_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                  return (
+                    <div key={pt.id} className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <p className="text-[13px] font-semibold" style={{ color: "var(--text1)" }}>{dateLabel}</p>
+                          {pt.caregiver_name && (
+                            <p className="text-[11px] mt-0.5" style={{ color: "var(--text3)" }}>
+                              {pt.caregiver_name}{pt.caregiver_relation ? ` · ${pt.caregiver_relation}` : ""}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => setExpandedNoteId(isExpanded ? null : pt.id)}
+                          className="text-[12px] font-medium hover:underline"
+                          style={{ color: "var(--teal)" }}
+                        >
+                          {isExpanded ? "Collapse" : "View"}
+                        </button>
+                      </div>
+                      {!isExpanded && (
+                        <p className="text-[12px] line-clamp-2" style={{ color: "var(--text3)" }}>
+                          {(pt.note_text || "").slice(0, 120)}…
+                        </p>
+                      )}
+                      {isExpanded && (
+                        <p className="text-[13px] leading-7 whitespace-pre-wrap mt-2" style={{ color: "var(--text2)" }}>
+                          {pt.note_text}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Assessment Tools Tab ── */}
         {activeTab === "reassessment" && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "rgba(27,168,160,0.1)" }}>
@@ -346,9 +452,9 @@ export default function BCBAClientPage() {
             <span className="text-[11px] font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-4" style={{ background: "rgba(27,168,160,0.15)", color: "var(--teal)" }}>
               Coming Soon
             </span>
-            <p className="text-[15px] font-semibold mb-2" style={{ color: "var(--text1)" }}>Reassessment Tools</p>
+            <p className="text-[15px] font-semibold mb-2" style={{ color: "var(--text1)" }}>Assessment Tools</p>
             <p className="text-[13px] max-w-xs" style={{ color: "var(--text3)" }}>
-              Coming soon — Reassessment tools will be available here.
+              Reassessment tools will be available here for BCBA Pro plan members.
             </p>
           </div>
         )}

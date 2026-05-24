@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 import { supabaseServer } from '@/lib/supabaseServer'
-import { generateSupervisionNote } from '@/lib/generateSupervisionNote'
+import { generateParentTrainingNote } from '@/lib/generateParentTrainingNote'
 
 export async function POST(request: Request) {
   const cookieStore = await cookies()
@@ -19,70 +19,72 @@ export async function POST(request: Request) {
     sessionDate?: string
     timeRange?: string
     location?: string
-    supervisorName?: string
-    rbtName?: string
-    contactType?: 'individual_supervision' | 'group_supervision' | 'client_observation'
-    supervisionDetails?: {
-      behaviorsObservedDuringVisit: string[]
-      protocolModificationsMade: string
-      feedbackProvidedToRBT: string
-      rbtPerformanceNotes: string
-      clinicalDecisionsMade: string
-      nextSteps: string
+    bcbaName?: string
+    caregiverName?: string
+    caregiverRelation?: string
+    sessionDetails?: {
+      behaviorsObservedDuringSession: string[]
+      proceduresTrainedToday: string[]
+      whatBCBAModeled: string
+      caregiverPracticeDescription: string
+      feedbackProvided: string
+      caregiverOutcome: string
+      generalizationTopicsDiscussed: string
+      nextSessionGoals: string
     }
   }
   try { body = await request.json() } catch {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { clientId, sessionDate, timeRange, location, supervisorName, rbtName, contactType, supervisionDetails } = body
+  const { clientId, sessionDate, timeRange, location, bcbaName, caregiverName, caregiverRelation, sessionDetails } = body
 
-  if (!clientId || !sessionDate || !contactType || !supervisionDetails) {
+  if (!clientId || !sessionDate || !caregiverName || !sessionDetails) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
   // Verify BCBA is connected to this client
   const { data: connection } = await supabaseServer
     .from('bcba_clients')
-    .select('id, rbt_id')
+    .select('id')
     .eq('bcba_id', user.id)
     .eq('client_id', clientId)
     .maybeSingle()
 
   if (!connection) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  let result: Awaited<ReturnType<typeof generateSupervisionNote>>
+  let result: Awaited<ReturnType<typeof generateParentTrainingNote>>
   try {
-    result = await generateSupervisionNote({
+    result = await generateParentTrainingNote({
       sessionInfo: {
         date: sessionDate,
         timeRange: timeRange || '',
         location: location || '',
-        supervisorName: supervisorName || '',
-        rbtName: rbtName || '',
-        contactType,
+        bcbaName: bcbaName || '',
+        caregiverName,
+        caregiverRelation: caregiverRelation || '',
       },
       clientId,
-      supervisionDetails,
+      sessionDetails,
     })
   } catch (e: any) {
-    console.error('[generate-supervision-note]', e)
+    console.error('[generate-parent-training-note]', e)
     return NextResponse.json({ error: e.message || 'Generation failed' }, { status: 500 })
   }
 
-  // Save to supervision_notes
-  const { error: saveError } = await supabaseServer.from('supervision_notes').insert({
+  // Save to parent_training_notes
+  const { error: saveError } = await supabaseServer.from('parent_training_notes').insert({
     client_id: clientId,
     bcba_id: user.id,
-    rbt_id: connection.rbt_id,
     session_date: sessionDate,
-    supervision_type: contactType,
+    caregiver_name: caregiverName,
+    caregiver_relation: caregiverRelation || null,
     note_text: result.note,
     status: 'draft',
   })
 
   if (saveError) {
-    console.error('[generate-supervision-note] save error:', saveError)
+    console.error('[generate-parent-training-note] save error:', saveError)
   }
 
   return NextResponse.json({ note: result.note, similarityWarning: result.similarityWarning || undefined })
