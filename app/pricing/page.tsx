@@ -42,7 +42,7 @@ const PLANS: Plan[] = [
       { label: "Up to 3 client profiles" },
       { label: "Note refinement with AI" },
       { label: "Schedule tracker" },
-      { label: "14-day free trial" },
+      { label: "7-day free trial" },
     ],
   },
   {
@@ -58,7 +58,7 @@ const PLANS: Plan[] = [
       { label: "Up to 15 client profiles" },
       { label: "Assessment PDF upload & parsing" },
       { label: "Priority support" },
-      { label: "14-day free trial" },
+      { label: "7-day free trial" },
     ],
   },
   {
@@ -72,7 +72,7 @@ const PLANS: Plan[] = [
       { label: "Unlimited client profiles" },
       { label: "Reassessment tools", soon: true },
       { label: "Multi-RBT management", soon: true },
-      { label: "14-day free trial" },
+      { label: "7-day free trial" },
     ],
   },
 ];
@@ -147,7 +147,7 @@ export default function PricingPage() {
           Simple, transparent pricing
         </h1>
         <p className="text-[15px] max-w-sm mx-auto" style={{ color: "var(--text3)" }}>
-          Start free for 14 days — no credit card required. Cancel any time.
+          Start free for 7 days — no credit card required. Cancel any time.
         </p>
 
         {/* Interval toggle */}
@@ -269,7 +269,7 @@ export default function PricingPage() {
                   className="text-[11px] text-center mb-6"
                   style={{ color: isHighlighted ? "rgba(255,255,255,0.35)" : "var(--text3)" }}
                 >
-                  14 days free · No credit card required
+                  7 days free · No credit card required
                 </p>
 
                 <div

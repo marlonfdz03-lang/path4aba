@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     payment_method_types: ['card'],
     payment_method_collection: 'always',
     line_items: [{ price: priceId, quantity: 1 }],
-    subscription_data: { trial_period_days: 14 },
+    subscription_data: { trial_period_days: 7 },
     success_url: `${origin}/dashboard?trial=started`,
     cancel_url: `${origin}/onboarding`,
     metadata: { userId, plan, promoCode: promoCode || '' },

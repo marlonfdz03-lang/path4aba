@@ -103,7 +103,7 @@ export default function BillingPage() {
         ) : !sub ? (
           <div className="bg-white rounded-xl p-8" style={{ border: "1px solid var(--border)" }}>
             <p className="text-[14px] font-medium mb-1" style={{ color: "var(--text1)" }}>No active subscription</p>
-            <p className="text-[13px] mb-5" style={{ color: "var(--text3)" }}>Start a free 14-day trial to get full access.</p>
+            <p className="text-[13px] mb-5" style={{ color: "var(--text3)" }}>Start a free 7-day trial to get full access.</p>
             <a
               href="/pricing"
               className="inline-flex px-5 py-2.5 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"

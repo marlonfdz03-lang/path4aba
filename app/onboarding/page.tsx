@@ -110,7 +110,7 @@ export default function OnboardingPage() {
         setLoadingPlan(null);
         return;
       }
-      // Redirect to Stripe Checkout — card collected but not charged until day 15
+      // Redirect to Stripe Checkout — card collected but not charged until day 8
       window.location.href = data.url;
     } catch (err) {
       const msg = err instanceof Error && err.message === "timeout"
@@ -139,7 +139,7 @@ export default function OnboardingPage() {
           Choose your plan
         </h1>
         <p className="text-[15px] max-w-sm mx-auto" style={{ color: "var(--text3)" }}>
-          14-day free trial — no credit card required. Cancel any time.
+          7-day free trial — no credit card required. Cancel any time.
         </p>
       </div>
 
@@ -207,7 +207,7 @@ export default function OnboardingPage() {
                 </button>
 
                 <p className="text-[11px] text-center mb-6" style={{ color: isHighlighted ? "rgba(255,255,255,0.35)" : "var(--text3)" }}>
-                  Your card will not be charged until your 14-day trial ends. Cancel anytime before day 15.
+                  Your card will not be charged until your 7-day trial ends. Cancel anytime before day 8.
                 </p>
 
                 <div className="h-px mb-5" style={{ background: isHighlighted ? "rgba(255,255,255,0.1)" : "var(--border)" }} />
