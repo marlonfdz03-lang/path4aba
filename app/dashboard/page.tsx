@@ -1,10 +1,7 @@
-"use client"
+import { redirect } from 'next/navigation'
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+export const dynamic = 'force-dynamic'
 
 export default function DashboardPage() {
-  const router = useRouter()
-  useEffect(() => { router.replace('/clients') }, [router])
-  return null
+  redirect('/clients')
 }
