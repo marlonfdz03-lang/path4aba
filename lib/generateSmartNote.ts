@@ -64,6 +64,15 @@ export interface GeneratedNote {
   behaviorsDocumented: string[];
   replacementSkillsDocumented: string[];
   generatedAt: string;
+  similarityWarning?: boolean;
+}
+
+function calculateSimilarity(text1: string, text2: string): number {
+  const words1 = new Set(text1.toLowerCase().split(/\s+/));
+  const words2 = new Set(text2.toLowerCase().split(/\s+/));
+  const intersection = new Set([...words1].filter(w => words2.has(w)));
+  const union = new Set([...words1, ...words2]);
+  return intersection.size / union.size;
 }
 
 function buildContextualFactors(input: SessionInput): string {
@@ -211,27 +220,54 @@ export async function generateSmartNote(input: SessionInput): Promise<GeneratedN
     }
   };
 
-  // Step 5: Generate the note using the master prompt + contextual clinical factors
+  // Step 5: Fetch full note history for this client to check similarity later
+  const { data: previousNotes } = await supabase
+    .from('session_notes')
+    .select('generated_note')
+    .eq('client_id', input.clientId)
+    .order('created_at', { ascending: false });
+
+  const previousTexts = (previousNotes || [])
+    .map(r => r.generated_note as string)
+    .filter(Boolean);
+
+  // Step 6: Generate the note using the master prompt + contextual clinical factors
   const contextualFactors = buildContextualFactors(input);
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o',
-    temperature: 0.4,
-    max_tokens: 1500,
-    messages: [
-      {
-        role: 'system',
-        content: MASTER_RBT_NOTE_PROMPT + contextualFactors
-      },
-      {
-        role: 'user',
-        content: `Generate a clinical ABA session note using this session data:\n\n${JSON.stringify(sessionContext, null, 2)}\n\nRemember: ONE continuous paragraph, EXACTLY 5 ABCs, no mentalistic language, no prohibited interventions, all activities in parentheses format, every behavior must have an intervention.`
+  const userPrompt = `Generate a clinical ABA session note using this session data:\n\n${JSON.stringify(sessionContext, null, 2)}\n\nRemember: ONE continuous paragraph, EXACTLY 5 ABCs, no mentalistic language, no prohibited interventions, all activities in parentheses format, every behavior must have an intervention.`;
+
+  async function callOpenAI(systemContent: string): Promise<string> {
+    const resp = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      temperature: 0.4,
+      max_tokens: 1500,
+      messages: [
+        { role: 'system', content: systemContent },
+        { role: 'user', content: userPrompt }
+      ]
+    });
+    return resp.choices[0].message.content || '';
+  }
+
+  let note = await callOpenAI(MASTER_RBT_NOTE_PROMPT + contextualFactors);
+
+  // Step 7: Similarity check — compare against entire note history
+  let similarityWarning = false;
+  if (previousTexts.length > 0) {
+    const tooSimilar = previousTexts.some(prev => calculateSimilarity(note, prev) > 0.70);
+    if (tooSimilar) {
+      const variationInstruction = `\n\nIMPORTANT: This note is too similar to a previous session note. You must vary the sentence starters, intervention descriptions, behavior topographies used, and narrative structure significantly. Use completely different ABC sequences and different order of events. The note must read as a distinctly different session.`;
+      note = await callOpenAI(MASTER_RBT_NOTE_PROMPT + contextualFactors + variationInstruction);
+
+      // If still too similar after regeneration, flag it but return the note
+      const stillTooSimilar = previousTexts.some(prev => calculateSimilarity(note, prev) > 0.70);
+      if (stillTooSimilar) {
+        similarityWarning = true;
+        console.warn('[generateSmartNote] Note similarity still >70% after regeneration for client:', input.clientId);
       }
-    ]
-  });
+    }
+  }
 
-  const note = response.choices[0].message.content || '';
-
-  // Step 6: Save to Supabase (only when client exists in Supabase)
+  // Step 8: Save to Supabase (only when client exists in Supabase)
   if (hasSupabaseClient) {
     const { error: saveError } = await supabase
       .from('session_notes')
@@ -253,6 +289,7 @@ export async function generateSmartNote(input: SessionInput): Promise<GeneratedN
     sessionDate: input.sessionInfo.date,
     behaviorsDocumented: input.behaviorsObserved.map(b => b.name),
     replacementSkillsDocumented: input.replacementSkillsAddressed.map(s => s.name),
-    generatedAt: new Date().toISOString()
+    generatedAt: new Date().toISOString(),
+    similarityWarning,
   };
 }

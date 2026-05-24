@@ -183,6 +183,7 @@ export default function ClientProfilePage() {
   const [generatedNote, setGeneratedNote] = useState("");
   const [generating, setGenerating] = useState(false);
   const [status, setStatus] = useState("");
+  const [similarityWarning, setSimilarityWarning] = useState(false);
 
   // Refine Note state
   const [pastedNote, setPastedNote] = useState("");
@@ -302,6 +303,7 @@ export default function ClientProfilePage() {
       const data = await res.json();
       if (!res.ok) { setStatus(data?.details || data?.error || "Note generation failed."); return; }
       setGeneratedNote(data.note || "");
+      setSimilarityWarning(!!data.similarityWarning);
       setStatus("");
     } catch {
       setStatus("Network error. Please try again.");
@@ -817,6 +819,11 @@ export default function ClientProfilePage() {
                 </p>
               )}
               {status && <p className="mt-2 text-[13px] text-red-500">{status}</p>}
+              {similarityWarning && (
+                <p className="mt-3 text-[13px] rounded-xl px-4 py-3 border" style={{ background: "#FFFBEB", borderColor: "#FCD34D", color: "#92400E" }}>
+                  ⚠️ This note may be similar to a previous session. Consider editing before submitting.
+                </p>
+              )}
               {generatedNote && (
                 <NoteOutput
                   note={generatedNote}

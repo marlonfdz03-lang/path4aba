@@ -23,7 +23,10 @@ export async function POST(req: NextRequest) {
 
     const result = await generateSmartNote(input);
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ...result,
+      ...(result.similarityWarning ? { similarityWarning: true } : {}),
+    });
   } catch (error: any) {
     console.error("Note generation error:", error);
 
