@@ -174,7 +174,62 @@ export async function sendPaymentFailedEmail(to: string, name: string) {
   })
 }
 
-// ── 5. Password reset ──────────────────────────────────────────────────────
+// ── 5. Fieldwork month-end reminder ───────────────────────────────────────
+
+export async function sendFieldworkMonthEndReminder(
+  to: string,
+  name: string,
+  hoursThisMonth: number,
+  pendingItems: string[]
+) {
+  const checklistHtml = pendingItems.length
+    ? `<ul style="margin:8px 0 24px;padding-left:20px;color:#475569;font-size:14px;">${pendingItems.map(i => `<li style="margin-bottom:4px;">${i}</li>`).join('')}</ul>`
+    : `<p style="color:#16A34A;margin:0 0 24px;font-size:14px;">✅ All compliance items on track!</p>`
+
+  const html = wrap(`
+    ${h1('3 days left to close your fieldwork month')}
+    ${p(`Hi ${name}, you've logged <strong style="color:#0D2B4E;">${hoursThisMonth.toFixed(1)} hours</strong> this month. Here's what's still pending:`, 16)}
+    ${checklistHtml}
+    ${btn('View Dashboard', 'https://path4aba.app/bcba-students')}
+  `)
+  return getResend().emails.send({ from: FROM, to, subject: '3 days left to close your fieldwork month', html })
+}
+
+// ── 6. M-FVF deadline ─────────────────────────────────────────────────────
+
+export async function sendMVFDeadlineEmail(
+  to: string,
+  name: string,
+  monthLabel: string,
+  certTrack: string
+) {
+  const html = wrap(`
+    ${h1('M-FVF deadline today')}
+    ${p(`Hi ${name}, today is the last day to have your <strong style="color:#0D2B4E;">${monthLabel}</strong> Monthly Fieldwork Verification Form signed. Unsigned forms mean those hours don't count toward your ${certTrack} certification.`, 24)}
+    ${btn('Sign M-FVF Now', 'https://path4aba.app/bcba-students/monthly')}
+  `)
+  return getResend().emails.send({ from: FROM, to, subject: `Today is the last day to sign your ${monthLabel} M-FVF`, html })
+}
+
+// ── 7. Fieldwork milestone ─────────────────────────────────────────────────
+
+export async function sendFieldworkMilestoneEmail(
+  to: string,
+  name: string,
+  pct: number,
+  hoursLogged: number,
+  certTrack: string
+) {
+  const label = pct === 100 ? "100% — you're done!" : `${pct}%`
+  const html = wrap(`
+    ${h1('🎉 Fieldwork milestone reached!')}
+    ${p(`You've reached <strong style="color:#0D2B4E;">${label}</strong> — <strong style="color:#0D2B4E;">${hoursLogged.toFixed(0)} hours</strong> logged toward your ${certTrack} certification. Keep going!`, 24)}
+    ${btn('View Progress', 'https://path4aba.app/bcba-students')}
+  `)
+  return getResend().emails.send({ from: FROM, to, subject: `You've reached ${label} of your fieldwork goal!`, html })
+}
+
+// ── 8. Password reset ──────────────────────────────────────────────────────
 
 export async function sendPasswordResetEmail(to: string, resetLink: string) {
   const html = wrap(`

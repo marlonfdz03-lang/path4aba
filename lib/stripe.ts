@@ -36,3 +36,17 @@ export const PRICES: Record<PlanKey, { month: string; year: string }> = {
     year: process.env.STRIPE_PRICE_BCBA_PRO_YEARLY!,
   },
 }
+
+// BCBA Students add-on pricing
+// addon: $9.99/mo · $99/yr (for existing RBT subscribers)
+// standalone: $14.99/mo · $149/yr (no existing plan)
+export const BCBA_STUDENTS_PRICES = {
+  addon: {
+    month: process.env.STRIPE_PRICE_BCBA_STUDENTS_ADDON_MONTHLY!,
+    year: process.env.STRIPE_PRICE_BCBA_STUDENTS_ADDON_YEARLY!,
+  },
+  standalone: {
+    month: process.env.STRIPE_PRICE_BCBA_STUDENTS_STANDALONE_MONTHLY!,
+    year: process.env.STRIPE_PRICE_BCBA_STUDENTS_STANDALONE_YEARLY!,
+  },
+}

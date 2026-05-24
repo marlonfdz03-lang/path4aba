@@ -8,6 +8,9 @@ const PUBLIC_ROUTES = ['/login', '/reset-password', '/pricing', '/privacy', '/te
 // Routes that require auth but skip the subscription check
 const SUBSCRIPTION_SKIP = ['/billing', '/pricing', '/onboarding']
 
+// Routes that require the bcba_students add-on (checked in layout, not here)
+// Middleware only does the main subscription check; layout.tsx handles the add-on gate
+
 // Plan slugs: 'trial' | 'rbt' | 'bcba_starter' | 'bcba_pro'
 // Client limits per plan are defined in lib/stripe.ts (PLAN_LIMITS).
 // Enforcement happens client-side when adding clients because client
@@ -73,7 +76,7 @@ export async function middleware(request: NextRequest) {
   if (user && !isPublic && !isSubscriptionSkip && !isPostPayment && !hasGraceCookie) {
     const { data: sub } = await supabase
       .from('subscriptions')
-      .select('status, plan, trial_ends_at')
+      .select('status, plan, trial_ends_at, bcba_students_status, bcba_students_trial_ends_at')
       .eq('user_id', user.id)
       .maybeSingle()
 
@@ -86,7 +89,16 @@ export async function middleware(request: NextRequest) {
           sub.trial_ends_at &&
           new Date(sub.trial_ends_at) > now))
 
-    if (!hasActiveSub) {
+    // Users on /bcba-students with only the add-on (no main plan) should pass through
+    const isBCBAStudentsRoute = pathname.startsWith('/bcba-students')
+    const hasBCBAStudentsAccess =
+      sub &&
+      (sub.bcba_students_status === 'active' ||
+        (sub.bcba_students_status === 'trialing' &&
+          sub.bcba_students_trial_ends_at &&
+          new Date(sub.bcba_students_trial_ends_at) > now))
+
+    if (!hasActiveSub && !(isBCBAStudentsRoute && hasBCBAStudentsAccess)) {
       if (!sub) {
         // Never signed up for a plan → choose plan first (no payment)
         return NextResponse.redirect(new URL('/onboarding', request.url))

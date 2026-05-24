@@ -65,28 +65,45 @@ export async function POST(req: Request) {
         trialEnd.setDate(trialEnd.getDate() + 7)
         const trial_ends_at = trialEnd.toISOString()
 
-        const { error } = await supabase
-          .from('subscriptions')
-          .upsert({
-            user_id: userId,
-            plan,
-            status: 'trialing',
-            trial_ends_at,
-            stripe_customer_id: session.customer?.toString() || null,
-            stripe_subscription_id: session.subscription?.toString() || null,
-          }, { onConflict: 'user_id' })
+        if (plan === 'bcba_students') {
+          // Add-on: update bcba_students columns on existing row (or create row)
+          const { error } = await supabase
+            .from('subscriptions')
+            .upsert({
+              user_id: userId,
+              bcba_students_status: 'trialing',
+              bcba_students_trial_ends_at: trial_ends_at,
+              bcba_students_subscription_id: session.subscription?.toString() || null,
+              stripe_customer_id: session.customer?.toString() || null,
+            }, { onConflict: 'user_id' })
+          if (error) {
+            console.error('[webhook] bcba_students upsert error:', JSON.stringify(error))
+            return new Response('DB error: ' + error.message, { status: 500 })
+          }
+          console.log('[webhook] bcba_students subscription saved for:', userId)
+        } else {
+          const { error } = await supabase
+            .from('subscriptions')
+            .upsert({
+              user_id: userId,
+              plan,
+              status: 'trialing',
+              trial_ends_at,
+              stripe_customer_id: session.customer?.toString() || null,
+              stripe_subscription_id: session.subscription?.toString() || null,
+            }, { onConflict: 'user_id' })
 
-        if (error) {
-          console.error('Supabase upsert error:', JSON.stringify(error))
-          return new Response('DB error: ' + error.message, { status: 500 })
-        }
+          if (error) {
+            console.error('Supabase upsert error:', JSON.stringify(error))
+            return new Response('DB error: ' + error.message, { status: 500 })
+          }
+          console.log('Subscription saved for:', userId)
 
-        console.log('Subscription saved for:', userId)
-
-        // Increment promo code usage if one was applied
-        const appliedPromo = session.metadata?.promoCode
-        if (appliedPromo) {
-          await supabase.rpc('increment_promo_uses', { promo_code: appliedPromo })
+          // Increment promo code usage if one was applied
+          const appliedPromo = session.metadata?.promoCode
+          if (appliedPromo) {
+            await supabase.rpc('increment_promo_uses', { promo_code: appliedPromo })
+          }
         }
 
         // Send payment confirmation email (fire-and-forget)
@@ -106,34 +123,65 @@ export async function POST(req: Request) {
       case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription
         const periodEnd = new Date((subscription as any).current_period_end * 1000).toISOString()
+        const mappedStatus = mapStripeStatus(subscription.status)
 
-        const update: any = {
-          status: mapStripeStatus(subscription.status),
-          current_period_ends_at: periodEnd,
-        }
-
-        if (subscription.status === 'trialing' && (subscription as any).trial_end) {
-          update.trial_ends_at = new Date((subscription as any).trial_end * 1000).toISOString()
-        }
-
-        const { error } = await supabase
+        // Try updating as bcba_students subscription first
+        const { data: bcbaRow } = await supabase
           .from('subscriptions')
-          .update(update)
-          .eq('stripe_subscription_id', subscription.id)
+          .select('user_id')
+          .eq('bcba_students_subscription_id', subscription.id)
+          .maybeSingle()
 
-        if (error) console.error('[webhook] subscription.updated error:', error)
+        if (bcbaRow) {
+          const update: any = { bcba_students_status: mappedStatus }
+          if (subscription.status === 'trialing' && (subscription as any).trial_end) {
+            update.bcba_students_trial_ends_at = new Date((subscription as any).trial_end * 1000).toISOString()
+          }
+          const { error } = await supabase
+            .from('subscriptions')
+            .update(update)
+            .eq('bcba_students_subscription_id', subscription.id)
+          if (error) console.error('[webhook] bcba_students subscription.updated error:', error)
+        } else {
+          const update: any = {
+            status: mappedStatus,
+            current_period_ends_at: periodEnd,
+          }
+          if (subscription.status === 'trialing' && (subscription as any).trial_end) {
+            update.trial_ends_at = new Date((subscription as any).trial_end * 1000).toISOString()
+          }
+          const { error } = await supabase
+            .from('subscriptions')
+            .update(update)
+            .eq('stripe_subscription_id', subscription.id)
+          if (error) console.error('[webhook] subscription.updated error:', error)
+        }
         break
       }
 
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription
 
-        const { error } = await supabase
+        // Try bcba_students first
+        const { data: bcbaRow } = await supabase
           .from('subscriptions')
-          .update({ status: 'canceled' })
-          .eq('stripe_subscription_id', subscription.id)
+          .select('user_id')
+          .eq('bcba_students_subscription_id', subscription.id)
+          .maybeSingle()
 
-        if (error) console.error('[webhook] subscription.deleted error:', error)
+        if (bcbaRow) {
+          const { error } = await supabase
+            .from('subscriptions')
+            .update({ bcba_students_status: 'canceled' })
+            .eq('bcba_students_subscription_id', subscription.id)
+          if (error) console.error('[webhook] bcba_students subscription.deleted error:', error)
+        } else {
+          const { error } = await supabase
+            .from('subscriptions')
+            .update({ status: 'canceled' })
+            .eq('stripe_subscription_id', subscription.id)
+          if (error) console.error('[webhook] subscription.deleted error:', error)
+        }
         break
       }
 

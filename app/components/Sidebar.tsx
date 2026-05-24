@@ -70,6 +70,19 @@ const IconClipboard = () => (
   </svg>
 );
 
+const IconGraduationCap = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+    <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+  </svg>
+);
+
+const IconLock = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+  </svg>
+);
+
 const IconNotes = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -168,6 +181,7 @@ export default function Sidebar() {
   const router = useRouter();
   const [clientCount, setClientCount] = useState(0);
   const [pendingReviewCount, setPendingReviewCount] = useState(0);
+  const [hasBCBAStudents, setHasBCBAStudents] = useState(false);
   const [user, setUser] = useState<{ name: string; profession: string; initials: string } | null>(null);
 
   useEffect(() => {
@@ -190,6 +204,22 @@ export default function Sidebar() {
             .eq("review_status", "pending")
             .then(({ count }) => setPendingReviewCount(count || 0));
         }
+
+        // Check bcba_students add-on
+        supabase
+          .from("subscriptions")
+          .select("bcba_students_status, bcba_students_trial_ends_at")
+          .eq("user_id", data.user.id)
+          .maybeSingle()
+          .then(({ data: sub }) => {
+            const now = new Date();
+            const active =
+              sub?.bcba_students_status === "active" ||
+              (sub?.bcba_students_status === "trialing" &&
+                sub.bcba_students_trial_ends_at &&
+                new Date(sub.bcba_students_trial_ends_at) > now);
+            setHasBCBAStudents(!!active);
+          });
       }
     });
   }, []);
@@ -227,6 +257,34 @@ export default function Sidebar() {
                 <NavItem href="/schedule" label="Schedule" icon={IconCalendar} active={isActive("/schedule")} />
               </div>
             </div>
+            {/* BCBA Students */}
+            <div>
+              <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                BCBA Students
+              </p>
+              <div className="space-y-0.5">
+                {hasBCBAStudents ? (
+                  <>
+                    <NavItem href="/bcba-students" label="Dashboard" icon={IconGraduationCap} active={isActive("/bcba-students") && !isActive("/bcba-students/log") && !isActive("/bcba-students/monthly") && !isActive("/bcba-students/settings")} />
+                    <NavItem href="/bcba-students/log" label="Log session" icon={IconFileText} active={isActive("/bcba-students/log")} />
+                    <NavItem href="/bcba-students/monthly" label="Monthly view" icon={IconCalendar} active={isActive("/bcba-students/monthly")} />
+                    <NavItem href="/bcba-students/settings" label="Settings" icon={IconSettings} active={isActive("/bcba-students/settings")} />
+                  </>
+                ) : (
+                  <Link
+                    href="/bcba-students"
+                    className="flex items-center gap-[10px] px-[10px] py-[9px] rounded-[6px] text-sm font-medium"
+                    style={{ color: "rgba(255,255,255,0.45)" }}
+                  >
+                    <IconGraduationCap />
+                    <span className="flex-1">Fieldwork tracker</span>
+                    <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full" style={{ background: "rgba(27,168,160,0.22)", color: "#24BDB4" }}>
+                      <IconLock /> Add-on
+                    </span>
+                  </Link>
+                )}
+              </div>
+            </div>
             {/* Account */}
             <div>
               <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
@@ -248,6 +306,34 @@ export default function Sidebar() {
                 <NavItem href="/" label="Dashboard" icon={IconDashboard} active={isActive("/")} />
                 <NavItem href="/clients" label="Clients" icon={IconUsers} active={isActive("/clients")} badge={clientCount} />
                 <NavItem href="/schedule" label="Schedule" icon={IconCalendar} active={isActive("/schedule")} />
+              </div>
+            </div>
+            {/* BCBA Students */}
+            <div>
+              <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                BCBA Students
+              </p>
+              <div className="space-y-0.5">
+                {hasBCBAStudents ? (
+                  <>
+                    <NavItem href="/bcba-students" label="Dashboard" icon={IconGraduationCap} active={isActive("/bcba-students") && !isActive("/bcba-students/log") && !isActive("/bcba-students/monthly") && !isActive("/bcba-students/settings")} />
+                    <NavItem href="/bcba-students/log" label="Log session" icon={IconFileText} active={isActive("/bcba-students/log")} />
+                    <NavItem href="/bcba-students/monthly" label="Monthly view" icon={IconCalendar} active={isActive("/bcba-students/monthly")} />
+                    <NavItem href="/bcba-students/settings" label="Settings" icon={IconSettings} active={isActive("/bcba-students/settings")} />
+                  </>
+                ) : (
+                  <Link
+                    href="/bcba-students"
+                    className="flex items-center gap-[10px] px-[10px] py-[9px] rounded-[6px] text-sm font-medium"
+                    style={{ color: "rgba(255,255,255,0.45)" }}
+                  >
+                    <IconGraduationCap />
+                    <span className="flex-1">Fieldwork tracker</span>
+                    <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full" style={{ background: "rgba(27,168,160,0.22)", color: "#24BDB4" }}>
+                      <IconLock /> Add-on
+                    </span>
+                  </Link>
+                )}
               </div>
             </div>
             {/* Account */}
