@@ -180,7 +180,12 @@ export default function LogSessionPage() {
                     </div>
                   </div>
                   <button
-                    onClick={handleDownloadSupervisionForm}
+                    onClick={() => {
+                      const win = window.open('', '_blank');
+                      if (!win) { alert('Enable popups to download this form.'); return; }
+                      win.document.write('<html><body><h1>Supervision Meeting Form</h1><p>Date: ' + new Date().toLocaleDateString() + '</p><script>window.print();<\/script></body></html>');
+                      win.document.close();
+                    }}
                     className="mt-4 w-full py-2.5 rounded-xl text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
                     style={{ background: "var(--teal)" }}
                   >
