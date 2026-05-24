@@ -200,7 +200,7 @@ export default function ClientsPage() {
       const { data, error } = await supabase
         .from("clients")
         .select("id, client_name, clinical_profile, created_at")
-        .eq("created_by", user.id)
+        .or(`created_by.eq.${user.id},rbt_id.eq.${user.id},created_by.is.null`)
         .order("created_at", { ascending: false });
 
       console.log('[clients] Supabase fetch result:', { count: data?.length, error, userId: user.id });
