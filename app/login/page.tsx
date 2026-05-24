@@ -290,6 +290,14 @@ function LoginContent() {
             </p>
 
           </form>
+
+          {/* Policy links */}
+          <p className="text-center text-[12px] mt-6" style={{ color: "var(--text3)" }}>
+            <a href="/privacy" className="hover:underline" style={{ color: "var(--text3)" }}>Privacy Policy</a>
+            <span className="mx-2">·</span>
+            <a href="/terms" className="hover:underline" style={{ color: "var(--text3)" }}>Terms of Service</a>
+          </p>
+
         </div>
       </div>
 

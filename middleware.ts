@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 // Routes that don't require auth
-const PUBLIC_ROUTES = ['/login', '/reset-password', '/pricing']
+const PUBLIC_ROUTES = ['/login', '/reset-password', '/pricing', '/privacy', '/terms']
 
 // Routes that require auth but skip the subscription check
 const SUBSCRIPTION_SKIP = ['/billing', '/pricing', '/onboarding']
