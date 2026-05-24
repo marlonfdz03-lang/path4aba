@@ -182,6 +182,7 @@ export default function Sidebar() {
   const [clientCount, setClientCount] = useState(0);
   const [pendingReviewCount, setPendingReviewCount] = useState(0);
   const [hasBCBAStudents, setHasBCBAStudents] = useState(false);
+  const [hasActiveRBT, setHasActiveRBT] = useState(false);
   const [user, setUser] = useState<{ name: string; profession: string; initials: string } | null>(null);
 
   useEffect(() => {
@@ -205,20 +206,26 @@ export default function Sidebar() {
             .then(({ count }) => setPendingReviewCount(count || 0));
         }
 
-        // Check bcba_students add-on
+        // Check subscriptions: bcba_students add-on + active RBT (for price display)
         supabase
           .from("subscriptions")
-          .select("bcba_students_status, bcba_students_trial_ends_at")
+          .select("status, plan, trial_ends_at, bcba_students_status, bcba_students_trial_ends_at")
           .eq("user_id", data.user.id)
           .maybeSingle()
           .then(({ data: sub }) => {
             const now = new Date();
-            const active =
+            const bcbaActive =
               sub?.bcba_students_status === "active" ||
               (sub?.bcba_students_status === "trialing" &&
                 sub.bcba_students_trial_ends_at &&
                 new Date(sub.bcba_students_trial_ends_at) > now);
-            setHasBCBAStudents(!!active);
+            setHasBCBAStudents(!!bcbaActive);
+
+            const rbtActive =
+              sub?.plan === "rbt" &&
+              (sub.status === "active" ||
+                (sub.status === "trialing" && sub.trial_ends_at && new Date(sub.trial_ends_at) > now));
+            setHasActiveRBT(!!rbtActive);
           });
       }
     });
@@ -279,7 +286,7 @@ export default function Sidebar() {
                     <IconGraduationCap />
                     <span className="flex-1">Fieldwork tracker</span>
                     <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full" style={{ background: "rgba(27,168,160,0.22)", color: "#24BDB4" }}>
-                      <IconLock /> Add-on
+                      <IconLock /> {hasActiveRBT ? "$9.99/mo" : "$14.99/mo"}
                     </span>
                   </Link>
                 )}
@@ -330,7 +337,7 @@ export default function Sidebar() {
                     <IconGraduationCap />
                     <span className="flex-1">Fieldwork tracker</span>
                     <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full" style={{ background: "rgba(27,168,160,0.22)", color: "#24BDB4" }}>
-                      <IconLock /> Add-on
+                      <IconLock /> {hasActiveRBT ? "$9.99/mo" : "$14.99/mo"}
                     </span>
                   </Link>
                 )}

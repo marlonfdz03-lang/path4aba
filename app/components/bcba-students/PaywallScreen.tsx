@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
 const CHECK_ICON = (
@@ -22,6 +22,24 @@ export default function PaywallScreen() {
   const [interval, setInterval] = useState<"month" | "year">("month");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [hasActiveRBT, setHasActiveRBT] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data?.user) { setHasActiveRBT(false); return; }
+      const { data: sub } = await supabase
+        .from("subscriptions")
+        .select("status, plan, trial_ends_at")
+        .eq("user_id", data.user.id)
+        .maybeSingle();
+      const now = new Date();
+      const active =
+        sub?.plan === "rbt" &&
+        (sub.status === "active" ||
+          (sub.status === "trialing" && sub.trial_ends_at && new Date(sub.trial_ends_at) > now));
+      setHasActiveRBT(!!active);
+    });
+  }, []);
 
   async function handleStart() {
     setLoading(true);
@@ -44,10 +62,9 @@ export default function PaywallScreen() {
     }
   }
 
-  const monthlyPrice = "$14.99";
-  const yearlyPrice = "$149";
-  const addonMonthly = "$9.99";
-  const addonYearly = "$99";
+  // Show the price that applies to this user. null = still detecting.
+  const monthlyPrice = hasActiveRBT ? "$9.99" : "$14.99";
+  const yearlyPrice  = hasActiveRBT ? "$99"   : "$149";
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6" style={{ background: "var(--bg)", fontFamily: "var(--font-dm-sans, sans-serif)" }}>
@@ -59,7 +76,7 @@ export default function PaywallScreen() {
             {/* Badge */}
             <div className="flex justify-center mb-5">
               <span className="text-[11px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full" style={{ background: "rgba(27,168,160,0.12)", color: "var(--teal)" }}>
-                BCBA Students Add-on
+                {hasActiveRBT ? "RBT Member Price" : "BCBA Students"}
               </span>
             </div>
 
@@ -89,16 +106,22 @@ export default function PaywallScreen() {
               ))}
             </div>
 
-            {/* Price */}
+            {/* Price — single price based on RBT status */}
             <div className="text-center mb-2">
-              <span className="text-[38px] font-semibold" style={{ color: "var(--text1)" }}>
-                {interval === "month" ? monthlyPrice : yearlyPrice}
-              </span>
+              {hasActiveRBT === null ? (
+                <span className="text-[38px] font-semibold" style={{ color: "var(--border)" }}>—</span>
+              ) : (
+                <span className="text-[38px] font-semibold" style={{ color: "var(--text1)" }}>
+                  {interval === "month" ? monthlyPrice : yearlyPrice}
+                </span>
+              )}
               <span className="text-[14px] ml-1" style={{ color: "var(--text3)" }}>/{interval === "month" ? "mo" : "yr"}</span>
             </div>
-            <p className="text-[12px] text-center mb-1" style={{ color: "var(--text3)" }}>
-              or {interval === "month" ? addonMonthly : addonYearly}/{interval === "month" ? "mo" : "yr"} with an active RBT plan
-            </p>
+            {hasActiveRBT && (
+              <p className="text-[12px] text-center mb-1 font-medium" style={{ color: "var(--teal)" }}>
+                RBT member discount applied
+              </p>
+            )}
             <p className="text-[12px] text-center mb-7" style={{ color: "var(--text3)" }}>
               7-day free trial · Card required · Cancel anytime
             </p>
@@ -111,7 +134,7 @@ export default function PaywallScreen() {
 
             <button
               onClick={handleStart}
-              disabled={loading}
+              disabled={loading || hasActiveRBT === null}
               className="w-full py-3 rounded-xl text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60 mb-6"
               style={{ background: "var(--teal)" }}
             >

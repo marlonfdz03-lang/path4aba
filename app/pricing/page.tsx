@@ -82,6 +82,25 @@ export default function PricingPage() {
   const [interval, setInterval] = useState<"month" | "year">("month");
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
+  async function handleStartBCBAStudents() {
+    setLoadingPlan("bcba_students");
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.push("/login"); return; }
+    try {
+      const res = await fetch("/api/bcba-students/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, interval }),
+      });
+      const { url, error } = await res.json();
+      if (error || !url) throw new Error(error || "No checkout URL");
+      window.location.href = url;
+    } catch (err) {
+      console.error("BCBA Students checkout error:", err);
+      setLoadingPlan(null);
+    }
+  }
+
   function yearlySavings(plan: Plan) {
     return Math.round(plan.monthlyPrice * 12 - plan.yearlyPrice);
   }
@@ -295,6 +314,57 @@ export default function PricingPage() {
             </div>
           );
         })}
+      </div>
+
+      {/* BCBA Students add-on */}
+      <div className="px-6 pb-10 max-w-5xl mx-auto w-full">
+        <p className="text-[11px] uppercase tracking-widest font-semibold mb-4 text-center" style={{ color: "var(--text3)" }}>
+          Add-on
+        </p>
+        <div className="bg-white rounded-2xl overflow-hidden flex flex-col md:flex-row" style={{ border: "1px solid var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+          <div className="w-1 md:w-auto md:h-auto flex-shrink-0" style={{ background: "linear-gradient(180deg, var(--teal), var(--sky))", minWidth: 4 }} />
+          <div className="p-7 flex flex-col md:flex-row gap-6 flex-1">
+            {/* Left: info */}
+            <div className="flex-1">
+              <p className="text-[11px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--text3)" }}>BCBA Students</p>
+              <p className="text-[18px] font-semibold mb-1" style={{ color: "var(--text1)" }}>Fieldwork Hour Tracker</p>
+              <p className="text-[13px] mb-4" style={{ color: "var(--text3)" }}>
+                Track BACB fieldwork hours, automatic compliance calculations, monthly M-FVF management, and AI-generated session notes.
+              </p>
+              <ul className="space-y-1.5">
+                {["Track concentrated & supervised fieldwork hours", "Automatic BACB compliance calculations", "Monthly M-FVF PDF export", "200+ BACB-compliant note descriptions"].map(f => (
+                  <li key={f} className="flex items-center gap-2">
+                    {CHECK_ICON}
+                    <span className="text-[13px]" style={{ color: "var(--text2)" }}>{f}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            {/* Right: price + CTA */}
+            <div className="flex flex-col justify-center min-w-[200px]">
+              <div className="flex items-end gap-1 mb-1">
+                <span className="text-[38px] font-semibold leading-none" style={{ color: "var(--text1)" }}>
+                  {interval === "month" ? "$14.99" : "$149"}
+                </span>
+                <span className="text-[13px] mb-1.5" style={{ color: "var(--text3)" }}>/{interval === "month" ? "mo" : "yr"}</span>
+              </div>
+              <p className="text-[12px] mb-4" style={{ color: "var(--text3)" }}>
+                Already an RBT member?{" "}
+                <a href="/login" className="font-medium hover:underline" style={{ color: "var(--teal)" }}>Log in</a>
+                {" "}to get it at $9.99/month.
+              </p>
+              <button
+                onClick={handleStartBCBAStudents}
+                disabled={!!loadingPlan}
+                className="w-full py-3 rounded-xl text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed mb-2"
+                style={{ background: "var(--teal)" }}
+              >
+                {loadingPlan === "bcba_students" ? "Redirecting…" : "Start Free Trial"}
+              </button>
+              <p className="text-[11px] text-center" style={{ color: "var(--text3)" }}>7 days free · Card required</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Footer note */}
