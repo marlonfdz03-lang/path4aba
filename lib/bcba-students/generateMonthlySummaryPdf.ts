@@ -16,6 +16,9 @@ export interface MonthlySummarySession {
 
 export interface MonthlySummaryData {
   traineeName: string
+  traineeBacbId: string | null
+  supervisorName: string | null
+  supervisorBacbId: string | null
   monthLabel: string        // e.g. "May 2026"
   monthYear: string         // e.g. "2026-05"
   fieldworkType: FieldworkType
@@ -91,237 +94,233 @@ export async function generateMonthlySummaryPdf(data: MonthlySummaryData): Promi
   const rules = BACB_RULES[data.fieldworkType]
   const s     = data.summary
 
-  // ── Helper: new page with header ────────────────────────────────────────────
+  // ── Helper: new page ────────────────────────────────────────────────────────
   function addPage(): [PDFPage, number] {
     const page = doc.addPage([PW, PH])
-    // teal accent bar
-    page.drawRectangle({ x: ML, y: PH - 42, width: W, height: 4, color: TEAL })
-    // page header (continuation pages only show a compact header)
+    page.drawRectangle({ x: 0, y: PH - 36, width: PW, height: 36, color: NAVY })
+    txt(page, bold, 'MONTHLY FIELDWORK SUMMARY', ML, PH - 24, 13, WHITE)
+    const sub = `${data.monthLabel}  ·  ${data.fieldworkType === 'concentrated' ? 'Concentrated Supervised Fieldwork' : 'Supervised Fieldwork'}`
+    txt(page, reg, sub, ML, PH - 34, 7.5, rgb(0.7, 0.85, 0.9))
     if (doc.getPageCount() > 1) {
-      txt(page, bold, 'MONTHLY FIELDWORK SUMMARY (continued)', ML, PH - 56, 9, NAVY)
-      txt(page, reg,  `${data.traineeName}  ·  ${data.monthLabel}`, ML, PH - 68, 8, GRAY)
-      return [page, PH - 84]
+      txt(page, reg, `${data.traineeName}  ·  continued`, MR - reg.widthOfTextAtSize(`${data.traineeName}  ·  continued`, 7.5), PH - 24, 7.5, rgb(0.7, 0.85, 0.9))
+      return [page, PH - 52]
     }
-    return [page, PH - 46]
+    return [page, PH - 44]
   }
 
   let [page, y] = addPage()
 
-  // ── TITLE ──────────────────────────────────────────────────────────────────
-  const title = 'MONTHLY FIELDWORK SUMMARY'
-  const titleW = bold.widthOfTextAtSize(title, 17)
-  txt(page, bold, title, (PW - titleW) / 2, y, 17, NAVY)
-  y -= 16
+  // ── INFO GRID ──────────────────────────────────────────────────────────────
+  // 3-column layout: Supervisee | Supervisor | Month
+  const colW = (W - 16) / 3
+  const cols = [ML, ML + colW + 8, ML + (colW + 8) * 2]
 
-  const sub = `${data.monthLabel}  ·  ${data.fieldworkType === 'concentrated' ? 'Concentrated Fieldwork' : 'Supervised Fieldwork'}`
-  const subW = reg.widthOfTextAtSize(sub, 10)
-  txt(page, reg, sub, (PW - subW) / 2, y, 10, TEAL)
-  y -= 8
+  page.drawRectangle({ x: ML, y: y - 52, width: W, height: 56, color: MGRAY, borderColor: LGRAY, borderWidth: 0.5 })
 
-  hRule(page, ML, MR, y, LGRAY, 1)
-  y -= 18
+  // Column 1: Supervisee
+  txt(page, reg,  'SUPERVISEE', cols[0] + 8, y - 8, 6.5, GRAY)
+  txt(page, bold, truncate(data.traineeName || '—', 28), cols[0] + 8, y - 20, 9, NAVY)
+  txt(page, reg,  'BACB ID', cols[0] + 8, y - 33, 6.5, GRAY)
+  txt(page, reg,  data.traineeBacbId || '—', cols[0] + 8, y - 43, 8.5, NAVY)
 
-  // ── TRAINEE INFO ──────────────────────────────────────────────────────────
-  txt(page, reg,  'TRAINEE', ML, y, 7.5, GRAY)
-  txt(page, reg,  'MONTH', ML + 260, y, 7.5, GRAY)
-  txt(page, reg,  'GENERATED', ML + 380, y, 7.5, GRAY)
-  y -= 13
-  txt(page, bold, data.traineeName || '—', ML, y, 11, NAVY)
-  txt(page, bold, data.monthLabel, ML + 260, y, 11, NAVY)
-  txt(page, reg,  new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), ML + 380, y, 9, GRAY)
-  y -= 22
+  // Vertical divider
+  page.drawLine({ start: { x: cols[1] - 4, y: y - 52 }, end: { x: cols[1] - 4, y }, thickness: 0.5, color: LGRAY })
 
-  hRule(page, ML, MR, y, LGRAY, 0.5)
-  y -= 14
+  // Column 2: Supervisor
+  txt(page, reg,  'SUPERVISOR', cols[1] + 8, y - 8, 6.5, GRAY)
+  txt(page, bold, truncate(data.supervisorName || '—', 28), cols[1] + 8, y - 20, 9, NAVY)
+  txt(page, reg,  'BACB ID', cols[1] + 8, y - 33, 6.5, GRAY)
+  txt(page, reg,  data.supervisorBacbId || '—', cols[1] + 8, y - 43, 8.5, NAVY)
 
-  // ── SUMMARY METRICS ───────────────────────────────────────────────────────
+  // Vertical divider
+  page.drawLine({ start: { x: cols[2] - 4, y: y - 52 }, end: { x: cols[2] - 4, y }, thickness: 0.5, color: LGRAY })
+
+  // Column 3: Month info
+  txt(page, reg,  'MONTH', cols[2] + 8, y - 8, 6.5, GRAY)
+  txt(page, bold, data.monthLabel, cols[2] + 8, y - 20, 9, NAVY)
+  txt(page, reg,  'GENERATED', cols[2] + 8, y - 33, 6.5, GRAY)
+  txt(page, reg,  new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), cols[2] + 8, y - 43, 8.5, NAVY)
+
+  y -= 62
+
+  // ── HOURS SUMMARY ─────────────────────────────────────────────────────────
   txt(page, bold, 'HOURS SUMMARY', ML, y, 8, GRAY)
   hRule(page, ML, MR, y - 2, TEAL, 1.5)
   y -= 14
 
-  // 4-column metric boxes
   const boxW = (W - 12) / 4
   const boxes: Array<{ label: string; value: string }> = [
-    { label: 'Independent Hrs', value: s.total_independent_hours.toFixed(2) },
-    { label: 'Supervised Hrs',  value: s.total_supervised_hours.toFixed(2) },
-    { label: 'Total Hrs',       value: s.total_hours.toFixed(2) },
-    { label: 'Supervision %',   value: s.supervision_pct.toFixed(1) + '%' },
+    { label: 'Total Hours',          value: s.total_hours.toFixed(2) },
+    { label: 'Independent Hours',    value: s.total_independent_hours.toFixed(2) },
+    { label: 'Supervised Hours',     value: s.total_supervised_hours.toFixed(2) },
+    { label: '% Hours Supervised',   value: s.supervision_pct.toFixed(1) + '%' },
   ]
   for (let i = 0; i < boxes.length; i++) {
     const bx = ML + i * (boxW + 4)
-    page.drawRectangle({ x: bx, y: y - 30, width: boxW, height: 34, color: MGRAY, borderColor: LGRAY, borderWidth: 0.5 })
-    txt(page, reg,  boxes[i].label, bx + 6, y + 0, 7, GRAY)
-    txt(page, bold, boxes[i].value, bx + 6, y - 18, 13, NAVY)
+    page.drawRectangle({ x: bx, y: y - 32, width: boxW, height: 36, color: MGRAY, borderColor: LGRAY, borderWidth: 0.5 })
+    txt(page, reg,  boxes[i].label, bx + 6, y - 2,  7, GRAY)
+    txt(page, bold, boxes[i].value, bx + 6, y - 21, 14, NAVY)
   }
-  y -= 44
+  y -= 46
 
-  // 2nd row: contacts
-  const boxes2: Array<{ label: string; value: string }> = [
-    { label: 'Sup. Contacts',   value: String(s.supervisor_contacts) },
-    { label: 'Individual Sup.', value: String(s.individual_contacts) },
-    { label: 'Group Sup.',      value: String(s.group_contacts) },
-    { label: 'Client Obs.',     value: String(s.client_observations) },
-  ]
-  for (let i = 0; i < boxes2.length; i++) {
-    const bx = ML + i * (boxW + 4)
-    page.drawRectangle({ x: bx, y: y - 30, width: boxW, height: 34, color: MGRAY, borderColor: LGRAY, borderWidth: 0.5 })
-    txt(page, reg,  boxes2[i].label, bx + 6, y + 0, 7, GRAY)
-    txt(page, bold, boxes2[i].value, bx + 6, y - 18, 13, NAVY)
-  }
-  y -= 50
-
-  // ── COMPLIANCE STATUS ────────────────────────────────────────────────────
-  txt(page, bold, 'COMPLIANCE STATUS', ML, y, 8, GRAY)
+  // ── BACB REQUIREMENTS CHECKLIST ───────────────────────────────────────────
+  txt(page, bold, 'BACB REQUIREMENTS CHECKLIST', ML, y, 8, GRAY)
   hRule(page, ML, MR, y - 2, TEAL, 1.5)
   y -= 14
 
-  const indivPct = s.supervisor_contacts > 0 ? (s.individual_contacts / s.supervisor_contacts) * 100 : 0
-  const grpPct   = s.supervisor_contacts > 0 ? (s.group_contacts   / s.supervisor_contacts) * 100 : 0
+  const grpPct = s.supervisor_contacts > 0 ? (s.group_contacts / s.supervisor_contacts) * 100 : 0
 
-  const checks: Array<{ label: string; met: boolean; detail: string }> = [
-    {
-      label: 'Minimum hours per month',
-      met:   s.total_hours >= rules.minHoursPerMonth,
-      detail: `${s.total_hours.toFixed(2)} of ${rules.minHoursPerMonth} hrs required`,
-    },
-    {
-      label: `Minimum supervision % (${rules.supervisionPctMin}%)`,
-      met:   s.supervision_pct >= rules.supervisionPctMin,
-      detail: `${s.supervision_pct.toFixed(1)}% achieved`,
-    },
-    {
-      label: `Supervision contacts per month (${rules.contactsPerMonth} required)`,
-      met:   s.supervisor_contacts >= rules.contactsPerMonth,
-      detail: `${s.supervisor_contacts} contact${s.supervisor_contacts !== 1 ? 's' : ''} recorded`,
-    },
-    {
-      label: 'Client observation (≥1 required)',
-      met:   s.client_observations >= BACB_RULES.clientObservationsPerMonth,
-      detail: `${s.client_observations} recorded`,
-    },
-    {
-      label: `Individual supervision ≥${BACB_RULES.individualSupervisionMin}% of contacts`,
-      met:   s.supervisor_contacts === 0 || indivPct >= BACB_RULES.individualSupervisionMin,
-      detail: s.supervisor_contacts === 0 ? 'No contacts recorded' : `${indivPct.toFixed(0)}% individual`,
-    },
-    {
-      label: `Group supervision ≤${BACB_RULES.groupSupervisionMax}% of contacts`,
-      met:   s.supervisor_contacts === 0 || grpPct <= BACB_RULES.groupSupervisionMax,
-      detail: s.supervisor_contacts === 0 ? 'No contacts recorded' : `${grpPct.toFixed(0)}% group`,
-    },
-    {
-      label: 'M-FVF signed by supervisor',
-      met:   s.mvf_signed,
-      detail: s.mvf_signed ? 'Signed' : 'Not yet signed',
-    },
-  ]
-
-  for (const check of checks) {
-    const mark = check.met ? '✓' : '✗'
-    const markColor = check.met ? GREEN : RED
-    txt(page, bold, mark, ML, y, 10, markColor)
-    txt(page, reg,  check.label, ML + 16, y, 9, NAVY)
-    txt(page, reg,  check.detail, ML + 320, y, 8.5, GRAY)
-    y -= 14
+  // Section helper
+  function sectionHeader(label: string) {
+    txt(page, bold, label, ML + 4, y, 7.5, GRAY)
+    y -= 12
   }
-  y -= 8
 
-  // Overall eligibility badge
-  const badgeText = s.is_eligible ? '✓  ELIGIBLE' : '✗  INELIGIBLE'
+  function checkRow(label: string, met: boolean, detail: string) {
+    const mark = met ? '✓' : '✗'
+    txt(page, bold, mark,   ML + 12, y, 9, met ? GREEN : RED)
+    txt(page, reg,  label,  ML + 26, y, 8.5, NAVY)
+    txt(page, reg,  detail, ML + 290, y, 8, GRAY)
+    y -= 13
+  }
+
+  // Total Hour Requirements
+  sectionHeader('Total Hour Requirements')
+  checkRow(
+    'Minimum 20 Total Hours',
+    s.total_hours >= 20,
+    `${s.total_hours.toFixed(2)} hrs logged`
+  )
+  checkRow(
+    'Maximum 130 Total Hours',
+    s.total_hours <= 130,
+    s.total_hours > 130 ? `${s.total_hours.toFixed(2)} hrs — exceeds limit` : `${s.total_hours.toFixed(2)} hrs — within limit`
+  )
+  y -= 4
+
+  // Supervision Requirements
+  sectionHeader('Supervision Requirements')
+  const supMinPct = rules.supervisionPctMin
+  checkRow(
+    `Minimum ${supMinPct}% Supervision`,
+    s.supervision_pct >= supMinPct,
+    `${s.supervision_pct.toFixed(1)}% achieved`
+  )
+  checkRow(
+    'Maximum 50% Group Supervision',
+    s.supervisor_contacts === 0 || grpPct <= BACB_RULES.groupSupervisionMax,
+    s.supervisor_contacts === 0 ? 'No contacts recorded' : `${grpPct.toFixed(0)}% group`
+  )
+  y -= 4
+
+  // Contacts Requirements
+  const contactsRequired = rules.contactsPerMonth
+  sectionHeader('Contacts Requirements')
+  checkRow(
+    `Minimum ${contactsRequired} Total Contacts`,
+    s.supervisor_contacts >= contactsRequired,
+    `${s.supervisor_contacts} contact${s.supervisor_contacts !== 1 ? 's' : ''} recorded`
+  )
+  checkRow(
+    'Minimum 1 Observation with Client',
+    s.client_observations >= 1,
+    `${s.client_observations} recorded`
+  )
+  y -= 4
+
+  // Eligibility badge
+  const badgeText = s.is_eligible ? '✓  ELIGIBLE FOR THIS MONTH' : '✗  INELIGIBLE FOR THIS MONTH'
   const badgeBg   = s.is_eligible ? rgb(0.9, 1.0, 0.94) : rgb(1.0, 0.93, 0.93)
   const badgeBdr  = s.is_eligible ? rgb(0.6, 0.9, 0.7)  : rgb(0.9, 0.7, 0.7)
   const badgeClr  = s.is_eligible ? GREEN : RED
-  page.drawRectangle({ x: ML, y: y - 20, width: W, height: 24, color: badgeBg, borderColor: badgeBdr, borderWidth: 1 })
-  txt(page, bold, badgeText, ML + 10, y - 9, 10, badgeClr)
+  page.drawRectangle({ x: ML, y: y - 18, width: W, height: 22, color: badgeBg, borderColor: badgeBdr, borderWidth: 1 })
+  txt(page, bold, badgeText, ML + 10, y - 7, 9, badgeClr)
   if (!s.is_eligible && s.ineligibility_reason) {
-    txt(page, reg, s.ineligibility_reason, ML + 110, y - 9, 8.5, GRAY)
+    txt(page, reg, s.ineligibility_reason, ML + 200, y - 7, 8, GRAY)
   }
-  y -= 34
+  y -= 32
 
   // ── SESSION LOG TABLE ────────────────────────────────────────────────────
-  y -= 10
+  y -= 6
   txt(page, bold, 'SESSION LOG', ML, y, 8, GRAY)
   hRule(page, ML, MR, y - 2, TEAL, 1.5)
   y -= 14
 
-  // Column layout (total W ≈ 524)
+  // Column layout
   const COL = {
-    date:    { x: ML,       w: 52  },
-    time:    { x: ML + 52,  w: 72  },
-    hrs:     { x: ML + 124, w: 34  },
-    act:     { x: ML + 158, w: 52  },
-    contact: { x: ML + 210, w: 90  },
-    sup:     { x: ML + 300, w: 80  },
-    note:    { x: ML + 380, w: MR - (ML + 380) },
+    date:    { x: ML,       w: 46  },
+    start:   { x: ML + 46,  w: 42  },
+    end:     { x: ML + 88,  w: 42  },
+    hrs:     { x: ML + 130, w: 30  },
+    act:     { x: ML + 160, w: 46  },
+    contact: { x: ML + 206, w: 82  },
+    sup:     { x: ML + 288, w: 72  },
+    note:    { x: ML + 360, w: MR - (ML + 360) },
   }
 
-  // Table header row
+  // Table header
   page.drawRectangle({ x: ML, y: y - 14, width: W, height: 17, color: NAVY })
   const headers: Array<{ label: string; x: number }> = [
-    { label: 'Date',        x: COL.date.x + 4    },
-    { label: 'Time',        x: COL.time.x + 4    },
-    { label: 'Hrs',         x: COL.hrs.x + 2     },
-    { label: 'Activity',    x: COL.act.x + 2     },
+    { label: 'Date',        x: COL.date.x + 3  },
+    { label: 'Start',       x: COL.start.x + 3 },
+    { label: 'End',         x: COL.end.x + 3   },
+    { label: 'Hrs',         x: COL.hrs.x + 2   },
+    { label: 'Activity',    x: COL.act.x + 2   },
     { label: 'Contact',     x: COL.contact.x + 2 },
-    { label: 'Supervisor',  x: COL.sup.x + 2     },
-    { label: 'Description', x: COL.note.x + 2    },
+    { label: 'Supervisor',  x: COL.sup.x + 2   },
+    { label: 'Description', x: COL.note.x + 2  },
   ]
-  for (const h of headers) txt(page, bold, h.label, h.x, y - 10, 7.5, WHITE)
+  for (const h of headers) txt(page, bold, h.label, h.x, y - 10, 7, WHITE)
   y -= 17
 
-  // Rows
   let rowIndex = 0
   for (const sess of data.sessions) {
-    const ROW_H = 14
+    const ROW_H = 13
 
     if (y < 60) {
-      // Footer before new page
       drawPageFooter(page, reg, ML, MR)
       ;[page, y] = addPage()
-      // Re-draw table header on continuation page
       page.drawRectangle({ x: ML, y: y - 14, width: W, height: 17, color: NAVY })
-      for (const h of headers) txt(page, bold, h.label, h.x, y - 10, 7.5, WHITE)
+      for (const h of headers) txt(page, bold, h.label, h.x, y - 10, 7, WHITE)
       y -= 17
       rowIndex = 0
     }
 
-    // Alternating row background
     if (rowIndex % 2 === 0) {
-      page.drawRectangle({ x: ML, y: y - ROW_H + 3, width: W, height: ROW_H, color: MGRAY })
+      page.drawRectangle({ x: ML, y: y - ROW_H + 2, width: W, height: ROW_H, color: MGRAY })
     }
 
-    const dateLabel = new Date(sess.session_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    const timeLabel = `${formatTime(sess.start_time)}–${formatTime(sess.end_time)}`
-    const actLabel  = sess.activity_type === 'unrestricted' ? 'Unrest.' : 'Restr.'
+    const dateLabel    = new Date(sess.session_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    const actLabel     = sess.activity_type === 'unrestricted' ? 'Unrest.' : 'Restr.'
     const contactLabel = CONTACT_SHORT[sess.contact_type] ?? sess.contact_type
-    const noteLabel = truncate(sess.session_note, 55)
+    const noteLabel    = truncate(sess.session_note, 100)
 
-    txt(page, reg, dateLabel,                      COL.date.x + 4,    y - 8, 7.5)
-    txt(page, reg, timeLabel,                      COL.time.x + 4,    y - 8, 7)
-    txt(page, reg, sess.total_hours.toFixed(2),    COL.hrs.x + 2,     y - 8, 7.5)
-    txt(page, reg, actLabel,                       COL.act.x + 2,     y - 8, 7.5)
-    txt(page, reg, contactLabel,                   COL.contact.x + 2, y - 8, 7.5)
-    txt(page, reg, truncate(sess.supervisor_name, 14), COL.sup.x + 2, y - 8, 7.5)
-    txt(page, reg, noteLabel,                      COL.note.x + 2,    y - 8, 7)
+    txt(page, reg, dateLabel,                          COL.date.x + 3,    y - 7.5, 7)
+    txt(page, reg, formatTime(sess.start_time),        COL.start.x + 3,   y - 7.5, 7)
+    txt(page, reg, formatTime(sess.end_time),          COL.end.x + 3,     y - 7.5, 7)
+    txt(page, reg, sess.total_hours.toFixed(2),        COL.hrs.x + 2,     y - 7.5, 7)
+    txt(page, reg, actLabel,                           COL.act.x + 2,     y - 7.5, 7)
+    txt(page, reg, contactLabel,                       COL.contact.x + 2, y - 7.5, 7)
+    txt(page, reg, truncate(sess.supervisor_name, 12), COL.sup.x + 2,     y - 7.5, 7)
+    txt(page, reg, noteLabel,                          COL.note.x + 2,    y - 7.5, 6.5)
 
     y -= ROW_H
     rowIndex++
   }
 
-  // ── FOOTER ────────────────────────────────────────────────────────────────
   drawPageFooter(page, reg, ML, MR)
 
   return doc.save()
 }
 
 function drawPageFooter(page: PDFPage, font: PDFFont, ML: number, MR: number) {
-  const PH   = page.getHeight()
   const PW   = page.getWidth()
-  const LGRAY = rgb(0.78, 0.78, 0.78)
-  const GRAY  = rgb(0.40, 0.40, 0.40)
-  const y = 28
-  page.drawLine({ start: { x: ML, y: y + 10 }, end: { x: MR, y: y + 10 }, thickness: 0.5, color: LGRAY })
-  const footer = 'Generated by Path4ABA — for reference only. Official M-FVF must be signed by supervisor.'
-  const fW = font.widthOfTextAtSize(footer, 7)
-  page.drawText(footer, { x: (PW - fW) / 2, y, size: 7, font, color: GRAY })
+  const yBase = 28
+  page.drawLine({ start: { x: ML, y: yBase + 14 }, end: { x: MR, y: yBase + 14 }, thickness: 0.5, color: LGRAY })
+  const line1 = 'Generated by Path4ABA — for reference only. Official M-FVF must be signed by supervisor.'
+  const line2 = 'Both parties must retain a copy of all fieldwork documentation for at least 7 years.'
+  const l1W = font.widthOfTextAtSize(line1, 6.5)
+  const l2W = font.widthOfTextAtSize(line2, 6.5)
+  page.drawText(line1, { x: (PW - l1W) / 2, y: yBase + 4, size: 6.5, font, color: GRAY })
+  page.drawText(line2, { x: (PW - l2W) / 2, y: yBase - 6, size: 6.5, font, color: GRAY })
 }

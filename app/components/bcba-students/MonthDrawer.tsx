@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { type FieldworkType } from "@/lib/bcba-students/calculations";
+import { BACB_RULES, type FieldworkType } from "@/lib/bcba-students/calculations";
 import ComplianceChecklist from "./ComplianceChecklist";
 
 interface Session {
@@ -88,7 +88,6 @@ export default function MonthDrawer({ monthYear, summary: initialSummary, fieldw
   const [loading, setLoading] = useState(true);
   const [signingMvf, setSigningMvf] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
-  const [downloadingSummary, setDownloadingSummary] = useState(false);
   const [downloadingSupervisionId, setDownloadingSupervisionId] = useState<string | null>(null);
   const [recalculating, setRecalculating] = useState(false);
 
@@ -137,24 +136,145 @@ export default function MonthDrawer({ monthYear, summary: initialSummary, fieldw
     onMvfSigned();
   }
 
-  async function handleDownloadSummary() {
-    setDownloadingSummary(true);
-    try {
-      const res = await fetch(`/api/bcba-students/monthly/${monthYear}/summary-pdf`);
-      if (!res.ok) throw new Error("PDF generation failed");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const safeName = traineeName.replace(/\s+/g, "-") || "Trainee";
-      a.download = `Monthly-Summary-${monthYear}-${safeName}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error("Monthly summary PDF failed:", e);
-    } finally {
-      setDownloadingSummary(false);
+  function handlePrintMonthlySummary() {
+    if (!summary) return;
+
+    const esc = (s: string | null | undefined) =>
+      String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    function fmt(t: string) {
+      if (!t) return "";
+      const [h, m] = t.split(":").map(Number);
+      return `${h % 12 || 12}:${m.toString().padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
     }
+
+    const rules = BACB_RULES[fieldworkType];
+    const grpPct = summary.supervisor_contacts > 0
+      ? (summary.group_contacts / summary.supervisor_contacts) * 100 : 0;
+
+    const checkRow = (label: string, met: boolean, detail: string) =>
+      `<tr><td class="ck ${met ? "ok" : "fail"}">${met ? "✓" : "✗"}</td><td>${esc(label)}</td><td class="det">${esc(detail)}</td></tr>`;
+
+    const CLABELS: Record<string, string> = {
+      none: "Independent",
+      individual_supervision: "Individual Sup.",
+      group_supervision: "Group Sup.",
+      client_observation: "Client Obs.",
+    };
+
+    const sessionRows = sessions.map((s, i) => {
+      const dl = new Date(s.session_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      const note = s.session_note && s.session_note.length > 100
+        ? s.session_note.slice(0, 99) + "…" : (s.session_note || "");
+      return `<tr class="${i % 2 === 0 ? "alt" : ""}">
+        <td>${esc(dl)}</td><td>${esc(fmt(s.start_time))}</td><td>${esc(fmt(s.end_time))}</td>
+        <td>${s.total_hours.toFixed(2)}</td>
+        <td>${esc(s.activity_type === "unrestricted" ? "Unrestricted" : "Restricted")}</td>
+        <td>${esc(CLABELS[s.contact_type] || s.contact_type)}</td>
+        <td>${esc(s.supervisor_name || "—")}</td>
+        <td>${esc(note)}</td>
+      </tr>`;
+    }).join("");
+
+    const fieldworkLabel = fieldworkType === "concentrated"
+      ? "Concentrated Supervised Fieldwork" : "Supervised Fieldwork";
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Monthly Summary — ${esc(monthLabel)}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,sans-serif;font-size:11px;color:#000;background:#fff;padding:40px;max-width:900px;margin:0 auto}
+    @media print{body{padding:0}@page{margin:1in}}
+    h1{font-size:18px;font-weight:700;margin-bottom:2px}
+    .sub{font-size:10px;color:#555;margin-bottom:22px}
+    .igrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border:1px solid #ccc;margin-bottom:20px}
+    .icol{padding:12px;border-right:1px solid #ccc}
+    .icol:last-child{border-right:none}
+    .lbl{font-size:8px;text-transform:uppercase;color:#888;font-weight:700;margin-bottom:4px;letter-spacing:.5px}
+    .val{font-size:12px;font-weight:700}
+    .val-sm{font-size:11px}
+    .sec{font-size:9px;font-weight:700;text-transform:uppercase;color:#888;border-bottom:2px solid #000;padding-bottom:3px;margin:20px 0 10px;letter-spacing:.8px}
+    .hgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+    .hbox{border:1.5px solid #000;padding:10px}
+    .hlbl{font-size:8px;text-transform:uppercase;color:#888;font-weight:700;margin-bottom:6px}
+    .hval{font-size:18px;font-weight:700}
+    table.chk{width:100%;border-collapse:collapse;margin-bottom:8px}
+    table.chk td{padding:4px 6px;font-size:10px}
+    .ck{font-weight:700;width:20px;font-size:11px}
+    .ck.ok{color:#16a34a}.ck.fail{color:#dc2626}
+    .det{color:#666;text-align:right;font-size:9px}
+    .ghdr{font-size:9px;font-weight:700;color:#555;padding:6px 6px 2px;text-transform:uppercase;letter-spacing:.5px}
+    .badge{display:inline-block;padding:5px 14px;border:2px solid;font-size:10px;font-weight:700;border-radius:3px;margin-top:8px}
+    .badge.ok{color:#16a34a;border-color:#16a34a;background:#f0fdf4}
+    .badge.fail{color:#dc2626;border-color:#dc2626;background:#fef2f2}
+    table.sess{width:100%;border-collapse:collapse;font-size:9px}
+    table.sess th{background:#000;color:#fff;padding:5px 6px;text-align:left;font-size:8px}
+    table.sess td{padding:4px 6px;border-bottom:1px solid #eee;vertical-align:top}
+    table.sess tr.alt td{background:#f7f7f7}
+    .foot{margin-top:28px;font-size:8px;color:#bbb;text-align:center;border-top:1px solid #eee;padding-top:8px}
+  </style>
+</head>
+<body>
+  <h1>MONTHLY FIELDWORK SUMMARY</h1>
+  <div class="sub">${esc(monthLabel)} &nbsp;·&nbsp; ${esc(fieldworkLabel)}</div>
+  <div class="igrid">
+    <div class="icol">
+      <div class="lbl">Supervisee</div><div class="val">${esc(traineeName || "—")}</div>
+      <div class="lbl" style="margin-top:10px">BACB ID</div><div class="val-sm">${esc(profile?.trainee_bacb_id || "—")}</div>
+    </div>
+    <div class="icol">
+      <div class="lbl">Supervisor</div><div class="val">${esc(profile?.supervisor_name || "—")}</div>
+      <div class="lbl" style="margin-top:10px">BACB ID</div><div class="val-sm">${esc(profile?.supervisor_bacb_id || "—")}</div>
+    </div>
+    <div class="icol">
+      <div class="lbl">Month</div><div class="val">${esc(monthLabel)}</div>
+      <div class="lbl" style="margin-top:10px">Generated</div><div class="val-sm">${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
+    </div>
+  </div>
+  <div class="sec">Hours Summary</div>
+  <div class="hgrid">
+    <div class="hbox"><div class="hlbl">Total Hours</div><div class="hval">${summary.total_hours.toFixed(2)}</div></div>
+    <div class="hbox"><div class="hlbl">Independent Hours</div><div class="hval">${summary.total_independent_hours.toFixed(2)}</div></div>
+    <div class="hbox"><div class="hlbl">Supervised Hours</div><div class="hval">${summary.total_supervised_hours.toFixed(2)}</div></div>
+    <div class="hbox"><div class="hlbl">% Hours Supervised</div><div class="hval">${summary.supervision_pct.toFixed(1)}%</div></div>
+  </div>
+  <div class="sec">BACB Requirements Checklist</div>
+  <table class="chk">
+    <tr><td colspan="3" class="ghdr">Total Hour Requirements</td></tr>
+    ${checkRow("Minimum 20 Total Hours", summary.total_hours >= 20, `${summary.total_hours.toFixed(2)} hrs logged`)}
+    ${checkRow("Maximum 130 Total Hours", summary.total_hours <= 130, summary.total_hours > 130 ? `${summary.total_hours.toFixed(2)} hrs — exceeds limit` : `${summary.total_hours.toFixed(2)} hrs — within limit`)}
+    <tr><td colspan="3" class="ghdr">Supervision Requirements</td></tr>
+    ${checkRow(`Minimum ${rules.supervisionPctMin}% Supervision`, summary.supervision_pct >= rules.supervisionPctMin, `${summary.supervision_pct.toFixed(1)}% achieved`)}
+    ${checkRow("Maximum 50% Group Supervision", summary.supervisor_contacts === 0 || grpPct <= 50, summary.supervisor_contacts === 0 ? "No contacts recorded" : `${grpPct.toFixed(0)}% group`)}
+    <tr><td colspan="3" class="ghdr">Contacts Requirements</td></tr>
+    ${checkRow(`Minimum ${rules.contactsPerMonth} Total Contacts`, summary.supervisor_contacts >= rules.contactsPerMonth, `${summary.supervisor_contacts} contact${summary.supervisor_contacts !== 1 ? "s" : ""} recorded`)}
+    ${checkRow("Minimum 1 Observation with Client", summary.client_observations >= 1, `${summary.client_observations} recorded`)}
+  </table>
+  <div>
+    <span class="badge ${summary.is_eligible ? "ok" : "fail"}">${summary.is_eligible ? "✓ ELIGIBLE" : "✗ INELIGIBLE"}</span>
+    ${!summary.is_eligible && summary.ineligibility_reason ? `<span style="font-size:10px;color:#666;margin-left:12px">${esc(summary.ineligibility_reason)}</span>` : ""}
+  </div>
+  <div class="sec" style="margin-top:24px">Session Log</div>
+  <table class="sess">
+    <thead><tr><th>Date</th><th>Start</th><th>End</th><th>Hrs</th><th>Activity</th><th>Contact</th><th>Supervisor</th><th>Description</th></tr></thead>
+    <tbody>${sessionRows || '<tr><td colspan="8" style="color:#999;padding:12px">No sessions logged.</td></tr>'}</tbody>
+  </table>
+  <div class="foot">
+    Generated by Path4ABA &nbsp;·&nbsp; For reference only. Official M-FVF must be signed by supervisor.<br>
+    Both parties must retain a copy of all fieldwork documentation for at least 7 years.
+  </div>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    win.print();
   }
 
   async function handleRecalculate() {
@@ -280,13 +400,15 @@ export default function MonthDrawer({ monthYear, summary: initialSummary, fieldw
         totalMonthHours: summary?.total_hours ?? 0,
       });
       const buf = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;
-          const blob = new Blob([buf], { type: "application/pdf" });
+      const blob = new Blob([buf], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       const safeName = traineeName.replace(/\s+/g, "-") || "Trainee";
       a.download = `Supervision-Form-${session.session_date}-${safeName}.pdf`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error("Supervision PDF failed:", e);
@@ -316,13 +438,15 @@ export default function MonthDrawer({ monthYear, summary: initialSummary, fieldw
         isEligible: summary.is_eligible,
       });
       const buf = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;
-          const blob = new Blob([buf], { type: "application/pdf" });
+      const blob = new Blob([buf], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       const safeName = traineeName.replace(/\s+/g, "-") || "Trainee";
       a.download = `M-FVF-${monthYear}-${safeName}.pdf`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error("PDF generation failed:", e);
@@ -350,7 +474,9 @@ export default function MonthDrawer({ monthYear, summary: initialSummary, fieldw
     const a = document.createElement("a");
     a.href = url;
     a.download = `fieldwork-${monthYear}.csv`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
 
@@ -363,12 +489,12 @@ export default function MonthDrawer({ monthYear, summary: initialSummary, fieldw
           <p className="text-[15px] font-semibold" style={{ color: "var(--text1)" }}>{monthLabel}</p>
           <div className="flex items-center gap-3">
             <button
-              onClick={handleDownloadSummary}
-              disabled={downloadingSummary}
+              onClick={handlePrintMonthlySummary}
+              disabled={!summary}
               className="text-[12px] font-medium hover:opacity-80 disabled:opacity-40"
               style={{ color: "var(--teal)" }}
             >
-              {downloadingSummary ? "Generating…" : "Monthly Summary"}
+              Monthly Summary
             </button>
             <button
               onClick={handleDownloadMvf}

@@ -28,7 +28,6 @@ export default function LogSessionPage() {
 
   const [savedSession, setSavedSession] = useState<SavedSession | null>(null);
   const [pdfData, setPdfData] = useState<SupervisionPdfData | null>(null);
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -85,27 +84,42 @@ export default function LogSessionPage() {
     }
   }
 
-  async function handleDownloadPdf() {
-    if (!pdfData) return;
-    setDownloadingPdf(true);
-    try {
-      const { generateSupervisionPdf } = await import("@/lib/bcba-students/generateSupervisionPdf");
-      const pdfBytes = await generateSupervisionPdf(pdfData);
-      const buf = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;
-      const blob = new Blob([buf], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const safeName = traineeName.replace(/\s+/g, "-") || "Trainee";
-      a.download = `Supervision-Form-${pdfData.sessionDate}-${safeName}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error("PDF generation failed:", e);
-    } finally {
-      setDownloadingPdf(false);
+  const handleDownloadSupervisionForm = () => {
+    const sessionSupervisorName = pdfData?.supervisorName || supervisorName;
+    const contactType = savedSession ? (CONTACT_LABELS[savedSession.contact_type] || savedSession.contact_type) : '';
+    const duration = savedSession ? `${savedSession.start_time} – ${savedSession.end_time}` : '';
+
+    const win = window.open('', '_blank');
+    if (!win) {
+      alert('Please allow popups for this site to download forms.');
+      return;
     }
-  }
+    win.document.write(`
+      <html>
+        <head>
+          <title>Supervision Meeting Form</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 40px; font-size: 13px; }
+            h1 { font-size: 18px; text-align: center; }
+            .field { margin: 16px 0; border-bottom: 1px solid #000; padding-bottom: 4px; }
+            .label { font-weight: bold; font-size: 11px; color: #555; }
+            @media print { body { font-family: Arial, sans-serif; font-size: 12px; } @page { margin: 1in; } }
+          </style>
+        </head>
+        <body>
+          <h1>Supervision Meeting Form</h1>
+          <div class="field"><div class="label">Date of Supervision</div>${savedSession?.session_date || new Date().toLocaleDateString()}</div>
+          <div class="field"><div class="label">Supervisor Name</div>${sessionSupervisorName || '_______________'}</div>
+          <div class="field"><div class="label">Duration</div>${duration || '_______________'}</div>
+          <div class="field"><div class="label">Meeting Format</div>${contactType || '_______________'}</div>
+          <div class="field"><div class="label">Activities Conducted</div><br/><br/><br/></div>
+          <div class="field"><div class="label">Supervisor Signature</div><br/><br/></div>
+          <script>window.print();</script>
+        </body>
+      </html>
+    `);
+    win.document.close();
+  };
 
   if (loading) {
     return (
@@ -166,12 +180,11 @@ export default function LogSessionPage() {
                     </div>
                   </div>
                   <button
-                    onClick={handleDownloadPdf}
-                    disabled={downloadingPdf || !pdfData}
-                    className="mt-4 w-full py-2.5 rounded-xl text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                    onClick={handleDownloadSupervisionForm}
+                    className="mt-4 w-full py-2.5 rounded-xl text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
                     style={{ background: "var(--teal)" }}
                   >
-                    {downloadingPdf ? "Generating PDF…" : !pdfData ? "Preparing…" : "Download Supervision Form"}
+                    Download Supervision Form
                   </button>
                 </div>
 

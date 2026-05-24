@@ -30,7 +30,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ monthYea
   const { monthYear } = await params
 
   const [profileRes, summaryRes, sessionsRes] = await Promise.all([
-    supabaseServer.from('fieldwork_profiles').select('fieldwork_type').eq('user_id', user.id).maybeSingle(),
+    supabaseServer.from('fieldwork_profiles').select('fieldwork_type, trainee_bacb_id, supervisor_name, supervisor_bacb_id').eq('user_id', user.id).maybeSingle(),
     supabaseServer.from('fieldwork_monthly_summaries').select('*').eq('user_id', user.id).eq('month_year', monthYear).maybeSingle(),
     supabaseServer.from('fieldwork_sessions').select('session_date, start_time, end_time, total_hours, activity_type, contact_type, supervisor_name, session_note').eq('user_id', user.id).eq('month_year', monthYear).order('session_date', { ascending: true }),
   ])
@@ -45,6 +45,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ monthYea
 
   const pdfBytes = await generateMonthlySummaryPdf({
     traineeName,
+    traineeBacbId: profileRes.data?.trainee_bacb_id ?? null,
+    supervisorName: profileRes.data?.supervisor_name ?? null,
+    supervisorBacbId: profileRes.data?.supervisor_bacb_id ?? null,
     monthLabel,
     monthYear,
     fieldworkType,
