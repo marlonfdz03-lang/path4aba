@@ -188,10 +188,10 @@ export default function ClientProfilePage() {
 
   // Share with BCBA state
   const [shareCode, setShareCode] = useState("");
-  const [shareExpiry, setShareExpiry] = useState("");
   const [generatingCode, setGeneratingCode] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareError, setShareError] = useState("");
+  const [codeCopied, setCodeCopied] = useState(false);
   // BCBA supervision suggestion banner
   const [bcbaSuggestion, setBcbaSuggestion] = useState<{ behaviors: string[]; interventions: string[] } | null>(null);
 
@@ -395,29 +395,11 @@ export default function ClientProfilePage() {
       const res = await fetch("/api/clients/generate-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientId: client.id,
-          clientName: client.clientName,
-          clientProfile: {
-            diagnosis: client.diagnosis || [],
-            setting: client.primary_setting || "",
-            approvedInterventions: client.clinicalProfile?.interventions?.map((i: any) => typeof i === "string" ? i : i.name) || [],
-            prohibitedInterventions: ["Punishment", "ResponseCost", "Restraint", "StandaloneExtinction", "TimeOut", "Overcorrection", "Aversive"],
-            reinforcers: client.clinicalProfile?.reinforcers || [],
-            activePrograms: {
-              maladaptive: client.clinicalProfile?.maladaptiveBehaviors?.map((b: any) => typeof b === "string" ? b : b.name) || [],
-              replacementSkills: [
-                ...(client.clinicalProfile?.replacementBehaviors?.map((b: any) => typeof b === "string" ? b : b.name) || []),
-                ...(client.clinicalProfile?.skillAcquisition?.map((s: any) => typeof s === "string" ? s : s.name) || []),
-              ],
-            },
-          },
-        }),
+        body: JSON.stringify({ clientId: client.id }),
       });
       const data = await res.json();
       if (!res.ok) { setShareError(data.error || "Failed to generate code"); setGeneratingCode(false); return; }
       setShareCode(data.code);
-      setShareExpiry(data.expiresAt ? new Date(data.expiresAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "");
       setShowShareModal(true);
     } catch {
       setShareError("Network error. Please try again.");
@@ -1028,9 +1010,9 @@ export default function ClientProfilePage() {
       {showShareModal && shareCode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: "rgba(0,0,0,0.4)" }}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8" style={{ fontFamily: "var(--font-dm-sans, sans-serif)" }}>
-            <h2 className="text-[18px] font-semibold mb-1" style={{ color: "var(--text1)" }}>Share with Your BCBA</h2>
+            <h2 className="text-[18px] font-semibold mb-1" style={{ color: "var(--text1)" }}>Share this client with your BCBA</h2>
             <p className="text-[13px] mb-6" style={{ color: "var(--text3)" }}>
-              Give this code to your BCBA. It expires{shareExpiry ? ` on ${shareExpiry}` : " in 7 days"}.
+              Give this code to your BCBA. It expires in 7 days.
             </p>
             <div
               className="flex items-center justify-between px-4 py-3 rounded-xl mb-4 font-mono text-[20px] font-bold tracking-widest"
@@ -1038,19 +1020,23 @@ export default function ClientProfilePage() {
             >
               {shareCode}
               <button
-                onClick={() => navigator.clipboard.writeText(shareCode)}
+                onClick={() => {
+                  navigator.clipboard.writeText(shareCode);
+                  setCodeCopied(true);
+                  setTimeout(() => setCodeCopied(false), 2000);
+                }}
                 className="ml-3 text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-colors"
-                style={{ background: "var(--teal)", color: "white", fontFamily: "var(--font-dm-sans, sans-serif)" }}
+                style={{ background: codeCopied ? "#16A34A" : "var(--teal)", color: "white", fontFamily: "var(--font-dm-sans, sans-serif)" }}
               >
-                Copy
+                {codeCopied ? "Copied!" : "Copy"}
               </button>
             </div>
             <button
-              onClick={() => setShowShareModal(false)}
+              onClick={() => { setShowShareModal(false); setCodeCopied(false); }}
               className="w-full py-2.5 rounded-xl text-[13px] font-medium border"
               style={{ borderColor: "var(--border)", color: "var(--text2)" }}
             >
-              Done
+              Close
             </button>
           </div>
         </div>

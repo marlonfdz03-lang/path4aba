@@ -20,25 +20,15 @@ export async function POST(request: Request) {
   const { data: { user } } = await authClient.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  let body: { clientId?: string; clientName?: string; clientProfile?: any }
+  let body: { clientId?: string }
   try { body = await request.json() } catch {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { clientId, clientName, clientProfile } = body
-  if (!clientId || !clientName) {
-    return NextResponse.json({ error: 'Missing clientId or clientName' }, { status: 400 })
+  const { clientId } = body
+  if (!clientId) {
+    return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
   }
-
-  // Upsert client into Supabase so the FK reference in client_access_codes works
-  await supabaseServer.from('clients').upsert({
-    id: clientId,
-    client_name: clientName,
-    diagnosis: clientProfile?.diagnosis || [],
-    primary_setting: clientProfile?.setting || '',
-    clinical_profile: clientProfile || {},
-    rbt_id: user.id,
-  }, { onConflict: 'id' })
 
   const code = randomCode()
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
@@ -55,5 +45,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to generate code' }, { status: 500 })
   }
 
-  return NextResponse.json({ code, expiresAt })
+  return NextResponse.json({ code })
 }
