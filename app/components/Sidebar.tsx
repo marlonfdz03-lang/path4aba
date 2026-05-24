@@ -63,6 +63,21 @@ const IconCreditCard = () => (
   </svg>
 );
 
+const IconClipboard = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+    <rect x="8" y="2" width="8" height="4" rx="1"/>
+  </svg>
+);
+
+const IconNotes = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+  </svg>
+);
+
 const IconChevronUp = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="18 15 12 9 6 15"/>
@@ -152,6 +167,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [clientCount, setClientCount] = useState(0);
+  const [pendingReviewCount, setPendingReviewCount] = useState(0);
   const [user, setUser] = useState<{ name: string; profession: string; initials: string } | null>(null);
 
   useEffect(() => {
@@ -164,9 +180,21 @@ export default function Sidebar() {
         const profession = meta.profession || "Clinician";
         const initials = name.split(/\s+/).filter(Boolean).map((w: string) => w[0].toUpperCase()).slice(0, 2).join("") || "??";
         setUser({ name, profession, initials });
+
+        // For BCBA: count pending review notes
+        const isBCBA = ["bcba", "bcaba"].includes(profession.toLowerCase());
+        if (isBCBA) {
+          supabase
+            .from("session_notes")
+            .select("id", { count: "exact", head: true })
+            .eq("review_status", "pending")
+            .then(({ count }) => setPendingReviewCount(count || 0));
+        }
       }
     });
   }, []);
+
+  const isBCBA = ["bcba", "bcaba"].includes((user?.profession || "").toLowerCase());
 
   if (pathname === "/login" || pathname === "/pricing" || pathname === "/onboarding") return null;
 
@@ -187,33 +215,62 @@ export default function Sidebar() {
 
       {/* Nav */}
       <div className="flex-1 overflow-y-auto px-[10px] py-3 space-y-5">
-        {/* Workspace group */}
-        <div>
-          <p
-            className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]"
-            style={{ color: "rgba(255,255,255,0.35)" }}
-          >
-            Workspace
-          </p>
-          <div className="space-y-0.5">
-            <NavItem href="/" label="Dashboard" icon={IconDashboard} active={isActive("/")} />
-            <NavItem href="/clients" label="Clients" icon={IconUsers} active={isActive("/clients")} badge={clientCount} />
-            <NavItem href="/schedule" label="Schedule" icon={IconCalendar} active={isActive("/schedule")} />
-          </div>
-        </div>
-
-        {/* Account group */}
-        <div>
-          <p
-            className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]"
-            style={{ color: "rgba(255,255,255,0.35)" }}
-          >
-            Account
-          </p>
-          <div className="space-y-0.5">
-            <NavItem href="/billing" label="Billing" icon={IconCreditCard} active={isActive("/billing")} />
-          </div>
-        </div>
+        {isBCBA ? (
+          <>
+            {/* BCBA Workspace */}
+            <div>
+              <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                Workspace
+              </p>
+              <div className="space-y-0.5">
+                <NavItem href="/bcba" label="My Clients" icon={IconUsers} active={isActive("/bcba")} />
+                <NavItem href="/schedule" label="Schedule" icon={IconCalendar} active={isActive("/schedule")} />
+              </div>
+            </div>
+            {/* BCBA Tools */}
+            <div>
+              <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                Tools
+              </p>
+              <div className="space-y-0.5">
+                <NavItem href="/bcba" label="Supervision Notes" icon={IconClipboard} active={false} />
+                <NavItem href="/bcba" label="RBT Notes" icon={IconNotes} active={false} badge={pendingReviewCount} />
+              </div>
+            </div>
+            {/* Account */}
+            <div>
+              <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                Account
+              </p>
+              <div className="space-y-0.5">
+                <NavItem href="/billing" label="Billing" icon={IconCreditCard} active={isActive("/billing")} />
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* RBT Workspace */}
+            <div>
+              <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                Workspace
+              </p>
+              <div className="space-y-0.5">
+                <NavItem href="/" label="Dashboard" icon={IconDashboard} active={isActive("/")} />
+                <NavItem href="/clients" label="Clients" icon={IconUsers} active={isActive("/clients")} badge={clientCount} />
+                <NavItem href="/schedule" label="Schedule" icon={IconCalendar} active={isActive("/schedule")} />
+              </div>
+            </div>
+            {/* Account */}
+            <div>
+              <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                Account
+              </p>
+              <div className="space-y-0.5">
+                <NavItem href="/billing" label="Billing" icon={IconCreditCard} active={isActive("/billing")} />
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Footer */}

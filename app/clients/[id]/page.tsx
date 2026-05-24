@@ -185,6 +185,15 @@ export default function ClientProfilePage() {
   const [status, setStatus] = useState("");
   const [similarityWarning, setSimilarityWarning] = useState(false);
 
+  // Share with BCBA state
+  const [shareCode, setShareCode] = useState("");
+  const [shareExpiry, setShareExpiry] = useState("");
+  const [generatingCode, setGeneratingCode] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareError, setShareError] = useState("");
+  // BCBA supervision suggestion banner
+  const [bcbaSuggestion, setBcbaSuggestion] = useState<{ behaviors: string[]; interventions: string[] } | null>(null);
+
   // Refine Note state
   const [pastedNote, setPastedNote] = useState("");
   const [perfectingNote, setPerfectingNote] = useState(false);
@@ -357,6 +366,65 @@ export default function ClientProfilePage() {
     setDailyNotes((prev) => prev.filter((note) => note.id !== noteId));
   }
 
+  async function handleShareWithBCBA() {
+    setGeneratingCode(true);
+    setShareError("");
+    try {
+      const res = await fetch("/api/clients/generate-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: client.id,
+          clientName: client.clientName,
+          clientProfile: {
+            diagnosis: client.diagnosis || [],
+            setting: client.primary_setting || "",
+            approvedInterventions: client.clinicalProfile?.interventions?.map((i: any) => typeof i === "string" ? i : i.name) || [],
+            prohibitedInterventions: ["Punishment", "ResponseCost", "Restraint", "StandaloneExtinction", "TimeOut", "Overcorrection", "Aversive"],
+            reinforcers: client.clinicalProfile?.reinforcers || [],
+            activePrograms: {
+              maladaptive: client.clinicalProfile?.maladaptiveBehaviors?.map((b: any) => typeof b === "string" ? b : b.name) || [],
+              replacementSkills: [
+                ...(client.clinicalProfile?.replacementBehaviors?.map((b: any) => typeof b === "string" ? b : b.name) || []),
+                ...(client.clinicalProfile?.skillAcquisition?.map((s: any) => typeof s === "string" ? s : s.name) || []),
+              ],
+            },
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setShareError(data.error || "Failed to generate code"); setGeneratingCode(false); return; }
+      setShareCode(data.code);
+      setShareExpiry(data.expiresAt ? new Date(data.expiresAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "");
+      setShowShareModal(true);
+    } catch {
+      setShareError("Network error. Please try again.");
+    }
+    setGeneratingCode(false);
+  }
+
+  async function checkBCBASuggestion() {
+    const today = new Date().toISOString().split("T")[0];
+    try {
+      const { data } = await (await import("@/lib/supabase")).supabase
+        .from("supervision_notes")
+        .select("note_text, session_date")
+        .eq("client_id", client.id)
+        .eq("session_date", today)
+        .maybeSingle();
+      if (data) {
+        const behaviors = client.clinicalProfile?.maladaptiveBehaviors?.map((b: any) => typeof b === "string" ? b : b.name) || [];
+        const interventions = client.clinicalProfile?.interventions?.map((i: any) => typeof i === "string" ? i : i.name) || [];
+        setBcbaSuggestion({ behaviors: behaviors.slice(0, 5), interventions: interventions.slice(0, 5) });
+      }
+    } catch {}
+  }
+
+  function handleTabChange(tab: Tab) {
+    setActiveTab(tab);
+    if (tab === "generate") checkBCBASuggestion();
+  }
+
   const TABS: { key: Tab; label: string }[] = [
     { key: "overview", label: "Overview" },
     { key: "generate", label: "Generate Note" },
@@ -405,9 +473,9 @@ export default function ClientProfilePage() {
                 </div>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
-                onClick={() => setActiveTab("generate")}
+                onClick={() => handleTabChange("generate")}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-medium text-white transition-opacity hover:opacity-90"
                 style={{ background: "var(--teal)" }}
               >
@@ -416,7 +484,20 @@ export default function ClientProfilePage() {
                 </svg>
                 Generate Note
               </button>
+              <button
+                onClick={handleShareWithBCBA}
+                disabled={generatingCode}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-medium border transition-colors hover:border-gray-400 disabled:opacity-50"
+                style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                </svg>
+                {generatingCode ? "Generating…" : "Share with BCBA"}
+              </button>
             </div>
+            {shareError && <p className="text-[12px] text-red-500 mt-1">{shareError}</p>}
           </div>
 
           {/* Meta fields */}
@@ -443,7 +524,7 @@ export default function ClientProfilePage() {
             return (
               <button
                 key={key}
-                onClick={() => setActiveTab(key)}
+                onClick={() => handleTabChange(key)}
                 className="px-4 py-3 text-[13px] font-medium transition-colors -mb-px border-b-2"
                 style={{
                   color: active ? "var(--teal)" : "var(--text3)",
@@ -545,6 +626,25 @@ export default function ClientProfilePage() {
         {/* ── Generate Note Tab ── */}
         {activeTab === "generate" && (
           <div className="space-y-5 max-w-[780px]">
+
+            {/* BCBA supervision suggestion banner */}
+            {bcbaSuggestion && (
+              <div className="px-4 py-3 rounded-xl border text-[13px]" style={{ background: "#EFF6FF", borderColor: "#BFDBFE", color: "#1D4ED8" }}>
+                <p className="font-semibold mb-1">Your BCBA supervised this session today.</p>
+                <p className="mb-2">Suggested behaviors: {bcbaSuggestion.behaviors.join(", ") || "see profile"}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (bcbaSuggestion.behaviors.length) setSelectedBehaviors(bcbaSuggestion.behaviors.slice(0, 5));
+                    if (bcbaSuggestion.interventions.length) setSelectedSkills(bcbaSuggestion.interventions.slice(0, 2));
+                  }}
+                  className="text-[12px] font-semibold underline hover:opacity-80"
+                >
+                  Use suggestions
+                </button>
+              </div>
+            )}
+
             {/* Form header */}
             <div className="bg-white rounded-[10px] border p-6 flex items-start justify-between" style={{ borderColor: "var(--border)" }}>
               <div>
@@ -901,6 +1001,38 @@ export default function ClientProfilePage() {
         )}
 
       </div>
+
+      {/* ── Share with BCBA modal ── */}
+      {showShareModal && shareCode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: "rgba(0,0,0,0.4)" }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8" style={{ fontFamily: "var(--font-dm-sans, sans-serif)" }}>
+            <h2 className="text-[18px] font-semibold mb-1" style={{ color: "var(--text1)" }}>Share with Your BCBA</h2>
+            <p className="text-[13px] mb-6" style={{ color: "var(--text3)" }}>
+              Give this code to your BCBA. It expires{shareExpiry ? ` on ${shareExpiry}` : " in 7 days"}.
+            </p>
+            <div
+              className="flex items-center justify-between px-4 py-3 rounded-xl mb-4 font-mono text-[20px] font-bold tracking-widest"
+              style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text1)" }}
+            >
+              {shareCode}
+              <button
+                onClick={() => navigator.clipboard.writeText(shareCode)}
+                className="ml-3 text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-colors"
+                style={{ background: "var(--teal)", color: "white", fontFamily: "var(--font-dm-sans, sans-serif)" }}
+              >
+                Copy
+              </button>
+            </div>
+            <button
+              onClick={() => setShowShareModal(false)}
+              className="w-full py-2.5 rounded-xl text-[13px] font-medium border"
+              style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
