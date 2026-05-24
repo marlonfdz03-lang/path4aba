@@ -53,6 +53,9 @@ export default function OnboardingPage() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [planError, setPlanError] = useState("");
 
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [termsWarning, setTermsWarning] = useState(false);
+
   const [promoInput, setPromoInput] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoApplied, setPromoApplied] = useState(false);
@@ -80,6 +83,11 @@ export default function OnboardingPage() {
   }
 
   async function handleSelectPlan(planKey: string) {
+    if (!agreedToTerms) {
+      setTermsWarning(true);
+      return;
+    }
+    setTermsWarning(false);
     setLoadingPlan(planKey);
     setPlanError("");
 
@@ -199,8 +207,8 @@ export default function OnboardingPage() {
 
                 <button
                   onClick={() => handleSelectPlan(plan.key)}
-                  disabled={!!loadingPlan}
-                  className="w-full py-3 rounded-xl text-[14px] font-semibold transition-opacity hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed mb-3"
+                  disabled={!!loadingPlan || !agreedToTerms}
+                  className="w-full py-3 rounded-xl text-[14px] font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed mb-3"
                   style={{ background: isHighlighted ? "var(--teal)" : "var(--navy)", color: "white" }}
                 >
                   {loading ? "Redirecting to checkout…" : "Start Free Trial"}
@@ -224,6 +232,32 @@ export default function OnboardingPage() {
             </div>
           );
         })}
+      </div>
+
+      {/* Terms checkbox */}
+      <div className="flex justify-center pb-4 px-6">
+        <div className="w-full max-w-sm">
+          <label className="flex items-start gap-3 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={agreedToTerms}
+              onChange={(e) => { setAgreedToTerms(e.target.checked); setTermsWarning(false); }}
+              className="mt-0.5 w-4 h-4 rounded flex-shrink-0"
+              style={{ accentColor: "var(--teal)" }}
+            />
+            <span className="text-[13px]" style={{ color: "var(--text2)" }}>
+              I agree to the{" "}
+              <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80" style={{ color: "var(--teal)" }}>Privacy Policy</a>
+              {" "}and{" "}
+              <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80" style={{ color: "var(--teal)" }}>Terms of Service</a>
+            </span>
+          </label>
+          {termsWarning && (
+            <p className="text-[12px] mt-2 ml-7" style={{ color: "#DC2626" }}>
+              Please accept the Privacy Policy and Terms of Service to continue.
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Promo code */}

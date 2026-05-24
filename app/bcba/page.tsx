@@ -100,30 +100,49 @@ function ConnectModal({ onClose, onConnected }: { onClose: () => void; onConnect
   );
 }
 
-function ClientCard({ client }: { client: BCBAClient }) {
+const AVATAR_COLORS = ["#1BA8A0", "#8B5CF6", "#F59E0B", "#EF4444", "#10B981"];
+
+function ClientCard({ client, index }: { client: BCBAClient; index: number }) {
   const connectedDate = new Date(client.connected_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const initials = (client.client_name || "?").split(/\s+/).filter(Boolean).map((w: string) => w[0].toUpperCase()).slice(0, 2).join("");
+  const color = AVATAR_COLORS[index % AVATAR_COLORS.length];
+
   return (
     <Link href={`/bcba/${client.id}`}>
       <div
-        className="bg-white rounded-xl p-5 border cursor-pointer transition-shadow hover:shadow-md"
-        style={{ borderColor: "var(--border)" }}
+        className="bg-white flex flex-col transition-all cursor-pointer"
+        style={{ border: "1px solid #E2E8F0", borderRadius: 10, overflow: "hidden" }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.borderColor = "#24BDB4";
+          (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 3px rgba(36,189,180,0.12)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.borderColor = "#E2E8F0";
+          (e.currentTarget as HTMLElement).style.boxShadow = "none";
+        }}
       >
-        <div className="flex items-start justify-between mb-3">
-          <div
-            className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
-            style={{ background: "linear-gradient(135deg, var(--teal), var(--sky))" }}
-          >
-            {client.client_name?.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase() || "?"}
+        <div style={{ height: 3, background: "linear-gradient(90deg, #1BA8A0, #4AB5E3)" }} />
+        <div className="p-5">
+          <div className="flex items-start gap-3 mb-3">
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-semibold text-white flex-shrink-0"
+              style={{ background: color }}
+            >
+              {initials}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[14px] font-semibold truncate" style={{ color: "var(--text1)" }}>{client.client_name}</p>
+              <p className="text-[11px] font-mono mt-0.5" style={{ color: "var(--text3)" }}>#{client.id.slice(0, 8).toUpperCase()}</p>
+            </div>
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: "#E6F9F5", color: "#0D8A6A" }}>
+              Connected
+            </span>
           </div>
-          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: "rgba(27,168,160,0.12)", color: "var(--teal)" }}>
-            Connected
-          </span>
+          {client.diagnosis?.length > 0 && (
+            <p className="text-[12px] mb-2" style={{ color: "var(--text3)" }}>{client.diagnosis.join(", ")}</p>
+          )}
+          <p className="text-[11px]" style={{ color: "var(--text3)" }}>Connected {connectedDate}</p>
         </div>
-        <p className="text-[14px] font-semibold mb-1" style={{ color: "var(--text1)" }}>{client.client_name}</p>
-        <p className="text-[12px] mb-3" style={{ color: "var(--text3)" }}>
-          {client.diagnosis?.join(", ") || "ASD"}
-        </p>
-        <p className="text-[11px]" style={{ color: "var(--text3)" }}>Connected {connectedDate}</p>
       </div>
     </Link>
   );
@@ -145,14 +164,14 @@ export default function BCBADashboard() {
   async function fetchClients(userId: string) {
     const { data } = await supabase
       .from("bcba_clients")
-      .select("client_id, rbt_id, connected_at, clients(id, client_name, diagnosis)")
+      .select("client_id, rbt_id, connected_at, clients(id, clinical_profile)")
       .eq("bcba_id", userId)
       .order("connected_at", { ascending: false });
 
     const mapped = (data || []).map((row: any) => ({
       id: row.client_id,
-      client_name: row.clients?.client_name || "Unknown Client",
-      diagnosis: row.clients?.diagnosis || [],
+      client_name: row.clients?.clinical_profile?.name || "Unknown Client",
+      diagnosis: row.clients?.clinical_profile?.maladaptiveBehaviors?.map((b: any) => b.name).slice(0, 2) || [],
       connected_at: row.connected_at,
       rbt_id: row.rbt_id,
     }));
@@ -196,7 +215,7 @@ export default function BCBADashboard() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {clients.map(c => <ClientCard key={c.id} client={c} />)}
+            {clients.map((c, i) => <ClientCard key={c.id} client={c} index={i} />)}
           </div>
         )}
       </div>

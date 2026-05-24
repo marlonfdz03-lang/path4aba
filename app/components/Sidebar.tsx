@@ -56,10 +56,10 @@ const IconLogout = () => (
   </svg>
 );
 
-const IconCreditCard = () => (
+const IconSettings = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="1" y="4" width="22" height="16" rx="2"/>
-    <line x1="1" y1="10" x2="23" y2="10"/>
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
   </svg>
 );
 
@@ -227,23 +227,13 @@ export default function Sidebar() {
                 <NavItem href="/schedule" label="Schedule" icon={IconCalendar} active={isActive("/schedule")} />
               </div>
             </div>
-            {/* BCBA Tools */}
-            <div>
-              <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
-                Tools
-              </p>
-              <div className="space-y-0.5">
-                <NavItem href="/bcba" label="Supervision Notes" icon={IconClipboard} active={false} />
-                <NavItem href="/bcba" label="RBT Notes" icon={IconNotes} active={false} badge={pendingReviewCount} />
-              </div>
-            </div>
             {/* Account */}
             <div>
               <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
                 Account
               </p>
               <div className="space-y-0.5">
-                <NavItem href="/billing" label="Billing" icon={IconCreditCard} active={isActive("/billing")} />
+                <NavItem href="/settings" label="Settings" icon={IconSettings} active={isActive("/settings")} />
               </div>
             </div>
           </>
@@ -266,7 +256,7 @@ export default function Sidebar() {
                 Account
               </p>
               <div className="space-y-0.5">
-                <NavItem href="/billing" label="Billing" icon={IconCreditCard} active={isActive("/billing")} />
+                <NavItem href="/settings" label="Settings" icon={IconSettings} active={isActive("/settings")} />
               </div>
             </div>
           </>

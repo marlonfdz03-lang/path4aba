@@ -7,7 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
-type BCBATab = "notes" | "missing_hours" | "supervision";
+type BCBATab = "notes" | "schedule" | "supervision" | "reassessment";
 
 const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
   pending:  { bg: "#FFF8E1", color: "#92400E", label: "Pending" },
@@ -28,8 +28,9 @@ function Topbar({ clientName }: { clientName: string }) {
 function TabBar({ active, onChange }: { active: BCBATab; onChange: (t: BCBATab) => void }) {
   const tabs: { id: BCBATab; label: string }[] = [
     { id: "notes", label: "RBT Notes" },
-    { id: "missing_hours", label: "Missing Hours" },
+    { id: "schedule", label: "Schedule" },
     { id: "supervision", label: "Supervision Notes" },
+    { id: "reassessment", label: "Reassessment Tools" },
   ];
   return (
     <div className="flex border-b bg-white px-8" style={{ borderColor: "var(--border)" }}>
@@ -112,6 +113,7 @@ export default function BCBAClientPage() {
   const clientId = params.clientId as string;
 
   const [activeTab, setActiveTab] = useState<BCBATab>("notes");
+
   const [client, setClient] = useState<any>(null);
   const [notes, setNotes] = useState<any[]>([]);
   const [supervisionNotes, setSupervisionNotes] = useState<any[]>([]);
@@ -251,8 +253,8 @@ export default function BCBAClientPage() {
           </div>
         )}
 
-        {/* ── Missing Hours Tab ── */}
-        {activeTab === "missing_hours" && (
+        {/* ── Schedule Tab ── */}
+        {activeTab === "schedule" && (
           <div>
             {missingHours.length === 0 ? (
               <div className="text-center py-12">
@@ -333,6 +335,24 @@ export default function BCBAClientPage() {
             )}
           </div>
         )}
+        {/* ── Reassessment Tools Tab ── */}
+        {activeTab === "reassessment" && (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "rgba(27,168,160,0.1)" }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+            </div>
+            <span className="text-[11px] font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-4" style={{ background: "rgba(27,168,160,0.15)", color: "var(--teal)" }}>
+              Coming Soon
+            </span>
+            <p className="text-[15px] font-semibold mb-2" style={{ color: "var(--text1)" }}>Reassessment Tools</p>
+            <p className="text-[13px] max-w-xs" style={{ color: "var(--text3)" }}>
+              Coming soon — Reassessment tools will be available here.
+            </p>
+          </div>
+        )}
+
       </div>
     </main>
   );
