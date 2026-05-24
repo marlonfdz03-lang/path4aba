@@ -4,5 +4,21 @@
       "path": "/api/cron/trial-reminder",
       "schedule": "0 10 * * *"
     }
+  ],
+  "functions": {
+    "app/api/webhooks/stripe/route.ts": {
+      "maxDuration": 30
+    }
+  },
+  "headers": [
+    {
+      "source": "/api/webhooks/stripe",
+      "headers": [
+        {
+          "key": "x-vercel-protection-bypass",
+          "value": "true"
+        }
+      ]
+    }
   ]
 }
