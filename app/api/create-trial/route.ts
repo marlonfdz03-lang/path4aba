@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getStripe, PRICES } from '@/lib/stripe'
 import { supabaseServer } from '@/lib/supabaseServer'
+import { sendWelcomeEmail } from '@/lib/email'
 
 export async function POST(request: Request) {
   let body: { userId?: string; plan?: string; promoCode?: string }
@@ -73,6 +74,9 @@ export async function POST(request: Request) {
 
   const session = await getStripe().checkout.sessions.create(sessionParams)
   console.log('[create-trial] Stripe checkout created:', session.id)
+
+  const name = user.user_metadata?.full_name || user.email?.split('@')[0] || 'there'
+  sendWelcomeEmail(user.email!, name).catch(err => console.error('[create-trial] welcome email error:', err))
 
   return NextResponse.json({ url: session.url })
 }

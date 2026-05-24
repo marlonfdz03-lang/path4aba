@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getStripe } from '@/lib/stripe'
 import { supabaseServer } from '@/lib/supabaseServer'
+import { sendPaymentConfirmationEmail, sendPaymentFailedEmail } from '@/lib/email'
 import Stripe from 'stripe'
 
 // Required so Next.js doesn't cache this route or pre-read the body
@@ -79,6 +80,19 @@ export async function POST(request: Request) {
         await supabaseServer.rpc('increment_promo_uses', { promo_code: appliedPromo })
       }
 
+      // Send payment confirmation email
+      if (userId) {
+        supabaseServer.auth.admin.getUserById(userId).then(({ data }) => {
+          const u = data.user
+          if (!u?.email) return
+          const name = u.user_metadata?.full_name || u.email.split('@')[0] || 'there'
+          const planLabel = (plan || 'rbt').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+          sendPaymentConfirmationEmail(u.email, name, planLabel, '—').catch(
+            err => console.error('[webhook] payment confirmation email error:', err)
+          )
+        }).catch(err => console.error('[webhook] user lookup error:', err))
+      }
+
       break
     }
 
@@ -115,6 +129,40 @@ export async function POST(request: Request) {
         .from('subscriptions')
         .update({ status: 'canceled' })
         .eq('stripe_subscription_id', subscription.id)
+      break
+    }
+
+    case 'invoice.payment_failed': {
+      const invoice = event.data.object as Stripe.Invoice
+      const customerEmail = (invoice as any).customer_email as string | null
+      const customerId = invoice.customer as string | null
+
+      ;(async () => {
+        try {
+          let email = customerEmail
+          let name = email ? email.split('@')[0] : 'there'
+
+          if (!email && customerId) {
+            const { data: sub } = await supabaseServer
+              .from('subscriptions')
+              .select('user_id')
+              .eq('stripe_customer_id', customerId)
+              .maybeSingle()
+            if (sub?.user_id) {
+              const { data } = await supabaseServer.auth.admin.getUserById(sub.user_id)
+              const u = data?.user
+              if (u?.email) {
+                email = u.email
+                name = u.user_metadata?.full_name || u.email.split('@')[0] || 'there'
+              }
+            }
+          }
+
+          if (email) await sendPaymentFailedEmail(email, name)
+        } catch (err) {
+          console.error('[webhook] payment failed email error:', err)
+        }
+      })()
       break
     }
   }

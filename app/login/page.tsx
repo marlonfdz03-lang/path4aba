@@ -86,9 +86,12 @@ function LoginContent() {
       setLoading(false);
 
     } else {
-      const { error: authError } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/reset-password` });
+      await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
       setLoading(false);
-      if (authError) { setError(authError.message); return; }
       setSuccess("✅ Check your email for a password reset link. (Check spam folder if you don't see it)");
     }
   }
