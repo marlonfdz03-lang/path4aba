@@ -1,7 +1,20 @@
 import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
+import { BCBA_STUDENTS_NOTE_PROMPT } from '@/app/prompts/bcbaStudentsNotePrompt'
 
 export const dynamic = 'force-dynamic'
+
+const ACTIVITY_LABELS: Record<string, string> = {
+  unrestricted: 'unrestricted fieldwork',
+  restricted: 'restricted fieldwork',
+}
+
+const CONTACT_LABELS: Record<string, string> = {
+  none: 'independent (no supervisor present)',
+  individual_supervision: 'individual supervision contact',
+  group_supervision: 'group supervision contact',
+  client_observation: 'client observation with supervisor feedback',
+}
 
 export async function POST(req: Request) {
   let body: { activityType?: string; contactType?: string; setting?: string }
@@ -13,20 +26,25 @@ export async function POST(req: Request) {
 
   const { activityType = 'unrestricted', contactType = 'none', setting = '' } = body
 
-  const prompt = `Generate a BACB-compliant fieldwork session description for a BCBA student trainee.
-Activity type: ${activityType}
-Contact type: ${contactType}
-Setting: ${setting}
-Write 2-3 sentences. Use professional behavior-analytic language. Reference client services without using client names. Do not use mentalistic language. Do not fabricate specific data or numbers.`
+  const userMessage = [
+    `Generate one BACB-compliant fieldwork session description.`,
+    `Activity type: ${ACTIVITY_LABELS[activityType] ?? activityType}`,
+    `Contact type: ${CONTACT_LABELS[contactType] ?? contactType}`,
+    setting ? `Setting: ${setting}` : null,
+  ].filter(Boolean).join('\n')
 
   try {
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 200,
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: BCBA_STUDENTS_NOTE_PROMPT },
+        { role: 'user', content: userMessage },
+      ],
+      temperature: 0.4,
+      max_tokens: 250,
     })
-    const note = response.choices[0]?.message?.content || ''
+    const note = response.choices[0]?.message?.content?.trim() || ''
     return NextResponse.json({ note })
   } catch (err: any) {
     console.error('[generate-note] OpenAI error:', err?.message)
