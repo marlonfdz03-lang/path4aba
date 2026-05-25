@@ -1,10 +1,11 @@
 "use client";
 
-import { BACB_RULES, type FieldworkType } from "@/lib/bcba-students/calculations";
+import { BACB_RULES, type FieldworkType, type CertificationTrack } from "@/lib/bcba-students/calculations";
 
 interface Props {
   totalHours: number;
   fieldworkType: FieldworkType;
+  certificationTrack: CertificationTrack;
   cumulativeUnrestrictedPct: number;
   thisMonthSupervisionPct: number;
 }
@@ -29,10 +30,10 @@ function Bar({ label, pct, min, color, warning }: { label: string; pct: number; 
   );
 }
 
-export default function ProgressBars({ totalHours, fieldworkType, cumulativeUnrestrictedPct, thisMonthSupervisionPct }: Props) {
-  const rules = BACB_RULES[fieldworkType];
+export default function ProgressBars({ totalHours, fieldworkType, certificationTrack, cumulativeUnrestrictedPct, thisMonthSupervisionPct }: Props) {
+  const rules = BACB_RULES[certificationTrack][fieldworkType];
   const overallPct = (totalHours / rules.totalHoursRequired) * 100;
-  const unrestrictedMin = BACB_RULES.unrestrictedPctMin;
+  const unrestrictedMin = BACB_RULES.shared.unrestrictedPctMin;
   const supervisionMin = rules.supervisionPctMin;
 
   return (

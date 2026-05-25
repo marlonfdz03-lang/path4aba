@@ -1,12 +1,13 @@
 "use client";
 
-import { BACB_RULES, estimatedCompletion, type FieldworkType } from "@/lib/bcba-students/calculations";
+import { BACB_RULES, estimatedCompletion, type FieldworkType, type CertificationTrack } from "@/lib/bcba-students/calculations";
 
 interface Props {
   totalHours: number;
   supervisedHours: number;
   supervisionPct: number;
   fieldworkType: FieldworkType;
+  certificationTrack: CertificationTrack;
   monthsActive: number;
 }
 
@@ -20,8 +21,8 @@ function MetricCard({ label, value, sub }: { label: string; value: string; sub?:
   );
 }
 
-export default function DashboardMetrics({ totalHours, supervisedHours, supervisionPct, fieldworkType, monthsActive }: Props) {
-  const rules = BACB_RULES[fieldworkType];
+export default function DashboardMetrics({ totalHours, supervisedHours, supervisionPct, fieldworkType, certificationTrack, monthsActive }: Props) {
+  const rules = BACB_RULES[certificationTrack][fieldworkType];
   const remaining = Math.max(0, rules.totalHoursRequired - totalHours);
   const estDate = estimatedCompletion(totalHours, rules.totalHoursRequired, monthsActive);
   const estLabel = estDate

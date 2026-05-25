@@ -208,12 +208,12 @@ export default function ClientProfilePage() {
       if (user) {
         const { data } = await supabase
           .from("clients")
-          .select("id, client_name, clinical_profile")
+          .select("id, internal_code, clinical_profile")
           .eq("id", id)
           .eq("rbt_id", user.id)
           .maybeSingle();
         if (data) {
-          const found = { id: data.id, clientName: data.client_name, clinicalProfile: data.clinical_profile };
+          const found = { id: data.id, clientName: data.internal_code, clinicalProfile: data.clinical_profile };
           setClient(found);
           setDailyNotes(getNotesByClientId(found.id));
           const raw = localStorage.getItem(`path4aba_saved_present_${found.id}`);

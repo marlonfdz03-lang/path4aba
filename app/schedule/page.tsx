@@ -423,7 +423,7 @@ export default function SchedulePage() {
         if (ids.length > 0) {
           const { data } = await supabase
             .from('clients')
-            .select('id, clinical_profile')
+            .select('id, internal_code, clinical_profile')
             .in('id', ids);
           rows = data || [];
         }
@@ -445,7 +445,7 @@ export default function SchedulePage() {
 
       setClients(unique.map((row) => ({
         id: row.id,
-        clientName: row.clinical_profile?.name || 'Unnamed Client',
+        clientName: row.internal_code || 'Unnamed Client',
         clinicalProfile: row.clinical_profile,
       })));
       setLoaded(true);

@@ -1,6 +1,6 @@
 "use client";
 
-import { BACB_RULES, type FieldworkType } from "@/lib/bcba-students/calculations";
+import { BACB_RULES, type FieldworkType, type CertificationTrack } from "@/lib/bcba-students/calculations";
 
 interface MonthData {
   total_hours: number;
@@ -15,6 +15,7 @@ interface MonthData {
 interface Props {
   month: MonthData | null;
   fieldworkType: FieldworkType;
+  certificationTrack: CertificationTrack;
 }
 
 function CheckItem({ label, met }: { label: string; met: boolean }) {
@@ -39,8 +40,8 @@ function CheckItem({ label, met }: { label: string; met: boolean }) {
   );
 }
 
-export default function ComplianceChecklist({ month, fieldworkType }: Props) {
-  const rules = BACB_RULES[fieldworkType];
+export default function ComplianceChecklist({ month, fieldworkType, certificationTrack }: Props) {
+  const rules = BACB_RULES[certificationTrack][fieldworkType];
   const today = new Date().getDate();
   const showMvfReminder = today >= 25;
 

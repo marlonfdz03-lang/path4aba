@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { BACB_RULES, type FieldworkType } from "@/lib/bcba-students/calculations";
+import { BACB_RULES, type FieldworkType, type CertificationTrack } from "@/lib/bcba-students/calculations";
 import ComplianceChecklist from "./ComplianceChecklist";
 
 interface Session {
@@ -83,6 +83,7 @@ interface EditForm {
 }
 
 export default function MonthDrawer({ monthYear, summary: initialSummary, fieldworkType, profile, traineeName, onClose, onMvfSigned }: Props) {
+  const certificationTrack: CertificationTrack = profile?.certification_track === 'BCaBA' ? 'BCaBA' : 'BCBA';
   const [sessions, setSessions] = useState<Session[]>([]);
   const [summary, setSummary] = useState<Summary | null>(initialSummary);
   const [loading, setLoading] = useState(true);
@@ -148,7 +149,7 @@ export default function MonthDrawer({ monthYear, summary: initialSummary, fieldw
       return `${h % 12 || 12}:${m.toString().padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
     }
 
-    const rules = BACB_RULES[fieldworkType];
+    const rules = BACB_RULES[certificationTrack][fieldworkType];
     const grpPct = summary.supervisor_contacts > 0
       ? (summary.group_contacts / summary.supervisor_contacts) * 100 : 0;
 
@@ -513,7 +514,7 @@ export default function MonthDrawer({ monthYear, summary: initialSummary, fieldw
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
           {/* Compliance */}
-          <ComplianceChecklist month={summary} fieldworkType={fieldworkType} />
+          <ComplianceChecklist month={summary} fieldworkType={fieldworkType} certificationTrack={certificationTrack} />
 
           {/* MVF */}
           <div className="bg-white rounded-xl p-5" style={{ border: "1px solid var(--border)" }}>

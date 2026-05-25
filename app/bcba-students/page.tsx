@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { type FieldworkType } from "@/lib/bcba-students/calculations";
+import { type FieldworkType, type CertificationTrack } from "@/lib/bcba-students/calculations";
 import DashboardMetrics from "@/app/components/bcba-students/DashboardMetrics";
 import ProgressBars from "@/app/components/bcba-students/ProgressBars";
 import ComplianceChecklist from "@/app/components/bcba-students/ComplianceChecklist";
@@ -69,6 +69,7 @@ export default function BCBAStudentsDashboard() {
   }
 
   const fieldworkType = profile?.fieldwork_type ?? "supervised";
+  const certificationTrack: CertificationTrack = profile?.certification_track === "BCaBA" ? "BCaBA" : "BCBA";
 
   // Aggregate totals across ALL eligible months
   const allTotal = summaries.reduce((s, m) => s + m.total_hours, 0);
@@ -137,6 +138,7 @@ export default function BCBAStudentsDashboard() {
           supervisedHours={allSupervised}
           supervisionPct={supervisionPct}
           fieldworkType={fieldworkType}
+          certificationTrack={certificationTrack}
           monthsActive={monthsActive}
         />
 
@@ -144,12 +146,13 @@ export default function BCBAStudentsDashboard() {
         <ProgressBars
           totalHours={allTotal}
           fieldworkType={fieldworkType}
+          certificationTrack={certificationTrack}
           cumulativeUnrestrictedPct={cumulativeUnrestrictedPct}
           thisMonthSupervisionPct={currentMonth?.supervision_pct ?? 0}
         />
 
         {/* Compliance checklist */}
-        <ComplianceChecklist month={currentMonth} fieldworkType={fieldworkType} />
+        <ComplianceChecklist month={currentMonth} fieldworkType={fieldworkType} certificationTrack={certificationTrack} />
 
         {/* BACB Compliance Guide — collapsible info panel */}
         <ComplianceGuide />

@@ -1,27 +1,51 @@
 export const BACB_RULES = {
-  concentrated: {
-    totalHoursRequired: 1500,
-    supervisionPctMin: 10,
-    contactsPerMonth: 6,
-    minHoursPerMonth: 20,
-    maxHoursPerMonth: 130,
-    canProrate: false,
+  BCBA: {
+    concentrated: {
+      totalHoursRequired: 1500,
+      supervisionPctMin: 10,
+      contactsPerMonth: 6,
+      minHoursPerMonth: 20,
+      maxHoursPerMonth: 130,
+      canProrate: false,
+    },
+    supervised: {
+      totalHoursRequired: 2000,
+      supervisionPctMin: 5,
+      contactsPerMonth: 4,
+      minHoursPerMonth: 20,
+      maxHoursPerMonth: 130,
+      canProrate: true,
+    },
   },
-  supervised: {
-    totalHoursRequired: 2000,
-    supervisionPctMin: 5,
-    contactsPerMonth: 4,
-    minHoursPerMonth: 20,
-    maxHoursPerMonth: 130,
-    canProrate: true,
+  BCaBA: {
+    concentrated: {
+      totalHoursRequired: 1000,
+      supervisionPctMin: 10,
+      contactsPerMonth: 4,
+      minHoursPerMonth: 20,
+      maxHoursPerMonth: 130,
+      canProrate: false,
+    },
+    supervised: {
+      totalHoursRequired: 1300,
+      supervisionPctMin: 5,
+      contactsPerMonth: 4,
+      minHoursPerMonth: 20,
+      maxHoursPerMonth: 130,
+      canProrate: true,
+    },
   },
-  unrestrictedPctMin: 60,
-  individualSupervisionMin: 50,
-  groupSupervisionMax: 50,
-  clientObservationsPerMonth: 1,
+  shared: {
+    unrestrictedPctMin: 60,
+    restrictedPctMax: 40,
+    individualSupervisionMin: 50,
+    groupSupervisionMax: 50,
+    clientObservationsPerMonth: 1,
+  },
 } as const
 
 export type FieldworkType = 'concentrated' | 'supervised'
+export type CertificationTrack = 'BCBA' | 'BCaBA'
 
 export interface Session {
   id: string
@@ -56,11 +80,12 @@ export function calcSupervisionPct(supervised: number, total: number): number {
 export function checkMonthEligibility(
   summary: MonthSummary,
   fieldworkType: FieldworkType,
-  mvfSigned: boolean
+  mvfSigned: boolean,
+  certificationTrack: CertificationTrack = 'BCBA'
 ): { eligible: boolean; reason?: string } {
-  const rules = BACB_RULES[fieldworkType]
+  const rules = BACB_RULES[certificationTrack][fieldworkType]
 
-  if (summary.client_observations < BACB_RULES.clientObservationsPerMonth) {
+  if (summary.client_observations < BACB_RULES.shared.clientObservationsPerMonth) {
     return { eligible: false, reason: 'No client observation recorded this month' }
   }
   if (summary.total_hours < rules.minHoursPerMonth) {
@@ -135,11 +160,14 @@ export function recalculateMonthSummary(sessions: Session[]): MonthSummary {
   }
 }
 
-export function adjustHoursForSupervisedFieldwork(summary: MonthSummary): MonthSummary {
-  const rules = BACB_RULES.supervised
+export function adjustHoursForSupervisedFieldwork(
+  summary: MonthSummary,
+  certificationTrack: CertificationTrack = 'BCBA'
+): MonthSummary {
+  const rules = BACB_RULES[certificationTrack].supervised
   let { total_independent_hours, total_supervised_hours, total_hours } = summary
 
-  // Cap total at 130 by removing independent hours
+  // Cap total at maxHoursPerMonth by removing independent hours
   if (total_hours > rules.maxHoursPerMonth) {
     const excess = total_hours - rules.maxHoursPerMonth
     total_independent_hours = Math.max(0, total_independent_hours - excess)

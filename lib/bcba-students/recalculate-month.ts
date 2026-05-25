@@ -5,6 +5,7 @@ import {
   checkMonthEligibility,
   type Session,
   type FieldworkType,
+  type CertificationTrack,
 } from './calculations'
 
 function getSupabase() {
@@ -34,11 +35,12 @@ export async function recalculateMonth(userId: string, monthYear: string): Promi
   // Fetch fieldwork type from profile
   const { data: profile } = await supabase
     .from('fieldwork_profiles')
-    .select('fieldwork_type')
+    .select('fieldwork_type, certification_track')
     .eq('user_id', userId)
     .maybeSingle()
 
   const fieldworkType: FieldworkType = (profile?.fieldwork_type as FieldworkType) || 'supervised'
+  const certificationTrack: CertificationTrack = (profile?.certification_track === 'BCaBA' ? 'BCaBA' : 'BCBA')
 
   // Fetch current MVF status
   const { data: existing } = await supabase
@@ -51,10 +53,10 @@ export async function recalculateMonth(userId: string, monthYear: string): Promi
   let summary = recalculateMonthSummary((sessions || []) as Session[])
 
   if (fieldworkType === 'supervised') {
-    summary = adjustHoursForSupervisedFieldwork(summary)
+    summary = adjustHoursForSupervisedFieldwork(summary, certificationTrack)
   }
 
-  const { eligible, reason } = checkMonthEligibility(summary, fieldworkType, existing?.mvf_signed ?? false)
+  const { eligible, reason } = checkMonthEligibility(summary, fieldworkType, existing?.mvf_signed ?? false, certificationTrack)
 
   const upsertData = {
     user_id: userId,

@@ -11,7 +11,6 @@ export default function GenerateNote() {
         <div className="grid gap-4">
           <input className="border p-4 rounded-xl" placeholder="Client name" />
           <input className="border p-4 rounded-xl" placeholder="Place of service" />
-          <input className="border p-4 rounded-xl" placeholder="Time in / Time out" />
 
           <textarea className="border p-4 rounded-xl h-28" placeholder="Behaviors observed today" />
           <textarea className="border p-4 rounded-xl h-28" placeholder="Interventions used" />

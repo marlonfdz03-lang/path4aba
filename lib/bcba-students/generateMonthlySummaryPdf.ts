@@ -1,5 +1,5 @@
 import { PDFDocument, PDFPage, PDFFont, StandardFonts, rgb } from 'pdf-lib'
-import { BACB_RULES, type FieldworkType } from './calculations'
+import { BACB_RULES, type FieldworkType, type CertificationTrack } from './calculations'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -22,6 +22,7 @@ export interface MonthlySummaryData {
   monthLabel: string        // e.g. "May 2026"
   monthYear: string         // e.g. "2026-05"
   fieldworkType: FieldworkType
+  certificationTrack: CertificationTrack
   summary: {
     total_independent_hours: number
     total_supervised_hours: number
@@ -91,7 +92,7 @@ export async function generateMonthlySummaryPdf(data: MonthlySummaryData): Promi
   const ML = 44, MR = PW - 44
   const W  = MR - ML
 
-  const rules = BACB_RULES[data.fieldworkType]
+  const rules = BACB_RULES[data.certificationTrack][data.fieldworkType]
   const s     = data.summary
 
   // ── Helper: new page ────────────────────────────────────────────────────────
@@ -208,7 +209,7 @@ export async function generateMonthlySummaryPdf(data: MonthlySummaryData): Promi
   )
   checkRow(
     'Maximum 50% Group Supervision',
-    s.supervisor_contacts === 0 || grpPct <= BACB_RULES.groupSupervisionMax,
+    s.supervisor_contacts === 0 || grpPct <= BACB_RULES.shared.groupSupervisionMax,
     s.supervisor_contacts === 0 ? 'No contacts recorded' : `${grpPct.toFixed(0)}% group`
   )
   y -= 4

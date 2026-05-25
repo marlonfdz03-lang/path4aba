@@ -60,11 +60,42 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
   const [dailyHoursLogged, setDailyHoursLogged] = useState(0);
   const [monthlyHoursLogged, setMonthlyHoursLogged] = useState(0);
   const [sessionsOnDate, setSessionsOnDate] = useState<Array<{ start_time: string; end_time: string }>>([]);
+  const [allUnrestrictedHours, setAllUnrestrictedHours] = useState(0);
+  const [allRestrictedHours, setAllRestrictedHours] = useState(0);
 
   const totalHours = toDecimalHours(startTime, endTime);
   const isSupervised = contactType !== "none";
   const supervisedHours = isSupervised ? totalHours : 0;
   const independentHours = isSupervised ? 0 : totalHours;
+
+  // Ratio tracker: accumulated hours across all months + current session
+  const sessionUnrestricted = activityType === "unrestricted" ? totalHours : 0;
+  const sessionRestricted = activityType === "restricted" ? totalHours : 0;
+  const displayUnrestricted = allUnrestrictedHours + sessionUnrestricted;
+  const displayRestricted = allRestrictedHours + sessionRestricted;
+  const displayTotal = displayUnrestricted + displayRestricted;
+  const restrictedPct = displayTotal > 0 ? (displayRestricted / displayTotal) * 100 : 0;
+
+  // Fetch all monthly summaries once for the restricted/unrestricted ratio tracker
+  useEffect(() => {
+    fetch("/api/bcba-students/monthly")
+      .then(r => r.json())
+      .then(d => {
+        const sums: Array<{ unrestricted_hours: number; restricted_hours: number }> = d.summaries || [];
+        setAllUnrestrictedHours(sums.reduce((acc, s) => acc + (s.unrestricted_hours || 0), 0));
+        setAllRestrictedHours(sums.reduce((acc, s) => acc + (s.restricted_hours || 0), 0));
+      })
+      .catch(() => {});
+  }, []);
+
+  // Auto-reset contact type when activity type changes
+  useEffect(() => {
+    if (activityType === "unrestricted") {
+      setContactType(prev => prev === "client_observation" ? "none" : prev);
+    } else {
+      setContactType("client_observation");
+    }
+  }, [activityType]);
 
   // Fetch existing sessions for the selected date/month to enforce daily and monthly limits
   useEffect(() => {
@@ -231,10 +262,10 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
           <select value={contactType} onChange={e => setContactType(e.target.value as any)}
             className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
             style={{ borderColor: "var(--border)", color: "var(--text1)" }}>
-            <option value="none">None (independent)</option>
-            <option value="individual_supervision">Individual supervision</option>
-            <option value="group_supervision">Group supervision</option>
-            <option value="client_observation">Client observation + feedback</option>
+            <option value="none" disabled={activityType === "restricted"} title={activityType === "restricted" ? "Individual/Group Supervision applies to unrestricted hours" : undefined}>None (independent)</option>
+            <option value="individual_supervision" disabled={activityType === "restricted"} title={activityType === "restricted" ? "Individual/Group Supervision applies to unrestricted hours" : undefined}>Individual supervision</option>
+            <option value="group_supervision" disabled={activityType === "restricted"} title={activityType === "restricted" ? "Individual/Group Supervision applies to unrestricted hours" : undefined}>Group supervision</option>
+            <option value="client_observation" disabled={activityType === "unrestricted"} title={activityType === "unrestricted" ? "Client Observation is a restricted activity" : undefined}>Client observation + feedback</option>
           </select>
         </div>
 
@@ -257,6 +288,27 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
             style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
         </div>
       </div>
+
+      {/* Restricted/unrestricted ratio tracker */}
+      {displayTotal > 0 && (
+        <div
+          className="rounded-xl px-4 py-3 mb-4"
+          style={{
+            background: restrictedPct > 40 ? "#FEF2F2" : restrictedPct > 35 ? "#FFF8E1" : "rgba(27,168,160,0.05)",
+            border: `1px solid ${restrictedPct > 40 ? "#FECACA" : restrictedPct > 35 ? "#FDE68A" : "rgba(27,168,160,0.2)"}`,
+          }}
+        >
+          <p className="text-[12px] font-medium" style={{ color: restrictedPct > 40 ? "#DC2626" : restrictedPct > 35 ? "#92400E" : "var(--text2)" }}>
+            Unrestricted: {displayUnrestricted.toFixed(2)} hrs ({displayTotal > 0 ? (100 - restrictedPct).toFixed(1) : "0.0"}%) · Restricted: {displayRestricted.toFixed(2)} hrs ({restrictedPct.toFixed(1)}%)
+          </p>
+          {restrictedPct > 40 && (
+            <p className="text-[12px] mt-0.5" style={{ color: "#DC2626" }}>You have exceeded the BACB maximum of 40% restricted hours.</p>
+          )}
+          {restrictedPct > 35 && restrictedPct <= 40 && (
+            <p className="text-[12px] mt-0.5" style={{ color: "#92400E" }}>Approaching 40% restricted limit.</p>
+          )}
+        </div>
+      )}
 
       {/* Warnings */}
       {warnings.map((w, i) => (

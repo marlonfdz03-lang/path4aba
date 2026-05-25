@@ -3,7 +3,7 @@ import { supabaseServer } from '@/lib/supabaseServer'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { generateMonthlySummaryPdf } from '@/lib/bcba-students/generateMonthlySummaryPdf'
-import type { FieldworkType } from '@/lib/bcba-students/calculations'
+import type { FieldworkType, CertificationTrack } from '@/lib/bcba-students/calculations'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,7 +30,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ monthYea
   const { monthYear } = await params
 
   const [profileRes, summaryRes, sessionsRes] = await Promise.all([
-    supabaseServer.from('fieldwork_profiles').select('fieldwork_type, trainee_bacb_id, supervisor_name, supervisor_bacb_id').eq('user_id', user.id).maybeSingle(),
+    supabaseServer.from('fieldwork_profiles').select('fieldwork_type, certification_track, trainee_bacb_id, supervisor_name, supervisor_bacb_id').eq('user_id', user.id).maybeSingle(),
     supabaseServer.from('fieldwork_monthly_summaries').select('*').eq('user_id', user.id).eq('month_year', monthYear).maybeSingle(),
     supabaseServer.from('fieldwork_sessions').select('session_date, start_time, end_time, total_hours, activity_type, contact_type, supervisor_name, session_note').eq('user_id', user.id).eq('month_year', monthYear).order('session_date', { ascending: true }),
   ])
@@ -41,6 +41,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ monthYea
 
   const traineeName: string = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Trainee'
   const fieldworkType: FieldworkType = (profileRes.data?.fieldwork_type as FieldworkType) || 'supervised'
+  const certificationTrack: CertificationTrack = profileRes.data?.certification_track === 'BCaBA' ? 'BCaBA' : 'BCBA'
   const monthLabel = new Date(monthYear + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
   const pdfBytes = await generateMonthlySummaryPdf({
@@ -51,6 +52,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ monthYea
     monthLabel,
     monthYear,
     fieldworkType,
+    certificationTrack,
     summary: summaryRes.data,
     sessions: sessionsRes.data || [],
   })

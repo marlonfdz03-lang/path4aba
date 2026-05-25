@@ -45,6 +45,39 @@ const CONTACT_LABELS: Record<string, string> = {
 
 const VARIATION_INSTRUCTION = `\n\nIMPORTANT: This note is too similar to a previously saved entry. You must vary the sentence structure, clinical action verb, ABA component referenced, and closing phrase significantly. Use a different starting verb and a different note-ending pattern than before. The note must read as a distinctly different clinical description.`
 
+function buildCombinationInstruction(activityType: string, contactType: string): string {
+  if (contactType === 'client_observation' && activityType === 'restricted') {
+    return `
+
+COMBINATION OVERRIDE: CLIENT OBSERVATION — RESTRICTED HOURS
+This is direct implementation with a client. Restricted fieldwork hours require direct service delivery language only.
+
+REQUIRED: Use only direct service verbs to open sentences: Implemented / Applied / Delivered / Collected / Conducted
+REQUIRED: Reference direct service delivery, therapy sessions, or instructional sessions — not data review.
+EXAMPLE PHRASES:
+  'Implemented behavior reduction procedures during direct service delivery with a client receiving ABA services'
+  'Collected frequency and duration data during direct therapy sessions'
+  'Applied prompting and reinforcement procedures during instructional sessions'
+BANNED FOR THIS COMBINATION: Reviewed / Analyzed / Evaluated / Conducted visual analysis / assessment / evaluation / visual analysis language of any kind`
+  }
+
+  if (contactType === 'group_supervision' && activityType === 'unrestricted') {
+    return `
+
+COMBINATION OVERRIDE: GROUP SUPERVISION — UNRESTRICTED HOURS
+This session occurred in a group supervision context. Use BCBA-level analysis language and reference the group setting.
+
+REQUIRED: Reference group supervision activities, peer review, or group learning context.
+EXAMPLE PHRASES:
+  'Participated in group supervision activities focused on reviewing behavioral data and intervention procedures for clients receiving ABA services'
+  'Reviewed treatment integrity and intervention outcomes during group supervision activities'
+  'Analyzed behavioral data trends with peers during group supervision to inform data-based treatment decisions'`
+  }
+
+  // individual_supervision + unrestricted and none + unrestricted: standard BCBA analysis language (base prompt applies as-is)
+  return ''
+}
+
 export async function POST(req: Request) {
   const user = await getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -78,6 +111,8 @@ export async function POST(req: Request) {
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
+  const systemPrompt = BCBA_STUDENTS_NOTE_PROMPT + buildCombinationInstruction(activityType, contactType)
+
   async function generate(systemContent: string): Promise<string> {
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',
@@ -91,14 +126,14 @@ export async function POST(req: Request) {
     return response.choices[0]?.message?.content?.trim() || ''
   }
 
-  let note = await generate(BCBA_STUDENTS_NOTE_PROMPT)
+  let note = await generate(systemPrompt)
 
   // Similarity check — same Jaccard pattern as lib/generateSmartNote.ts
   let similarityWarning = false
   if (previousNotes.length > 0) {
     const tooSimilar = previousNotes.some(prev => calculateSimilarity(note, prev) >= 0.80)
     if (tooSimilar) {
-      note = await generate(BCBA_STUDENTS_NOTE_PROMPT + VARIATION_INSTRUCTION)
+      note = await generate(systemPrompt + VARIATION_INSTRUCTION)
 
       const stillTooSimilar = previousNotes.some(prev => calculateSimilarity(note, prev) >= 0.80)
       if (stillTooSimilar) {

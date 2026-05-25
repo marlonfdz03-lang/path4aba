@@ -169,7 +169,7 @@ export default function BCBAClientPage() {
     // Verify connection + fetch client
     const { data: conn } = await supabase
       .from("bcba_clients")
-      .select("clients(id, client_name, diagnosis, clinical_profile)")
+      .select("clients(id, internal_code, diagnosis, clinical_profile)")
       .eq("bcba_id", userId)
       .eq("client_id", clientId)
       .maybeSingle();
@@ -223,7 +223,7 @@ export default function BCBAClientPage() {
 
   return (
     <main className="min-h-screen" style={{ background: "var(--bg)", fontFamily: "var(--font-dm-sans, sans-serif)" }}>
-      <Topbar clientName={client?.client_name || "Client"} />
+      <Topbar clientName={client?.internal_code || "Client"} />
 
       {/* Client header */}
       <div className="px-8 py-5 bg-white border-b" style={{ borderColor: "var(--border)" }}>
@@ -232,10 +232,10 @@ export default function BCBAClientPage() {
             className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold text-white"
             style={{ background: "linear-gradient(135deg, var(--teal), var(--sky))" }}
           >
-            {client?.client_name?.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase() || "?"}
+            {(client?.internal_code || "?").slice(0, 2).toUpperCase()}
           </div>
           <div>
-            <p className="text-[16px] font-semibold" style={{ color: "var(--text1)" }}>{client?.client_name}</p>
+            <p className="text-[16px] font-semibold" style={{ color: "var(--text1)" }}>{client?.internal_code}</p>
             <p className="text-[13px]" style={{ color: "var(--text3)" }}>{client?.diagnosis?.join(", ") || "ASD"}</p>
           </div>
         </div>
