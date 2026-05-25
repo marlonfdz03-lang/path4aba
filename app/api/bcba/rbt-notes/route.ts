@@ -15,17 +15,24 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url)
   const clientId = url.searchParams.get('clientId')
+  console.log('[rbt-notes] bcba_id:', user.id, 'clientId param:', clientId)
 
   // Get all clients this BCBA is connected to
-  const { data: connections } = await supabaseServer
+  const { data: connections, error: connError } = await supabaseServer
     .from('bcba_clients')
     .select('client_id')
     .eq('bcba_id', user.id)
 
+  console.log('[rbt-notes] bcba_clients connections:', connections?.length, 'error:', connError?.message)
+
   const clientIds = connections?.map(c => c.client_id) || []
-  if (clientIds.length === 0) return NextResponse.json({ notes: [] })
+  if (clientIds.length === 0) {
+    console.log('[rbt-notes] no connected clients — returning empty')
+    return NextResponse.json({ notes: [] })
+  }
 
   const targetIds = clientId ? [clientId] : clientIds
+  console.log('[rbt-notes] querying session_notes for client_ids:', targetIds)
 
   const { data: notes, error } = await supabaseServer
     .from('session_notes')
@@ -33,8 +40,10 @@ export async function GET(request: Request) {
     .in('client_id', targetIds)
     .order('created_at', { ascending: false })
 
+  console.log('[rbt-notes] session_notes rows found:', notes?.length, 'error:', error?.message)
+
   if (error) {
-    console.error('[bcba/rbt-notes]', error)
+    console.error('[bcba/rbt-notes] DB error:', error)
     return NextResponse.json({ error: 'Failed to fetch notes' }, { status: 500 })
   }
 

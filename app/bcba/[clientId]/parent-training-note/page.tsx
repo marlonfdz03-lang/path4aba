@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -31,6 +29,7 @@ export default function ParentTrainingNotePage() {
   const [client, setClient] = useState<any>(null);
   const [bcbaName, setBcbaName] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   // Session info
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split("T")[0]);
@@ -65,11 +64,17 @@ export default function ParentTrainingNotePage() {
   }, [clientId]);
 
   async function loadData(_userId: string) {
-    const res = await fetch(`/api/bcba/client/${clientId}`);
-    if (!res.ok) { router.push("/bcba"); return; }
-    const { client: clientData } = await res.json();
-    setClient(clientData);
-    setLoading(false);
+    try {
+      const res = await fetch(`/api/bcba/client/${clientId}`);
+      if (!res.ok) { router.push("/bcba"); return; }
+      const json = await res.json();
+      setClient(json.client);
+    } catch (e) {
+      console.error("[parent-training-note] loadData error:", e);
+      setLoadError("Failed to load client data. Please go back and try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   const profile = client?.clinical_profile || {};
@@ -141,6 +146,19 @@ export default function ParentTrainingNotePage() {
       <main className="min-h-screen" style={{ background: "var(--bg)" }}>
         <Topbar clientName="" clientId={clientId} />
         <div className="px-8 py-8"><p className="text-[13px]" style={{ color: "var(--text3)" }}>Loading…</p></div>
+      </main>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <main className="min-h-screen" style={{ background: "var(--bg)" }}>
+        <Topbar clientName="" clientId={clientId} />
+        <div className="px-8 py-8">
+          <p className="text-[13px] px-3 py-2 rounded-lg border" style={{ background: "#FEF2F2", borderColor: "#FECACA", color: "#DC2626" }}>
+            {loadError}
+          </p>
+        </div>
       </main>
     );
   }

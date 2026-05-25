@@ -236,10 +236,11 @@ function ClientDetailView({
 
   const canLog = date !== "" && reason !== "" && Number(hours) > 0;
 
-  function handleLog() {
+  async function handleLog() {
     if (!canLog) return;
+    const id = crypto.randomUUID();
     const entry: MissedEntry = {
-      id: crypto.randomUUID(),
+      id,
       clientId: client.id,
       clientName: client.clientName,
       date, reason, hours: Number(hours), notes: notes.trim(),
@@ -248,6 +249,21 @@ function ClientDetailView({
     saveEntries(updated);
     onEntriesChange(updated);
     setDate(""); setReason(""); setHours(""); setNotes("");
+
+    // Also persist to Supabase so BCBAs can see missed hours
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { error } = await supabase.from('missed_hours').insert({
+        id,
+        client_id: client.id,
+        rbt_id: user.id,
+        date,
+        reason,
+        hours: Number(hours),
+        notes: notes.trim() || null,
+      });
+      if (error) console.error('[schedule] missed_hours insert error:', error.message);
+    }
   }
 
   function handleDelete(id: string) {

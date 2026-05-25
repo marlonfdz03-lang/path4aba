@@ -15,16 +15,23 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url)
   const clientId = url.searchParams.get('clientId')
+  console.log('[missing-hours] bcba_id:', user.id, 'clientId param:', clientId)
 
-  const { data: connections } = await supabaseServer
+  const { data: connections, error: connError } = await supabaseServer
     .from('bcba_clients')
     .select('client_id')
     .eq('bcba_id', user.id)
 
+  console.log('[missing-hours] bcba_clients connections:', connections?.length, 'error:', connError?.message)
+
   const clientIds = connections?.map(c => c.client_id) || []
-  if (clientIds.length === 0) return NextResponse.json({ entries: [] })
+  if (clientIds.length === 0) {
+    console.log('[missing-hours] no connected clients — returning empty')
+    return NextResponse.json({ entries: [] })
+  }
 
   const targetIds = clientId ? [clientId] : clientIds
+  console.log('[missing-hours] querying missed_hours for client_ids:', targetIds)
 
   const { data: entries, error } = await supabaseServer
     .from('missed_hours')
@@ -32,8 +39,10 @@ export async function GET(request: Request) {
     .in('client_id', targetIds)
     .order('date', { ascending: false })
 
+  console.log('[missing-hours] rows found:', entries?.length, 'error:', error?.message)
+
   if (error) {
-    // Table may not exist yet — return empty gracefully
+    console.log('[missing-hours] missed_hours table error (may not exist yet):', error.message)
     return NextResponse.json({ entries: [] })
   }
 
