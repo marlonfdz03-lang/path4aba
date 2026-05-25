@@ -214,8 +214,12 @@ export default function ClientProfilePage() {
           const found = { id: data.id, clientName: data.clinical_profile?.name || data.internal_code, clinicalProfile: data.clinical_profile };
           setClient(found);
           setDailyNotes(getNotesByClientId(found.id));
-          const raw = localStorage.getItem(`path4aba_saved_present_${found.id}`);
-          if (raw) { try { setSavedPresent(JSON.parse(raw)); } catch {} }
+          if (data.clinical_profile?.whoWasPresent?.length) {
+            setSavedPresent(data.clinical_profile.whoWasPresent);
+          } else {
+            const raw = localStorage.getItem(`path4aba_saved_present_${found.id}`);
+            if (raw) { try { setSavedPresent(JSON.parse(raw)); } catch {} }
+          }
           return;
         }
       }
@@ -263,6 +267,9 @@ export default function ClientProfilePage() {
     const updated = [...new Set([...savedPresent, name])];
     setSavedPresent(updated);
     localStorage.setItem(`path4aba_saved_present_${client.id}`, JSON.stringify(updated));
+    supabase.from("clients")
+      .update({ clinical_profile: { ...client.clinicalProfile, whoWasPresent: updated } })
+      .eq("id", client.id);
     if (!selectedPresent.includes(name)) setSelectedPresent((prev) => [...prev, name]);
     setCustomPresent("");
   }
@@ -469,7 +476,6 @@ export default function ClientProfilePage() {
               <div>
                 <h1 className="text-xl font-semibold mb-1" style={{ color: "var(--text1)" }}>{client.clientName}</h1>
                 <div className="flex items-center gap-2">
-                  <span className="text-[12px]" style={{ color: "var(--text3)" }}>#{client.id.slice(0, 8).toUpperCase()}</span>
                   <span
                     className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full"
                     style={{ background: "#E6F9F5", color: "#0D8A6A" }}
