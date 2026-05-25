@@ -78,8 +78,10 @@ export default function ParentTrainingNotePage() {
   }
 
   const profile = client?.clinical_profile || {};
-  const allBehaviors: string[] = profile?.activePrograms?.maladaptive || profile?.maladaptiveBehaviors || [];
-  const allInterventions: string[] = profile?.approvedInterventions || [];
+  const rawBehaviors: any[] = profile?.activePrograms?.maladaptive || profile?.maladaptiveBehaviors || [];
+  const allBehaviors: string[] = rawBehaviors.map((b: any) => typeof b === 'string' ? b : (b?.name || '')).filter(Boolean);
+  const rawInterventions: any[] = profile?.approvedInterventions || [];
+  const allInterventions: string[] = rawInterventions.map((i: any) => typeof i === 'string' ? i : (i?.name || '')).filter(Boolean);
 
   function toggleBehavior(b: string) {
     setSelectedBehaviors(prev => prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b]);

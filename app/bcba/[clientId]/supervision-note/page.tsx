@@ -78,7 +78,8 @@ export default function SupervisionNotePage() {
   }
 
   const profile = client?.clinical_profile || {};
-  const allBehaviors: string[] = profile?.activePrograms?.maladaptive || profile?.maladaptiveBehaviors || [];
+  const rawBehaviors: any[] = profile?.activePrograms?.maladaptive || profile?.maladaptiveBehaviors || [];
+  const allBehaviors: string[] = rawBehaviors.map((b: any) => typeof b === 'string' ? b : (b?.name || '')).filter(Boolean);
 
   function toggleBehavior(b: string) {
     setSelectedBehaviors(prev => prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b]);
