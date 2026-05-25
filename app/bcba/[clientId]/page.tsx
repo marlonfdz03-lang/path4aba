@@ -165,7 +165,7 @@ export default function BCBAClientPage() {
     });
   }, [clientId]);
 
-  async function loadAll(_userId: string) {
+  async function loadAll(userId: string) {
     // Verify connection + fetch client via server-side route (bypasses RLS)
     const clientRes = await fetch(`/api/bcba/client/${clientId}`);
     if (!clientRes.ok) { router.push("/bcba"); return; }
