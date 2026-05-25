@@ -5,7 +5,6 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
 
 const CONTACT_TYPES = [
   { value: "individual_supervision", label: "Individual" },
@@ -64,16 +63,11 @@ export default function SupervisionNotePage() {
     });
   }, [clientId]);
 
-  async function loadData(userId: string) {
-    const { data: conn } = await supabase
-      .from("bcba_clients")
-      .select("clients(id, client_name, diagnosis, clinical_profile)")
-      .eq("bcba_id", userId)
-      .eq("client_id", clientId)
-      .maybeSingle();
-
-    if (!conn) { router.push("/bcba"); return; }
-    setClient((conn as any).clients);
+  async function loadData(_userId: string) {
+    const res = await fetch(`/api/bcba/client/${clientId}`);
+    if (!res.ok) { router.push("/bcba"); return; }
+    const { client: clientData } = await res.json();
+    setClient(clientData);
     setLoading(false);
   }
 
@@ -140,7 +134,7 @@ export default function SupervisionNotePage() {
 
   return (
     <main className="min-h-screen" style={{ background: "var(--bg)", fontFamily: "var(--font-dm-sans, sans-serif)" }}>
-      <Topbar clientName={client?.client_name || "Client"} clientId={clientId} />
+      <Topbar clientName={client?.client_name || client?.internal_code || "Client"} clientId={clientId} />
 
       <div className="px-8 py-6 max-w-3xl">
         <div className="bg-white rounded-xl border p-6 space-y-5" style={{ borderColor: "var(--border)" }}>

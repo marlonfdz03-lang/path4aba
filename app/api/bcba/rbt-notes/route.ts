@@ -41,10 +41,12 @@ export async function GET(request: Request) {
   // Attach client names
   const { data: clients } = await supabaseServer
     .from('clients')
-    .select('id, client_name')
+    .select('id, internal_code, clinical_profile')
     .in('id', targetIds)
 
-  const clientMap = Object.fromEntries((clients || []).map(c => [c.id, c.client_name]))
+  const clientMap = Object.fromEntries(
+    (clients || []).map(c => [c.id, c.clinical_profile?.name || c.internal_code || 'Unknown Client'])
+  )
   const enriched = (notes || []).map(n => ({ ...n, clientName: clientMap[n.client_id] || 'Unknown Client' }))
 
   return NextResponse.json({ notes: enriched })

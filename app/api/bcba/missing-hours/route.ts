@@ -39,10 +39,12 @@ export async function GET(request: Request) {
 
   const { data: clients } = await supabaseServer
     .from('clients')
-    .select('id, client_name')
+    .select('id, internal_code, clinical_profile')
     .in('id', targetIds)
 
-  const clientMap = Object.fromEntries((clients || []).map(c => [c.id, c.client_name]))
+  const clientMap = Object.fromEntries(
+    (clients || []).map(c => [c.id, c.clinical_profile?.name || c.internal_code || 'Unknown Client'])
+  )
   const enriched = (entries || []).map(e => ({ ...e, clientName: clientMap[e.client_id] || 'Unknown Client' }))
 
   return NextResponse.json({ entries: enriched })

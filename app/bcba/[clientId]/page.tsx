@@ -161,21 +161,16 @@ export default function BCBAClientPage() {
           setIsBCBAPro(!!isPro);
         });
 
-      loadAll(data.user.id);
+      loadAll(data.user.id as string);
     });
   }, [clientId]);
 
-  async function loadAll(userId: string) {
-    // Verify connection + fetch client
-    const { data: conn } = await supabase
-      .from("bcba_clients")
-      .select("clients(id, internal_code, diagnosis, clinical_profile)")
-      .eq("bcba_id", userId)
-      .eq("client_id", clientId)
-      .maybeSingle();
-
-    if (!conn) { router.push("/bcba"); return; }
-    setClient((conn as any).clients);
+  async function loadAll(_userId: string) {
+    // Verify connection + fetch client via server-side route (bypasses RLS)
+    const clientRes = await fetch(`/api/bcba/client/${clientId}`);
+    if (!clientRes.ok) { router.push("/bcba"); return; }
+    const { client: clientData } = await clientRes.json();
+    setClient(clientData);
 
     // Fetch RBT notes
     const notesRes = await fetch(`/api/bcba/rbt-notes?clientId=${clientId}`);
@@ -223,7 +218,7 @@ export default function BCBAClientPage() {
 
   return (
     <main className="min-h-screen" style={{ background: "var(--bg)", fontFamily: "var(--font-dm-sans, sans-serif)" }}>
-      <Topbar clientName={client?.internal_code || "Client"} />
+      <Topbar clientName={client?.client_name || "Client"} />
 
       {/* Client header */}
       <div className="px-8 py-5 bg-white border-b" style={{ borderColor: "var(--border)" }}>
@@ -232,11 +227,13 @@ export default function BCBAClientPage() {
             className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold text-white"
             style={{ background: "linear-gradient(135deg, var(--teal), var(--sky))" }}
           >
-            {(client?.internal_code || "?").slice(0, 2).toUpperCase()}
+            {(client?.client_name || client?.internal_code || "?")[0].toUpperCase()}
           </div>
           <div>
-            <p className="text-[16px] font-semibold" style={{ color: "var(--text1)" }}>{client?.internal_code}</p>
-            <p className="text-[13px]" style={{ color: "var(--text3)" }}>{client?.diagnosis?.join(", ") || "ASD"}</p>
+            <p className="text-[16px] font-semibold" style={{ color: "var(--text1)" }}>{client?.client_name || client?.internal_code}</p>
+            <p className="text-[13px]" style={{ color: "var(--text3)" }}>
+              {client?.clinical_profile?.diagnosis?.join(", ") || client?.internal_code || ""}
+            </p>
           </div>
         </div>
       </div>
