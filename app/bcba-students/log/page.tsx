@@ -162,9 +162,12 @@ export default function LogSessionPage() {
           <div class="section">Activities Conducted</div>
           <div class="textarea">${sessionNote}</div>
           <div class="section">Supervisee Performance Feedback</div>
-          <div class="textarea">&nbsp;</div>
-          <div class="section">Follow Up Information</div>
-          <div class="textarea">&nbsp;</div>
+          <div style="margin-top:8px;display:flex;flex-direction:column;gap:10px;font-size:13px;">
+            <label style="display:flex;align-items:center;gap:10px;"><input type="checkbox" style="width:14px;height:14px;flex-shrink:0;" /> Appropriate implementation of procedures</label>
+            <label style="display:flex;align-items:center;gap:10px;"><input type="checkbox" style="width:14px;height:14px;flex-shrink:0;" /> Accurate data collection</label>
+            <label style="display:flex;align-items:center;gap:10px;"><input type="checkbox" style="width:14px;height:14px;flex-shrink:0;" /> Maintained treatment integrity</label>
+            <label style="display:flex;align-items:center;gap:10px;"><input type="checkbox" style="width:14px;height:14px;flex-shrink:0;" /> Professional interaction and participation</label>
+          </div>
           <div class="sig-row">
             <div class="sig">Supervisor Name: ${supName}<br/><br/>Supervisor Signature: _____________________________ &nbsp;&nbsp; Date: ___________</div>
           </div>
