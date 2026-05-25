@@ -2,17 +2,17 @@
 
 import { useEffect, useState } from "react";
 
-const CATEGORIES = [
-  "Functional assessment",
-  "General behavior analysis",
-  "Behavior change procedures",
-  "Ethics & professional conduct",
-  "Staff training & supervision",
-  "Treatment planning",
-  "Measurement & data systems",
-  "Data analysis & graphing",
-  "Experimental design",
-  "Assessment",
+const CATEGORIES: { value: string; label: string }[] = [
+  { value: "functional assessment",       label: "Functional Assessment" },
+  { value: "general behavior analysis",   label: "General Behavior Analysis" },
+  { value: "behavior change procedures",  label: "Behavior Change Procedures" },
+  { value: "ethics & professional conduct", label: "Ethics & Professional Conduct" },
+  { value: "staff training & supervision", label: "Staff Training & Supervision" },
+  { value: "treatment planning",          label: "Treatment Planning" },
+  { value: "measurement & data systems",  label: "Measurement & Data Systems" },
+  { value: "data analysis & graphing",    label: "Data Analysis & Graphing" },
+  { value: "experimental design",         label: "Experimental Design" },
+  { value: "assessment",                  label: "Assessment" },
 ];
 
 interface Note {
@@ -29,7 +29,7 @@ interface Props {
 }
 
 export default function NoteSuggestionsPanel({ activityType, onSelect, onClose }: Props) {
-  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [category, setCategory] = useState(CATEGORIES[0].value);
   const [query, setQuery] = useState("");
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(false);
@@ -84,15 +84,15 @@ export default function NoteSuggestionsPanel({ activityType, onSelect, onClose }
         <div className="flex gap-1 overflow-x-auto px-6 py-3 flex-shrink-0" style={{ borderBottom: "1px solid var(--border)" }}>
           {CATEGORIES.map(c => (
             <button
-              key={c}
-              onClick={() => setCategory(c)}
+              key={c.value}
+              onClick={() => setCategory(c.value)}
               className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors"
               style={{
-                background: category === c ? "var(--navy)" : "var(--border)",
-                color: category === c ? "white" : "var(--text2)",
+                background: category === c.value ? "var(--navy)" : "var(--border)",
+                color: category === c.value ? "white" : "var(--text2)",
               }}
             >
-              {c}
+              {c.label}
             </button>
           ))}
         </div>
