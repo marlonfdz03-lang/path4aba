@@ -15,7 +15,7 @@ export async function GET(req: Request) {
     .order('id')
 
   if (category) query = query.eq('category', category)
-  if (activityType) query = query.eq('activity_type', activityType)
+  if (activityType) query = query.or(`activity_type.eq.${activityType},activity_type.is.null`)
   if (q) query = query.ilike('note', `%${q}%`)
 
   const { data, error } = await query.limit(100)

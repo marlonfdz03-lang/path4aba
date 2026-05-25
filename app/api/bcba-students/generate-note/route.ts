@@ -45,6 +45,18 @@ const CONTACT_LABELS: Record<string, string> = {
 
 const VARIATION_INSTRUCTION = `\n\nIMPORTANT: This note is too similar to a previously saved entry. You must vary the sentence structure, clinical action verb, ABA component referenced, and closing phrase significantly. Use a different starting verb and a different note-ending pattern than before. The note must read as a distinctly different clinical description.`
 
+const CATEGORY_INSTRUCTIONS: Record<string, string> = {
+  'Functional assessment': `\n\nCATEGORY OVERRIDE: FUNCTIONAL ASSESSMENT\nThis session involved functional assessment activities. Use language referencing functional behavior assessments, indirect/descriptive/experimental analysis methods, or hypothesis development about behavior function. Preferred verbs: Conducted / Administered / Analyzed. Avoid generic "reviewed behavioral data" language — reference the assessment process specifically.`,
+  'General behavior analysis': `\n\nCATEGORY OVERRIDE: GENERAL BEHAVIOR ANALYSIS\nThis session involved general behavior analysis activities. Reference visual analysis, data trends, graphing, or behavioral patterns across sessions. Language should reflect BCBA-level analytical reasoning, not direct service delivery.`,
+  'Behavior change procedures': `\n\nCATEGORY OVERRIDE: BEHAVIOR CHANGE PROCEDURES\nThis session involved behavior change programming. Reference intervention development, skill acquisition procedures, reinforcement systems, or behavior reduction strategies. Preferred verbs: Developed / Evaluated / Implemented / Reviewed.`,
+  'Ethics & professional conduct': `\n\nCATEGORY OVERRIDE: ETHICS & PROFESSIONAL CONDUCT\nThis session involved ethics or professional conduct activities. Reference ethical decision-making, professional standards, BACB guidelines, or consultation on ethical matters. Language should reflect professional-level reasoning.`,
+  'Staff training & supervision': `\n\nCATEGORY OVERRIDE: STAFF TRAINING & SUPERVISION\nThis session involved staff training or supervision activities. Reference supervision tasks, training procedures, feedback delivery, or procedural fidelity review. Language should reflect supervisory and training roles.`,
+  'Treatment planning': `\n\nCATEGORY OVERRIDE: TREATMENT PLANNING\nThis session involved treatment planning activities. Reference behavior intervention plan development, goal-setting, or individualized programming decisions. Preferred verbs: Developed / Reviewed / Updated.`,
+  'Measurement & data systems': `\n\nCATEGORY OVERRIDE: MEASUREMENT & DATA SYSTEMS\nThis session involved measurement or data system activities. Reference data collection procedures, measurement tools, inter-observer agreement, or data system design.`,
+  'Data analysis & graphing': `\n\nCATEGORY OVERRIDE: DATA ANALYSIS & GRAPHING\nThis session involved data analysis and graphing activities. Reference visual analysis of graphed data, trend identification, level and variability, or data-based decision-making from graphs.`,
+  'Experimental design': `\n\nCATEGORY OVERRIDE: EXPERIMENTAL DESIGN\nThis session involved experimental design activities. Reference single-case design, treatment integrity, experimental control, or evidence-based practice evaluation.`,
+}
+
 function buildCombinationInstruction(activityType: string, contactType: string): string {
   if (contactType === 'client_observation' && activityType === 'restricted') {
     return `
@@ -82,14 +94,14 @@ export async function POST(req: Request) {
   const user = await getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  let body: { activityType?: string; contactType?: string; setting?: string }
+  let body: { activityType?: string; contactType?: string; setting?: string; category?: string }
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   }
 
-  const { activityType = 'unrestricted', contactType = 'none', setting = '' } = body
+  const { activityType = 'unrestricted', contactType = 'none', setting = '', category = '' } = body
 
   const userMessage = [
     `Generate one BACB-compliant fieldwork session description.`,
@@ -111,7 +123,8 @@ export async function POST(req: Request) {
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-  const systemPrompt = BCBA_STUDENTS_NOTE_PROMPT + buildCombinationInstruction(activityType, contactType)
+  const categoryInstruction = category ? (CATEGORY_INSTRUCTIONS[category] ?? '') : ''
+  const systemPrompt = BCBA_STUDENTS_NOTE_PROMPT + buildCombinationInstruction(activityType, contactType) + categoryInstruction
 
   async function generate(systemContent: string): Promise<string> {
     const response = await openai.chat.completions.create({

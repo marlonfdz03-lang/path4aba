@@ -54,7 +54,7 @@ export default function NoteSuggestionsPanel({ activityType, onSelect, onClose }
     const res = await fetch("/api/bcba-students/generate-note", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ activityType, contactType: "none", setting: "" }),
+      body: JSON.stringify({ activityType, contactType: "none", setting: "", category }),
     });
     const data = await res.json();
     setGenerated(data.note || "");
