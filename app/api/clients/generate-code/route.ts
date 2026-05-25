@@ -33,6 +33,8 @@ export async function POST(request: Request) {
   const code = randomCode()
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
+  console.log('[generate-code] inserting code for clientId:', clientId, 'rbt_id:', user.id, 'code:', code)
+
   const { error } = await supabaseServer.from('client_access_codes').insert({
     client_id: clientId,
     rbt_id: user.id,
@@ -41,9 +43,10 @@ export async function POST(request: Request) {
   })
 
   if (error) {
-    console.error('[generate-code]', error)
+    console.error('[generate-code] insert error:', error)
     return NextResponse.json({ error: 'Failed to generate code' }, { status: 500 })
   }
 
+  console.log('[generate-code] success, code:', code)
   return NextResponse.json({ code })
 }

@@ -157,32 +157,30 @@ export default function BCBADashboard() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.push("/login"); return; }
-      fetchClients(data.user.id);
+      fetchClients();
     });
   }, []);
 
-  async function fetchClients(userId: string) {
-    const { data } = await supabase
-      .from("bcba_clients")
-      .select("client_id, rbt_id, connected_at, clients(id, clinical_profile)")
-      .eq("bcba_id", userId)
-      .order("connected_at", { ascending: false });
-
-    const mapped = (data || []).map((row: any) => ({
-      id: row.client_id,
-      client_name: row.clients?.clinical_profile?.name || "Unknown Client",
-      diagnosis: row.clients?.clinical_profile?.maladaptiveBehaviors?.map((b: any) => b.name).slice(0, 2) || [],
-      connected_at: row.connected_at,
-      rbt_id: row.rbt_id,
-    }));
-    setClients(mapped);
+  async function fetchClients() {
+    try {
+      const res = await fetch("/api/bcba/clients");
+      const data = await res.json();
+      if (res.ok) {
+        setClients(data.clients || []);
+      } else {
+        console.error("[bcba] fetchClients error:", data.error);
+      }
+    } catch (err) {
+      console.error("[bcba] fetchClients network error:", err);
+    }
     setLoading(false);
   }
 
   function handleConnected(client: BCBAClient) {
     setShowModal(false);
+    if (!client?.id) return;
     setClients(prev => [client, ...prev]);
-    if (client?.id) router.push(`/bcba/${client.id}`);
+    router.push(`/bcba/${client.id}`);
   }
 
   return (

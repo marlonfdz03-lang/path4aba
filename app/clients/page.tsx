@@ -172,6 +172,7 @@ function ClientCard({
 }
 
 export default function ClientsPage() {
+  const router = useRouter();
   const [clients, setClients] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
@@ -194,6 +195,12 @@ export default function ClientsPage() {
       if (!user) {
         console.log('[clients] No authenticated user, cannot fetch clients');
         setLoaded(true);
+        return;
+      }
+
+      const profession = (user.user_metadata?.profession || "").toLowerCase();
+      if (profession === "bcba" || profession === "bcaba") {
+        router.push("/bcba");
         return;
       }
 
