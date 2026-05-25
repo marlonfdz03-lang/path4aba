@@ -128,7 +128,6 @@ function buildContextualFactors(input: SessionInput): string {
 export async function generateSmartNote(input: SessionInput): Promise<GeneratedNote> {
   // Step 1: Get client profile — use provided profile or fetch from Supabase
   let resolvedProfile: any;
-  const hasSupabaseClient = !input.clientProfile;
 
   if (input.clientProfile) {
     resolvedProfile = input.clientProfile;
@@ -267,20 +266,18 @@ export async function generateSmartNote(input: SessionInput): Promise<GeneratedN
     }
   }
 
-  // Step 8: Save to Supabase (only when client exists in Supabase)
-  if (hasSupabaseClient) {
-    const { error: saveError } = await supabase
-      .from('session_notes')
-      .insert({
-        client_id: input.clientId,
-        session_date: input.sessionInfo.date,
-        raw_session_data: sessionContext,
-        generated_note: note,
-      });
+  // Step 8: Always save to session_notes. FK violation = localStorage-only client → logged, not thrown.
+  const { error: saveError } = await supabase
+    .from('session_notes')
+    .insert({
+      client_id: input.clientId,
+      session_date: input.sessionInfo.date,
+      raw_session_data: sessionContext,
+      generated_note: note,
+    });
 
-    if (saveError) {
-      console.error('Failed to save session note:', saveError);
-    }
+  if (saveError) {
+    console.warn('[generateSmartNote] session_notes insert failed (localStorage-only client or missing table):', saveError.message);
   }
 
   return {

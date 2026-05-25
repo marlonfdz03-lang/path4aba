@@ -331,9 +331,14 @@ export default function ClientProfilePage() {
       const res = await fetch("/api/generate-note", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) { setStatus(data?.details || data?.error || "Note generation failed."); return; }
-      setGeneratedNote(data.note || "");
+      const generatedText = data.note || "";
+      setGeneratedNote(generatedText);
       setSimilarityWarning(!!data.similarityWarning);
       setStatus("");
+      // Backup to localStorage so notes survive even if Supabase write failed
+      const backupNote = { id: crypto.randomUUID(), clientId: client.id, date: date || new Date().toLocaleDateString(), note: generatedText };
+      saveNote(backupNote);
+      setDailyNotes(prev => [backupNote, ...prev]);
     } catch {
       setStatus("Network error. Please try again.");
     } finally {
