@@ -445,7 +445,7 @@ export default function SchedulePage() {
 
       setClients(unique.map((row) => ({
         id: row.id,
-        clientName: row.internal_code || 'Unnamed Client',
+        clientName: row.clinical_profile?.name || row.internal_code || 'Unnamed Client',
         clinicalProfile: row.clinical_profile,
       })));
       setLoaded(true);

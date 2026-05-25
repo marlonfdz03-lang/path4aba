@@ -213,7 +213,7 @@ export default function ClientProfilePage() {
           .eq("rbt_id", user.id)
           .maybeSingle();
         if (data) {
-          const found = { id: data.id, clientName: data.internal_code, clinicalProfile: data.clinical_profile };
+          const found = { id: data.id, clientName: data.clinical_profile?.name || data.internal_code, clinicalProfile: data.clinical_profile };
           setClient(found);
           setDailyNotes(getNotesByClientId(found.id));
           const raw = localStorage.getItem(`path4aba_saved_present_${found.id}`);
