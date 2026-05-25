@@ -17,13 +17,12 @@ export async function GET(request: Request) {
   const clientId = url.searchParams.get('clientId')
   console.log('[rbt-notes] bcba_id:', user.id, 'clientId param:', clientId)
 
-  // Get all clients this BCBA is connected to
   const { data: connections, error: connError } = await supabaseServer
     .from('bcba_clients')
     .select('client_id')
     .eq('bcba_id', user.id)
 
-  console.log('[rbt-notes] bcba_clients connections:', connections?.length, 'error:', connError?.message)
+  console.log('[rbt-notes] bcba_clients connections:', connections?.length, 'connError:', connError?.message)
 
   const clientIds = connections?.map(c => c.client_id) || []
   if (clientIds.length === 0) {
@@ -36,18 +35,17 @@ export async function GET(request: Request) {
 
   const { data: notes, error } = await supabaseServer
     .from('session_notes')
-    .select('id, client_id, session_date, generated_note, review_status, reviewed_at, review_comment, created_at')
+    .select('id, client_id, rbt_id, session_date, generated_note, created_at')
     .in('client_id', targetIds)
     .order('created_at', { ascending: false })
 
-  console.log('[rbt-notes] session_notes rows found:', notes?.length, 'error:', error?.message)
+  console.log('[rbt-notes] rows:', notes?.length, 'error:', error?.message)
 
   if (error) {
-    console.error('[bcba/rbt-notes] DB error:', error)
-    return NextResponse.json({ error: 'Failed to fetch notes' }, { status: 500 })
+    console.error('[rbt-notes] DB error:', error)
+    return NextResponse.json({ error: 'Failed to fetch notes', detail: error.message }, { status: 500 })
   }
 
-  // Attach client names
   const { data: clients } = await supabaseServer
     .from('clients')
     .select('id, internal_code, clinical_profile')
@@ -56,7 +54,11 @@ export async function GET(request: Request) {
   const clientMap = Object.fromEntries(
     (clients || []).map(c => [c.id, c.clinical_profile?.name || c.internal_code || 'Unknown Client'])
   )
-  const enriched = (notes || []).map(n => ({ ...n, clientName: clientMap[n.client_id] || 'Unknown Client' }))
+  const enriched = (notes || []).map(n => ({
+    ...n,
+    clientName: clientMap[n.client_id] || 'Unknown Client',
+  }))
 
+  console.log('[rbt-notes] returning', enriched.length, 'notes')
   return NextResponse.json({ notes: enriched })
 }

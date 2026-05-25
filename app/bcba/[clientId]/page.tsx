@@ -1,13 +1,11 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
-type BCBATab = "notes" | "schedule" | "supervision" | "parent_training" | "reassessment";
+type BCBATab = "overview" | "notes" | "schedule" | "supervision" | "parent_training" | "reassessment";
 
 const SUPERVISION_TYPE_LABELS: Record<string, string> = {
   face_to_face: "Face-to-Face",
@@ -17,11 +15,17 @@ const SUPERVISION_TYPE_LABELS: Record<string, string> = {
   client_observation: "Client Observation",
 };
 
-const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
-  pending:  { bg: "#FFF8E1", color: "#92400E", label: "Pending" },
-  accepted: { bg: "#E6F9F5", color: "#065F46", label: "Accepted" },
-  rejected: { bg: "#FEF2F2", color: "#DC2626", label: "Rejected" },
-};
+
+function SectionHeader({ title }: { title: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-4">
+      <p className="text-[11px] uppercase tracking-widest font-semibold whitespace-nowrap" style={{ color: "var(--text3)" }}>
+        {title}
+      </p>
+      <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+    </div>
+  );
+}
 
 function Topbar({ clientName }: { clientName: string }) {
   return (
@@ -35,11 +39,12 @@ function Topbar({ clientName }: { clientName: string }) {
 
 function TabBar({ active, onChange, isBCBAPro }: { active: BCBATab; onChange: (t: BCBATab) => void; isBCBAPro: boolean | null }) {
   const tabs: { id: BCBATab; label: string; proOnly?: boolean }[] = [
-    { id: "notes",           label: "RBT Notes" },
-    { id: "schedule",        label: "Schedule" },
-    { id: "supervision",     label: "Supervision Notes" },
-    { id: "parent_training", label: "Parent Training" },
-    { id: "reassessment",    label: "Assessment Tools", proOnly: true },
+    { id: "overview",       label: "Overview" },
+    { id: "notes",          label: "RBT Notes" },
+    { id: "schedule",       label: "Schedule" },
+    { id: "supervision",    label: "Supervision Notes" },
+    { id: "parent_training",label: "Parent Training" },
+    { id: "reassessment",   label: "Assessment Tools", proOnly: true },
   ];
   return (
     <div className="flex border-b bg-white px-8 overflow-x-auto" style={{ borderColor: "var(--border)" }}>
@@ -70,68 +75,13 @@ function TabBar({ active, onChange, isBCBAPro }: { active: BCBATab; onChange: (t
   );
 }
 
-function ReviewButtons({ noteId, currentStatus, onReviewed }: { noteId: string; currentStatus: string; onReviewed: () => void }) {
-  const [showComment, setShowComment] = useState(false);
-  const [comment, setComment] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  if (currentStatus !== "pending") return null;
-
-  async function submit(status: "accepted" | "rejected") {
-    setLoading(true);
-    await fetch("/api/bcba/review-note", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ noteId, status, comment: comment || undefined }),
-    });
-    setLoading(false);
-    onReviewed();
-  }
-
-  return (
-    <div className="mt-3">
-      {showComment && (
-        <textarea
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          placeholder="Reason for rejection (optional)…"
-          className="w-full border rounded-xl px-3 py-2 text-[12px] resize-none mb-2 focus:outline-none"
-          style={{ borderColor: "var(--border)", color: "var(--text2)", minHeight: 60 }}
-        />
-      )}
-      <div className="flex gap-2">
-        <button
-          onClick={() => submit("accepted")}
-          disabled={loading}
-          className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white disabled:opacity-50"
-          style={{ background: "#16A34A" }}
-        >
-          Accept
-        </button>
-        <button
-          onClick={() => { if (!showComment) { setShowComment(true); } else { submit("rejected"); } }}
-          disabled={loading}
-          className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white disabled:opacity-50"
-          style={{ background: "#DC2626" }}
-        >
-          {showComment ? "Confirm Reject" : "Reject"}
-        </button>
-        {showComment && (
-          <button onClick={() => setShowComment(false)} className="px-3 py-1.5 rounded-lg text-[12px] border" style={{ borderColor: "var(--border)", color: "var(--text3)" }}>
-            Cancel
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
 
 export default function BCBAClientPage() {
   const params = useParams();
   const router = useRouter();
   const clientId = params.clientId as string;
 
-  const [activeTab, setActiveTab] = useState<BCBATab>("notes");
+  const [activeTab, setActiveTab] = useState<BCBATab>("overview");
   const [isBCBAPro, setIsBCBAPro] = useState<boolean | null>(null);
 
   const [client, setClient] = useState<any>(null);
@@ -146,7 +96,6 @@ export default function BCBAClientPage() {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.push("/login"); return; }
 
-      // Check BCBA Pro plan
       supabase
         .from("subscriptions")
         .select("status, plan, trial_ends_at")
@@ -166,17 +115,14 @@ export default function BCBAClientPage() {
   }, [clientId]);
 
   async function loadAll(userId: string) {
-    // Verify connection + fetch client via server-side route (bypasses RLS)
     const clientRes = await fetch(`/api/bcba/client/${clientId}`);
     if (!clientRes.ok) { router.push("/bcba"); return; }
     const { client: clientData } = await clientRes.json();
     setClient(clientData);
 
-    // Fetch RBT notes
     const notesRes = await fetch(`/api/bcba/rbt-notes?clientId=${clientId}`);
     if (notesRes.ok) { const d = await notesRes.json(); setNotes(d.notes || []); }
 
-    // Fetch supervision notes
     const { data: supNotes } = await supabase
       .from("supervision_notes")
       .select("id, session_date, supervision_type, note_text, status, created_at")
@@ -185,7 +131,6 @@ export default function BCBAClientPage() {
       .order("session_date", { ascending: false });
     setSupervisionNotes(supNotes || []);
 
-    // Fetch parent training notes
     const { data: ptNotes } = await supabase
       .from("parent_training_notes")
       .select("id, session_date, caregiver_name, caregiver_relation, note_text, status, created_at")
@@ -194,17 +139,10 @@ export default function BCBAClientPage() {
       .order("session_date", { ascending: false });
     setParentTrainingNotes(ptNotes || []);
 
-    // Fetch missing hours
     const hoursRes = await fetch(`/api/bcba/missing-hours?clientId=${clientId}`);
     if (hoursRes.ok) { const d = await hoursRes.json(); setMissingHours(d.entries || []); }
 
     setLoading(false);
-  }
-
-  function refreshNotes() {
-    fetch(`/api/bcba/rbt-notes?clientId=${clientId}`)
-      .then(r => r.json())
-      .then(d => setNotes(d.notes || []));
   }
 
   if (loading) {
@@ -215,6 +153,8 @@ export default function BCBAClientPage() {
       </main>
     );
   }
+
+  const cp = client?.clinical_profile || {};
 
   return (
     <main className="min-h-screen" style={{ background: "var(--bg)", fontFamily: "var(--font-dm-sans, sans-serif)" }}>
@@ -232,7 +172,7 @@ export default function BCBAClientPage() {
           <div>
             <p className="text-[16px] font-semibold" style={{ color: "var(--text1)" }}>{client?.client_name || client?.internal_code}</p>
             <p className="text-[13px]" style={{ color: "var(--text3)" }}>
-              {client?.clinical_profile?.diagnosis?.join(", ") || client?.internal_code || ""}
+              {cp.diagnosis?.join(", ") || client?.internal_code || ""}
             </p>
           </div>
         </div>
@@ -240,7 +180,140 @@ export default function BCBAClientPage() {
 
       <TabBar active={activeTab} onChange={setActiveTab} isBCBAPro={isBCBAPro} />
 
-      <div className="px-8 py-6 max-w-4xl">
+      <div className="px-8 py-6 max-w-5xl">
+
+        {/* ── Overview Tab ── */}
+        {activeTab === "overview" && (
+          <div className="grid grid-cols-[280px_1fr] gap-5">
+
+            {/* Left column */}
+            <div className="space-y-5">
+
+              {/* Clinical Snapshot */}
+              <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
+                <SectionHeader title="Clinical Snapshot" />
+                <div className="space-y-3">
+                  {[
+                    { label: "Diagnosis", value: cp.diagnosis?.join(", ") || "—" },
+                    { label: "Maladaptive Behaviors", value: cp.maladaptiveBehaviors?.length || 0 },
+                    { label: "Approved Interventions", value: cp.interventions?.length || 0 },
+                    { label: "Replacement Behaviors", value: cp.replacementBehaviors?.length || 0 },
+                    { label: "Skill Programs", value: cp.skillAcquisition?.length || 0 },
+                    { label: "Reinforcers", value: cp.reinforcers?.length || 0 },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="flex justify-between items-start gap-4">
+                      <span className="text-[13px]" style={{ color: "var(--text2)" }}>{label}</span>
+                      <span className="text-[13px] font-medium text-right" style={{ color: "var(--text1)" }}>{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reinforcers */}
+              <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
+                <SectionHeader title="Reinforcers" />
+                {cp.reinforcers?.length ? (
+                  <div className="mb-3">
+                    <p className="text-[11px] uppercase tracking-wide font-semibold mb-1.5" style={{ color: "var(--text3)" }}>Tangibles</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {cp.reinforcers.map((r: string, i: number) => (
+                        <span key={i} className="text-[12px] px-2.5 py-1 rounded-full" style={{ background: "var(--teal-light)", color: "var(--teal)" }}>{r}</span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {cp.homeActivities?.length ? (
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide font-semibold mb-1.5" style={{ color: "var(--text3)" }}>Activities</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {cp.homeActivities.map((a: string, i: number) => (
+                        <span key={i} className="text-[12px] px-2.5 py-1 rounded-full" style={{ background: "var(--teal-light)", color: "var(--teal)" }}>{a}</span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {!cp.reinforcers?.length && !cp.homeActivities?.length && (
+                  <p className="text-[13px]" style={{ color: "var(--text3)" }}>No reinforcers in profile.</p>
+                )}
+              </div>
+
+            </div>
+
+            {/* Right column */}
+            <div className="space-y-5">
+
+              {/* Maladaptive Behaviors */}
+              <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
+                <SectionHeader title="Maladaptive Behaviors" />
+                {!cp.maladaptiveBehaviors?.length ? (
+                  <p className="text-[13px]" style={{ color: "var(--text3)" }}>No behaviors recorded.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {cp.maladaptiveBehaviors.map((b: any, i: number) => {
+                      const name = typeof b === "string" ? b : (b?.name || "");
+                      const topography = typeof b === "object" ? (b?.topography || "") : "";
+                      const fn = typeof b === "object" ? (b?.function || b?.behaviorFunction || "") : "";
+                      return (
+                        <div key={i} className="px-4 py-3 rounded-xl" style={{ background: "#FEF3E2", border: "1px solid #F6AD5580" }}>
+                          <p className="text-[13px] font-semibold" style={{ color: "#92400E" }}>{name}</p>
+                          {topography && (
+                            <p className="text-[12px] mt-0.5" style={{ color: "#B7791F" }}>
+                              <span className="font-medium">Topography:</span> {topography}
+                            </p>
+                          )}
+                          {fn && (
+                            <p className="text-[12px]" style={{ color: "#B7791F" }}>
+                              <span className="font-medium">Function:</span> {fn}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Approved Interventions */}
+              <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
+                <SectionHeader title="Approved Interventions" />
+                {!cp.interventions?.length ? (
+                  <p className="text-[13px]" style={{ color: "var(--text3)" }}>No interventions in profile.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {cp.interventions.map((item: any, i: number) => (
+                      <span
+                        key={i}
+                        className="text-[12px] font-medium px-2.5 py-1 rounded-full"
+                        style={{ background: "var(--teal-light)", color: "var(--teal)" }}
+                      >
+                        {typeof item === "string" ? item : (item?.name || "")}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Replacement Skills */}
+              {(cp.replacementBehaviors?.length || cp.skillAcquisition?.length) ? (
+                <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
+                  <SectionHeader title="Replacement Skills &amp; Skill Acquisition" />
+                  <div className="flex flex-wrap gap-2">
+                    {[...(cp.replacementBehaviors || []), ...(cp.skillAcquisition || [])].map((s: any, i: number) => (
+                      <span
+                        key={i}
+                        className="text-[12px] font-medium px-2.5 py-1 rounded-full"
+                        style={{ background: "#EFF6FF", color: "#1D4ED8" }}
+                      >
+                        {typeof s === "string" ? s : (s?.name || "")}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+            </div>
+          </div>
+        )}
 
         {/* ── RBT Notes Tab ── */}
         {activeTab === "notes" && (
@@ -248,7 +321,6 @@ export default function BCBAClientPage() {
             {notes.length === 0 ? (
               <p className="text-[13px]" style={{ color: "var(--text3)" }}>No session notes from the RBT yet.</p>
             ) : notes.map(note => {
-              const s = STATUS_STYLES[note.review_status] || STATUS_STYLES.pending;
               const isExpanded = expandedNoteId === note.id;
               const dateLabel = note.session_date
                 ? new Date(note.session_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
@@ -264,31 +336,18 @@ export default function BCBAClientPage() {
                         </p>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: s.bg, color: s.color }}>
-                        {s.label}
-                      </span>
-                      <button
-                        onClick={() => setExpandedNoteId(isExpanded ? null : note.id)}
-                        className="text-[12px] font-medium hover:underline"
-                        style={{ color: "var(--teal)" }}
-                      >
-                        {isExpanded ? "Collapse" : "Expand"}
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => setExpandedNoteId(isExpanded ? null : note.id)}
+                      className="text-[12px] font-medium hover:underline flex-shrink-0"
+                      style={{ color: "var(--teal)" }}
+                    >
+                      {isExpanded ? "Collapse" : "Expand"}
+                    </button>
                   </div>
                   {isExpanded && (
-                    <>
-                      <p className="text-[13px] leading-7 whitespace-pre-wrap mb-4" style={{ color: "var(--text2)" }}>
-                        {note.generated_note}
-                      </p>
-                      {note.review_status === "rejected" && note.review_comment && (
-                        <p className="text-[12px] mb-3 px-3 py-2 rounded-lg border" style={{ background: "#FEF2F2", borderColor: "#FECACA", color: "#DC2626" }}>
-                          Rejected: {note.review_comment}
-                        </p>
-                      )}
-                      <ReviewButtons noteId={note.id} currentStatus={note.review_status || "pending"} onReviewed={refreshNotes} />
-                    </>
+                    <p className="text-[13px] leading-7 whitespace-pre-wrap" style={{ color: "var(--text2)" }}>
+                      {note.generated_note}
+                    </p>
                   )}
                 </div>
               );

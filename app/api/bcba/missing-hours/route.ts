@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     .select('client_id')
     .eq('bcba_id', user.id)
 
-  console.log('[missing-hours] bcba_clients connections:', connections?.length, 'error:', connError?.message)
+  console.log('[missing-hours] bcba_clients connections:', connections?.length, 'connError:', connError?.message)
 
   const clientIds = connections?.map(c => c.client_id) || []
   if (clientIds.length === 0) {
@@ -39,10 +39,15 @@ export async function GET(request: Request) {
     .in('client_id', targetIds)
     .order('date', { ascending: false })
 
-  console.log('[missing-hours] rows found:', entries?.length, 'error:', error?.message)
+  console.log('[missing-hours] rows:', entries?.length, 'error code:', error?.code, 'error msg:', error?.message)
 
   if (error) {
-    console.log('[missing-hours] missed_hours table error (may not exist yet):', error.message)
+    // PGRST205 = table not in schema cache (table doesn't exist yet)
+    if (error.code === 'PGRST205' || error.message?.includes('relation') || error.message?.includes('does not exist')) {
+      console.log('[missing-hours] missed_hours table does not exist yet — returning empty')
+    } else {
+      console.error('[missing-hours] unexpected DB error:', error)
+    }
     return NextResponse.json({ entries: [] })
   }
 
@@ -56,5 +61,6 @@ export async function GET(request: Request) {
   )
   const enriched = (entries || []).map(e => ({ ...e, clientName: clientMap[e.client_id] || 'Unknown Client' }))
 
+  console.log('[missing-hours] returning', enriched.length, 'entries')
   return NextResponse.json({ entries: enriched })
 }
