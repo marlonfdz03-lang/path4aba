@@ -322,9 +322,7 @@ export default function BCBAClientPage() {
               <p className="text-[13px]" style={{ color: "var(--text3)" }}>No session notes from the RBT yet.</p>
             ) : notes.map(note => {
               const isExpanded = expandedNoteId === note.id;
-              const dateLabel = note.session_date
-                ? new Date(note.session_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                : new Date(note.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+              const dateLabel = new Date(note.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
               return (
                 <div key={note.id} className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
                   <div className="flex items-start justify-between gap-4 mb-2">
@@ -332,7 +330,7 @@ export default function BCBAClientPage() {
                       <p className="text-[13px] font-semibold" style={{ color: "var(--text1)" }}>{dateLabel}</p>
                       {!isExpanded && (
                         <p className="text-[12px] mt-1 line-clamp-2" style={{ color: "var(--text3)" }}>
-                          {(note.generated_note || "").slice(0, 120)}…
+                          {(note.note_text || "").slice(0, 120)}…
                         </p>
                       )}
                     </div>
@@ -346,7 +344,7 @@ export default function BCBAClientPage() {
                   </div>
                   {isExpanded && (
                     <p className="text-[13px] leading-7 whitespace-pre-wrap" style={{ color: "var(--text2)" }}>
-                      {note.generated_note}
+                      {note.note_text}
                     </p>
                   )}
                 </div>

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
 import { generateSmartNote, SessionInput } from "@/lib/generateSmartNote";
 
 export const runtime = "nodejs";
@@ -21,7 +23,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await generateSmartNote(input);
+    const cookieStore = await cookies();
+    const authClient = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
+    );
+    const { data: { user } } = await authClient.auth.getUser();
+
+    const result = await generateSmartNote(input, user?.id);
 
     return NextResponse.json({
       ...result,

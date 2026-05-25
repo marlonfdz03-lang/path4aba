@@ -35,7 +35,7 @@ export async function GET(request: Request) {
 
   const { data: notes, error } = await supabaseServer
     .from('session_notes')
-    .select('id, client_id, rbt_id, session_date, generated_note, created_at')
+    .select('id, client_id, user_id, note_text, created_at')
     .in('client_id', targetIds)
     .order('created_at', { ascending: false })
 
