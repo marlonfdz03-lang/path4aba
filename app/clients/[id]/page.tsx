@@ -165,8 +165,6 @@ export default function ClientProfilePage() {
 
   // Generate Note state
   const [date, setDate] = useState("");
-  const [timeIn, setTimeIn] = useState("");
-  const [timeOut, setTimeOut] = useState("");
   const [location, setLocation] = useState("");
   const [selectedPresent, setSelectedPresent] = useState<string[]>([]);
   const [savedPresent, setSavedPresent] = useState<string[]>([]);
@@ -297,7 +295,7 @@ export default function ClientProfilePage() {
 
     const body = {
       clientId: client.id,
-      sessionInfo: { date, timeRange: timeIn && timeOut ? `${timeIn} - ${timeOut}` : "", location, caregiver: presentPerson },
+      sessionInfo: { date, location, caregiver: presentPerson },
       behaviorsObserved: selectedBehaviors.map((name) => ({ name, topography: "", frequency: 1, antecedentContext: "", function: "" })),
       replacementSkillsAddressed: selectedSkills.map((name) => ({ name, promptLevel: "", clientResponse: "", successful: true })),
       activitiesUsed: [],
@@ -669,31 +667,13 @@ export default function ClientProfilePage() {
             <div className="bg-white rounded-[10px] border p-6" style={{ borderColor: "var(--border)" }}>
               <SectionHeader title="Session Overview" />
 
-              <div className="grid grid-cols-3 gap-4 mb-4">
-                <div>
-                  <label className="block text-[12px] font-semibold mb-1.5" style={{ color: "var(--text3)" }}>DATE</label>
-                  <input
-                    type="date" value={date} onChange={(e) => setDate(e.target.value)}
-                    className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2"
-                    style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[12px] font-semibold mb-1.5" style={{ color: "var(--text3)" }}>START TIME</label>
-                  <input
-                    type="time" value={timeIn} onChange={(e) => setTimeIn(e.target.value)}
-                    className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2"
-                    style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[12px] font-semibold mb-1.5" style={{ color: "var(--text3)" }}>END TIME</label>
-                  <input
-                    type="time" value={timeOut} onChange={(e) => setTimeOut(e.target.value)}
-                    className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2"
-                    style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-                  />
-                </div>
+              <div className="mb-4">
+                <label className="block text-[12px] font-semibold mb-1.5" style={{ color: "var(--text3)" }}>DATE</label>
+                <input
+                  type="date" value={date} onChange={(e) => setDate(e.target.value)}
+                  className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2"
+                  style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4 mb-4">
