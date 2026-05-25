@@ -89,7 +89,6 @@ export default function MonthDrawer({ monthYear, summary: initialSummary, fieldw
   const [loading, setLoading] = useState(true);
   const [signingMvf, setSigningMvf] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
-  const [downloadingSupervisionId, setDownloadingSupervisionId] = useState<string | null>(null);
   const [recalculating, setRecalculating] = useState(false);
 
   // three-dot menu
@@ -380,42 +379,106 @@ export default function MonthDrawer({ monthYear, summary: initialSummary, fieldw
     }
   }
 
-  async function handleDownloadSupervisionPdf(session: Session) {
-    if (!profile) return;
-    setDownloadingSupervisionId(session.id);
-    try {
-      const { generateSupervisionPdf } = await import("@/lib/bcba-students/generateSupervisionPdf");
-      const independentHoursOnDate = sessions
-        .filter(s => s.session_date === session.session_date)
-        .reduce((sum, s) => sum + (s.independent_hours || 0), 0);
-      const pdfBytes = await generateSupervisionPdf({
-        traineeName,
-        certificationTrack: profile.certification_track || "BCBA",
-        sessionDate: session.session_date,
-        startTime: session.start_time,
-        endTime: session.end_time,
-        contactType: session.contact_type as "individual_supervision" | "group_supervision" | "client_observation",
-        sessionNote: session.session_note,
-        supervisorName: session.supervisor_name || profile.supervisor_name || "",
-        independentHoursOnDate,
-        totalMonthHours: summary?.total_hours ?? 0,
-      });
-      const buf = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;
-      const blob = new Blob([buf], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const safeName = traineeName.replace(/\s+/g, "-") || "Trainee";
-      a.download = `Supervision-Form-${session.session_date}-${safeName}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error("Supervision PDF failed:", e);
-    } finally {
-      setDownloadingSupervisionId(null);
+  function handleDownloadSupervisionForm(session: Session) {
+    const win = window.open('', '_blank');
+    if (!win) { alert('Enable popups to download this form.'); return; }
+
+    const sd = session.session_date;
+    const sessionDate = sd
+      ? new Date(sd + 'T00:00:00').toLocaleDateString('en-US')
+      : new Date().toLocaleDateString('en-US');
+
+    function fmtT(t: string) {
+      const [h, m] = t.split(':').map(Number);
+      return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
     }
+
+    const st = session.start_time || '';
+    const et = session.end_time || '';
+    let duration = '___';
+    if (st && et) {
+      const [sh, sm] = st.split(':').map(Number);
+      const [eh, em] = et.split(':').map(Number);
+      const mins = (eh * 60 + em) - (sh * 60 + sm);
+      const h = Math.floor(mins / 60), m = mins % 60;
+      duration = `${fmtT(st)} – ${fmtT(et)} (${h}h${m > 0 ? ` ${m}min` : ''})`;
+    }
+
+    const ct = session.contact_type || '';
+    const ctLabel = CONTACT_LABELS[ct] || '___';
+    const groupNoteHtml = ct === 'group_supervision'
+      ? '<p style="font-size:11px;color:#666;margin-top:4px;font-style:italic;">Group supervision session — maximum 10 trainees per BACB requirements.</p>'
+      : '';
+
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const superviseeNameValue = esc(traineeName || '___');
+    const certTrack = profile?.certification_track || 'BCBA';
+    const supName = esc(session.supervisor_name || profile?.supervisor_name || '___');
+
+    const independentHoursOnDate = sessions
+      .filter(s => s.session_date === session.session_date)
+      .reduce((sum, s) => sum + (s.independent_hours || 0), 0);
+
+    const indep = independentHoursOnDate.toFixed(2);
+    const sup = (session.supervised_hours ?? 0).toFixed(2);
+    const totalHoursAccumulated = (summary?.total_hours ?? 0).toFixed(2);
+    const sessionNote = esc(session.session_note || '');
+
+    win.document.write(`
+      <html>
+        <head>
+          <title>Supervision Meeting Form</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 40px; font-size: 13px; color: #000; }
+            h1 { font-size: 16px; text-align: center; font-weight: bold; margin-bottom: 4px; }
+            h2 { font-size: 13px; text-align: center; font-weight: normal; margin-bottom: 24px; }
+            .row { display: flex; gap: 40px; margin-bottom: 16px; }
+            .field { flex: 1; }
+            .label { font-size: 10px; font-weight: bold; color: #555; margin-bottom: 2px; }
+            .value { border-bottom: 1px solid #000; padding-bottom: 3px; min-height: 18px; }
+            .section { margin-top: 20px; margin-bottom: 8px; font-weight: bold; font-size: 12px; border-bottom: 2px solid #000; padding-bottom: 3px; }
+            .textarea { border: 1px solid #000; min-height: 80px; width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box; white-space: pre-wrap; }
+            .sig-row { display: flex; gap: 40px; margin-top: 32px; }
+            .sig { flex: 1; border-top: 1px solid #000; padding-top: 4px; font-size: 11px; }
+            @media print { body { padding: 0.5in; } input[type="checkbox"] { -webkit-print-color-adjust: exact; } }
+          </style>
+        </head>
+        <body>
+          <h1>SUPERVISION MEETING FORM</h1>
+          <h2>BCBA Fieldwork Documentation — Path4ABA</h2>
+          <div class="row">
+            <div class="field"><div class="label">Name of Supervisee</div><div class="value">${superviseeNameValue}</div></div>
+            <div class="field"><div class="label">Certification Seeking</div><div class="value">${certTrack}</div></div>
+          </div>
+          <div class="row">
+            <div class="field"><div class="label">Date of Supervision</div><div class="value">${sessionDate}</div></div>
+            <div class="field"><div class="label">Duration of Supervision</div><div class="value">${duration}</div></div>
+          </div>
+          <div class="row">
+            <div class="field"><div class="label">Meeting Format</div><div class="value">${ctLabel}${groupNoteHtml}</div></div>
+            <div class="field"><div class="label">Total Hours Accumulated (This Month)</div><div class="value">${totalHoursAccumulated}</div></div>
+          </div>
+          <div class="row">
+            <div class="field"><div class="label">Independent Hours (this session)</div><div class="value">${indep}</div></div>
+            <div class="field"><div class="label">Supervised Hours (this session)</div><div class="value">${sup}</div></div>
+          </div>
+          <div class="section">Activities Conducted</div>
+          <div class="textarea">${sessionNote}</div>
+          <div class="section">Supervisee Performance Feedback</div>
+          <div style="margin-top:8px;display:flex;flex-direction:column;gap:10px;font-size:13px;">
+            <label style="display:flex;align-items:center;gap:10px;"><input type="checkbox" style="width:14px;height:14px;flex-shrink:0;" /> Appropriate implementation of procedures</label>
+            <label style="display:flex;align-items:center;gap:10px;"><input type="checkbox" style="width:14px;height:14px;flex-shrink:0;" /> Accurate data collection</label>
+            <label style="display:flex;align-items:center;gap:10px;"><input type="checkbox" style="width:14px;height:14px;flex-shrink:0;" /> Maintained treatment integrity</label>
+            <label style="display:flex;align-items:center;gap:10px;"><input type="checkbox" style="width:14px;height:14px;flex-shrink:0;" /> Professional interaction and participation</label>
+          </div>
+          <div class="sig-row">
+            <div class="sig">Supervisor Name: ${supName}<br/><br/>Supervisor Signature: _____________________________ &nbsp;&nbsp; Date: ___________</div>
+          </div>
+          <script>window.print();<\/script>
+        </body>
+      </html>
+    `);
+    win.document.close();
   }
 
   async function handleDownloadMvf() {
@@ -683,10 +746,9 @@ export default function MonthDrawer({ monthYear, summary: initialSummary, fieldw
                         <div className="flex items-start gap-2">
                           {SUPERVISION_TYPES.has(s.contact_type) && (
                             <button
-                              onClick={() => handleDownloadSupervisionPdf(s)}
-                              disabled={downloadingSupervisionId === s.id}
+                              onClick={() => handleDownloadSupervisionForm(s)}
                               title="Download Supervision Form"
-                              className="flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-lg transition-opacity hover:opacity-80 disabled:opacity-40 flex-shrink-0"
+                              className="flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-lg transition-opacity hover:opacity-80 flex-shrink-0"
                               style={{ color: "var(--teal)", background: "rgba(27,168,160,0.08)", border: "1px solid rgba(27,168,160,0.2)" }}
                             >
                               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -694,7 +756,7 @@ export default function MonthDrawer({ monthYear, summary: initialSummary, fieldw
                                 <polyline points="14 2 14 8 20 8"/>
                                 <line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
                               </svg>
-                              {downloadingSupervisionId === s.id ? "…" : "Form"}
+                              Form
                             </button>
                           )}
                           <div className="text-right">

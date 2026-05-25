@@ -137,7 +137,7 @@ export default function LogSessionPage() {
             .textarea { border: 1px solid #000; min-height: 80px; width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box; white-space: pre-wrap; }
             .sig-row { display: flex; gap: 40px; margin-top: 32px; }
             .sig { flex: 1; border-top: 1px solid #000; padding-top: 4px; font-size: 11px; }
-            @media print { body { padding: 0.5in; } }
+            @media print { body { padding: 0.5in; } input[type="checkbox"] { -webkit-print-color-adjust: exact; } }
           </style>
         </head>
         <body>
