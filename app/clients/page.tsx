@@ -78,12 +78,6 @@ function ClientCard({
             >
               {client.clientName}
             </p>
-            <p
-              className="text-[11px] font-mono mt-0.5"
-              style={{ color: "var(--text3)" }}
-            >
-              #{client.id.slice(0, 8).toUpperCase()}
-            </p>
           </div>
           <span
             className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0"
