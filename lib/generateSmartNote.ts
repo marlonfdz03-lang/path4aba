@@ -2,7 +2,12 @@ import OpenAI from 'openai';
 import { MASTER_RBT_NOTE_PROMPT } from '@/app/prompts/masterPrompt';
 import { supabaseServer as supabase } from '@/lib/supabaseServer';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({
+  apiKey: process.env.AZURE_OPENAI_API_KEY,
+  baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/deployments/gpt-4o`,
+  defaultQuery: { 'api-version': '2024-11-20' },
+  defaultHeaders: { 'api-key': process.env.AZURE_OPENAI_API_KEY },
+});
 
 export interface SessionInput {
   sessionInfo: {
@@ -236,7 +241,6 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string): Pr
 
   async function callOpenAI(systemContent: string): Promise<string> {
     const resp = await openai.chat.completions.create({
-      model: 'gpt-4o',
       temperature: 0.4,
       max_tokens: 1500,
       messages: [

@@ -122,14 +122,18 @@ export async function POST(req: Request) {
     .map(r => r.session_note as string)
     .filter(Boolean)
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  const openai = new OpenAI({
+    apiKey: process.env.AZURE_OPENAI_API_KEY,
+    baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/deployments/gpt-4o`,
+    defaultQuery: { 'api-version': '2024-11-20' },
+    defaultHeaders: { 'api-key': process.env.AZURE_OPENAI_API_KEY },
+  })
 
   const categoryInstruction = category ? (CATEGORY_INSTRUCTIONS[category] ?? '') : ''
   const systemPrompt = BCBA_STUDENTS_NOTE_PROMPT + buildCombinationInstruction(activityType, contactType) + categoryInstruction
 
   async function generate(systemContent: string): Promise<string> {
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemContent },
         { role: 'user', content: userMessage },
