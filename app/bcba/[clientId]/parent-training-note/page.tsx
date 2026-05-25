@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { supabase } from "@/lib/supabase";
 
 const CAREGIVER_RELATIONS = [
   "Mother", "Father", "Grandparent", "Foster Parent", "Legal Guardian", "Stepparent", "Sibling", "Other",
