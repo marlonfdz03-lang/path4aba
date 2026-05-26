@@ -172,7 +172,7 @@ export default function BCBAClientPage() {
           <div>
             <p className="text-[16px] font-semibold" style={{ color: "var(--text1)" }}>{client?.client_name || client?.internal_code}</p>
             <p className="text-[13px]" style={{ color: "var(--text3)" }}>
-              {cp.diagnosis?.join(", ") || client?.internal_code || ""}
+              {cp.diagnosis?.join(", ") || ""}
             </p>
           </div>
         </div>
