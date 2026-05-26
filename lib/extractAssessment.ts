@@ -1,6 +1,11 @@
 import OpenAI from 'openai';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({
+  apiKey: process.env.AZURE_OPENAI_API_KEY,
+  baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/deployments/gpt-4o`,
+  defaultQuery: { 'api-version': '2024-11-20' },
+  defaultHeaders: { 'api-key': process.env.AZURE_OPENAI_API_KEY },
+});
 
 export interface ExtractedAssessment {
   clientCode: string;
@@ -63,7 +68,6 @@ function stripIdentifiers(data: ExtractedAssessment): ExtractedAssessment {
 
 export async function extractAssessment(text: string): Promise<ExtractedAssessment> {
   const response = await openai.chat.completions.create({
-    model: 'gpt-4o',
     temperature: 0,
     messages: [
       {

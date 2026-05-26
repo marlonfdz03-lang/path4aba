@@ -4,7 +4,12 @@ import { NOTE_PERFECTOR_PROMPT } from '@/app/prompts/notePerfectorPrompt';
 
 export const runtime = 'nodejs';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({
+  apiKey: process.env.AZURE_OPENAI_API_KEY,
+  baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/deployments/gpt-4o`,
+  defaultQuery: { 'api-version': '2024-11-20' },
+  defaultHeaders: { 'api-key': process.env.AZURE_OPENAI_API_KEY },
+});
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,7 +23,6 @@ export async function POST(req: NextRequest) {
     }
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
       temperature: 0.3,
       max_tokens: 1500,
       messages: [

@@ -22,10 +22,14 @@ export async function POST(req: Request) {
   }
 
   try {
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    const openai = new OpenAI({
+      apiKey: process.env.AZURE_OPENAI_API_KEY,
+      baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/deployments/gpt-4o`,
+      defaultQuery: { 'api-version': '2024-11-20' },
+      defaultHeaders: { 'api-key': process.env.AZURE_OPENAI_API_KEY },
+    })
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         ...messages as OpenAI.Chat.ChatCompletionMessageParam[],
