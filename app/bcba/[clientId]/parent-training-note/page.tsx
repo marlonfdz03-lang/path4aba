@@ -9,6 +9,143 @@ const CAREGIVER_RELATIONS = [
   "Mother", "Father", "Grandparent", "Foster Parent", "Legal Guardian", "Stepparent", "Sibling", "Other",
 ];
 
+const PARTICIPANT_OPTIONS = ["BCBA", "Caregiver", "Client", "RBT", "Other"];
+
+const CAREGIVER_GOALS_OPTIONS = [
+  "Improve reinforcement consistency",
+  "Improve prompting implementation",
+  "Increase consistency during home routines",
+  "Improve implementation of behavior reduction strategies",
+  "Improve transition support implementation",
+  "Increase use of replacement behavior strategies",
+  "Improve implementation of communication strategies",
+  "Improve generalization across settings",
+  "Increase caregiver confidence implementing ABA procedures",
+  "Improve consistency with behavior intervention plan",
+  "Increase independent caregiver implementation",
+  "Other",
+];
+
+const TRAINING_FOCUS_OPTIONS = [
+  "Reinforcement strategies",
+  "Prompting procedures",
+  "Behavior reduction strategies",
+  "Communication strategies",
+  "Transition support strategies",
+  "Replacement behavior implementation",
+  "Daily living routines",
+  "Functional communication training",
+  "Error correction procedures",
+  "Behavior intervention plan review",
+  "Generalization strategies",
+  "Other",
+];
+
+const BST_OPTIONS = [
+  "Instruction provided",
+  "Modeling completed",
+  "Caregiver rehearsal completed",
+  "Corrective feedback provided",
+  "Live coaching provided",
+  "Role-play completed",
+  "Performance feedback provided",
+];
+
+const CAREGIVER_PERF_OPTIONS = [
+  "Caregiver implemented procedures independently",
+  "Caregiver required verbal prompting",
+  "Caregiver demonstrated improved consistency",
+  "Caregiver required additional coaching",
+  "Caregiver demonstrated appropriate reinforcement delivery",
+  "Caregiver demonstrated improved prompting consistency",
+  "Generalization difficulties observed",
+  "Environmental distractions impacted implementation",
+  "Caregiver demonstrated increased confidence implementing procedures",
+  "Additional caregiver support recommended",
+  "Other",
+];
+
+const CLIENT_RESPONSE_OPTIONS = [
+  "Increased appropriate communication observed",
+  "Reduced maladaptive behavior observed",
+  "Improved transition tolerance observed",
+  "Increased engagement observed",
+  "Improved compliance observed",
+  "Increased independent responding observed",
+  "Improved participation observed",
+  "Improved generalization across caregiver interactions observed",
+  "Reduced prompt dependency observed",
+  "Other",
+];
+
+const NEXT_STEPS_OPTIONS = [
+  "Continue caregiver coaching",
+  "Continue reinforcement training",
+  "Continue prompting procedure training",
+  "Monitor caregiver implementation consistency",
+  "Continue generalization training",
+  "Continue BST during future sessions",
+  "Reassess caregiver fidelity next session",
+  "Continue collaboration with caregiver",
+  "Review progress toward goals next session",
+  "Continue home implementation support",
+  "Other",
+];
+
+function SectionHeader({ title }: { title: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-4">
+      <p className="text-[11px] uppercase tracking-widest font-semibold whitespace-nowrap" style={{ color: "var(--text3)" }}>
+        {title}
+      </p>
+      <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+    </div>
+  );
+}
+
+function CheckboxGroup({
+  options,
+  selected,
+  onToggle,
+  otherValue,
+  onOtherChange,
+}: {
+  options: string[];
+  selected: string[];
+  onToggle: (val: string) => void;
+  otherValue?: string;
+  onOtherChange?: (val: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+      {options.map(opt => (
+        <div key={opt}>
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={selected.includes(opt)}
+              onChange={() => onToggle(opt)}
+              className="mt-0.5 flex-shrink-0"
+              style={{ accentColor: "var(--teal)" }}
+            />
+            <span className="text-[13px]" style={{ color: "var(--text1)" }}>{opt}</span>
+          </label>
+          {opt === "Other" && selected.includes("Other") && (
+            <input
+              type="text"
+              value={otherValue ?? ""}
+              onChange={e => onOtherChange?.(e.target.value)}
+              placeholder="Specify…"
+              className="mt-1.5 ml-5 w-[calc(100%-1.25rem)] border rounded-lg px-3 py-1.5 text-[12px] focus:outline-none"
+              style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Topbar({ clientName, clientId }: { clientName: string; clientId: string }) {
   return (
     <div className="flex items-center gap-2 px-8 h-14 bg-white text-[13px]" style={{ borderBottom: "1px solid var(--border)" }}>
@@ -31,22 +168,48 @@ export default function ParentTrainingNotePage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
-  // Session info
+  // Section 1 — Session Information
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split("T")[0]);
-  const [timeRange, setTimeRange] = useState("");
   const [location, setLocation] = useState("");
   const [caregiverName, setCaregiverName] = useState("");
   const [caregiverRelation, setCaregiverRelation] = useState("Mother");
 
-  // Session details
-  const [selectedBehaviors, setSelectedBehaviors] = useState<string[]>([]);
-  const [selectedProcedures, setSelectedProcedures] = useState<string[]>([]);
-  const [whatBCBAModeled, setWhatBCBAModeled] = useState("");
-  const [caregiverPractice, setCaregiverPractice] = useState("");
-  const [feedbackProvided, setFeedbackProvided] = useState("");
-  const [caregiverOutcome, setCaregiverOutcome] = useState("");
-  const [generalizationTopics, setGeneralizationTopics] = useState("");
-  const [nextSessionGoals, setNextSessionGoals] = useState("");
+  // Section 2 — Participants Present
+  const [participantsPresent, setParticipantsPresent] = useState<string[]>([]);
+  const [participantsOther, setParticipantsOther] = useState("");
+
+  // Section 3 — Was client present?
+  const [clientPresent, setClientPresent] = useState<"yes" | "no" | "partial" | null>(null);
+
+  // Section 4 — Skill Targets
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [skillsFreeText, setSkillsFreeText] = useState("");
+
+  // Section 5 — Caregiver Goals
+  const [caregiverGoals, setCaregiverGoals] = useState<string[]>([]);
+  const [caregiverGoalsOther, setCaregiverGoalsOther] = useState("");
+
+  // Section 6 — Training Focus
+  const [trainingFocus, setTrainingFocus] = useState<string[]>([]);
+  const [trainingFocusOther, setTrainingFocusOther] = useState("");
+
+  // Section 7 — BST Components
+  const [bstComponents, setBstComponents] = useState<string[]>([]);
+
+  // Section 8 — Caregiver Performance
+  const [caregiverPerf, setCaregiverPerf] = useState<string[]>([]);
+  const [caregiverPerfOther, setCaregiverPerfOther] = useState("");
+
+  // Section 9 — Client Response
+  const [clientResponse, setClientResponse] = useState<string[]>([]);
+  const [clientResponseOther, setClientResponseOther] = useState("");
+
+  // Section 10 — Additional Details
+  const [additionalDetails, setAdditionalDetails] = useState("");
+
+  // Section 11 — Next Steps
+  const [nextStepsSel, setNextStepsSel] = useState<string[]>([]);
+  const [nextStepsOther, setNextStepsOther] = useState("");
 
   // Output
   const [generating, setGenerating] = useState(false);
@@ -59,11 +222,11 @@ export default function ParentTrainingNotePage() {
       if (!data.user) { router.push("/login"); return; }
       const name = data.user.user_metadata?.full_name || data.user.email?.split("@")[0] || "";
       setBcbaName(name);
-      loadData(data.user.id);
+      loadData();
     });
   }, [clientId]);
 
-  async function loadData(_userId: string) {
+  async function loadData() {
     try {
       const res = await fetch(`/api/bcba/client/${clientId}`);
       if (!res.ok) { router.push("/bcba"); return; }
@@ -78,28 +241,70 @@ export default function ParentTrainingNotePage() {
   }
 
   const profile = client?.clinical_profile || {};
-  const rawBehaviors: any[] = profile?.activePrograms?.maladaptive || profile?.maladaptiveBehaviors || [];
-  const allBehaviors: string[] = rawBehaviors.map((b: any) => typeof b === 'string' ? b : (b?.name || '')).filter(Boolean);
-  const rawInterventions: any[] = profile?.approvedInterventions || [];
-  const allInterventions: string[] = rawInterventions.map((i: any) => typeof i === 'string' ? i : (i?.name || '')).filter(Boolean);
 
-  function toggleBehavior(b: string) {
-    setSelectedBehaviors(prev => prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b]);
-  }
+  const allSkills: string[] = [
+    ...(profile?.replacementBehaviors || []),
+    ...(profile?.skillAcquisition || []),
+  ].map((s: any) => (typeof s === "string" ? s : s?.name || "")).filter(Boolean);
 
-  function toggleProcedure(p: string) {
-    setSelectedProcedures(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
+  function toggle(setter: React.Dispatch<React.SetStateAction<string[]>>, val: string) {
+    setter(prev => prev.includes(val) ? prev.filter(x => x !== val) : [...prev, val]);
   }
 
   async function handleGenerate() {
-    if (!sessionDate || !caregiverName.trim() || selectedBehaviors.length === 0 || !whatBCBAModeled.trim() || !caregiverPractice.trim()) {
-      setGenError("Please fill in date, caregiver name, select at least one behavior, and describe what was modeled and practiced.");
-      return;
-    }
     setGenerating(true);
     setGenError("");
     setGeneratedNote("");
     setSimilarityWarning(false);
+
+    const skillsArr = selectedSkills.length > 0
+      ? selectedSkills
+      : skillsFreeText.trim() ? [skillsFreeText.trim()] : [];
+
+    const behaviorsObserved = [
+      ...skillsArr,
+      ...clientResponse.filter(r => r !== "Other"),
+      ...(clientResponseOther.trim() ? [clientResponseOther.trim()] : []),
+    ];
+
+    const proceduresTrained = [
+      ...trainingFocus.filter(f => f !== "Other"),
+      ...(trainingFocusOther.trim() ? [trainingFocusOther.trim()] : []),
+      ...bstComponents,
+    ];
+
+    const whatModeled = [
+      ...trainingFocus.filter(f => f !== "Other"),
+      ...bstComponents.filter(b => b === "Instruction provided" || b === "Modeling completed"),
+    ].filter(Boolean).join(", ");
+
+    const caregiverPracticeStr = [
+      ...bstComponents.filter(b => ["Caregiver rehearsal completed", "Role-play completed", "Live coaching provided"].includes(b)),
+      ...caregiverPerf.filter(p => p !== "Other"),
+      ...(caregiverPerfOther.trim() ? [caregiverPerfOther.trim()] : []),
+    ].filter(Boolean).join(", ");
+
+    const feedbackStr = [
+      ...bstComponents.filter(b => b === "Corrective feedback provided" || b === "Performance feedback provided"),
+      ...caregiverGoals.filter(g => g !== "Other"),
+      ...(caregiverGoalsOther.trim() ? [caregiverGoalsOther.trim()] : []),
+    ].filter(Boolean).join(", ");
+
+    const caregiverOutcomeStr = [
+      ...caregiverPerf.filter(p => p !== "Other"),
+      ...(caregiverPerfOther.trim() ? [caregiverPerfOther.trim()] : []),
+      additionalDetails.trim(),
+    ].filter(Boolean).join(". ");
+
+    const generalizationStr = [
+      ...caregiverGoals.filter(g => g !== "Other"),
+      ...(caregiverGoalsOther.trim() ? [caregiverGoalsOther.trim()] : []),
+    ].filter(Boolean).join(", ");
+
+    const nextStepsStr = [
+      ...nextStepsSel.filter(s => s !== "Other"),
+      ...(nextStepsOther.trim() ? [nextStepsOther.trim()] : []),
+    ].filter(Boolean).join(", ");
 
     try {
       const res = await fetch("/api/bcba/generate-parent-training-note", {
@@ -108,20 +313,20 @@ export default function ParentTrainingNotePage() {
         body: JSON.stringify({
           clientId,
           sessionDate,
-          timeRange,
+          timeRange: "",
           location,
           bcbaName,
           caregiverName,
           caregiverRelation,
           sessionDetails: {
-            behaviorsObservedDuringSession: selectedBehaviors,
-            proceduresTrainedToday: selectedProcedures,
-            whatBCBAModeled,
-            caregiverPracticeDescription: caregiverPractice,
-            feedbackProvided,
-            caregiverOutcome,
-            generalizationTopicsDiscussed: generalizationTopics,
-            nextSessionGoals,
+            behaviorsObservedDuringSession: behaviorsObserved,
+            proceduresTrainedToday: proceduresTrained,
+            whatBCBAModeled: whatModeled,
+            caregiverPracticeDescription: caregiverPracticeStr,
+            feedbackProvided: feedbackStr,
+            caregiverOutcome: caregiverOutcomeStr,
+            generalizationTopicsDiscussed: generalizationStr,
+            nextSessionGoals: nextStepsStr,
           },
         }),
       });
@@ -135,13 +340,6 @@ export default function ParentTrainingNotePage() {
       setGenerating(false);
     }
   }
-
-  const canGenerate =
-    sessionDate &&
-    caregiverName.trim().length > 0 &&
-    selectedBehaviors.length > 0 &&
-    whatBCBAModeled.trim().length > 0 &&
-    caregiverPractice.trim().length > 0;
 
   if (loading) {
     return (
@@ -170,206 +368,224 @@ export default function ParentTrainingNotePage() {
       <Topbar clientName={client?.client_name || client?.internal_code || "Client"} clientId={clientId} />
 
       <div className="px-8 py-6 max-w-3xl">
-        <div className="bg-white rounded-xl border p-6 space-y-5" style={{ borderColor: "var(--border)" }}>
+        <div className="bg-white rounded-xl border p-6 space-y-8" style={{ borderColor: "var(--border)" }}>
           <p className="text-[15px] font-semibold" style={{ color: "var(--text1)" }}>New Parent Training Note (97156)</p>
 
-          {/* Date */}
+          {/* ── SECTION 1 — Session Information ── */}
           <div>
-            <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Session Date</label>
-            <input
-              type="date"
-              value={sessionDate}
-              onChange={e => setSessionDate(e.target.value)}
-              className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
-              style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+            <SectionHeader title="Section 1 — Session Information" />
+            <div className="space-y-5">
+
+              <div>
+                <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Date</label>
+                <input
+                  type="date"
+                  value={sessionDate}
+                  onChange={e => setSessionDate(e.target.value)}
+                  className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
+                  style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Location</label>
+                <select
+                  value={location}
+                  onChange={e => setLocation(e.target.value)}
+                  className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
+                  style={{ borderColor: "var(--border)", color: location ? "var(--text1)" : "var(--text3)" }}
+                >
+                  <option value="">Select location…</option>
+                  <option value="home">Home</option>
+                  <option value="clinic">Clinic</option>
+                  <option value="school">School</option>
+                  <option value="telehealth">Telehealth</option>
+                  <option value="community">Community</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>
+                    Caregiver Name <span style={{ color: "#DC2626" }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={caregiverName}
+                    onChange={e => setCaregiverName(e.target.value)}
+                    placeholder="First and last name"
+                    className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
+                    style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Relation to Client</label>
+                  <select
+                    value={caregiverRelation}
+                    onChange={e => setCaregiverRelation(e.target.value)}
+                    className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
+                    style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                  >
+                    {CAREGIVER_RELATIONS.map(r => <option key={r}>{r}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── SECTION 2 — Participants Present ── */}
+          <div>
+            <SectionHeader title="Section 2 — Participants Present" />
+            <CheckboxGroup
+              options={PARTICIPANT_OPTIONS}
+              selected={participantsPresent}
+              onToggle={val => toggle(setParticipantsPresent, val)}
+              otherValue={participantsOther}
+              onOtherChange={setParticipantsOther}
             />
           </div>
 
-          {/* Time range + Location */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Time Range</label>
-              <input
-                type="text"
-                value={timeRange}
-                onChange={e => setTimeRange(e.target.value)}
-                placeholder="e.g. 3:00 PM – 4:00 PM"
-                className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
-                style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-              />
-            </div>
-            <div>
-              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Location</label>
-              <input
-                type="text"
-                value={location}
-                onChange={e => setLocation(e.target.value)}
-                placeholder="e.g. Client home"
-                className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
-                style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-              />
-            </div>
-          </div>
-
-          {/* Caregiver */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>
-                Caregiver Name <span style={{ color: "#DC2626" }}>*</span>
-              </label>
-              <input
-                type="text"
-                value={caregiverName}
-                onChange={e => setCaregiverName(e.target.value)}
-                placeholder="First and last name"
-                className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
-                style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-              />
-            </div>
-            <div>
-              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Relation to Client</label>
-              <select
-                value={caregiverRelation}
-                onChange={e => setCaregiverRelation(e.target.value)}
-                className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
-                style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-              >
-                {CAREGIVER_RELATIONS.map(r => <option key={r}>{r}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Behaviors observed during session */}
+          {/* ── SECTION 3 — Was the client present? ── */}
           <div>
-            <label className="block text-[12px] font-medium mb-2" style={{ color: "var(--text2)" }}>
-              Behaviors Observed During Session <span style={{ color: "#DC2626" }}>*</span>{" "}
-              <span style={{ color: "var(--text3)" }}>({selectedBehaviors.length} selected)</span>
-            </label>
-            {allBehaviors.length === 0 ? (
-              <p className="text-[12px]" style={{ color: "var(--text3)" }}>No behaviors in client profile.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {allBehaviors.map((b: string) => (
-                  <button
-                    key={b}
-                    type="button"
-                    onClick={() => toggleBehavior(b)}
-                    className="px-3 py-1.5 rounded-full border text-[12px] font-medium transition-colors"
-                    style={{
-                      background: selectedBehaviors.includes(b) ? "var(--teal)" : "white",
-                      borderColor: selectedBehaviors.includes(b) ? "var(--teal)" : "var(--border)",
-                      color: selectedBehaviors.includes(b) ? "white" : "var(--text2)",
-                    }}
-                  >
-                    {b}
-                  </button>
+            <SectionHeader title="Section 3 — Was the Client Present During Training?" />
+            <div className="flex gap-2">
+              {(["yes", "no", "partial"] as const).map(v => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setClientPresent(v)}
+                  className="flex-1 py-2.5 rounded-xl border text-[12px] font-medium transition-colors"
+                  style={{
+                    background: clientPresent === v ? "var(--teal)" : "white",
+                    borderColor: clientPresent === v ? "var(--teal)" : "var(--border)",
+                    color: clientPresent === v ? "white" : "var(--text2)",
+                  }}
+                >
+                  {v === "yes" ? "Yes" : v === "no" ? "No" : "Partial Session"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── SECTION 4 — Replacement / Skill Targets ── */}
+          <div>
+            <SectionHeader title="Section 4 — Replacement / Skill Acquisition Targets Addressed" />
+            <p className="text-[12px] mb-3" style={{ color: "var(--text3)" }}>Replacement / Skill Targets Addressed (from client profile)</p>
+            {allSkills.length > 0 ? (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                {allSkills.map(s => (
+                  <label key={s} className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedSkills.includes(s)}
+                      onChange={() => toggle(setSelectedSkills, s)}
+                      className="mt-0.5 flex-shrink-0"
+                      style={{ accentColor: "var(--teal)" }}
+                    />
+                    <span className="text-[13px]" style={{ color: "var(--text1)" }}>{s}</span>
+                  </label>
                 ))}
               </div>
+            ) : (
+              <input
+                type="text"
+                value={skillsFreeText}
+                onChange={e => setSkillsFreeText(e.target.value)}
+                placeholder="No skills in profile — describe targets addressed"
+                className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
+                style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+              />
             )}
           </div>
 
-          {/* Procedures trained */}
-          {allInterventions.length > 0 && (
-            <div>
-              <label className="block text-[12px] font-medium mb-2" style={{ color: "var(--text2)" }}>
-                Procedures Trained Today{" "}
-                <span style={{ color: "var(--text3)" }}>({selectedProcedures.length} selected)</span>
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {allInterventions.map((i: string) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => toggleProcedure(i)}
-                    className="px-3 py-1.5 rounded-full border text-[12px] font-medium transition-colors"
-                    style={{
-                      background: selectedProcedures.includes(i) ? "var(--teal)" : "white",
-                      borderColor: selectedProcedures.includes(i) ? "var(--teal)" : "var(--border)",
-                      color: selectedProcedures.includes(i) ? "white" : "var(--text2)",
-                    }}
-                  >
-                    {i}
-                  </button>
-                ))}
-              </div>
+          {/* ── SECTION 5 — Caregiver Goals Addressed ── */}
+          <div>
+            <SectionHeader title="Section 5 — Caregiver Goals Addressed" />
+            <CheckboxGroup
+              options={CAREGIVER_GOALS_OPTIONS}
+              selected={caregiverGoals}
+              onToggle={val => toggle(setCaregiverGoals, val)}
+              otherValue={caregiverGoalsOther}
+              onOtherChange={setCaregiverGoalsOther}
+            />
+          </div>
+
+          {/* ── SECTION 6 — Parent Training Focus ── */}
+          <div>
+            <SectionHeader title="Section 6 — Parent Training Focus" />
+            <CheckboxGroup
+              options={TRAINING_FOCUS_OPTIONS}
+              selected={trainingFocus}
+              onToggle={val => toggle(setTrainingFocus, val)}
+              otherValue={trainingFocusOther}
+              onOtherChange={setTrainingFocusOther}
+            />
+          </div>
+
+          {/* ── SECTION 7 — BST Components Completed ── */}
+          <div>
+            <SectionHeader title="Section 7 — BST Components Completed" />
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+              {BST_OPTIONS.map(opt => (
+                <label key={opt} className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={bstComponents.includes(opt)}
+                    onChange={() => toggle(setBstComponents, opt)}
+                    className="mt-0.5 flex-shrink-0"
+                    style={{ accentColor: "var(--teal)" }}
+                  />
+                  <span className="text-[13px]" style={{ color: "var(--text1)" }}>{opt}</span>
+                </label>
+              ))}
             </div>
-          )}
+          </div>
 
-          {/* What BCBA modeled */}
+          {/* ── SECTION 8 — Caregiver Performance / Observations ── */}
           <div>
-            <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>
-              What the BCBA Modeled <span style={{ color: "#DC2626" }}>*</span>
-            </label>
-            <textarea
-              value={whatBCBAModeled}
-              onChange={e => setWhatBCBAModeled(e.target.value)}
-              placeholder="Describe the specific procedure or technique you demonstrated for the caregiver…"
-              className="w-full border rounded-xl px-4 py-3 text-[13px] resize-none focus:outline-none"
-              style={{ borderColor: "var(--border)", color: "var(--text1)", minHeight: 80 }}
+            <SectionHeader title="Section 8 — Caregiver Performance / Observations" />
+            <CheckboxGroup
+              options={CAREGIVER_PERF_OPTIONS}
+              selected={caregiverPerf}
+              onToggle={val => toggle(setCaregiverPerf, val)}
+              otherValue={caregiverPerfOther}
+              onOtherChange={setCaregiverPerfOther}
             />
           </div>
 
-          {/* Caregiver practice description */}
+          {/* ── SECTION 9 — Client Response During Parent Training ── */}
           <div>
-            <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>
-              Caregiver Practice Description <span style={{ color: "#DC2626" }}>*</span>
-            </label>
-            <textarea
-              value={caregiverPractice}
-              onChange={e => setCaregiverPractice(e.target.value)}
-              placeholder="Describe how the caregiver rehearsed the procedure — what they did, how many trials, what conditions…"
-              className="w-full border rounded-xl px-4 py-3 text-[13px] resize-none focus:outline-none"
-              style={{ borderColor: "var(--border)", color: "var(--text1)", minHeight: 80 }}
+            <SectionHeader title="Section 9 — Client Response During Parent Training" />
+            <CheckboxGroup
+              options={CLIENT_RESPONSE_OPTIONS}
+              selected={clientResponse}
+              onToggle={val => toggle(setClientResponse, val)}
+              otherValue={clientResponseOther}
+              onOtherChange={setClientResponseOther}
             />
           </div>
 
-          {/* Feedback provided */}
+          {/* ── SECTION 10 — Additional Parent Training Details ── */}
           <div>
-            <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Feedback Provided by BCBA</label>
+            <SectionHeader title="Section 10 — Additional Parent Training Details" />
             <textarea
-              value={feedbackProvided}
-              onChange={e => setFeedbackProvided(e.target.value)}
-              placeholder="What specifically did you reinforce or correct — timing, prompt delivery, response quality?…"
+              value={additionalDetails}
+              onChange={e => setAdditionalDetails(e.target.value)}
+              placeholder="Describe caregiver participation, barriers, implementation challenges, client response, or specific coaching provided."
               className="w-full border rounded-xl px-4 py-3 text-[13px] resize-none focus:outline-none"
-              style={{ borderColor: "var(--border)", color: "var(--text1)", minHeight: 80 }}
+              style={{ borderColor: "var(--border)", color: "var(--text1)", minHeight: 96 }}
             />
           </div>
 
-          {/* Caregiver outcome */}
+          {/* ── SECTION 11 — Next Steps ── */}
           <div>
-            <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Caregiver Outcome</label>
-            <textarea
-              value={caregiverOutcome}
-              onChange={e => setCaregiverOutcome(e.target.value)}
-              placeholder="Did they implement independently? What measurably improved? What needs continued practice?…"
-              className="w-full border rounded-xl px-4 py-3 text-[13px] resize-none focus:outline-none"
-              style={{ borderColor: "var(--border)", color: "var(--text1)", minHeight: 80 }}
-            />
-          </div>
-
-          {/* Generalization */}
-          <div>
-            <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Generalization Topics Discussed</label>
-            <textarea
-              value={generalizationTopics}
-              onChange={e => setGeneralizationTopics(e.target.value)}
-              placeholder="What home routines or settings will the caregiver practice this in?…"
-              className="w-full border rounded-xl px-4 py-3 text-[13px] resize-none focus:outline-none"
-              style={{ borderColor: "var(--border)", color: "var(--text1)", minHeight: 64 }}
-            />
-          </div>
-
-          {/* Next session goals — internal only */}
-          <div>
-            <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>
-              Next Session Goals <span className="font-normal" style={{ color: "var(--text3)" }}>(internal reference only — not included in generated note)</span>
-            </label>
-            <textarea
-              value={nextSessionGoals}
-              onChange={e => setNextSessionGoals(e.target.value)}
-              placeholder="Your own notes for the next parent training contact…"
-              className="w-full border rounded-xl px-4 py-3 text-[13px] resize-none focus:outline-none"
-              style={{ borderColor: "var(--border)", color: "var(--text1)", minHeight: 64 }}
+            <SectionHeader title="Section 11 — Next Steps" />
+            <CheckboxGroup
+              options={NEXT_STEPS_OPTIONS}
+              selected={nextStepsSel}
+              onToggle={val => toggle(setNextStepsSel, val)}
+              otherValue={nextStepsOther}
+              onOtherChange={setNextStepsOther}
             />
           </div>
 
@@ -379,9 +595,10 @@ export default function ParentTrainingNotePage() {
             </p>
           )}
 
+          {/* ── SECTION 12 — Generate Note ── */}
           <button
             onClick={handleGenerate}
-            disabled={!canGenerate || generating}
+            disabled={!sessionDate || generating}
             className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ background: "var(--teal)" }}
           >
@@ -390,11 +607,6 @@ export default function ParentTrainingNotePage() {
             </svg>
             {generating ? "Generating…" : "Generate Parent Training Note"}
           </button>
-          {!canGenerate && !generating && (
-            <p className="text-[12px]" style={{ color: "var(--text3)" }}>
-              Date, caregiver name, at least one behavior, BCBA modeling description, and caregiver practice description are required.
-            </p>
-          )}
         </div>
 
         {/* Output */}
