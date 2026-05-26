@@ -58,6 +58,11 @@ const CATEGORY_INSTRUCTIONS: Record<string, string> = {
   'assessment': `\n\nCATEGORY OVERRIDE: ASSESSMENT\nThis session involved assessment activities. Reference standardized or informal assessment procedures, skill acquisition baselines, or evaluation of client performance across domains. Preferred verbs: Conducted / Administered / Evaluated.`,
 }
 
+const ACTIVITY_TYPE_INSTRUCTIONS: Record<string, string> = {
+  restricted: `\n\nACTIVITY TYPE: RESTRICTED\nThis is a RESTRICTED fieldwork activity. The note must reflect direct client contact and implementation of ABA procedures (e.g., running programs, DTT, NET, prompting, reinforcement delivery, behavior reduction). Do NOT use analysis or planning language.`,
+  unrestricted: `\n\nACTIVITY TYPE: UNRESTRICTED\nThis is an UNRESTRICTED fieldwork activity. The note must reflect BCBA-level analytical work (e.g., visual analysis, treatment planning, data review, programming decisions). Do NOT use direct implementation language.`,
+}
+
 function buildCombinationInstruction(activityType: string, contactType: string): string {
   if (contactType === 'client_observation' && activityType === 'restricted') {
     return `
@@ -129,8 +134,9 @@ export async function POST(req: Request) {
     defaultHeaders: { 'api-key': process.env.AZURE_OPENAI_API_KEY },
   })
 
+  const activityInstruction = ACTIVITY_TYPE_INSTRUCTIONS[activityType] ?? ''
   const categoryInstruction = category ? (CATEGORY_INSTRUCTIONS[category] ?? '') : ''
-  const systemPrompt = BCBA_STUDENTS_NOTE_PROMPT + buildCombinationInstruction(activityType, contactType) + categoryInstruction
+  const systemPrompt = BCBA_STUDENTS_NOTE_PROMPT + activityInstruction + buildCombinationInstruction(activityType, contactType) + categoryInstruction
 
   async function generate(systemContent: string): Promise<string> {
     const response = await openai.chat.completions.create({
