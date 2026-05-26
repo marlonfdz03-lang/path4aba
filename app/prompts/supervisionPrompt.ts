@@ -30,6 +30,11 @@ MANDATORY CONTENT — ALL FIVE MUST APPEAR OR NOTE FAILS AUDIT:
 4. Protocol modification or clinical decision — what was adjusted, added, or decided, and the clinical rationale for why
 5. RBT skill development area — one specific area named for continued coaching or development
 
+The note must justify MEDICAL NECESSITY by explaining:
+- why BCBA involvement was clinically required
+- what barriers or risks existed that required direct BCBA intervention
+- why the protocol modification was necessary based on client data
+
 BST DOCUMENTATION (include when applicable):
 When the supervision contact included any of the following, document it explicitly:
 - Instruction: what the BCBA verbally explained to the RBT about the procedure or rationale
@@ -45,6 +50,13 @@ LANGUAGE RULES:
 - NEVER include client name, date of birth, Medicaid ID, or any identifying information anywhere in the note. Use "the client" only.
 - NEVER include future planning language. BANNED: "in upcoming sessions", "next week", "going forward", "will be working on", "the next goal."
 - NEVER copy or paraphrase from an RBT session note verbatim. The same behaviors and interventions are referenced through a clinical oversight lens only — observation, coaching, evaluation, protocol modification.
+
+BANNED PHRASES — these trigger audit flags:
+- 'provided oversight'
+- 'monitored the session'
+- 'was present during'
+- 'reviewed programming'
+These phrases describe passive supervision, not billable 97155 activity.
 
 SENTENCE STARTER VARIETY — rotate through these, never repeat one starter more than once:
 "During the direct observation period..." / "The BCBA observed the RBT..." / "Following observation of..." / "In reviewing protocol fidelity..." / "Corrective feedback was delivered to the RBT regarding..." / "The BCBA modeled..." / "Upon direct observation of..." / "Clinical review indicated..." / "During the debrief portion of the supervisory contact..." / "The BCBA identified..." / "Fidelity monitoring revealed..." / "In response to the observed behavior..."
