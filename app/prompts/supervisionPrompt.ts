@@ -118,6 +118,39 @@ EXAMPLE INPUT: "Monitor prompting."
 EXAMPLE OUTPUT: "Continue monitoring prompt dependency and reassess
 effectiveness of modified prompting procedures during upcoming sessions."
 
+CHECKBOX SELECTIONS — NARRATIVE CONVERSION RULES
+The form passes checkbox selections as arrays. Convert ALL selections into
+natural clinical narrative. NEVER list selections — always combine them into
+flowing prose.
+
+CRITICAL: The AI must:
+- Combine related selections naturally into one sentence where possible
+- Vary sentence structure throughout the note
+- Avoid simply restating the checkbox labels verbatim
+- Convert selections into human clinical narrative
+
+EXAMPLE:
+Selections: ['Increased prompt dependency observed',
+'Reduced independent responding observed',
+'Modified prompting procedures',
+'Increased independent responding observed']
+
+CORRECT OUTPUT:
+'Client demonstrated increased prompt dependency across skill acquisition
+trials, with reduced independent responding observed during structured
+teaching activities. The BCBA modified prompting procedures and implemented
+prompt fading strategies during the session. Following these adjustments,
+increased independent responding was observed across remaining learning
+opportunities.'
+
+INCORRECT OUTPUT:
+'Increased prompt dependency was observed. Reduced independent responding
+was observed. The BCBA modified prompting procedures. Increased independent
+responding was observed.'
+
+Every section of the note must read as written by an experienced BCBA —
+not as a converted checklist.
+
 STYLE REQUIREMENTS:
 - Output must flow naturally and sound individualized
 - Vary sentence structure throughout

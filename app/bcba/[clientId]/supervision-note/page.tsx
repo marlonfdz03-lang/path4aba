@@ -73,6 +73,76 @@ const NEXT_STEPS_OPTIONS = [
   "Other",
 ];
 
+const OBJECTIVE_OBS_OPTIONS = [
+  "Increased prompt dependency observed",
+  "Reduced independent responding observed",
+  "Elevated maladaptive behavior frequency observed",
+  "Increased latency to respond observed",
+  "Inconsistent responding across targets observed",
+  "Reduced task engagement observed",
+  "Treatment integrity concerns observed",
+  "Inconsistent reinforcement delivery observed",
+  "Difficulty transitioning between activities observed",
+  "Increased vocal protest observed",
+  "Increased task refusal observed",
+  "Generalization deficits observed",
+  "Reduced attending behavior observed",
+  "Difficulty maintaining instructional control observed",
+  "Client required increased prompting levels",
+  "Reduced motivation for programmed reinforcers observed",
+  "Inconsistent error correction implementation observed",
+  "Escalation during transitions observed",
+  "Reduced tolerance to denied access observed",
+  "Skill acquisition plateau observed",
+  "Other",
+];
+
+const CLIENT_RESPONSE_OPTIONS = [
+  "Increased independent responding observed",
+  "Reduced maladaptive behavior observed",
+  "Improved task engagement observed",
+  "Improved transition tolerance observed",
+  "Reduced prompt dependency observed",
+  "Increased compliance with demands observed",
+  "Improved instructional control observed",
+  "Increased attending behavior observed",
+  "Reduced latency to respond observed",
+  "Improved reinforcement effectiveness observed",
+  "Improved tolerance to denied access observed",
+  "Improved participation during teaching activities observed",
+  "Increased appropriate communication observed",
+  "Improved responding across skill acquisition targets observed",
+  "Reduced escalation during transitions observed",
+  "Improved treatment participation observed",
+  "Improved behavioral regulation observed",
+  "Increased successful transitions observed",
+  "Improved consistency across trials observed",
+  "Other",
+];
+
+const ADDITIONAL_FEEDBACK_OPTIONS = [
+  "Reinforcement timing reviewed with RBT",
+  "Prompt hierarchy implementation reviewed",
+  "Error correction procedures reviewed",
+  "Treatment integrity feedback provided",
+  "Live modeling completed by BCBA",
+  "RBT rehearsed modified procedures",
+  "BCBA provided live coaching during session",
+  "Data collection procedures reviewed",
+  "Prompt fading procedures reviewed",
+  "Antecedent strategies reviewed",
+  "Replacement behavior implementation reviewed",
+  "Behavioral momentum procedures reviewed",
+  "Transition procedures reviewed",
+  "Reinforcement schedule implementation reviewed",
+  "BCBA monitored RBT procedural fidelity",
+  "Corrective feedback provided regarding prompting consistency",
+  "Corrective feedback provided regarding reinforcement delivery",
+  "RBT demonstrated improved implementation following feedback",
+  "Additional supervision recommended",
+  "Other",
+];
+
 function SectionHeader({ title }: { title: string }) {
   return (
     <div className="flex items-center gap-3 mb-4">
@@ -197,18 +267,21 @@ export default function SupervisionNotePage() {
   const [bcbaActions, setBcbaActions] = useState<string[]>([]);
   const [bcbaActionsOther, setBcbaActionsOther] = useState("");
 
-  // Section 6 — Objective data
-  const [objectiveData, setObjectiveData] = useState("");
+  // Section 6 — Objective observations
+  const [objectiveObs, setObjectiveObs] = useState<string[]>([]);
+  const [objectiveObsOther, setObjectiveObsOther] = useState("");
 
   // Section 7 — Client response
-  const [clientResponse, setClientResponse] = useState("");
+  const [clientResponseSel, setClientResponseSel] = useState<string[]>([]);
+  const [clientResponseOther, setClientResponseOther] = useState("");
 
   // Section 8 — RBT feedback
   const [rbtFeedback, setRbtFeedback] = useState<string[]>([]);
   const [rbtFeedbackOther, setRbtFeedbackOther] = useState("");
 
   // Section 9 — Additional RBT feedback
-  const [additionalFeedback, setAdditionalFeedback] = useState("");
+  const [additionalFeedbackSel, setAdditionalFeedbackSel] = useState<string[]>([]);
+  const [additionalFeedbackOther, setAdditionalFeedbackOther] = useState("");
 
   // Section 10 — Next steps
   const [nextStepsSel, setNextStepsSel] = useState<string[]>([]);
@@ -273,23 +346,38 @@ export default function SupervisionNotePage() {
       ? selectedSkills
       : skillsFreeText.trim() ? [skillsFreeText.trim()] : [];
 
+    const objectiveStr = [
+      objectiveObs.filter(o => o !== "Other").join(", "),
+      objectiveObsOther.trim(),
+    ].filter(Boolean).join(", ");
+
+    const clientResponseStr = [
+      clientResponseSel.filter(o => o !== "Other").join(", "),
+      clientResponseOther.trim(),
+    ].filter(Boolean).join(", ");
+
+    const additionalFeedbackStr = [
+      additionalFeedbackSel.filter(o => o !== "Other").join(", "),
+      additionalFeedbackOther.trim(),
+    ].filter(Boolean).join(", ");
+
     const protocolMods = [
       bcbaActions.length > 0 ? bcbaActions.join(", ") : "",
       bcbaActionsOther.trim(),
       skillsContext.length > 0 ? `Skill targets addressed: ${skillsContext.join(", ")}` : "",
-      clientResponse.trim(),
+      clientResponseStr,
     ].filter(Boolean).join(". ");
 
     const feedbackStr = [
       rbtFeedback.join(", "),
       rbtFeedbackOther.trim(),
-      additionalFeedback.trim(),
+      additionalFeedbackStr,
     ].filter(Boolean).join(". ");
 
     const clinicalDecisionsStr = [
       whyBCBA.length > 0 ? `BCBA involvement needed because: ${whyBCBA.join(", ")}` : "",
       whyBCBAOther.trim(),
-      objectiveData.trim(),
+      objectiveStr,
     ].filter(Boolean).join(". ");
 
     const nextStepsStr = [
@@ -314,7 +402,7 @@ export default function SupervisionNotePage() {
             behaviorsObservedDuringVisit: behaviorsForAPI,
             protocolModificationsMade: protocolMods,
             feedbackProvidedToRBT: feedbackStr,
-            rbtPerformanceNotes: objectiveData,
+            rbtPerformanceNotes: objectiveStr,
             clinicalDecisionsMade: clinicalDecisionsStr,
             nextSteps: nextStepsStr,
           },
@@ -552,24 +640,24 @@ export default function SupervisionNotePage() {
           {/* ── SECTION 6 — Objective Observations / Data ── */}
           <div>
             <SectionHeader title="Section 6 — Objective Observations / Data" />
-            <textarea
-              value={objectiveData}
-              onChange={e => setObjectiveData(e.target.value)}
-              placeholder="Describe objective observations, prompt levels, frequencies, percentages, latency, treatment integrity concerns, or measurable data observed during session."
-              className="w-full border rounded-xl px-4 py-3 text-[13px] resize-none focus:outline-none"
-              style={{ borderColor: "var(--border)", color: "var(--text1)", minHeight: 96 }}
+            <CheckboxGroup
+              options={OBJECTIVE_OBS_OPTIONS}
+              selected={objectiveObs}
+              onToggle={val => toggle(setObjectiveObs, val)}
+              otherValue={objectiveObsOther}
+              onOtherChange={setObjectiveObsOther}
             />
           </div>
 
           {/* ── SECTION 7 — Client Response After Modifications ── */}
           <div>
             <SectionHeader title="Section 7 — Client Response After Modifications" />
-            <textarea
-              value={clientResponse}
-              onChange={e => setClientResponse(e.target.value)}
-              placeholder="Describe measurable client response following protocol modifications or BCBA intervention."
-              className="w-full border rounded-xl px-4 py-3 text-[13px] resize-none focus:outline-none"
-              style={{ borderColor: "var(--border)", color: "var(--text1)", minHeight: 96 }}
+            <CheckboxGroup
+              options={CLIENT_RESPONSE_OPTIONS}
+              selected={clientResponseSel}
+              onToggle={val => toggle(setClientResponseSel, val)}
+              otherValue={clientResponseOther}
+              onOtherChange={setClientResponseOther}
             />
           </div>
 
@@ -588,12 +676,12 @@ export default function SupervisionNotePage() {
           {/* ── SECTION 9 — Additional RBT Feedback Details ── */}
           <div>
             <SectionHeader title="Section 9 — Additional RBT Feedback Details" />
-            <textarea
-              value={additionalFeedback}
-              onChange={e => setAdditionalFeedback(e.target.value)}
-              placeholder="Add any additional details about RBT feedback or training provided."
-              className="w-full border rounded-xl px-4 py-3 text-[13px] resize-none focus:outline-none"
-              style={{ borderColor: "var(--border)", color: "var(--text1)", minHeight: 80 }}
+            <CheckboxGroup
+              options={ADDITIONAL_FEEDBACK_OPTIONS}
+              selected={additionalFeedbackSel}
+              onToggle={val => toggle(setAdditionalFeedbackSel, val)}
+              otherValue={additionalFeedbackOther}
+              onOtherChange={setAdditionalFeedbackOther}
             />
           </div>
 
