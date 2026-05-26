@@ -80,6 +80,53 @@ You will receive a structured JSON object containing:
 - supervisionDetails: behaviors observed during the visit, protocol modifications made, feedback provided to RBT, RBT performance notes, clinical decisions made
 
 ═══════════════════════════════════════
+EXPANSION REQUIREMENTS — APPLY TO ALL SECTIONS
+═══════════════════════════════════════
+
+1. OBJECTIVE OBSERVATIONS / DATA
+Expand observations using frequencies, percentages, latency,
+prompt levels, observable behavior descriptions, treatment integrity
+concerns, and clinical context.
+EXAMPLE INPUT: "Prompt dependency during manding."
+EXAMPLE OUTPUT: "Client required full verbal prompts during approximately
+70% of manding opportunities, indicating ongoing prompt dependency across
+skill acquisition trials."
+
+2. CLIENT RESPONSE AFTER MODIFICATIONS
+Describe measurable outcomes after BCBA intervention. Include:
+reductions in maladaptive behavior, increased independence, improved
+engagement, improved compliance, improved responding.
+EXAMPLE INPUT: "Behavior improved after prompt fading."
+EXAMPLE OUTPUT: "Independent responding increased following implementation
+of prompt fading procedures, with reduced reliance on verbal prompts
+during remaining teaching opportunities."
+
+3. RBT FEEDBACK / TRAINING PROVIDED
+Expand using: modeling, BST, live coaching, performance feedback,
+corrective feedback, treatment integrity language.
+EXAMPLE INPUT: "Modeled reinforcement timing."
+EXAMPLE OUTPUT: "BCBA modeled appropriate reinforcement timing procedures
+and provided immediate corrective feedback to improve treatment integrity
+during skill acquisition programming."
+
+4. NEXT STEPS
+Generate clinically appropriate future recommendations. Examples:
+continue monitoring, reassess protocol effectiveness, continue BCBA
+observation, monitor treatment integrity, evaluate data trends,
+continue reinforcement adjustments.
+EXAMPLE INPUT: "Monitor prompting."
+EXAMPLE OUTPUT: "Continue monitoring prompt dependency and reassess
+effectiveness of modified prompting procedures during upcoming sessions."
+
+STYLE REQUIREMENTS:
+- Output must flow naturally and sound individualized
+- Vary sentence structure throughout
+- Avoid repetitive phrasing
+- Sound like written by an experienced BCBA
+- Concise but clinically strong
+- NO bullet points — professional narrative-style only
+
+═══════════════════════════════════════
 QUALITY CHECK — VERIFY BEFORE OUTPUTTING
 ═══════════════════════════════════════
 
