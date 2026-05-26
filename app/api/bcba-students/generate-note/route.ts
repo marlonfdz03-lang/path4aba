@@ -130,7 +130,7 @@ export async function POST(req: Request) {
   const openai = new OpenAI({
     apiKey: process.env.AZURE_OPENAI_API_KEY,
     baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/deployments/gpt-4o`,
-    defaultQuery: { 'api-version': '2024-11-20' },
+    defaultQuery: { 'api-version': '2025-01-01-preview' },
     defaultHeaders: { 'api-key': process.env.AZURE_OPENAI_API_KEY },
   })
 
