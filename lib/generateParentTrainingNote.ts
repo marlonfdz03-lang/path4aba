@@ -117,6 +117,7 @@ export async function generateParentTrainingNote(input: ParentTrainingNoteInput)
 
   async function callOpenAI(systemContent: string): Promise<string> {
     const resp = await openai.chat.completions.create({
+      model: 'gpt-4o',
       temperature: 0.4,
       max_tokens: 1000,
       messages: [

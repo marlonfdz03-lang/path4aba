@@ -68,6 +68,7 @@ function stripIdentifiers(data: ExtractedAssessment): ExtractedAssessment {
 
 export async function extractAssessment(text: string): Promise<ExtractedAssessment> {
   const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
     temperature: 0,
     messages: [
       {

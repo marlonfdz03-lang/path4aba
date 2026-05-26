@@ -143,6 +143,7 @@ export async function generateSupervisionNote(input: SupervisionNoteInput): Prom
 
   async function callOpenAI(sysContent: string): Promise<string> {
     const resp = await openai.chat.completions.create({
+      model: 'gpt-4o',
       temperature: 0.4,
       max_tokens: 1000,
       messages: [

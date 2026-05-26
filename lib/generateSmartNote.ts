@@ -241,6 +241,7 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string): Pr
 
   async function callOpenAI(systemContent: string): Promise<string> {
     const resp = await openai.chat.completions.create({
+      model: 'gpt-4o',
       temperature: 0.4,
       max_tokens: 1500,
       messages: [

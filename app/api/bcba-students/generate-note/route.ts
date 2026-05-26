@@ -140,6 +140,7 @@ export async function POST(req: Request) {
 
   async function generate(systemContent: string): Promise<string> {
     const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemContent },
         { role: 'user', content: userMessage },

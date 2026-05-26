@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
     }
 
     const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
       temperature: 0.3,
       max_tokens: 1500,
       messages: [
