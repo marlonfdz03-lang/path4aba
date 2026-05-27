@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Path4ABA</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-logo">
+      <div class="logo-dot"></div>
+      <span class="logo-text">Path4ABA</span>
+    </div>
+    <button id="logoutBtn" class="icon-btn" title="Sign out" style="display:none">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+        <polyline points="16 17 21 12 16 7"/>
+        <line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- ── Screen: Loading ── -->
+  <div id="screen-loading" class="screen" style="display:none">
+    <div class="center-content">
+      <div class="spinner"></div>
+      <p class="muted-text">Connecting…</p>
+    </div>
+  </div>
+
+  <!-- ── Screen: Unauthenticated ── -->
+  <div id="screen-auth" class="screen" style="display:none">
+    <div class="auth-card">
+      <div class="auth-icon">🔒</div>
+      <p class="auth-title">Sign in to use Path4ABA</p>
+      <p class="auth-sub">Log in at Path4ABA, then come back to this extension.</p>
+      <button id="loginBtn" class="btn-primary full-width">
+        Open Path4ABA Login
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Screen: No clients ── -->
+  <div id="screen-no-clients" class="screen" style="display:none">
+    <div class="auth-card">
+      <div class="auth-icon">👤</div>
+      <p class="auth-title">No clients found</p>
+      <p class="auth-sub">Add clients in Path4ABA first, then reopen this extension.</p>
+      <button id="openAppBtn" class="btn-outline full-width">Open Path4ABA</button>
+    </div>
+  </div>
+
+  <!-- ── Screen: Main ── -->
+  <div id="screen-main" class="screen" style="display:none">
+
+    <!-- BCBA suggestion banner -->
+    <div id="suggestionBanner" style="display:none" class="banner">
+      <p class="banner-title" id="bannerTitle"></p>
+      <p class="banner-body" id="bannerBody"></p>
+    </div>
+
+    <!-- Client selector -->
+    <div class="section">
+      <label class="field-label">Client</label>
+      <select id="clientSelect" class="select">
+        <option value="">Select a client…</option>
+      </select>
+    </div>
+
+    <!-- Role badge -->
+    <div id="roleBadge" class="role-badge" style="display:none"></div>
+
+    <!-- Action tabs — shown after client selected -->
+    <div id="actionSection" style="display:none">
+
+      <div class="tab-bar">
+        <button class="tab active" data-tab="generate" id="tabGenerate">Generate Note</button>
+        <button class="tab" data-tab="refine" id="tabRefine">Refine Note</button>
+      </div>
+
+      <!-- ── Generate Tab ── -->
+      <div id="tabContent-generate" class="tab-content">
+
+        <div class="field">
+          <label class="field-label">Date</label>
+          <input type="date" id="genDate" class="input">
+        </div>
+
+        <div class="field">
+          <label class="field-label">Location</label>
+          <div class="toggle-group" id="locationGroup">
+            <button class="toggle-btn" data-val="home">Home</button>
+            <button class="toggle-btn" data-val="school">School</button>
+            <button class="toggle-btn" data-val="clinic">Clinic</button>
+          </div>
+        </div>
+
+        <!-- Behaviors (RBT: required 5 | BCBA: any) -->
+        <div class="field" id="behaviorsField">
+          <label class="field-label">
+            Behaviors <span id="behaviorsHint" class="hint"></span>
+          </label>
+          <div id="behaviorsGrid" class="check-grid"></div>
+          <p id="noBehaviors" class="empty-msg" style="display:none">No behaviors in client profile.</p>
+        </div>
+
+        <!-- Skills (RBT: required 2 | BCBA: any) -->
+        <div class="field" id="skillsField">
+          <label class="field-label">
+            Replacement Skills <span id="skillsHint" class="hint"></span>
+          </label>
+          <div id="skillsGrid" class="check-grid"></div>
+          <p id="noSkills" class="empty-msg" style="display:none">No skills in client profile.</p>
+        </div>
+
+        <button id="generateBtn" class="btn-primary full-width" disabled>
+          ✦ Generate Note
+        </button>
+        <p id="generateHint" class="hint center-text" style="display:none"></p>
+
+      </div>
+
+      <!-- ── Refine Tab ── -->
+      <div id="tabContent-refine" class="tab-content" style="display:none">
+        <div class="field">
+          <label class="field-label">Paste existing note</label>
+          <textarea
+            id="pasteNote"
+            class="textarea"
+            placeholder="Paste a note from ABA Matrix, Office Puzzle, or any other tool…"
+            rows="7"
+          ></textarea>
+        </div>
+        <button id="refineBtn" class="btn-primary full-width" disabled>
+          ✦ Refine Note
+        </button>
+      </div>
+
+    </div>
+
+    <!-- ── Output ── -->
+    <div id="outputSection" style="display:none" class="output-section">
+      <div class="output-header">
+        <span class="field-label">Generated Note</span>
+        <div class="output-actions">
+          <button id="saveBtn" class="btn-sm">Save</button>
+          <button id="copyBtn" class="btn-sm btn-teal">Copy</button>
+        </div>
+      </div>
+      <div id="streamStatus" class="stream-status" style="display:none"></div>
+      <textarea id="outputNote" class="textarea output-note"></textarea>
+      <div id="similarityWarn" class="warn-banner" style="display:none">
+        ⚠️ This note may be similar to a previous session. Review before submitting.
+      </div>
+    </div>
+
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -17,6 +17,34 @@ const SUBSCRIPTION_SKIP = ['/billing', '/pricing', '/onboarding']
 // profiles are stored in localStorage, which is inaccessible here.
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+  const origin = request.headers.get('origin') ?? ''
+  const isExtension = origin.startsWith('chrome-extension://') || origin.startsWith('moz-extension://')
+
+  // CORS preflight for browser extension requests
+  if (isExtension && request.method === 'OPTIONS') {
+    return new NextResponse(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Max-Age': '86400',
+      },
+    })
+  }
+
+  // Pass API routes through; add CORS header for extension if needed
+  if (pathname.startsWith('/api')) {
+    const res = NextResponse.next({ request: { headers: request.headers } })
+    if (isExtension) {
+      res.headers.set('Access-Control-Allow-Origin', origin)
+      res.headers.set('Access-Control-Allow-Credentials', 'true')
+    }
+    return res
+  }
+
   let response = NextResponse.next({
     request: { headers: request.headers },
   })
@@ -44,7 +72,6 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const { pathname } = request.nextUrl
   const isPublic = PUBLIC_ROUTES.some((r) => pathname === r || pathname.startsWith(r + '/'))
 
   // 1. Unauthenticated → send to login
@@ -112,5 +139,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }
