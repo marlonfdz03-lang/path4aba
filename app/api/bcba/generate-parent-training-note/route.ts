@@ -31,6 +31,7 @@ export async function POST(request: Request) {
       caregiverOutcome: string
       generalizationTopicsDiscussed: string
       nextSessionGoals: string
+      clientPresent?: string
     }
   }
   try { body = await request.json() } catch {

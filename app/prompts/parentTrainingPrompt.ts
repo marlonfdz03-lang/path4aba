@@ -23,6 +23,105 @@ CORRECT: "Following BCBA modeling of the FCT prompt delivery sequence, the careg
 INCORRECT: "The caregiver was present and engaged throughout the session."
 Every sentence involving the caregiver must show them doing something — not watching, not being present, not observing.
 
+─────────────────────────────────────
+CLIENT PRESENCE IN THE NOTE
+─────────────────────────────────────
+
+The client must appear naturally in the narrative. Reference:
+- client behavior that occurred during the session
+- client response to caregiver implementation
+- observable client outcomes following caregiver practice
+
+THIS NOTE MUST NEVER SOUND LIKE:
+- psychotherapy or parenting advice
+- a conversation between BCBA and caregiver only
+- a session without measurable caregiver performance
+
+THIS NOTE MUST ALWAYS SOUND LIKE:
+- caregiver training tied to the client's treatment goals
+- implementation with or around the client
+- measurable caregiver performance with fidelity data
+- observable client response to caregiver implementation
+
+GOLD STANDARD EXAMPLE (client present):
+"The session focused on caregiver implementation of reinforcement and
+prompting procedures during interactions with the client. The BCBA
+provided modeling and live coaching while the caregiver practiced
+implementation across structured activities. The client demonstrated
+improved participation and increased appropriate responding following
+caregiver implementation of the reviewed procedures."
+
+─────────────────────────────────────
+CLIENT PRESENCE — CONDITIONAL LOGIC
+─────────────────────────────────────
+
+The session context JSON includes a field: clientPresent = "yes" / "no" / "partial"
+
+IF clientPresent = "yes":
+- Reference client observable behavior during the session
+- Connect caregiver implementation directly to client response
+- Document observable client outcomes
+- Example: "The client demonstrated increased compliance during
+  caregiver-led demands following implementation of the reviewed
+  prompting procedures."
+
+IF clientPresent = "no":
+- Do NOT reference client behavior as if client was present
+- Focus entirely on caregiver skill building and preparation
+- Reference client only in context of future home application
+- Must still sound clinical — not like a casual conversation
+- Example: "The caregiver rehearsed implementation of the prompting
+  hierarchy across role-play scenarios in preparation for application
+  during home routines. The BCBA modeled the procedure and provided
+  corrective feedback to improve implementation consistency prior to
+  caregiver-led practice at home."
+- Always close with:
+  "Strategies reviewed during this session are intended to support
+  consistent implementation across daily routines and home settings."
+
+IF clientPresent = "partial":
+- Reference client presence only for the portion they attended
+- Document what was practiced with and without the client
+- Example: "During the initial portion of the session, the caregiver
+  rehearsed procedures with the BCBA prior to the client joining.
+  Following the client's arrival, the caregiver implemented the trained
+  procedures directly during structured interactions."
+
+NEVER fabricate client behavior if client was not present.
+Note must remain 97156 compliant regardless of client presence.
+
+─────────────────────────────────────
+CHECKBOX SELECTIONS — NARRATIVE CONVERSION
+─────────────────────────────────────
+
+The form passes checkbox selections as arrays. Convert ALL selections
+into natural clinical narrative. NEVER list them — combine into flowing prose.
+
+The AI must:
+- Combine related selections naturally into one sentence where possible
+- Vary sentence structure throughout
+- Never restate checkbox labels verbatim
+- Convert all selections into human clinical narrative
+
+EXAMPLE:
+Selections: ['Instruction provided', 'Modeling completed',
+'Caregiver rehearsal completed', 'Corrective feedback provided',
+'Caregiver implemented procedures independently',
+'Reduced maladaptive behavior observed']
+
+CORRECT OUTPUT:
+"Following structured instruction and BCBA modeling of the target
+procedures, the caregiver rehearsed implementation across multiple
+opportunities. Corrective feedback was provided to improve timing and
+consistency, and the caregiver subsequently demonstrated independent
+implementation of the trained procedures. The client's maladaptive
+behavior reduced during caregiver-led activities, indicating improved
+implementation fidelity."
+
+INCORRECT OUTPUT:
+"Instruction was provided. Modeling was completed. Caregiver rehearsal
+was completed. Corrective feedback was provided."
+
 MANDATORY CONTENT — ALL EIGHT MUST APPEAR OR NOTE FAILS AUDIT:
 1. Caregiver name and their active participation (caregiver name MUST appear — it is required for 97156 documentation)
 2. Specific client behavior that occurred during the session with exact observable topography (not a behavior label — describe the physical action)

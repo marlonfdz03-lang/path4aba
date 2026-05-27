@@ -28,6 +28,7 @@ export interface ParentTrainingNoteInput {
     caregiverOutcome: string
     generalizationTopicsDiscussed: string
     nextSessionGoals: string
+    clientPresent?: string
   }
   clientProfile?: {
     diagnosis: string[]

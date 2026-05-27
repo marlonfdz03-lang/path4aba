@@ -327,6 +327,7 @@ export default function ParentTrainingNotePage() {
             caregiverOutcome: caregiverOutcomeStr,
             generalizationTopicsDiscussed: generalizationStr,
             nextSessionGoals: nextStepsStr,
+            clientPresent: clientPresent ?? "",
           },
         }),
       });
