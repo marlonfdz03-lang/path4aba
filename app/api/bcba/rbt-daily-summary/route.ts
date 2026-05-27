@@ -28,14 +28,15 @@ export async function GET(request: Request) {
   if (!connection) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   if (!connection.rbt_id) return NextResponse.json({ summary: null })
 
-  const today = new Date().toISOString().split('T')[0]
+  const dateParam = url.searchParams.get('date')
+  const queryDate = dateParam || new Date().toISOString().split('T')[0]
 
   const { data: note } = await supabaseServer
     .from('session_notes')
     .select('behaviors_addressed, skills_addressed, interventions_used')
     .eq('client_id', clientId)
     .eq('user_id', connection.rbt_id)
-    .eq('session_date', today)
+    .eq('session_date', queryDate)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()

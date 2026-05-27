@@ -290,6 +290,9 @@ export default function SupervisionNotePage() {
   // Section 11 — Additional next steps
   const [additionalNextSteps, setAdditionalNextSteps] = useState("");
 
+  // RBT recommendation banner
+  const [rbtSummary, setRbtSummary] = useState<{ behaviors: string[]; skills: string[]; interventions: string[] } | null>(null);
+
   // Output
   const [generating, setGenerating] = useState(false);
   const [generatedNote, setGeneratedNote] = useState("");
@@ -315,6 +318,19 @@ export default function SupervisionNotePage() {
       setLoadError("Failed to load client data. Please go back and try again.");
     } finally {
       setLoading(false);
+    }
+    await fetchRbtDailySummary(sessionDate, clientId);
+  }
+
+  async function fetchRbtDailySummary(date: string, cid: string) {
+    if (!date) { setRbtSummary(null); return; }
+    try {
+      const res = await fetch(`/api/bcba/rbt-daily-summary?clientId=${cid}&date=${date}`);
+      if (!res.ok) { setRbtSummary(null); return; }
+      const json = await res.json();
+      setRbtSummary(json.summary || null);
+    } catch {
+      setRbtSummary(null);
     }
   }
 
@@ -472,6 +488,46 @@ export default function SupervisionNotePage() {
         <div className="bg-white rounded-xl border p-6 space-y-8" style={{ borderColor: "var(--border)" }}>
           <p className="text-[15px] font-semibold" style={{ color: "var(--text1)" }}>New Supervision Note (97155)</p>
 
+          {/* ── RBT Recommendation Banner ── */}
+          {rbtSummary && (
+            <div style={{ borderLeft: "4px solid #0d6e6e", background: "#f0fafa", borderRadius: "0.5rem", padding: "14px 16px" }}>
+              <p className="text-[13px] font-semibold mb-0.5" style={{ color: "#0d6e6e" }}>📋 RBT Session Today — Recommended Focus Areas</p>
+              <p className="text-[11px] mb-3" style={{ color: "#2d8f8f" }}>Based on the RBT's session note for this client on the selected date</p>
+              <div className="flex flex-wrap gap-4">
+                {rbtSummary.behaviors.length > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "#0d6e6e" }}>Behaviors Addressed</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {rbtSummary.behaviors.map(b => (
+                        <span key={b} className="px-2.5 py-1 rounded-full text-[11px] font-medium" style={{ background: "rgba(13,110,110,0.12)", color: "#0d6e6e" }}>{b}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {rbtSummary.skills.length > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "#0d6e6e" }}>Skills Targeted</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {rbtSummary.skills.map(s => (
+                        <span key={s} className="px-2.5 py-1 rounded-full text-[11px] font-medium" style={{ background: "rgba(13,110,110,0.12)", color: "#0d6e6e" }}>{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {rbtSummary.interventions.length > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "#0d6e6e" }}>Interventions Used</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {rbtSummary.interventions.map(i => (
+                        <span key={i} className="px-2.5 py-1 rounded-full text-[11px] font-medium" style={{ background: "rgba(13,110,110,0.12)", color: "#0d6e6e" }}>{i}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ── SECTION 1 — Session Information ── */}
           <div>
             <SectionHeader title="Section 1 — Session Information" />
@@ -482,7 +538,7 @@ export default function SupervisionNotePage() {
                 <input
                   type="date"
                   value={sessionDate}
-                  onChange={e => setSessionDate(e.target.value)}
+                  onChange={e => { setSessionDate(e.target.value); fetchRbtDailySummary(e.target.value, clientId); }}
                   className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
                   style={{ borderColor: "var(--border)", color: "var(--text1)" }}
                 />
