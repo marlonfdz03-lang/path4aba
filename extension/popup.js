@@ -26,14 +26,21 @@ async function api(path, options = {}) {
     ? {}
     : { 'Content-Type': 'application/json' };
 
-  return fetch(`${BASE}${path}`, {
-    credentials: 'include',
-    ...options,
-    headers: {
-      ...baseHeaders,
-      ...(options.headers || {}),
-    },
-  });
+  const url = `${BASE}${path}`;
+  try {
+    return await fetch(url, {
+      credentials: 'include',
+      ...options,
+      headers: {
+        ...baseHeaders,
+        ...(options.headers || {}),
+      },
+    });
+  } catch (err) {
+    console.error('[Path4ABA] fetch error:', err.name, err.message);
+    console.error('[Path4ABA] URL attempted:', url);
+    throw err;
+  }
 }
 
 // ── Screen management ──────────────────────
@@ -57,13 +64,17 @@ function showError(msg) {
 // ── Init ───────────────────────────────────
 async function init() {
   showScreen('loading');
+  console.log('[Path4ABA] extension starting, calling:', BASE + '/api/bcba/clients');
 
   // Try BCBA clients
   let res;
   try {
     res = await api('/api/bcba/clients');
-  } catch {
+  } catch (err) {
+    console.error('[Path4ABA] init error:', err.message);
     showScreen('auth');
+    document.getElementById('screen-auth').insertAdjacentHTML('beforeend',
+      `<p style="color:#f87171;font-size:12px;margin-top:8px">Network error: ${err.message}</p>`);
     return;
   }
 
@@ -98,7 +109,9 @@ async function init() {
         return;
       }
     }
-  } catch {}
+  } catch (err) {
+    console.error('[Path4ABA] RBT clients error:', err.name, err.message);
+  }
 
   // Authenticated but no clients
   if (res.ok) {
