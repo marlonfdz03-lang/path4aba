@@ -93,6 +93,20 @@ export default function BCBAClientPage() {
   const [loading, setLoading] = useState(true);
   const [rbtDailySummary, setRbtDailySummary] = useState<{ behaviors: string[]; skills: string[]; interventions: string[] } | null>(null);
 
+  // Clinical profile editing
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [editBehaviors, setEditBehaviors] = useState<{ name: string; topography: string; function: string }[]>([]);
+  const [editInterventions, setEditInterventions] = useState<string[]>([]);
+  const [editSkills, setEditSkills] = useState<string[]>([]);
+  const [newBehaviorName, setNewBehaviorName] = useState("");
+  const [newBehaviorTopography, setNewBehaviorTopography] = useState("");
+  const [newBehaviorFunction, setNewBehaviorFunction] = useState("");
+  const [newIntervention, setNewIntervention] = useState("");
+  const [newSkill, setNewSkill] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [profileSaved, setProfileSaved] = useState(false);
+
   useEffect(() => {
     if (activeTab === "supervision") {
       fetch(`/api/bcba/rbt-daily-summary?clientId=${clientId}`)
@@ -155,6 +169,74 @@ export default function BCBAClientPage() {
     setLoading(false);
   }
 
+  function enterEditMode() {
+    const cp = client?.clinical_profile || {};
+    setEditBehaviors(
+      (cp.maladaptiveBehaviors || []).map((b: any) =>
+        typeof b === "string"
+          ? { name: b, topography: "", function: "" }
+          : { name: b?.name || "", topography: b?.topography || "", function: b?.function || b?.behaviorFunction || "" }
+      )
+    );
+    setEditInterventions(
+      (cp.interventions || []).map((i: any) => typeof i === "string" ? i : (i?.name || ""))
+    );
+    setEditSkills([
+      ...(cp.replacementBehaviors || []).map((s: any) => typeof s === "string" ? s : (s?.name || "")),
+      ...(cp.skillAcquisition || []).map((s: any) => typeof s === "string" ? s : (s?.name || "")),
+    ]);
+    setNewBehaviorName(""); setNewBehaviorTopography(""); setNewBehaviorFunction("");
+    setNewIntervention(""); setNewSkill("");
+    setSaveError(""); setProfileSaved(false);
+    setEditingProfile(true);
+  }
+
+  function addBehavior() {
+    if (!newBehaviorName.trim()) return;
+    setEditBehaviors(prev => [...prev, { name: newBehaviorName.trim(), topography: newBehaviorTopography.trim(), function: newBehaviorFunction.trim() }]);
+    setNewBehaviorName(""); setNewBehaviorTopography(""); setNewBehaviorFunction("");
+  }
+
+  function addIntervention() {
+    if (!newIntervention.trim()) return;
+    setEditInterventions(prev => [...prev, newIntervention.trim()]);
+    setNewIntervention("");
+  }
+
+  function addSkill() {
+    if (!newSkill.trim()) return;
+    setEditSkills(prev => [...prev, newSkill.trim()]);
+    setNewSkill("");
+  }
+
+  async function handleSaveProfile() {
+    setSaving(true); setSaveError(""); setProfileSaved(false);
+    const cp = client?.clinical_profile || {};
+    const newProfile = {
+      ...cp,
+      maladaptiveBehaviors: editBehaviors,
+      interventions: editInterventions,
+      replacementBehaviors: editSkills,
+      skillAcquisition: [],
+    };
+    try {
+      const res = await fetch(`/api/bcba/client/${clientId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clinicalProfile: newProfile }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setSaveError(data.error || "Save failed"); return; }
+      setClient((prev: any) => ({ ...prev, clinical_profile: data.client.clinical_profile }));
+      setProfileSaved(true);
+      setEditingProfile(false);
+    } catch {
+      setSaveError("Network error. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) {
     return (
       <main className="min-h-screen" style={{ background: "var(--bg)" }}>
@@ -194,134 +276,285 @@ export default function BCBAClientPage() {
 
         {/* ── Overview Tab ── */}
         {activeTab === "overview" && (
-          <div className="grid grid-cols-[280px_1fr] gap-5">
+          <div>
 
-            {/* Left column */}
-            <div className="space-y-5">
-
-              {/* Clinical Snapshot */}
-              <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
-                <SectionHeader title="Clinical Snapshot" />
-                <div className="space-y-3">
-                  {[
-                    { label: "Diagnosis", value: cp.diagnosis?.join(", ") || "—" },
-                    { label: "Maladaptive Behaviors", value: cp.maladaptiveBehaviors?.length || 0 },
-                    { label: "Approved Interventions", value: cp.interventions?.length || 0 },
-                    { label: "Replacement Behaviors", value: cp.replacementBehaviors?.length || 0 },
-                    { label: "Skill Programs", value: cp.skillAcquisition?.length || 0 },
-                    { label: "Reinforcers", value: cp.reinforcers?.length || 0 },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="flex justify-between items-start gap-4">
-                      <span className="text-[13px]" style={{ color: "var(--text2)" }}>{label}</span>
-                      <span className="text-[13px] font-medium text-right" style={{ color: "var(--text1)" }}>{value}</span>
-                    </div>
-                  ))}
+            {/* Edit mode */}
+            {editingProfile ? (
+              <div className="space-y-5 max-w-[700px]">
+                <div className="flex items-center justify-between">
+                  <p className="text-[15px] font-semibold" style={{ color: "var(--text1)" }}>Edit Clinical Profile</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setEditingProfile(false)}
+                      className="px-4 py-2 rounded-lg text-[13px] font-medium border transition-colors hover:border-gray-400"
+                      style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSaveProfile}
+                      disabled={saving}
+                      className="px-4 py-2 rounded-lg text-[13px] font-semibold text-white disabled:opacity-60 hover:opacity-90 transition-opacity"
+                      style={{ background: "var(--teal)" }}
+                    >
+                      {saving ? "Saving…" : "Save Changes"}
+                    </button>
+                  </div>
                 </div>
-              </div>
+                {saveError && <p className="text-[13px] text-red-500">{saveError}</p>}
 
-              {/* Reinforcers */}
-              <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
-                <SectionHeader title="Reinforcers" />
-                {cp.reinforcers?.length ? (
-                  <div className="mb-3">
-                    <p className="text-[11px] uppercase tracking-wide font-semibold mb-1.5" style={{ color: "var(--text3)" }}>Tangibles</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {cp.reinforcers.map((r: string, i: number) => (
-                        <span key={i} className="text-[12px] px-2.5 py-1 rounded-full" style={{ background: "var(--teal-light)", color: "var(--teal)" }}>{r}</span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-                {cp.homeActivities?.length ? (
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wide font-semibold mb-1.5" style={{ color: "var(--text3)" }}>Activities</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {cp.homeActivities.map((a: string, i: number) => (
-                        <span key={i} className="text-[12px] px-2.5 py-1 rounded-full" style={{ background: "var(--teal-light)", color: "var(--teal)" }}>{a}</span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-                {!cp.reinforcers?.length && !cp.homeActivities?.length && (
-                  <p className="text-[13px]" style={{ color: "var(--text3)" }}>No reinforcers in profile.</p>
-                )}
-              </div>
-
-            </div>
-
-            {/* Right column */}
-            <div className="space-y-5">
-
-              {/* Maladaptive Behaviors */}
-              <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
-                <SectionHeader title="Maladaptive Behaviors" />
-                {!cp.maladaptiveBehaviors?.length ? (
-                  <p className="text-[13px]" style={{ color: "var(--text3)" }}>No behaviors recorded.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {cp.maladaptiveBehaviors.map((b: any, i: number) => {
-                      const name = typeof b === "string" ? b : (b?.name || "");
-                      const topography = typeof b === "object" ? (b?.topography || "") : "";
-                      const fn = typeof b === "object" ? (b?.function || b?.behaviorFunction || "") : "";
-                      return (
-                        <div key={i} className="px-4 py-3 rounded-xl" style={{ background: "#FEF3E2", border: "1px solid #F6AD5580" }}>
-                          <p className="text-[13px] font-semibold" style={{ color: "#92400E" }}>{name}</p>
-                          {topography && (
-                            <p className="text-[12px] mt-0.5" style={{ color: "#B7791F" }}>
-                              <span className="font-medium">Topography:</span> {topography}
-                            </p>
-                          )}
-                          {fn && (
-                            <p className="text-[12px]" style={{ color: "#B7791F" }}>
-                              <span className="font-medium">Function:</span> {fn}
-                            </p>
-                          )}
+                {/* Section 1: Maladaptive Behaviors */}
+                <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
+                  <SectionHeader title="Maladaptive Behaviors" />
+                  <div className="space-y-2 mb-4">
+                    {editBehaviors.length === 0 && (
+                      <p className="text-[13px]" style={{ color: "var(--text3)" }}>No behaviors yet.</p>
+                    )}
+                    {editBehaviors.map((b, i) => (
+                      <div key={i} className="flex items-start gap-2 px-4 py-3 rounded-xl" style={{ background: "#FEF3E2", border: "1px solid #F6AD5580" }}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-semibold" style={{ color: "#92400E" }}>{b.name}</p>
+                          {b.topography && <p className="text-[12px]" style={{ color: "#B7791F" }}>Topography: {b.topography}</p>}
+                          {b.function && <p className="text-[12px]" style={{ color: "#B7791F" }}>Function: {b.function}</p>}
                         </div>
-                      );
-                    })}
+                        <button
+                          onClick={() => setEditBehaviors(prev => prev.filter((_, idx) => idx !== i))}
+                          className="text-[18px] leading-none flex-shrink-0 hover:opacity-60 transition-opacity"
+                          style={{ color: "#B7791F" }}
+                        >×</button>
+                      </div>
+                    ))}
                   </div>
-                )}
-              </div>
+                  <div className="space-y-2 p-3 rounded-lg border border-dashed" style={{ borderColor: "var(--border)" }}>
+                    <p className="text-[11px] uppercase tracking-wide font-semibold mb-1" style={{ color: "var(--text3)" }}>Add Behavior</p>
+                    <input
+                      placeholder="Behavior name (required)"
+                      value={newBehaviorName}
+                      onChange={e => setNewBehaviorName(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-2 text-[13px] focus:outline-none"
+                      style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                    />
+                    <input
+                      placeholder="Topography (optional)"
+                      value={newBehaviorTopography}
+                      onChange={e => setNewBehaviorTopography(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-2 text-[13px] focus:outline-none"
+                      style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                    />
+                    <input
+                      placeholder="Function (optional)"
+                      value={newBehaviorFunction}
+                      onChange={e => setNewBehaviorFunction(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && addBehavior()}
+                      className="w-full border rounded-lg px-3 py-2 text-[13px] focus:outline-none"
+                      style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                    />
+                    <button
+                      onClick={addBehavior}
+                      disabled={!newBehaviorName.trim()}
+                      className="px-4 py-1.5 rounded-lg text-[12px] font-semibold text-white disabled:opacity-40"
+                      style={{ background: "var(--teal)" }}
+                    >
+                      Add Behavior
+                    </button>
+                  </div>
+                </div>
 
-              {/* Approved Interventions */}
-              <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
-                <SectionHeader title="Approved Interventions" />
-                {!cp.interventions?.length ? (
-                  <p className="text-[13px]" style={{ color: "var(--text3)" }}>No interventions in profile.</p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {cp.interventions.map((item: any, i: number) => (
-                      <span
-                        key={i}
-                        className="text-[12px] font-medium px-2.5 py-1 rounded-full"
-                        style={{ background: "var(--teal-light)", color: "var(--teal)" }}
-                      >
-                        {typeof item === "string" ? item : (item?.name || "")}
+                {/* Section 2: Approved Interventions */}
+                <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
+                  <SectionHeader title="Approved Interventions" />
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {editInterventions.length === 0 && (
+                      <p className="text-[13px]" style={{ color: "var(--text3)" }}>No interventions yet.</p>
+                    )}
+                    {editInterventions.map((item, i) => (
+                      <span key={i} className="flex items-center gap-1 text-[12px] font-medium px-2.5 py-1 rounded-full" style={{ background: "var(--teal-light)", color: "var(--teal)" }}>
+                        {item}
+                        <button onClick={() => setEditInterventions(prev => prev.filter((_, idx) => idx !== i))} className="ml-0.5 text-[14px] leading-none hover:opacity-60">×</button>
                       </span>
                     ))}
                   </div>
-                )}
-              </div>
+                  <div className="flex gap-2">
+                    <input
+                      placeholder="Add intervention"
+                      value={newIntervention}
+                      onChange={e => setNewIntervention(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && addIntervention()}
+                      className="flex-1 border rounded-lg px-3 py-2 text-[13px] focus:outline-none"
+                      style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                    />
+                    <button
+                      onClick={addIntervention}
+                      disabled={!newIntervention.trim()}
+                      className="px-4 py-2 rounded-lg text-[12px] font-semibold text-white disabled:opacity-40"
+                      style={{ background: "var(--teal)" }}
+                    >Add</button>
+                  </div>
+                </div>
 
-              {/* Replacement Skills */}
-              {(cp.replacementBehaviors?.length || cp.skillAcquisition?.length) ? (
+                {/* Section 3: Replacement Skills */}
                 <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
                   <SectionHeader title="Replacement Skills &amp; Skill Acquisition" />
-                  <div className="flex flex-wrap gap-2">
-                    {[...(cp.replacementBehaviors || []), ...(cp.skillAcquisition || [])].map((s: any, i: number) => (
-                      <span
-                        key={i}
-                        className="text-[12px] font-medium px-2.5 py-1 rounded-full"
-                        style={{ background: "#EFF6FF", color: "#1D4ED8" }}
-                      >
-                        {typeof s === "string" ? s : (s?.name || "")}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {editSkills.length === 0 && (
+                      <p className="text-[13px]" style={{ color: "var(--text3)" }}>No skills yet.</p>
+                    )}
+                    {editSkills.map((s, i) => (
+                      <span key={i} className="flex items-center gap-1 text-[12px] font-medium px-2.5 py-1 rounded-full" style={{ background: "#EFF6FF", color: "#1D4ED8" }}>
+                        {s}
+                        <button onClick={() => setEditSkills(prev => prev.filter((_, idx) => idx !== i))} className="ml-0.5 text-[14px] leading-none hover:opacity-60">×</button>
                       </span>
                     ))}
                   </div>
+                  <div className="flex gap-2">
+                    <input
+                      placeholder="Add skill"
+                      value={newSkill}
+                      onChange={e => setNewSkill(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && addSkill()}
+                      className="flex-1 border rounded-lg px-3 py-2 text-[13px] focus:outline-none"
+                      style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                    />
+                    <button
+                      onClick={addSkill}
+                      disabled={!newSkill.trim()}
+                      className="px-4 py-2 rounded-lg text-[12px] font-semibold text-white disabled:opacity-40"
+                      style={{ background: "var(--teal)" }}
+                    >Add</button>
+                  </div>
                 </div>
-              ) : null}
+              </div>
+            ) : (
 
-            </div>
+              /* Read mode */
+              <div>
+                <div className="flex justify-end mb-4">
+                  {profileSaved && (
+                    <span className="mr-3 text-[13px] font-medium" style={{ color: "#16A34A" }}>Saved ✓</span>
+                  )}
+                  <button
+                    onClick={enterEditMode}
+                    className="px-4 py-2 rounded-lg text-[13px] font-semibold text-white hover:opacity-90 transition-opacity"
+                    style={{ background: "var(--teal)" }}
+                  >
+                    Edit Clinical Profile
+                  </button>
+                </div>
+                <div className="grid grid-cols-[280px_1fr] gap-5">
+
+                  {/* Left column */}
+                  <div className="space-y-5">
+
+                    {/* Clinical Snapshot */}
+                    <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
+                      <SectionHeader title="Clinical Snapshot" />
+                      <div className="space-y-3">
+                        {[
+                          { label: "Diagnosis", value: cp.diagnosis?.join(", ") || "—" },
+                          { label: "Maladaptive Behaviors", value: cp.maladaptiveBehaviors?.length || 0 },
+                          { label: "Approved Interventions", value: cp.interventions?.length || 0 },
+                          { label: "Replacement Behaviors", value: (cp.replacementBehaviors?.length || 0) + (cp.skillAcquisition?.length || 0) },
+                          { label: "Reinforcers", value: cp.reinforcers?.length || 0 },
+                        ].map(({ label, value }) => (
+                          <div key={label} className="flex justify-between items-start gap-4">
+                            <span className="text-[13px]" style={{ color: "var(--text2)" }}>{label}</span>
+                            <span className="text-[13px] font-medium text-right" style={{ color: "var(--text1)" }}>{value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Reinforcers */}
+                    <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
+                      <SectionHeader title="Reinforcers" />
+                      {cp.reinforcers?.length ? (
+                        <div className="mb-3">
+                          <p className="text-[11px] uppercase tracking-wide font-semibold mb-1.5" style={{ color: "var(--text3)" }}>Tangibles</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {cp.reinforcers.map((r: string, i: number) => (
+                              <span key={i} className="text-[12px] px-2.5 py-1 rounded-full" style={{ background: "var(--teal-light)", color: "var(--teal)" }}>{r}</span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {cp.homeActivities?.length ? (
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide font-semibold mb-1.5" style={{ color: "var(--text3)" }}>Activities</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {cp.homeActivities.map((a: string, i: number) => (
+                              <span key={i} className="text-[12px] px-2.5 py-1 rounded-full" style={{ background: "var(--teal-light)", color: "var(--teal)" }}>{a}</span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {!cp.reinforcers?.length && !cp.homeActivities?.length && (
+                        <p className="text-[13px]" style={{ color: "var(--text3)" }}>No reinforcers in profile.</p>
+                      )}
+                    </div>
+
+                  </div>
+
+                  {/* Right column */}
+                  <div className="space-y-5">
+
+                    {/* Maladaptive Behaviors */}
+                    <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
+                      <SectionHeader title="Maladaptive Behaviors" />
+                      {!cp.maladaptiveBehaviors?.length ? (
+                        <p className="text-[13px]" style={{ color: "var(--text3)" }}>No behaviors recorded.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {cp.maladaptiveBehaviors.map((b: any, i: number) => {
+                            const name = typeof b === "string" ? b : (b?.name || "");
+                            const topography = typeof b === "object" ? (b?.topography || "") : "";
+                            const fn = typeof b === "object" ? (b?.function || b?.behaviorFunction || "") : "";
+                            return (
+                              <div key={i} className="px-4 py-3 rounded-xl" style={{ background: "#FEF3E2", border: "1px solid #F6AD5580" }}>
+                                <p className="text-[13px] font-semibold" style={{ color: "#92400E" }}>{name}</p>
+                                {topography && <p className="text-[12px] mt-0.5" style={{ color: "#B7791F" }}><span className="font-medium">Topography:</span> {topography}</p>}
+                                {fn && <p className="text-[12px]" style={{ color: "#B7791F" }}><span className="font-medium">Function:</span> {fn}</p>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Approved Interventions */}
+                    <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
+                      <SectionHeader title="Approved Interventions" />
+                      {!cp.interventions?.length ? (
+                        <p className="text-[13px]" style={{ color: "var(--text3)" }}>No interventions in profile.</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {cp.interventions.map((item: any, i: number) => (
+                            <span key={i} className="text-[12px] font-medium px-2.5 py-1 rounded-full" style={{ background: "var(--teal-light)", color: "var(--teal)" }}>
+                              {typeof item === "string" ? item : (item?.name || "")}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Replacement Skills */}
+                    {(cp.replacementBehaviors?.length || cp.skillAcquisition?.length) ? (
+                      <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
+                        <SectionHeader title="Replacement Skills &amp; Skill Acquisition" />
+                        <div className="flex flex-wrap gap-2">
+                          {[...(cp.replacementBehaviors || []), ...(cp.skillAcquisition || [])].map((s: any, i: number) => (
+                            <span key={i} className="text-[12px] font-medium px-2.5 py-1 rounded-full" style={{ background: "#EFF6FF", color: "#1D4ED8" }}>
+                              {typeof s === "string" ? s : (s?.name || "")}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
         )}
 

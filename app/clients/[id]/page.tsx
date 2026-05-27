@@ -600,6 +600,8 @@ export default function ClientProfilePage() {
 
         {/* ── Overview Tab ── */}
         {activeTab === "overview" && (
+          <div>
+          <p className="text-[12px] mb-4" style={{ color: "var(--text3)" }}>Clinical profile managed by your BCBA</p>
           <div className="grid grid-cols-[280px_1fr] gap-5">
             {/* Left column */}
             <div className="space-y-5">
@@ -681,6 +683,7 @@ export default function ClientProfilePage() {
                 </div>
               </div>
             </div>
+          </div>
           </div>
         )}
 
