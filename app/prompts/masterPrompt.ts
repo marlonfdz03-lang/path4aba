@@ -242,6 +242,53 @@ The note must read as STRUCTURED CLINICAL STORYTELLING.
 Not: behavior → intervention → solved (AI pattern)
 But: activity context → behavior in context → clinical response → realistic outcome → natural transition
 
+8. INTERVENTION NAME NATURALIZATION
+Do NOT always write the full intervention name. Vary between formal and natural shorthand:
+
+ACCEPTABLE VARIATIONS:
+- "Differential Reinforcement of Alternative Behavior (DRA)" → sometimes just "DRA"
+- "Functional Communication Training (FCT)" → sometimes "FCT" or "functional communication procedures"
+- "Premack Principle" → sometimes "Premack strategy" or "high-probability sequencing"
+- "Noncontingent Reinforcement (NCR)" → sometimes "NCR" or "noncontingent access"
+- "Behavior Momentum" → sometimes "behavioral momentum procedures" or "high-probability request sequence"
+
+RULE: Use the full name for the FIRST mention. After that, vary naturally.
+Full formal name = at most 2 times per note. Rest should be natural shorthand.
+
+9. REINFORCER REALISM
+Do NOT list 3-4 different edible reinforcers in one session.
+Real sessions typically use 1-2 primary reinforcers consistently.
+CORRECT: Use the same reinforcer 2-3 times across different ABCs — that's realistic. Vary the DESCRIPTOR not the item.
+INCORRECT: strawberries in ABC1, chocolate in ABC2, ice cream in ABC3 — too many different items, sounds AI-generated trying to seem varied.
+
+10. DEPTH VARIATION — STRICT RULE
+Apply this exact distribution across the 5 ABCs:
+- ABC 1: Full detail — activity context, full intervention HOW, specific outcome
+- ABC 2: Full detail — activity context, full intervention HOW, specific outcome
+- ABC 3: Moderate — activity context, partial HOW, realistic outcome
+- ABC 4: Brief — shorter setup, intervention named with minimal HOW, brief outcome
+- ABC 5: Full detail — activity context, full intervention HOW, closing realistic outcome
+
+ABC 4 being brief is intentional — it mirrors how real RBTs write routine events more concisely than complex ones.
+
+11. NATURAL REPETITION IS ALLOWED
+Real RBTs occasionally use similar phrasing across a note.
+It is ACCEPTABLE to use "verbal prompting" twice if it happened twice.
+It is ACCEPTABLE to reference the same activity twice if it recurred.
+Do NOT artificially diversify every single word — that over-optimization is an AI giveaway.
+
+12. OCCASIONAL SIMPLER PHRASING
+Not every sentence needs to be maximally clinical.
+Occasionally use simpler but still professional phrasing:
+ACCEPTABLE: "the client completed the task with minimal prompting"
+ALSO ACCEPTABLE: "the client required two verbal prompts before initiating"
+Both are fine. Mix them. Do not always choose the most sophisticated option.
+
+13. BEHAVIOR DENSITY CONTROL
+A maximum of 5 DIFFERENT behavior topographies per note (one per ABC).
+Do NOT pack multiple behaviors into one ABC.
+Depth over breadth — one well-documented behavioral event is stronger than three briefly mentioned ones.
+
 ═══════════════════════════════════════
 QUALITY CHECK — BEFORE OUTPUTTING
 ═══════════════════════════════════════
