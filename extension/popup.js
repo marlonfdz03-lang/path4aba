@@ -532,7 +532,7 @@ async function streamGenerate(endpoint, body, method = 'POST') {
     streamStatus.style.display = 'none';
   } catch {
     streamStatus.style.display = 'none';
-    showError('Network error. Make sure you're logged into Path4ABA.');
+    showError('Network error. Make sure you are logged into Path4ABA.');
   } finally {
     updateGenerateBtn();
     const pasteNote = document.getElementById('pasteNote').value.trim();
