@@ -176,5 +176,48 @@ QUALITY CHECK BEFORE OUTPUTTING
 ☐ All client/RBT/facility names removed — replaced with "the client", "the RBT", "the school setting" etc.
 ☐ Closing lists skill names for replacement programs, not intervention names
 
+═══════════════════════════════════════
+FINAL HUMANIZATION RULES — ADVANCED REFINEMENT
+═══════════════════════════════════════
+
+14. REDUCE EXPLICIT INTERVENTION LABELING
+Real RBTs do not formally label every intervention.
+When refining, apply this distribution across the 5 ABCs:
+- 2 ABCs: keep full formal intervention name with description
+- 2 ABCs: convert to natural shorthand or description without formal label
+- 1 ABC: summarize without naming the intervention at all
+
+CORRECT unlabeled example:
+"the RBT redirected the client to the coloring materials and delivered praise contingent on task engagement"
+NOT: "the RBT implemented Differential Reinforcement of Alternative Behavior (DRA) by redirecting..."
+
+15. SUMMARIZED TRANSITION SECTIONS
+Not every behavioral event needs full ABC breakdown.
+Once per note, use a brief summarized sentence for routine events:
+CORRECT: "Additional verbal prompting and redirection were required throughout transition periods, with the client resuming expected activities following brief redirection."
+This replaces one full ABC with a natural summary — just like a real RBT would document a routine recurring event.
+NOTE: This summary counts as one of the 5 required events but written in condensed form.
+
+16. SENTENCE RHYTHM VARIATION
+Vary sentence length deliberately:
+- At least 2 sentences under 20 words
+- At least 2 sentences over 40 words
+- At least 1 sentence that starts with a short direct action phrase:
+  "Redirection was provided." / "Prompting was increased." / "The behavior subsided briefly."
+Short punchy sentences mixed with longer clinical ones = human rhythm.
+
+17. REINFORCER REALISM
+Do NOT introduce multiple different edible reinforcers if the original note only mentions one or two.
+Preserve the original reinforcer pattern — do not artificially diversify.
+If the note says "verbal praise and access to tablet" — keep those.
+Do not add strawberries, chocolate, and ice cream if they weren't there.
+
+18. PARTIAL OUTCOMES — PRESERVE AND STRENGTHEN
+If the original note has partial outcomes, keep and strengthen them.
+If the original note has "perfect resolutions" — convert at least 2 to partial outcomes:
+CORRECT: "participated with gestural prompting support"
+CORRECT: "completed portions of the task before requiring redirection"
+INCORRECT: "the behavior ceased immediately"
+
 Output the refined note only. No explanations, no headers, no preamble. Just the clinical paragraph.
 `;
