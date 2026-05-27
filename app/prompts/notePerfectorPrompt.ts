@@ -58,6 +58,15 @@ NAMES (HIPAA COMPLIANCE):
 - Replace every client proper name with "the client" and every therapist/RBT name with "the RBT".
 - School names, facility names, and location names must be replaced with generic descriptors: "the school setting", "the home setting", "the clinic setting".
 
+BANNED WORDS FOR CLIENT BEHAVIOR:
+- NEVER use "chose", "decided", or "selected" to describe what the client did. These imply internal mental states and are not observable behavior.
+  INCORRECT: "the client chose to walk with the RBT" → CORRECT: "the client walked with the RBT"
+  INCORRECT: "the client decided to comply" → CORRECT: "the client picked up materials and began the task"
+- NEVER use mentalistic language: wanted, felt, refused because, was frustrated, was upset, was happy, enjoyed, was motivated, was angry. Describe the physical action instead.
+  INCORRECT: "the client refused to comply" → CORRECT: "the client turned away from materials and did not initiate the task"
+  INCORRECT: "the client was frustrated" → CORRECT: "the client vocalized loudly and pushed materials off the table"
+If you are about to write "chose", "decided", "refused", or any mental state word — STOP. Describe the physical action instead.
+
 3. TOPOGRAPHY FIXES:
 - Never add a label before the topography
 - INCORRECT: "engaged in tantrum behavior by screaming" → CORRECT: "screamed and dropped to the floor"
@@ -68,10 +77,25 @@ NAMES (HIPAA COMPLIANCE):
   INCORRECT: "did not remain in the designated area"
   CORRECT options: "walked toward the hallway without permission" / "moved away from the activity area and approached the door" / "exited the classroom and walked into the hallway"
 
+NO BEHAVIOR LABELS BEFORE TOPOGRAPHY:
+- The topography IS the behavior — no category label is needed before it.
+- INCORRECT: "engaged in tantrum behavior by screaming" → CORRECT: "screamed and dropped to the floor"
+- INCORRECT: "engaged in escape behavior by running" → CORRECT: "ran toward the exit without permission"
+- INCORRECT: "exhibited off-task behavior by gazing around" → CORRECT: "gazed around the room and handled objects unrelated to the task"
+- INCORRECT: "displayed aggression by hitting" → CORRECT: "struck the table surface with an open hand"
+Never prefix observable behavior with a category label ("engaged in X behavior by...", "exhibited X", "displayed X").
+
 4. INTERVENTION FIXES:
 - Every behavior must have an intervention with HOW it was implemented
 - INCORRECT: "RBT implemented DRA" → CORRECT: "RBT implemented DRA by reinforcing [specific alternative behavior] with [specific reinforcer]"
 - INCORRECT: "client was redirected" → CORRECT: "RBT implemented Redirection by [specific action]"
+- INTERVENTION HOW SPECIFICITY: NEVER name an intervention without describing exactly how it was implemented.
+  INCORRECT: "the RBT implemented DRA" — does not name the alternative behavior or reinforcer
+  INCORRECT: "the RBT used Behavior Momentum" — does not list the high-probability requests used
+  INCORRECT: "the RBT implemented Environmental Modification" — does not describe what was changed
+  CORRECT DRA: "the RBT implemented DRA by delivering verbal praise and access to (tablet) immediately contingent on appropriate task engagement with materials"
+  CORRECT Behavior Momentum: "the RBT implemented Behavior Momentum by presenting simple high-probability requests — handing materials to the RBT, clapping hands, and standing up — before presenting the transition directive"
+  CORRECT Environmental Modification: "the RBT implemented Environmental Modification by adjusting the seating arrangement to reduce proximity to distractors and providing a visual schedule to structure the activity sequence"
 - DRA must name the specific alternative behavior reinforced
 - Behavior Momentum must include examples of high-probability requests
 - Environmental Modification must include two specific changes made
@@ -107,6 +131,10 @@ NAMES (HIPAA COMPLIANCE):
 - Never say "preferred item" — use the actual item name if mentioned
 - Never list "behavior-specific praise" AND "verbal praise" together
 - Rotate descriptors: "behavior-specific praise", "social reinforcement", "positive verbal feedback"
+- REINFORCER SPECIFICITY: NEVER say "preferred edible", "preferred item", or "tangible reinforcer" — these are audit red flags.
+  Use the actual item name from the original note or the client profile context provided.
+  CORRECT: "small portion of strawberries" / "access to (Pokémon cards)" / "access to (tablet) for 3 minutes"
+  INCORRECT: "preferred edible" / "preferred item" / "tangible reinforcer"
 
 8. REPLACEMENT BEHAVIOR HIGHLIGHT:
 - At least one ABC must show replacement behavior displacing maladaptive behavior
