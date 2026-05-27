@@ -115,11 +115,13 @@ function NoteOutput({
   onChange,
   onCopy,
   onSave,
+  saved,
 }: {
   note: string;
   onChange: (v: string) => void;
   onCopy: () => void;
   onSave?: () => void;
+  saved?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
@@ -143,9 +145,9 @@ function NoteOutput({
             <button
               onClick={onSave}
               className="px-3 py-1.5 rounded-lg text-[13px] font-medium text-white transition-opacity hover:opacity-90"
-              style={{ background: "var(--teal)" }}
+              style={{ background: saved ? "#16A34A" : "var(--teal)" }}
             >
-              Save Note
+              {saved ? "Saved ✓" : "Save Note"}
             </button>
           )}
         </div>
@@ -205,6 +207,7 @@ export default function ClientProfilePage() {
   const [perfectStatus, setPerfectStatus] = useState("");
   const [perfectedNote, setPerfectedNote] = useState("");
   const [perfectSimilarityWarning, setPerfectSimilarityWarning] = useState(false);
+  const [refinedNoteSaved, setRefinedNoteSaved] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -446,6 +449,30 @@ export default function ClientProfilePage() {
     } finally {
       setPerfectingNote(false);
     }
+  }
+
+  async function handleSaveRefinedNote() {
+    if (!perfectedNote.trim()) return;
+    const today = new Date();
+    const noteObject = {
+      id: crypto.randomUUID(),
+      clientId: client.id,
+      date: today.toLocaleDateString(),
+      note: perfectedNote,
+    };
+    saveNote(noteObject);
+    setDailyNotes(prev => [noteObject, ...prev]);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from("session_notes").insert({
+        client_id: client.id,
+        user_id: user.id,
+        note_text: perfectedNote,
+        session_date: today.toISOString().split("T")[0],
+      });
+    }
+    setRefinedNoteSaved(true);
+    setTimeout(() => setRefinedNoteSaved(false), 2000);
   }
 
   function handleDeleteNote(noteId: string) {
@@ -1011,6 +1038,8 @@ export default function ClientProfilePage() {
                   note={perfectedNote}
                   onChange={setPerfectedNote}
                   onCopy={() => navigator.clipboard.writeText(perfectedNote)}
+                  onSave={handleSaveRefinedNote}
+                  saved={refinedNoteSaved}
                 />
               )}
             </div>
