@@ -408,10 +408,32 @@ export default function SupervisionNotePage() {
           },
         }),
       });
-      const data = await res.json();
-      if (!res.ok) { setGenError(data.error || "Generation failed."); return; }
-      setGeneratedNote(data.note || "");
-      setSimilarityWarning(!!data.similarityWarning);
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        setGenError(data.error || "Generation failed.");
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+      outer: while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        if (chunk.includes("__META__")) {
+          const parts = chunk.split("__META__");
+          if (parts[0]) { fullText += parts[0]; setGeneratedNote(fullText); }
+          try { const meta = JSON.parse(parts[1]); if (meta.error) { setGenError(meta.error); return; } setSimilarityWarning(!!meta.similarityWarning); } catch {}
+          break outer;
+        }
+        if (chunk.includes("__REGEN__")) {
+          fullText = "";
+          setGeneratedNote("");
+          continue;
+        }
+        fullText += chunk;
+        setGeneratedNote(fullText);
+      }
     } catch {
       setGenError("Network error. Please try again.");
     } finally {

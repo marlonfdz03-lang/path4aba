@@ -336,16 +336,39 @@ export default function ClientProfilePage() {
 
     try {
       const res = await fetch("/api/generate-note", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const data = await res.json();
-      if (!res.ok) { setStatus(data?.details || data?.error || "Note generation failed."); return; }
-      const generatedText = data.note || "";
-      setGeneratedNote(generatedText);
-      setSimilarityWarning(!!data.similarityWarning);
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        setStatus(data?.details || data?.error || "Note generation failed.");
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+      outer: while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        if (chunk.includes("__META__")) {
+          const parts = chunk.split("__META__");
+          if (parts[0]) { fullText += parts[0]; setGeneratedNote(fullText); }
+          try { const meta = JSON.parse(parts[1]); if (meta.error) { setStatus(meta.error); return; } setSimilarityWarning(!!meta.similarityWarning); } catch {}
+          break outer;
+        }
+        if (chunk.includes("__REGEN__")) {
+          fullText = "";
+          setGeneratedNote("");
+          setStatus("Regenerating for uniqueness…");
+          continue;
+        }
+        fullText += chunk;
+        setGeneratedNote(fullText);
+      }
       setStatus("");
-      // Backup to localStorage so notes survive even if Supabase write failed
-      const backupNote = { id: crypto.randomUUID(), clientId: client.id, date: date || new Date().toLocaleDateString(), note: generatedText };
-      saveNote(backupNote);
-      setDailyNotes(prev => [backupNote, ...prev]);
+      if (fullText.trim()) {
+        const backupNote = { id: crypto.randomUUID(), clientId: client.id, date: date || new Date().toLocaleDateString(), note: fullText };
+        saveNote(backupNote);
+        setDailyNotes(prev => [backupNote, ...prev]);
+      }
     } catch {
       setStatus("Network error. Please try again.");
     } finally {
@@ -381,9 +404,27 @@ export default function ClientProfilePage() {
 
     try {
       const res = await fetch("/api/refine-note", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const data = await res.json();
-      if (!res.ok) { setPerfectStatus(data?.details || data?.error || "Note perfection failed."); return; }
-      setPerfectedNote(data.note || "");
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        setPerfectStatus(data?.error || "Note perfection failed.");
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        if (chunk.includes("__META__")) {
+          const parts = chunk.split("__META__");
+          if (parts[0]) { fullText += parts[0]; setPerfectedNote(fullText); }
+          try { const meta = JSON.parse(parts[1]); if (meta.error) { setPerfectStatus(meta.error); return; } } catch {}
+          break;
+        }
+        fullText += chunk;
+        setPerfectedNote(fullText);
+      }
       setPerfectStatus("");
     } catch {
       setPerfectStatus("Network error. Please try again.");

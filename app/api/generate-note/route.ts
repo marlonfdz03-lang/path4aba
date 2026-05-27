@@ -31,20 +31,33 @@ export async function POST(req: NextRequest) {
     );
     const { data: { user } } = await authClient.auth.getUser();
 
-    const result = await generateSmartNote(input, user?.id);
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          const result = await generateSmartNote(input, user?.id, (text) => {
+            controller.enqueue(encoder.encode(text));
+          });
+          controller.enqueue(encoder.encode(
+            `\n__META__${JSON.stringify({ similarityWarning: result.similarityWarning || false })}`
+          ));
+        } catch (e: any) {
+          controller.enqueue(encoder.encode(
+            `\n__META__${JSON.stringify({ error: e.message || 'Generation failed' })}`
+          ));
+        } finally {
+          controller.close();
+        }
+      }
+    });
 
-    return NextResponse.json({
-      ...result,
-      ...(result.similarityWarning ? { similarityWarning: true } : {}),
+    return new Response(readable, {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     });
   } catch (error: any) {
     console.error("Note generation error:", error);
-
     return NextResponse.json(
-      {
-        error: "Note generation failed",
-        details: error?.message || String(error),
-      },
+      { error: "Note generation failed", details: error?.message || String(error) },
       { status: 500 }
     );
   }

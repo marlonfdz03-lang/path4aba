@@ -22,15 +22,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const response = await openai.chat.completions.create({
+    const encoder = new TextEncoder();
+    const openaiStream = await openai.chat.completions.create({
       model: 'gpt-4o',
       temperature: 0.3,
       max_tokens: 1500,
+      stream: true,
       messages: [
-        {
-          role: 'system',
-          content: NOTE_PERFECTOR_PROMPT
-        },
+        { role: 'system', content: NOTE_PERFECTOR_PROMPT },
         {
           role: 'user',
           content: `Refine this ABA session note. Preserve all clinical facts. Apply all quality rules.
@@ -46,9 +45,25 @@ ${originalNote}`
       ]
     });
 
-    const note = response.choices[0].message.content || '';
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of openaiStream) {
+            const delta = chunk.choices[0]?.delta?.content || '';
+            if (delta) controller.enqueue(encoder.encode(delta));
+          }
+          controller.enqueue(encoder.encode('\n__META__{}'));
+        } catch (e) {
+          controller.enqueue(encoder.encode(`\n__META__${JSON.stringify({ error: 'Stream error' })}`));
+        } finally {
+          controller.close();
+        }
+      }
+    });
 
-    return NextResponse.json({ note });
+    return new Response(readable, {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
 
   } catch (error) {
     console.error('Note refinement error:', error);

@@ -85,7 +85,7 @@ function buildContactTypeSection(contactType: string): string {
   return ''
 }
 
-export async function generateSupervisionNote(input: SupervisionNoteInput): Promise<GeneratedSupervisionNote> {
+export async function generateSupervisionNote(input: SupervisionNoteInput, onChunk?: (text: string) => void): Promise<GeneratedSupervisionNote> {
   // Step 1: Resolve client profile
   let resolvedProfile: NonNullable<SupervisionNoteInput['clientProfile']>
 
@@ -142,6 +142,24 @@ export async function generateSupervisionNote(input: SupervisionNoteInput): Prom
     `no client identifying information.`
 
   async function callOpenAI(sysContent: string): Promise<string> {
+    if (onChunk) {
+      const stream = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        temperature: 0.4,
+        max_tokens: 1000,
+        stream: true,
+        messages: [
+          { role: 'system', content: sysContent },
+          { role: 'user', content: userPrompt },
+        ],
+      })
+      let text = ''
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta?.content || ''
+        if (delta) { text += delta; onChunk(delta) }
+      }
+      return text
+    }
     const resp = await openai.chat.completions.create({
       model: 'gpt-4o',
       temperature: 0.4,
@@ -161,6 +179,7 @@ export async function generateSupervisionNote(input: SupervisionNoteInput): Prom
   if (previousTexts.length > 0) {
     const tooSimilar = previousTexts.some(prev => calculateSimilarity(note, prev) > 0.70)
     if (tooSimilar) {
+      if (onChunk) onChunk('\n__REGEN__\n')
       const variationInstruction =
         `\n\nIMPORTANT: This supervision note is too similar to a previous one for this client. ` +
         `Use completely different sentence starters, vary the clinical observations, feedback examples, ` +

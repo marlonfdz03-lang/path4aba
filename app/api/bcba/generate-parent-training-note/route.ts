@@ -54,39 +54,53 @@ export async function POST(request: Request) {
 
   if (!connection) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  let result: Awaited<ReturnType<typeof generateParentTrainingNote>>
-  try {
-    result = await generateParentTrainingNote({
-      sessionInfo: {
-        date: sessionDate,
-        timeRange: timeRange || '',
-        location: location || '',
-        bcbaName: bcbaName || '',
-        caregiverName,
-        caregiverRelation: caregiverRelation || '',
-      },
-      clientId,
-      sessionDetails,
-    })
-  } catch (e: any) {
-    console.error('[generate-parent-training-note]', e)
-    return NextResponse.json({ error: e.message || 'Generation failed' }, { status: 500 })
+  const parentTrainingInput = {
+    sessionInfo: {
+      date: sessionDate,
+      timeRange: timeRange || '',
+      location: location || '',
+      bcbaName: bcbaName || '',
+      caregiverName,
+      caregiverRelation: caregiverRelation || '',
+    },
+    clientId,
+    sessionDetails,
   }
 
-  // Save to parent_training_notes
-  const { error: saveError } = await supabaseServer.from('parent_training_notes').insert({
-    client_id: clientId,
-    bcba_id: user.id,
-    session_date: sessionDate,
-    caregiver_name: caregiverName,
-    caregiver_relation: caregiverRelation || null,
-    note_text: result.note,
-    status: 'draft',
+  const encoder = new TextEncoder()
+  const readable = new ReadableStream({
+    async start(controller) {
+      try {
+        const result = await generateParentTrainingNote(parentTrainingInput, (text) => {
+          controller.enqueue(encoder.encode(text))
+        })
+
+        const { error: saveError } = await supabaseServer.from('parent_training_notes').insert({
+          client_id: clientId,
+          bcba_id: user.id,
+          session_date: sessionDate,
+          caregiver_name: caregiverName,
+          caregiver_relation: caregiverRelation || null,
+          note_text: result.note,
+          status: 'draft',
+        })
+        if (saveError) console.error('[generate-parent-training-note] save error:', saveError)
+
+        controller.enqueue(encoder.encode(
+          `\n__META__${JSON.stringify({ similarityWarning: result.similarityWarning || false })}`
+        ))
+      } catch (e: any) {
+        console.error('[generate-parent-training-note]', e)
+        controller.enqueue(encoder.encode(
+          `\n__META__${JSON.stringify({ error: e.message || 'Generation failed' })}`
+        ))
+      } finally {
+        controller.close()
+      }
+    }
   })
 
-  if (saveError) {
-    console.error('[generate-parent-training-note] save error:', saveError)
-  }
-
-  return NextResponse.json({ note: result.note, similarityWarning: result.similarityWarning || undefined })
+  return new Response(readable, {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+  })
 }

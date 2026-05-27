@@ -130,7 +130,7 @@ function buildContextualFactors(input: SessionInput): string {
   );
 }
 
-export async function generateSmartNote(input: SessionInput, rbtId?: string): Promise<GeneratedNote> {
+export async function generateSmartNote(input: SessionInput, rbtId?: string, onChunk?: (text: string) => void): Promise<GeneratedNote> {
   // Step 1: Get client profile — use provided profile or fetch from Supabase
   let resolvedProfile: any;
 
@@ -240,6 +240,24 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string): Pr
   const userPrompt = `Generate a clinical ABA session note using this session data:\n\n${JSON.stringify(sessionContext, null, 2)}\n\nRemember: ONE continuous paragraph, EXACTLY 5 ABCs, no mentalistic language, no prohibited interventions, all activities in parentheses format, every behavior must have an intervention.`;
 
   async function callOpenAI(systemContent: string): Promise<string> {
+    if (onChunk) {
+      const stream = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        temperature: 0.4,
+        max_tokens: 1500,
+        stream: true,
+        messages: [
+          { role: 'system', content: systemContent },
+          { role: 'user', content: userPrompt }
+        ]
+      });
+      let text = '';
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta?.content || '';
+        if (delta) { text += delta; onChunk(delta); }
+      }
+      return text;
+    }
     const resp = await openai.chat.completions.create({
       model: 'gpt-4o',
       temperature: 0.4,
@@ -259,6 +277,7 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string): Pr
   if (previousTexts.length > 0) {
     const tooSimilar = previousTexts.some(prev => calculateSimilarity(note, prev) > 0.70);
     if (tooSimilar) {
+      if (onChunk) onChunk('\n__REGEN__\n');
       const variationInstruction = `\n\nIMPORTANT: This note is too similar to a previous session note. You must vary the sentence starters, intervention descriptions, behavior topographies used, and narrative structure significantly. Use completely different ABC sequences and different order of events. The note must read as a distinctly different session.`;
       note = await callOpenAI(MASTER_RBT_NOTE_PROMPT + contextualFactors + variationInstruction);
 

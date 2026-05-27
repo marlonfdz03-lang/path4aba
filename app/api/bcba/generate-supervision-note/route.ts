@@ -51,39 +51,53 @@ export async function POST(request: Request) {
 
   if (!connection) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  let result: Awaited<ReturnType<typeof generateSupervisionNote>>
-  try {
-    result = await generateSupervisionNote({
-      sessionInfo: {
-        date: sessionDate,
-        timeRange: timeRange || '',
-        location: location || '',
-        supervisorName: supervisorName || '',
-        rbtName: rbtName || '',
-        contactType,
-      },
-      clientId,
-      supervisionDetails,
-    })
-  } catch (e: any) {
-    console.error('[generate-supervision-note]', e)
-    return NextResponse.json({ error: e.message || 'Generation failed' }, { status: 500 })
+  const supervisionInput = {
+    sessionInfo: {
+      date: sessionDate,
+      timeRange: timeRange || '',
+      location: location || '',
+      supervisorName: supervisorName || '',
+      rbtName: rbtName || '',
+      contactType,
+    },
+    clientId,
+    supervisionDetails,
   }
 
-  // Save to supervision_notes
-  const { error: saveError } = await supabaseServer.from('supervision_notes').insert({
-    client_id: clientId,
-    bcba_id: user.id,
-    rbt_id: connection.rbt_id,
-    session_date: sessionDate,
-    supervision_type: contactType,
-    note_text: result.note,
-    status: 'draft',
+  const encoder = new TextEncoder()
+  const readable = new ReadableStream({
+    async start(controller) {
+      try {
+        const result = await generateSupervisionNote(supervisionInput, (text) => {
+          controller.enqueue(encoder.encode(text))
+        })
+
+        const { error: saveError } = await supabaseServer.from('supervision_notes').insert({
+          client_id: clientId,
+          bcba_id: user.id,
+          rbt_id: connection.rbt_id,
+          session_date: sessionDate,
+          supervision_type: contactType,
+          note_text: result.note,
+          status: 'draft',
+        })
+        if (saveError) console.error('[generate-supervision-note] save error:', saveError)
+
+        controller.enqueue(encoder.encode(
+          `\n__META__${JSON.stringify({ similarityWarning: result.similarityWarning || false })}`
+        ))
+      } catch (e: any) {
+        console.error('[generate-supervision-note]', e)
+        controller.enqueue(encoder.encode(
+          `\n__META__${JSON.stringify({ error: e.message || 'Generation failed' })}`
+        ))
+      } finally {
+        controller.close()
+      }
+    }
   })
 
-  if (saveError) {
-    console.error('[generate-supervision-note] save error:', saveError)
-  }
-
-  return NextResponse.json({ note: result.note, similarityWarning: result.similarityWarning || undefined })
+  return new Response(readable, {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+  })
 }
