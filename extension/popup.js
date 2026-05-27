@@ -19,11 +19,18 @@ let activeTab = 'generate';
 
 // ── API helper ─────────────────────────────
 async function api(path, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
+  // Don't send Content-Type on GET/HEAD — it triggers an unnecessary CORS preflight.
+  // POST/PATCH requests that send a body still need it.
+  const baseHeaders = method === 'GET' || method === 'HEAD'
+    ? {}
+    : { 'Content-Type': 'application/json' };
+
   return fetch(`${BASE}${path}`, {
     credentials: 'include',
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      ...baseHeaders,
       ...(options.headers || {}),
     },
   });

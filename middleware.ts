@@ -21,26 +21,29 @@ export async function middleware(request: NextRequest) {
   const origin = request.headers.get('origin') ?? ''
   const isExtension = origin.startsWith('chrome-extension://') || origin.startsWith('moz-extension://')
 
-  // CORS preflight for browser extension requests
-  if (isExtension && request.method === 'OPTIONS') {
+  // Handle all OPTIONS preflight requests to /api from any origin (incl. extensions)
+  if (pathname.startsWith('/api') && request.method === 'OPTIONS') {
     return new NextResponse(null, {
       status: 204,
       headers: {
-        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Origin': isExtension ? origin : '*',
         'Access-Control-Allow-Credentials': 'true',
-        'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
         'Access-Control-Max-Age': '86400',
+        'Vary': 'Origin',
       },
     })
   }
 
-  // Pass API routes through; add CORS header for extension if needed
+  // Pass API routes through; add dynamic Access-Control-Allow-Origin for extensions.
+  // Static CORS headers (methods, allowed-headers, Vary) come from next.config.ts headers().
   if (pathname.startsWith('/api')) {
     const res = NextResponse.next({ request: { headers: request.headers } })
     if (isExtension) {
       res.headers.set('Access-Control-Allow-Origin', origin)
       res.headers.set('Access-Control-Allow-Credentials', 'true')
+      res.headers.set('Vary', 'Origin')
     }
     return res
   }
