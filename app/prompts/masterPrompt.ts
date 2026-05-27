@@ -27,7 +27,7 @@ SENTENCE STARTER VARIETY:
 - Avoid starting with just "When" more than once per note.
 
 LENGTH REQUIREMENT:
-- The note must be a minimum of 400 words.
+- The note must be a minimum of 450 words.
 - Each ABC must be detailed and specific enough to contribute meaningfully to the word count.
 - Expand the HOW of each intervention with more clinical detail.
 - Expand the client response with more observable specifics.

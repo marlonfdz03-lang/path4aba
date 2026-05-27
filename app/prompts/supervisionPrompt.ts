@@ -62,7 +62,7 @@ SENTENCE STARTER VARIETY — rotate through these, never repeat one starter more
 "During the direct observation period..." / "The BCBA observed the RBT..." / "Following observation of..." / "In reviewing protocol fidelity..." / "Corrective feedback was delivered to the RBT regarding..." / "The BCBA modeled..." / "Upon direct observation of..." / "Clinical review indicated..." / "During the debrief portion of the supervisory contact..." / "The BCBA identified..." / "Fidelity monitoring revealed..." / "In response to the observed behavior..."
 
 STRUCTURE:
-- Write ONE CONTINUOUS PARAGRAPH of 350–500 words.
+- Write ONE CONTINUOUS PARAGRAPH of a minimum of 500 words.
 - No bullet points, no headers, no numbered lists.
 - The note must be individualized to THIS supervision contact. A note that could have been written for any generic supervision visit on any day fails audit review.
 - Natural clinical flow: observation → fidelity finding → feedback → clinical decision or modification → outcome → development area → closing.
@@ -169,7 +169,7 @@ QUALITY CHECK — VERIFY BEFORE OUTPUTTING
 ☐ No mentalistic language anywhere
 ☐ No client name, DOB, or Medicaid ID
 ☐ No future planning language
-☐ One continuous paragraph, 350–500 words
+☐ One continuous paragraph, minimum 500 words
 ☐ No two sentences start with the same word or phrase
 ☐ Note is individualized — references specific behaviors, specific feedback, specific decisions from this contact
 ☐ Clinical reasoning is explicit — WHY, not just WHAT

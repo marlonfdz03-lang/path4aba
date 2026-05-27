@@ -152,7 +152,7 @@ LANGUAGE RULES:
 - Generalization discussion should describe what the caregiver WILL practice at home in their routine — this is a training commitment, not clinical future planning. Phrase it as a skill the caregiver is now equipped to use, not a plan the clinician will implement.
 
 STRUCTURE:
-- Write 2–3 paragraphs totaling 400–500 words.
+- Write 2–3 paragraphs totaling a minimum of 500 words.
 - Paragraph 1: Setting context, specific client behavior that occurred, BCBA's instructional phase and modeling.
 - Paragraph 2: Caregiver rehearsal, feedback from BCBA with specifics, corrections or confirmatory reinforcement given.
 - Paragraph 3: Caregiver outcome and what measurably improved, generalization discussion, closing compliance statement.
@@ -186,7 +186,7 @@ QUALITY CHECK — VERIFY BEFORE OUTPUTTING
 ☐ No mentalistic language anywhere
 ☐ No client identifying information (name, DOB, Medicaid ID)
 ☐ Caregiver name IS present
-☐ 2–3 paragraphs, 400–500 words total
+☐ 2–3 paragraphs, minimum 500 words total
 ☐ No future planning language (except generalization phrased as caregiver capability)
 ☐ Note reads as caregiver training, not as therapy or as supervision
 
