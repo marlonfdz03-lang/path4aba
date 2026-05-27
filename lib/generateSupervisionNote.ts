@@ -177,7 +177,7 @@ export async function generateSupervisionNote(input: SupervisionNoteInput, onChu
   // Step 5: Similarity check
   let similarityWarning = false
   if (previousTexts.length > 0) {
-    const tooSimilar = previousTexts.some(prev => calculateSimilarity(note, prev) > 0.70)
+    const tooSimilar = previousTexts.some(prev => calculateSimilarity(note, prev) > 0.60)
     if (tooSimilar) {
       if (onChunk) onChunk('\n__REGEN__\n')
       const variationInstruction =
@@ -186,10 +186,10 @@ export async function generateSupervisionNote(input: SupervisionNoteInput, onChu
         `fidelity findings, and protocol modification rationale significantly. ` +
         `The note must read as a distinctly different supervision contact.`
       note = await callOpenAI(systemPrompt + variationInstruction)
-      const stillTooSimilar = previousTexts.some(prev => calculateSimilarity(note, prev) > 0.70)
+      const stillTooSimilar = previousTexts.some(prev => calculateSimilarity(note, prev) > 0.60)
       if (stillTooSimilar) {
         similarityWarning = true
-        console.warn('[generateSupervisionNote] Similarity >70% after regeneration for client:', input.clientId)
+        console.warn('[generateSupervisionNote] Similarity >60% after regeneration for client:', input.clientId)
       }
     }
   }

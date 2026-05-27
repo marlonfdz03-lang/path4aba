@@ -152,7 +152,7 @@ export async function generateParentTrainingNote(input: ParentTrainingNoteInput,
   // Step 5: Similarity check
   let similarityWarning = false
   if (previousTexts.length > 0) {
-    const tooSimilar = previousTexts.some(prev => calculateSimilarity(note, prev) > 0.70)
+    const tooSimilar = previousTexts.some(prev => calculateSimilarity(note, prev) > 0.60)
     if (tooSimilar) {
       if (onChunk) onChunk('\n__REGEN__\n')
       const variationInstruction =
@@ -161,10 +161,10 @@ export async function generateParentTrainingNote(input: ParentTrainingNoteInput,
         `feedback examples, and generalization discussion significantly. ` +
         `The note must read as a distinctly different training session.`
       note = await callOpenAI(MASTER_PARENT_TRAINING_PROMPT + variationInstruction)
-      const stillTooSimilar = previousTexts.some(prev => calculateSimilarity(note, prev) > 0.70)
+      const stillTooSimilar = previousTexts.some(prev => calculateSimilarity(note, prev) > 0.60)
       if (stillTooSimilar) {
         similarityWarning = true
-        console.warn('[generateParentTrainingNote] Similarity >70% after regeneration for client:', input.clientId)
+        console.warn('[generateParentTrainingNote] Similarity >60% after regeneration for client:', input.clientId)
       }
     }
   }

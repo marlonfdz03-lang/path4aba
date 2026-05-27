@@ -204,6 +204,7 @@ export default function ClientProfilePage() {
   const [perfectingNote, setPerfectingNote] = useState(false);
   const [perfectStatus, setPerfectStatus] = useState("");
   const [perfectedNote, setPerfectedNote] = useState("");
+  const [perfectSimilarityWarning, setPerfectSimilarityWarning] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -398,6 +399,7 @@ export default function ClientProfilePage() {
 
     const body = {
       originalNote: pastedNote,
+      clientId: client.id,
       clientProfile: {
         approvedInterventions: client.clinicalProfile?.interventions?.map((i: any) => typeof i === "string" ? i : i.name) || [],
         prohibitedInterventions: ["Punishment", "ResponseCost", "Restraint", "StandaloneExtinction", "TimeOut", "Overcorrection", "Aversive"],
@@ -418,15 +420,22 @@ export default function ClientProfilePage() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let fullText = "";
-      while (true) {
+      setPerfectSimilarityWarning(false);
+      outer2: while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
         if (chunk.includes("__META__")) {
           const parts = chunk.split("__META__");
           if (parts[0]) { fullText += parts[0]; setPerfectedNote(fullText); }
-          try { const meta = JSON.parse(parts[1]); if (meta.error) { setPerfectStatus(meta.error); return; } } catch {}
-          break;
+          try { const meta = JSON.parse(parts[1]); if (meta.error) { setPerfectStatus(meta.error); return; } setPerfectSimilarityWarning(!!meta.similarityWarning); } catch {}
+          break outer2;
+        }
+        if (chunk.includes("__REGEN__")) {
+          fullText = "";
+          setPerfectedNote("");
+          setPerfectStatus("Regenerating for uniqueness…");
+          continue;
         }
         fullText += chunk;
         setPerfectedNote(fullText);
@@ -989,6 +998,11 @@ export default function ClientProfilePage() {
                 {perfectingNote ? "Refining..." : "Refine Note"}
               </button>
               {perfectStatus && <p className="mt-3 text-[13px] text-red-500">{perfectStatus}</p>}
+              {perfectSimilarityWarning && (
+                <p className="mt-3 text-[13px] px-3 py-2 rounded-lg border" style={{ background: "#FFFBEB", borderColor: "#FCD34D", color: "#92400E" }}>
+                  ⚠️ This refined note may be similar to a previous session. Consider editing before submitting.
+                </p>
+              )}
               {perfectedNote && (
                 <NoteOutput
                   note={perfectedNote}
