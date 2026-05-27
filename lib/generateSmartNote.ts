@@ -227,12 +227,12 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   // Step 5: Fetch full note history for this client to check similarity later
   const { data: previousNotes } = await supabase
     .from('session_notes')
-    .select('generated_note')
+    .select('note_text')
     .eq('client_id', input.clientId)
     .order('created_at', { ascending: false });
 
   const previousTexts = (previousNotes || [])
-    .map(r => r.generated_note as string)
+    .map(r => r.note_text as string)
     .filter(Boolean);
 
   // Step 6: Generate the note using the master prompt + contextual clinical factors
