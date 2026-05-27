@@ -121,17 +121,23 @@ function NoteOutput({
   onCopy: () => void;
   onSave?: () => void;
 }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    onCopy();
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
   return (
     <div className="mt-5">
       <div className="flex justify-between items-center mb-3">
         <p className="text-[13px] font-semibold" style={{ color: "var(--text1)" }}>Generated Note</p>
         <div className="flex gap-2">
           <button
-            onClick={onCopy}
-            className="px-3 py-1.5 rounded-lg text-[13px] font-medium border transition-colors hover:border-gray-400"
-            style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+            onClick={handleCopy}
+            className="px-3 py-1.5 rounded-lg text-[13px] font-medium border transition-colors"
+            style={{ borderColor: copied ? "#16A34A" : "var(--border)", color: copied ? "#16A34A" : "var(--text2)" }}
           >
-            Copy
+            {copied ? "✓ Copied" : "Copy"}
           </button>
           {onSave && (
             <button

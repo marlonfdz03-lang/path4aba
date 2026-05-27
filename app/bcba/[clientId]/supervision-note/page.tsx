@@ -295,6 +295,7 @@ export default function SupervisionNotePage() {
   const [generatedNote, setGeneratedNote] = useState("");
   const [similarityWarning, setSimilarityWarning] = useState(false);
   const [genError, setGenError] = useState("");
+  const [noteCopied, setNoteCopied] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -757,11 +758,11 @@ export default function SupervisionNotePage() {
             <div className="flex items-center justify-between mb-3">
               <p className="text-[13px] font-semibold" style={{ color: "var(--text1)" }}>Generated Supervision Note (97155)</p>
               <button
-                onClick={() => navigator.clipboard.writeText(generatedNote)}
-                className="px-3 py-1.5 rounded-lg text-[12px] font-medium border hover:border-gray-400 transition-colors"
-                style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+                onClick={() => { navigator.clipboard.writeText(generatedNote); setNoteCopied(true); setTimeout(() => setNoteCopied(false), 2000); }}
+                className="px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors"
+                style={{ borderColor: noteCopied ? "#16A34A" : "var(--border)", color: noteCopied ? "#16A34A" : "var(--text2)" }}
               >
-                Copy
+                {noteCopied ? "✓ Copied" : "Copy"}
               </button>
             </div>
             {similarityWarning && (
