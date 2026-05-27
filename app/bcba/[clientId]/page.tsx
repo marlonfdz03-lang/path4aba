@@ -91,6 +91,16 @@ export default function BCBAClientPage() {
   const [missingHours, setMissingHours] = useState<any[]>([]);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [rbtDailySummary, setRbtDailySummary] = useState<{ behaviors: string[]; skills: string[]; interventions: string[] } | null>(null);
+
+  useEffect(() => {
+    if (activeTab === "supervision") {
+      fetch(`/api/bcba/rbt-daily-summary?clientId=${clientId}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d?.summary) setRbtDailySummary(d.summary); })
+        .catch(() => {});
+    }
+  }, [activeTab, clientId]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -383,6 +393,28 @@ export default function BCBAClientPage() {
         {/* ── Supervision Notes Tab ── */}
         {activeTab === "supervision" && (
           <div>
+            {/* RBT daily session banner */}
+            {rbtDailySummary && (
+              <div className="mb-4 px-4 py-4 rounded-xl border" style={{ background: "rgba(27,168,160,0.05)", borderColor: "rgba(27,168,160,0.2)", borderLeftWidth: "3px", borderLeftColor: "var(--teal)" }}>
+                <p className="text-[13px] font-semibold mb-2" style={{ color: "var(--teal)" }}>RBT Session Today — Recommended Focus Areas</p>
+                {rbtDailySummary.behaviors.length > 0 && (
+                  <p className="text-[12px] mb-1" style={{ color: "var(--text2)" }}>
+                    <span className="font-medium">Behaviors addressed: </span>{rbtDailySummary.behaviors.join(", ")}
+                  </p>
+                )}
+                {rbtDailySummary.skills.length > 0 && (
+                  <p className="text-[12px] mb-1" style={{ color: "var(--text2)" }}>
+                    <span className="font-medium">Skills targeted: </span>{rbtDailySummary.skills.join(", ")}
+                  </p>
+                )}
+                {rbtDailySummary.interventions.length > 0 && (
+                  <p className="text-[12px] mb-1" style={{ color: "var(--text2)" }}>
+                    <span className="font-medium">Interventions used: </span>{rbtDailySummary.interventions.slice(0, 5).join(", ")}
+                  </p>
+                )}
+                <p className="text-[11px] mt-2" style={{ color: "var(--text3)" }}>Based on today's RBT session note</p>
+              </div>
+            )}
             <div className="flex justify-end mb-4">
               <Link
                 href={`/bcba/${clientId}/supervision-note`}

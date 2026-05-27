@@ -297,6 +297,10 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
       client_id: input.clientId,
       user_id: rbtId ?? null,
       note_text: note,
+      session_date: input.sessionInfo.date || null,
+      behaviors_addressed: input.behaviorsObserved.map(b => b.name),
+      skills_addressed: input.replacementSkillsAddressed.map(s => s.name),
+      interventions_used: resolvedProfile.approvedInterventions || [],
     });
 
   if (saveError) {

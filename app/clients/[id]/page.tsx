@@ -197,7 +197,7 @@ export default function ClientProfilePage() {
   const [shareError, setShareError] = useState("");
   const [codeCopied, setCodeCopied] = useState(false);
   // BCBA supervision suggestion banner
-  const [bcbaSuggestion, setBcbaSuggestion] = useState<{ behaviors: string[]; interventions: string[] } | null>(null);
+  const [bcbaSuggestion, setBcbaSuggestion] = useState<{ notePreview: string; isTruncated: boolean; supervisionTypeLabel: string } | null>(null);
 
   // Refine Note state
   const [pastedNote, setPastedNote] = useState("");
@@ -465,19 +465,11 @@ export default function ClientProfilePage() {
   }
 
   async function checkBCBASuggestion() {
-    const today = new Date().toISOString().split("T")[0];
     try {
-      const { data } = await (await import("@/lib/supabase")).supabase
-        .from("supervision_notes")
-        .select("note_text, session_date")
-        .eq("client_id", client.id)
-        .eq("session_date", today)
-        .maybeSingle();
-      if (data) {
-        const behaviors = client.clinicalProfile?.maladaptiveBehaviors?.map((b: any) => typeof b === "string" ? b : b.name) || [];
-        const interventions = client.clinicalProfile?.interventions?.map((i: any) => typeof i === "string" ? i : i.name) || [];
-        setBcbaSuggestion({ behaviors: behaviors.slice(0, 5), interventions: interventions.slice(0, 5) });
-      }
+      const res = await fetch(`/api/rbt/bcba-daily-summary?clientId=${client.id}`);
+      if (!res.ok) return;
+      const { summary } = await res.json();
+      if (summary) setBcbaSuggestion(summary);
     } catch {}
   }
 
@@ -689,19 +681,14 @@ export default function ClientProfilePage() {
 
             {/* BCBA supervision suggestion banner */}
             {bcbaSuggestion && (
-              <div className="px-4 py-3 rounded-xl border text-[13px]" style={{ background: "#EFF6FF", borderColor: "#BFDBFE", color: "#1D4ED8" }}>
-                <p className="font-semibold mb-1">Your BCBA supervised this session today.</p>
-                <p className="mb-2">Suggested behaviors: {bcbaSuggestion.behaviors.join(", ") || "see profile"}</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (bcbaSuggestion.behaviors.length) setSelectedBehaviors(bcbaSuggestion.behaviors.slice(0, 5));
-                    if (bcbaSuggestion.interventions.length) setSelectedSkills(bcbaSuggestion.interventions.slice(0, 2));
-                  }}
-                  className="text-[12px] font-semibold underline hover:opacity-80"
-                >
-                  Use suggestions
-                </button>
+              <div className="px-4 py-4 rounded-xl border" style={{ background: "rgba(27,168,160,0.05)", borderColor: "rgba(27,168,160,0.2)", borderLeftWidth: "3px", borderLeftColor: "var(--teal)" }}>
+                <p className="text-[13px] font-semibold mb-1.5" style={{ color: "var(--teal)" }}>
+                  BCBA Supervision Today — {bcbaSuggestion.supervisionTypeLabel}
+                </p>
+                <p className="text-[12px] leading-relaxed mb-1.5" style={{ color: "var(--text2)" }}>
+                  {bcbaSuggestion.notePreview}{bcbaSuggestion.isTruncated ? "…" : ""}
+                </p>
+                <p className="text-[11px]" style={{ color: "var(--text3)" }}>Based on today's BCBA supervision note</p>
               </div>
             )}
 
