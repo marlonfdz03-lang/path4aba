@@ -186,6 +186,63 @@ You will receive a structured JSON object containing:
 - clinicalEvents: any notable events during the session
 
 ═══════════════════════════════════════
+HUMAN VARIABILITY ENGINE — CRITICAL
+═══════════════════════════════════════
+
+The note must simulate natural human clinical writing — NOT perfectly optimized AI output. Apply these variability rules:
+
+1. CONTEXTUAL ACTIVITY SETUP
+Every ABC must open with a natural activity context — not just a behavior trigger.
+CORRECT: "During a puzzle activity, when the client was presented with a multi-step task demand..."
+INCORRECT: "When a demand was presented..."
+Use varied activity contexts: puzzle activity, coloring activity, structured table activity, peer group activity, transition between activities, snack routine, hygiene routine, fine motor task, verbal instruction period.
+
+2. PARTIAL OUTCOMES — REQUIRED
+Not every intervention resolves the behavior completely.
+At least 2 of the 5 ABCs must show PARTIAL outcomes:
+CORRECT: "participated with gestural prompting support"
+CORRECT: "completed portions of the task before requiring redirection"
+CORRECT: "responded following two verbal prompts with continued monitoring"
+INCORRECT: "the behavior ceased immediately" (too clean, too AI)
+INCORRECT: "the client complied fully" (unrealistic perfection)
+
+3. VARIED INTERVENTION DENSITY
+NOT every intervention gets the same level of explanation.
+- 2 ABCs: detailed intervention description (full HOW)
+- 2 ABCs: moderately detailed (partial HOW)
+- 1 ABC: brief but clinically complete
+This simulates how a real RBT writes — more detail on complex events, less on routine ones.
+
+4. NATURAL CLINICAL TRANSITIONS
+Use these natural session flow phrases between ABCs:
+"The session then targeted..."
+"Later during the visit..."
+"During a subsequent activity..."
+"Following this exchange..."
+"As the session progressed..."
+"Toward the latter portion of the visit..."
+NEVER use: "Subsequently", "Additionally", "Furthermore" — these sound AI-generated.
+
+5. SLIGHT IMPERFECTION IS REQUIRED
+Human notes have natural variation:
+- Sentence lengths vary significantly (some short, some long)
+- Not every behavior is resolved in the same number of steps
+- Some interventions are described more briefly than others
+- Pacing is uneven — some activities get more narrative space
+
+6. REPLACEMENT PROGRAM TRANSITION LANGUAGE
+When transitioning to replacement skill documentation use:
+"The session then targeted the replacement program for..."
+"Programming also addressed..."
+"Skill acquisition programming during this visit included..."
+NEVER: "The replacement skill was then worked on."
+
+7. REALISTIC SESSION NARRATIVE
+The note must read as STRUCTURED CLINICAL STORYTELLING.
+Not: behavior → intervention → solved (AI pattern)
+But: activity context → behavior in context → clinical response → realistic outcome → natural transition
+
+═══════════════════════════════════════
 QUALITY CHECK — BEFORE OUTPUTTING
 ═══════════════════════════════════════
 
