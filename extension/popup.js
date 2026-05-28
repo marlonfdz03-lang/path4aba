@@ -566,32 +566,17 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
   btn.disabled = true;
 
   try {
-    // Save to localStorage via chrome.storage as a backup
+    // Save to chrome.storage as local backup
     const key = `path4aba_ext_note_${selectedClientId}_${Date.now()}`;
     chrome.storage.local.set({ [key]: { clientId: selectedClientId, note: text, savedAt: new Date().toISOString() } });
 
-    // Also POST to app to save in session_notes
-    await api('/api/generate-note', {
+    // Save to session_notes table
+    await api('/api/session-notes', {
       method: 'POST',
       body: JSON.stringify({
         clientId: selectedClientId,
-        sessionInfo: {
-          date: document.getElementById('genDate').value || new Date().toISOString().split('T')[0],
-          location: selectedLocation || '',
-          caregiver: '',
-        },
-        behaviorsObserved: selectedBehaviors.map(name => ({
-          name, topography: '', frequency: 1, antecedentContext: '', function: ''
-        })),
-        replacementSkillsAddressed: selectedSkills.map(name => ({
-          name, promptLevel: '', clientResponse: '', successful: true
-        })),
-        activitiesUsed: [],
-        reinforcersUsed: [],
-        // Pass pre-generated note so server skips AI generation — server currently
-        // doesn't have a "save only" endpoint; this is a workaround until one exists.
-        // TODO: create POST /api/session-notes to save a note without AI generation.
-        _preGeneratedNote: text,
+        noteText: text,
+        sessionDate: document.getElementById('genDate').value || new Date().toISOString().split('T')[0],
       }),
     });
   } catch {}

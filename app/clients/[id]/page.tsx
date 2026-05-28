@@ -209,6 +209,25 @@ export default function ClientProfilePage() {
   const [perfectSimilarityWarning, setPerfectSimilarityWarning] = useState(false);
   const [refinedNoteSaved, setRefinedNoteSaved] = useState(false);
 
+  async function loadNotesFromSupabase(clientId: string) {
+    const { data: supaNotes } = await supabase
+      .from("session_notes")
+      .select("id, note_text, created_at")
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: false });
+    if (supaNotes && supaNotes.length > 0) {
+      setDailyNotes(supaNotes.map((n: any) => ({
+        id: n.id,
+        clientId,
+        date: new Date(n.created_at).toLocaleDateString(),
+        note: n.note_text,
+        fromSupabase: true,
+      })));
+      return true;
+    }
+    return false;
+  }
+
   useEffect(() => {
     async function load() {
       const id = params.id as string;
@@ -223,7 +242,8 @@ export default function ClientProfilePage() {
         if (data) {
           const found = { id: data.id, clientName: data.clinical_profile?.name || data.internal_code, clinicalProfile: data.clinical_profile };
           setClient(found);
-          setDailyNotes(getNotesByClientId(found.id));
+          const loadedFromSupabase = await loadNotesFromSupabase(found.id);
+          if (!loadedFromSupabase) setDailyNotes(getNotesByClientId(found.id));
           if (data.clinical_profile?.whoWasPresent?.length) {
             setSavedPresent(data.clinical_profile.whoWasPresent);
           } else {
@@ -386,11 +406,23 @@ export default function ClientProfilePage() {
     }
   }
 
-  function handleSaveNote() {
+  async function handleSaveNote() {
     if (!generatedNote.trim()) { alert("Generate a note before saving."); return; }
-    const noteObject = { id: crypto.randomUUID(), clientId: client.id, date: date || new Date().toLocaleDateString(), note: generatedNote };
-    saveNote(noteObject);
-    setDailyNotes((prev) => [noteObject, ...prev]);
+    const today = new Date();
+    const backupNote = { id: crypto.randomUUID(), clientId: client.id, date: date || today.toLocaleDateString(), note: generatedNote };
+    saveNote(backupNote);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from("session_notes").insert({
+        client_id: client.id,
+        user_id: user.id,
+        note_text: generatedNote,
+        session_date: date || today.toISOString().split("T")[0],
+      });
+      await loadNotesFromSupabase(client.id);
+    } else {
+      setDailyNotes(prev => [backupNote, ...prev]);
+    }
     alert("Note saved successfully.");
   }
 
@@ -461,7 +493,6 @@ export default function ClientProfilePage() {
       note: perfectedNote,
     };
     saveNote(noteObject);
-    setDailyNotes(prev => [noteObject, ...prev]);
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       await supabase.from("session_notes").insert({
@@ -470,14 +501,21 @@ export default function ClientProfilePage() {
         note_text: perfectedNote,
         session_date: today.toISOString().split("T")[0],
       });
+      await loadNotesFromSupabase(client.id);
+    } else {
+      setDailyNotes(prev => [noteObject, ...prev]);
     }
     setRefinedNoteSaved(true);
     setTimeout(() => setRefinedNoteSaved(false), 2000);
   }
 
-  function handleDeleteNote(noteId: string) {
+  async function handleDeleteNote(noteId: string, fromSupabase?: boolean) {
     if (!window.confirm("Are you sure you want to delete this note?")) return;
-    deleteNote(noteId);
+    if (fromSupabase) {
+      await supabase.from("session_notes").delete().eq("id", noteId);
+    } else {
+      deleteNote(noteId);
+    }
     setDailyNotes((prev) => prev.filter((note) => note.id !== noteId));
   }
 
@@ -1060,7 +1098,7 @@ export default function ClientProfilePage() {
                       <div className="flex justify-between items-center mb-3">
                         <span className="text-[13px] font-semibold" style={{ color: "var(--text1)" }}>{note.date}</span>
                         <button
-                          onClick={() => handleDeleteNote(note.id)}
+                          onClick={() => handleDeleteNote(note.id, note.fromSupabase)}
                           className="text-[12px] font-medium text-red-400 hover:text-red-600 transition-colors"
                         >
                           Delete
