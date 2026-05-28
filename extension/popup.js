@@ -17,6 +17,13 @@ let selectedSkills = [];     // names
 let selectedLocation = null;
 let activeTab = 'generate';
 
+// Session condition state
+let selectedPresent = [];
+let environmentalChange = false;
+let medicationChange = false;
+let missedSessions = false;
+let complianceLevel = 'typical';
+
 // ── API helper ─────────────────────────────
 async function api(path, options = {}) {
   const method = (options.method || 'GET').toUpperCase();
@@ -157,6 +164,7 @@ document.getElementById('clientSelect').addEventListener('change', async (e) => 
   selectedBehaviors = [];
   selectedSkills = [];
   selectedProfile = null;
+  resetSessionConditions();
 
   const actionSection = document.getElementById('actionSection');
   const outputSection = document.getElementById('outputSection');
@@ -199,6 +207,7 @@ async function loadClientProfile(clientId) {
 
   renderBehaviors();
   renderSkills();
+  renderPresent();
 }
 
 // ── Behaviors grid ─────────────────────────
@@ -315,6 +324,65 @@ function renderSkills() {
   });
 }
 
+// ── Who Was Present grid ───────────────────
+function renderPresent() {
+  const grid = document.getElementById('presentGrid');
+  if (!grid) return;
+
+  const names = ['Caregiver', 'Teacher', ...(selectedProfile?.whoWasPresent || [])];
+  const unique = [...new Set(names)];
+
+  grid.innerHTML = '';
+  unique.forEach(name => {
+    const item = document.createElement('div');
+    item.className = 'check-item';
+    item.dataset.name = name;
+    item.innerHTML = `
+      <div class="check-box">
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="white">
+          <path d="M10 3L5 8.5 2 5.5 1 6.5l4 4 6-7z"/>
+        </svg>
+      </div>
+      <span>${name}</span>
+    `;
+    item.addEventListener('click', () => {
+      if (item.classList.contains('checked')) {
+        item.classList.remove('checked');
+        selectedPresent = selectedPresent.filter(n => n !== name);
+      } else {
+        item.classList.add('checked');
+        selectedPresent.push(name);
+      }
+      updateGenerateBtn();
+    });
+    grid.appendChild(item);
+  });
+}
+
+// ── Reset session conditions ───────────────
+function resetSessionConditions() {
+  selectedPresent = [];
+  environmentalChange = false;
+  medicationChange = false;
+  missedSessions = false;
+  complianceLevel = 'typical';
+
+  ['envGroup', 'medGroup', 'missedGroup'].forEach(id => {
+    const g = document.getElementById(id);
+    if (!g) return;
+    g.querySelectorAll('.toggle-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+  });
+  const cg = document.getElementById('complianceGroup');
+  if (cg) {
+    cg.querySelectorAll('.toggle-btn').forEach((b, i) => {
+      b.classList.toggle('active', i === 0);
+      b.style.background = '';
+      b.style.borderColor = '';
+      b.style.color = '';
+    });
+  }
+}
+
 // ── Location selector ──────────────────────
 document.getElementById('locationGroup').addEventListener('click', (e) => {
   const btn = e.target.closest('.toggle-btn');
@@ -325,10 +393,43 @@ document.getElementById('locationGroup').addEventListener('click', (e) => {
   updateGenerateBtn();
 });
 
+// ── Session condition toggles ──────────────
+['envGroup', 'medGroup', 'missedGroup'].forEach(id => {
+  document.getElementById(id).addEventListener('click', e => {
+    const btn = e.target.closest('.toggle-btn');
+    if (!btn) return;
+    document.querySelectorAll(`#${id} .toggle-btn`).forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (id === 'envGroup') environmentalChange = btn.dataset.val === 'yes';
+    else if (id === 'medGroup') medicationChange = btn.dataset.val === 'yes';
+    else if (id === 'missedGroup') missedSessions = btn.dataset.val === 'yes';
+  });
+});
+
+document.getElementById('complianceGroup').addEventListener('click', e => {
+  const btn = e.target.closest('.toggle-btn');
+  if (!btn) return;
+  complianceLevel = btn.dataset.val;
+  document.querySelectorAll('#complianceGroup .toggle-btn').forEach(b => {
+    b.classList.remove('active');
+    b.style.background = '';
+    b.style.borderColor = '';
+    b.style.color = '';
+  });
+  btn.classList.add('active');
+  if (complianceLevel === 'poor') {
+    btn.style.background = '#dc2626';
+    btn.style.borderColor = '#dc2626';
+  } else if (complianceLevel === 'below_typical') {
+    btn.style.background = '#f59e0b';
+    btn.style.borderColor = '#f59e0b';
+  }
+});
+
 // ── Generate button state ──────────────────
 function updateGenerateBtn() {
   const dateVal = document.getElementById('genDate').value;
-  let canGenerate = !!dateVal && !!selectedLocation && !!selectedClientId;
+  let canGenerate = !!dateVal && !!selectedLocation && !!selectedClientId && selectedPresent.length > 0;
 
   if (userRole === 'rbt') {
     canGenerate = canGenerate && selectedBehaviors.length === 5 && selectedSkills.length === 2;
@@ -337,6 +438,7 @@ function updateGenerateBtn() {
       const missing = [];
       if (!dateVal) missing.push('date');
       if (!selectedLocation) missing.push('location');
+      if (selectedPresent.length === 0) missing.push('who was present');
       if (selectedBehaviors.length < 5) missing.push(`${5 - selectedBehaviors.length} more behavior(s)`);
       if (selectedSkills.length < 2) missing.push(`${2 - selectedSkills.length} more skill(s)`);
       hint.textContent = 'Still needed: ' + missing.join(', ');
@@ -413,7 +515,7 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
 
   const body = {
     clientId: selectedClientId,
-    sessionInfo: { date, location: selectedLocation, caregiver: '' },
+    sessionInfo: { date, location: selectedLocation, caregiver: selectedPresent.join(' and ') },
     behaviorsObserved: selectedBehaviors.map(name => ({
       name, topography: '', frequency: 1, antecedentContext: '', function: ''
     })),
@@ -422,6 +524,10 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     })),
     activitiesUsed: [],
     reinforcersUsed: [],
+    clinicalEvents: medicationChange ? 'Medication consumed today.' : '',
+    complianceLevel: complianceLevel !== 'typical' ? complianceLevel : undefined,
+    environmentalChangeDescription: environmentalChange ? 'Environmental changes noted this session.' : undefined,
+    missedHoursData: missedSessions ? { totalHours: 1, reason: 'Reported by caregiver' } : undefined,
     clientProfile: {
       diagnosis: [],
       setting: selectedLocation,
@@ -564,30 +670,50 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
 
   const btn = document.getElementById('saveBtn');
   btn.disabled = true;
+  document.querySelectorAll('.save-error').forEach(e => e.remove());
 
   try {
-    // Save to chrome.storage as local backup
-    const key = `path4aba_ext_note_${selectedClientId}_${Date.now()}`;
-    chrome.storage.local.set({ [key]: { clientId: selectedClientId, note: text, savedAt: new Date().toISOString() } });
-
-    // Save to session_notes table
-    await api('/api/session-notes', {
+    const res = await api('/api/extension/save-note', {
       method: 'POST',
       body: JSON.stringify({
-        clientId: selectedClientId,
-        noteText: text,
-        sessionDate: document.getElementById('genDate').value || new Date().toISOString().split('T')[0],
+        note_text: text,
+        client_id: selectedClientId,
+        session_date: document.getElementById('genDate').value || new Date().toISOString().split('T')[0],
       }),
     });
-  } catch {}
 
-  btn.textContent = 'Saved ✓';
-  btn.classList.add('saved');
-  setTimeout(() => {
-    btn.textContent = 'Save';
-    btn.classList.remove('saved');
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const warn = document.createElement('p');
+      warn.className = 'error-msg save-error';
+      warn.textContent = data.message || data.error || 'Save failed. Please try again.';
+      document.getElementById('outputSection').appendChild(warn);
+      btn.disabled = false;
+      return;
+    }
+
+    // Local backup
+    chrome.storage.local.set({
+      [`path4aba_ext_note_${selectedClientId}_${Date.now()}`]: {
+        clientId: selectedClientId, note: text, savedAt: new Date().toISOString(),
+      },
+    });
+
+    btn.textContent = '✓ Saved to profile';
+    btn.classList.add('saved');
+    setTimeout(() => {
+      btn.textContent = 'Save';
+      btn.classList.remove('saved');
+      btn.disabled = false;
+    }, 2000);
+  } catch {
+    const warn = document.createElement('p');
+    warn.className = 'error-msg save-error';
+    warn.textContent = 'Network error. Make sure you are logged into Path4ABA.';
+    document.getElementById('outputSection').appendChild(warn);
     btn.disabled = false;
-  }, 2000);
+  }
 });
 
 // ── Auth screen buttons ────────────────────

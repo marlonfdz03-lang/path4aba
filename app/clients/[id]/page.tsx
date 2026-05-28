@@ -210,22 +210,24 @@ export default function ClientProfilePage() {
   const [refinedNoteSaved, setRefinedNoteSaved] = useState(false);
 
   async function loadNotesFromSupabase(clientId: string) {
-    const { data: supaNotes } = await supabase
-      .from("session_notes")
-      .select("id, note_text, created_at")
-      .eq("client_id", clientId)
-      .order("created_at", { ascending: false });
-    if (supaNotes && supaNotes.length > 0) {
-      setDailyNotes(supaNotes.map((n: any) => ({
-        id: n.id,
-        clientId,
-        date: new Date(n.created_at).toLocaleDateString(),
-        note: n.note_text,
-        fromSupabase: true,
-      })));
-      return true;
+    try {
+      const res = await fetch(`/api/session-notes?clientId=${clientId}`);
+      if (!res.ok) return false;
+      const { notes } = await res.json();
+      if (notes && notes.length > 0) {
+        setDailyNotes(notes.map((n: any) => ({
+          id: n.id,
+          clientId,
+          date: new Date(n.created_at).toLocaleDateString(),
+          note: n.note_text,
+          fromSupabase: true,
+        })));
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
     }
-    return false;
   }
 
   useEffect(() => {

@@ -5,7 +5,7 @@ import { supabaseServer } from '@/lib/supabaseServer'
 
 export const dynamic = 'force-dynamic'
 
-export async function POST(req: Request) {
+async function getAuthUser() {
   const cookieStore = await cookies()
   const authClient = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,6 +13,27 @@ export async function POST(req: Request) {
     { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
   )
   const { data: { user } } = await authClient.auth.getUser()
+  return user
+}
+
+export async function GET(req: Request) {
+  const user = await getAuthUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const clientId = new URL(req.url).searchParams.get('clientId')
+  if (!clientId) return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
+
+  const { data: notes } = await supabaseServer
+    .from('session_notes')
+    .select('id, note_text, created_at')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false })
+
+  return NextResponse.json({ notes: notes || [] })
+}
+
+export async function POST(req: Request) {
+  const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
