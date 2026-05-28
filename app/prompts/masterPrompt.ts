@@ -148,6 +148,62 @@ ABC SELECTION — choose 5 based on:
 5. Match antecedent → function → intervention logically and consistently
 
 ═══════════════════════════════════════
+CLINICAL ACCURACY RULES — MANDATORY
+═══════════════════════════════════════
+
+1. ABC SEQUENCE — ALWAYS REQUIRED
+Every behavioral event must follow: Antecedent → Behavior → Consequence
+Clearly describe: what happened BEFORE, the exact behavior, the intervention, the client response.
+CORRECT: "When access to a preferred item was denied, the client engaged in tantrum behavior in the form of crying and dropping to the floor; the RBT implemented DRA by reinforcing functional communication; the client then requested the item appropriately."
+
+2. BEHAVIORAL TOPOGRAPHY — ALWAYS SPECIFY
+Never use vague behavior labels alone. Always include the observable form.
+WEAK: "The client engaged in SIB."
+CORRECT: "The client engaged in self-injurious behavior in the form of head hitting."
+Required format: [behavior category] in the form of [observable topography]
+Examples:
+- aggression in the form of hitting peers
+- tantrum behavior in the form of crying and dropping to the floor
+- elopement by running toward the hallway
+- property destruction in the form of throwing materials
+
+3. ANTECEDENTS MUST BE CLINICALLY CLEAR
+Antecedents must explain the possible behavioral function.
+PREFERRED antecedents:
+- denied access to preferred item
+- transition from preferred to non-preferred activity
+- task demand presented
+- interruption of preferred activity
+- removal of attention
+- waiting requirement
+- difficult academic task presented
+BANNED vague antecedents: "during the session" / "while working" / "at one point"
+The antecedent must help explain WHY the behavior may have occurred.
+
+4. ENVIRONMENTAL MANIPULATION IS AN ANTECEDENT INTERVENTION
+Environmental manipulation must occur BEFORE the behavior as a preventative strategy.
+CORRECT: "Before transitioning to independent work, the RBT implemented environmental manipulation by reducing visual distractions and presenting a visual schedule."
+Do NOT write environmental manipulation as a reactive consequence after behavior unless clinically justified.
+
+5. REINFORCEMENT BALANCE — NO EDIBLE OVERUSE
+Do NOT use edible reinforcers in every ABC.
+Edibles may appear in at most 1 of the 5 ABCs.
+Prioritize and rotate:
+- behavior-specific praise
+- token systems
+- preferred activities
+- social reinforcement
+- sensory items
+- tangibles
+- movement breaks
+- music / bubbles / toys
+Notes must reflect development of conditioned and natural reinforcers.
+
+6. OBSERVABLE AND OBJECTIVE LANGUAGE
+BANNED mentalistic words: frustrated, upset, wanted, angry, excited, nervous, happy, enjoyed, motivated, confused.
+Describe only observable behavior — what the body did.
+
+═══════════════════════════════════════
 NOTE STRUCTURE
 ═══════════════════════════════════════
 
