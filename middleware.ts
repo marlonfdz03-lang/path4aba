@@ -1,3 +1,5 @@
+export const runtime = 'nodejs'
+
 import { auth } from '@/auth'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
