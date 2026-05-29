@@ -3,6 +3,8 @@ import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 import { supabaseServer } from '@/lib/supabaseServer'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: Request) {
   const cookieStore = await cookies()
   const authClient = createServerClient(
@@ -15,9 +17,9 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url)
   const clientId = url.searchParams.get('clientId')
-  if (!clientId) return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
+  const date = url.searchParams.get('date')
+  if (!clientId || !date) return NextResponse.json({ error: 'Missing clientId or date' }, { status: 400 })
 
-  // Verify BCBA is connected to this client and get the connected RBT's id
   const { data: connection } = await supabaseServer
     .from('bcba_clients')
     .select('rbt_id')
@@ -26,28 +28,26 @@ export async function GET(request: Request) {
     .maybeSingle()
 
   if (!connection) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  if (!connection.rbt_id) return NextResponse.json({ summary: null })
-
-  const dateParam = url.searchParams.get('date')
-  const queryDate = dateParam || new Date().toISOString().split('T')[0]
+  if (!connection.rbt_id) return NextResponse.json({ empty: true })
 
   const { data: note } = await supabaseServer
     .from('session_notes')
-    .select('behaviors_addressed, skills_addressed, interventions_used')
+    .select('behaviors_addressed, skills_addressed, interventions_used, activities_used, note_text')
     .eq('client_id', clientId)
     .eq('user_id', connection.rbt_id)
-    .eq('session_date', queryDate)
+    .eq('session_date', date)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
 
-  if (!note) return NextResponse.json({ summary: null })
+  if (!note) return NextResponse.json({ empty: true })
 
   return NextResponse.json({
-    summary: {
-      behaviors: (note.behaviors_addressed as string[]) || [],
-      skills: (note.skills_addressed as string[]) || [],
-      interventions: (note.interventions_used as string[]) || [],
-    }
+    empty: false,
+    behaviors: (note.behaviors_addressed as string[]) || [],
+    skills: (note.skills_addressed as string[]) || [],
+    interventions: (note.interventions_used as string[]) || [],
+    activities: (note.activities_used as string[]) || [],
+    noteText: note.note_text || '',
   })
 }

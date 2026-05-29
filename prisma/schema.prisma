@@ -1,0 +1,303 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── App tables ───────────────────────────────────────────────────────────────
+
+model clients {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  agency_id        String?   @db.Uuid
+  internal_code    String?
+  diagnosis        String?
+  primary_setting  String?
+  clinical_profile Json?
+  active_behaviors Json?
+  created_by       String?   @db.Uuid
+  rbt_id           String?   @db.Uuid
+  created_at       DateTime? @default(now()) @db.Timestamptz(6)
+
+  session_notes             session_notes[]
+  missed_hours              missed_hours[]
+  client_access_codes       client_access_codes[]
+  bcba_clients              bcba_clients[]
+  supervision_notes         supervision_notes[]
+  parent_training_notes     parent_training_notes[]
+  supervision_notes_97153xp supervision_notes_97153xp[]
+}
+
+model session_notes {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id           String?   @db.Uuid
+  user_id             String?   @db.Uuid
+  note_text           String?
+  session_date        String?
+  behaviors_addressed String[]
+  skills_addressed    String[]
+  interventions_used  String[]
+  activities_used     String[]
+  review_status       String?
+  reviewed_by         String?   @db.Uuid
+  reviewed_at         DateTime? @db.Timestamptz(6)
+  review_comment      String?
+  created_at          DateTime? @default(now()) @db.Timestamptz(6)
+
+  client clients? @relation(fields: [client_id], references: [id], onDelete: Cascade)
+}
+
+model subscriptions {
+  id                            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                       String    @unique @db.Uuid
+  plan                          String?
+  status                        String?
+  trial_ends_at                 DateTime? @db.Timestamptz(6)
+  current_period_ends_at        DateTime? @db.Timestamptz(6)
+  stripe_customer_id            String?
+  stripe_subscription_id        String?
+  bcba_students_status          String?
+  bcba_students_trial_ends_at   DateTime? @db.Timestamptz(6)
+  bcba_students_subscription_id String?
+  created_at                    DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+model bcba_clients {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bcba_id      String    @db.Uuid
+  client_id    String    @db.Uuid
+  rbt_id       String?   @db.Uuid
+  connected_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  client clients @relation(fields: [client_id], references: [id], onDelete: Cascade)
+
+  @@unique([bcba_id, client_id])
+}
+
+model fieldwork_sessions {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id           String    @db.Uuid
+  session_date      String
+  month_year        String
+  start_time        String?
+  end_time          String?
+  independent_hours Float     @default(0)
+  supervised_hours  Float     @default(0)
+  total_hours       Float     @default(0)
+  activity_type     String?
+  contact_type      String?   @default("none")
+  setting           String?
+  supervisor_name   String?
+  session_note      String?
+  created_at        DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+model fieldwork_monthly_summaries {
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                 String    @db.Uuid
+  month_year              String
+  total_independent_hours Float     @default(0)
+  total_supervised_hours  Float     @default(0)
+  total_hours             Float     @default(0)
+  supervision_pct         Float     @default(0)
+  unrestricted_hours      Float     @default(0)
+  restricted_hours        Float     @default(0)
+  supervisor_contacts     Int       @default(0)
+  individual_contacts     Int       @default(0)
+  group_contacts          Int       @default(0)
+  client_observations     Int       @default(0)
+  is_eligible             Boolean   @default(false)
+  ineligibility_reason    String?
+  mvf_signed              Boolean   @default(false)
+  mvf_signed_at           DateTime? @db.Timestamptz(6)
+  created_at              DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@unique([user_id, month_year])
+}
+
+model fieldwork_profiles {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id             String    @unique @db.Uuid
+  fieldwork_type      String?
+  certification_track String?
+  trainee_bacb_id     String?
+  supervisor_name     String?
+  supervisor_bacb_id  String?
+  supervisor_email    String?
+  start_date          String?
+  state_of_fieldwork  String?
+  country_of_fieldwork String?
+  onboarding_complete Boolean   @default(false)
+  created_at          DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+model client_access_codes {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id  String    @db.Uuid
+  rbt_id     String    @db.Uuid
+  code       String    @unique
+  expires_at DateTime? @db.Timestamptz(6)
+  used       Boolean   @default(false)
+  used_by    String?   @db.Uuid
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  client clients @relation(fields: [client_id], references: [id], onDelete: Cascade)
+}
+
+model supervision_notes {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id        String?   @db.Uuid
+  bcba_id          String?   @db.Uuid
+  rbt_id           String?   @db.Uuid
+  session_date     String?
+  supervision_type String?
+  note_text        String?
+  status           String?   @default("draft")
+  created_at       DateTime? @default(now()) @db.Timestamptz(6)
+
+  client clients? @relation(fields: [client_id], references: [id], onDelete: Cascade)
+}
+
+model parent_training_notes {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id          String?   @db.Uuid
+  bcba_id            String?   @db.Uuid
+  session_date       String?
+  caregiver_name     String?
+  caregiver_relation String?
+  note_text          String?
+  status             String?   @default("draft")
+  created_at         DateTime? @default(now()) @db.Timestamptz(6)
+
+  client clients? @relation(fields: [client_id], references: [id], onDelete: Cascade)
+}
+
+model missed_hours {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id  String?   @db.Uuid
+  rbt_id     String?   @db.Uuid
+  date       String?
+  reason     String?
+  hours      Float?
+  notes      String?
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  client clients? @relation(fields: [client_id], references: [id], onDelete: Cascade)
+}
+
+model behaviors {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  category    String?
+  description String?
+  created_at  DateTime? @default(now()) @db.Timestamptz(6)
+
+  topographies       topographies[]
+  replacement_skills replacement_skills[]
+}
+
+model topographies {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  behavior_id          String    @db.Uuid
+  description          String?
+  measurable_unit      String?
+  severity_level       Int?
+  vocabulary_variants  String[]
+  created_at           DateTime? @default(now()) @db.Timestamptz(6)
+
+  behavior behaviors @relation(fields: [behavior_id], references: [id], onDelete: Cascade)
+}
+
+model supervision_notes_97153xp {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id           String?   @db.Uuid
+  bcba_id             String?   @db.Uuid
+  session_date        String?
+  note_text           String?
+  rbt_session_context Json?
+  created_at          DateTime? @default(now()) @db.Timestamptz(6)
+
+  client clients? @relation(fields: [client_id], references: [id], onDelete: Cascade)
+}
+
+model replacement_skills {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  skill_description   String?
+  function_targeted   String?
+  behavior_id         String?   @db.Uuid
+  teaching_procedure  String?
+  vocabulary_variants String[]
+  created_at          DateTime? @default(now()) @db.Timestamptz(6)
+
+  behavior behaviors? @relation(fields: [behavior_id], references: [id])
+}
+
+model promo_codes {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code            String    @unique
+  discount_amount Float?
+  max_uses        Int?
+  current_uses    Int       @default(0)
+  created_at      DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+model bcba_notes {
+  id            Int     @id @default(autoincrement())
+  note          String?
+  category      String?
+  activity_type String?
+}
+
+// ─── NextAuth tables ──────────────────────────────────────────────────────────
+
+model users {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String?
+  name          String?
+  role          String    @default("rbt")
+  emailVerified DateTime? @db.Timestamptz(6)
+  image         String?
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+
+  accounts accounts[]
+  sessions sessions[]
+}
+
+model accounts {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user users @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model sessions {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime @db.Timestamptz(6)
+
+  user users @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model verification_tokens {
+  identifier String
+  token      String
+  expires    DateTime @db.Timestamptz(6)
+
+  @@id([identifier, token])
+}

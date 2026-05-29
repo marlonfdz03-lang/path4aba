@@ -198,9 +198,6 @@ export default function ClientProfilePage() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareError, setShareError] = useState("");
   const [codeCopied, setCodeCopied] = useState(false);
-  // BCBA supervision suggestion banner
-  const [bcbaSuggestion, setBcbaSuggestion] = useState<{ notePreview: string; isTruncated: boolean; supervisionTypeLabel: string } | null>(null);
-
   // Refine Note state
   const [pastedNote, setPastedNote] = useState("");
   const [perfectingNote, setPerfectingNote] = useState(false);
@@ -540,18 +537,8 @@ export default function ClientProfilePage() {
     setGeneratingCode(false);
   }
 
-  async function checkBCBASuggestion() {
-    try {
-      const res = await fetch(`/api/rbt/bcba-daily-summary?clientId=${client.id}`);
-      if (!res.ok) return;
-      const { summary } = await res.json();
-      if (summary) setBcbaSuggestion(summary);
-    } catch {}
-  }
-
   function handleTabChange(tab: Tab) {
     setActiveTab(tab);
-    if (tab === "generate") checkBCBASuggestion();
   }
 
   const TABS: { key: Tab; label: string }[] = [
@@ -758,18 +745,6 @@ export default function ClientProfilePage() {
         {activeTab === "generate" && (
           <div className="space-y-5 max-w-[780px]">
 
-            {/* BCBA supervision suggestion banner */}
-            {bcbaSuggestion && (
-              <div className="px-4 py-4 rounded-xl border" style={{ background: "rgba(27,168,160,0.05)", borderColor: "rgba(27,168,160,0.2)", borderLeftWidth: "3px", borderLeftColor: "var(--teal)" }}>
-                <p className="text-[13px] font-semibold mb-1.5" style={{ color: "var(--teal)" }}>
-                  BCBA Supervision Today — {bcbaSuggestion.supervisionTypeLabel}
-                </p>
-                <p className="text-[12px] leading-relaxed mb-1.5" style={{ color: "var(--text2)" }}>
-                  {bcbaSuggestion.notePreview}{bcbaSuggestion.isTruncated ? "…" : ""}
-                </p>
-                <p className="text-[11px]" style={{ color: "var(--text3)" }}>Based on today's BCBA supervision note</p>
-              </div>
-            )}
 
             {/* Form header */}
             <div className="bg-white rounded-[10px] border p-6 flex items-start justify-between" style={{ borderColor: "var(--border)" }}>

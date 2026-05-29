@@ -1,4 +1,5 @@
-import { createServerClient } from '@supabase/ssr'
+import { auth } from '@/auth'
+import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
@@ -8,20 +9,12 @@ const PUBLIC_ROUTES = ['/login', '/reset-password', '/pricing', '/privacy', '/te
 // Routes that require auth but skip the subscription check
 const SUBSCRIPTION_SKIP = ['/billing', '/pricing', '/onboarding']
 
-// Routes that require the bcba_students add-on (checked in layout, not here)
-// Middleware only does the main subscription check; layout.tsx handles the add-on gate
-
-// Plan slugs: 'trial' | 'rbt' | 'bcba_starter' | 'bcba_pro'
-// Client limits per plan are defined in lib/stripe.ts (PLAN_LIMITS).
-// Enforcement happens client-side when adding clients because client
-// profiles are stored in localStorage, which is inaccessible here.
-
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const origin = request.headers.get('origin') ?? ''
   const isExtension = origin.startsWith('chrome-extension://') || origin.startsWith('moz-extension://')
 
-  // Handle all OPTIONS preflight requests to /api from any origin (incl. extensions)
+  // ── CORS preflight ──────────────────────────────────────────────────────────
   if (pathname.startsWith('/api') && request.method === 'OPTIONS') {
     return new NextResponse(null, {
       status: 204,
@@ -36,8 +29,7 @@ export async function middleware(request: NextRequest) {
     })
   }
 
-  // Pass API routes through; add dynamic Access-Control-Allow-Origin for extensions.
-  // Static CORS headers (methods, allowed-headers, Vary) come from next.config.ts headers().
+  // ── API pass-through ────────────────────────────────────────────────────────
   if (pathname.startsWith('/api')) {
     const res = NextResponse.next({ request: { headers: request.headers } })
     if (isExtension) {
@@ -48,32 +40,9 @@ export async function middleware(request: NextRequest) {
     return res
   }
 
-  let response = NextResponse.next({
-    request: { headers: request.headers },
-  })
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          )
-          response = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  const { data: { user } } = await supabase.auth.getUser()
+  // ── Auth check (NextAuth replaces Supabase here) ────────────────────────────
+  const session = await auth()
+  const user = session?.user
 
   const isPublic = PUBLIC_ROUTES.some((r) => pathname === r || pathname.startsWith(r + '/'))
 
@@ -87,15 +56,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // 3. Authenticated + not a skip route → check subscription
+  // ── Subscription gate (still queries Supabase — migration later) ───────────
   const isSubscriptionSkip = SUBSCRIPTION_SKIP.some((r) => pathname === r || pathname.startsWith(r + '/'))
 
-  // Grace period: allow through immediately after Stripe redirects back so the
-  // webhook has time to update the DB before the next middleware check.
-  // We use a short-lived cookie so the grace period survives client-side navigation.
   const isPostPayment =
     request.nextUrl.searchParams.get('subscription') === 'success' ||
     request.nextUrl.searchParams.get('trial') === 'started'
+
+  let response = NextResponse.next({ request: { headers: request.headers } })
 
   if (isPostPayment) {
     response.cookies.set('trial_grace', '1', { maxAge: 300, path: '/', httpOnly: true, sameSite: 'lax' })
@@ -104,10 +72,15 @@ export async function middleware(request: NextRequest) {
   const hasGraceCookie = request.cookies.get('trial_grace')?.value === '1'
 
   if (user && !isPublic && !isSubscriptionSkip && !isPostPayment && !hasGraceCookie) {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+
     const { data: sub } = await supabase
       .from('subscriptions')
       .select('status, plan, trial_ends_at, bcba_students_status, bcba_students_trial_ends_at')
-      .eq('user_id', user.id)
+      .eq('user_id', (user as any).id)
       .maybeSingle()
 
     const now = new Date()
@@ -119,7 +92,6 @@ export async function middleware(request: NextRequest) {
           sub.trial_ends_at &&
           new Date(sub.trial_ends_at) > now))
 
-    // Users on /bcba-students with only the add-on (no main plan) should pass through
     const isBCBAStudentsRoute = pathname.startsWith('/bcba-students')
     const hasBCBAStudentsAccess =
       sub &&
@@ -130,10 +102,8 @@ export async function middleware(request: NextRequest) {
 
     if (!hasActiveSub && !(isBCBAStudentsRoute && hasBCBAStudentsAccess)) {
       if (!sub) {
-        // Never signed up for a plan → choose plan first (no payment)
         return NextResponse.redirect(new URL('/onboarding', request.url))
       }
-      // Trial expired or subscription canceled → show payment/upgrade screen
       return NextResponse.redirect(new URL('/pricing', request.url))
     }
   }

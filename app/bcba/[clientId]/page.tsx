@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
-type BCBATab = "overview" | "notes" | "schedule" | "supervision" | "parent_training" | "reassessment";
+type BCBATab = "overview" | "notes" | "schedule" | "97153xp" | "supervision" | "parent_training" | "reassessment";
 
 const SUPERVISION_TYPE_LABELS: Record<string, string> = {
   face_to_face: "Face-to-Face",
@@ -14,6 +14,33 @@ const SUPERVISION_TYPE_LABELS: Record<string, string> = {
   group_supervision: "Group Supervision",
   client_observation: "Client Observation",
 };
+
+const XP_BCBA_ACTIONS = [
+  "BCBA observed RBT implementation",
+  "Live coaching was provided",
+  "Corrective feedback was provided",
+  "BCBA modeled correct procedure",
+  "RBT rehearsed modified procedure",
+  "Treatment integrity was monitored",
+  "Protocol implementation was reviewed",
+  "Data collection was reviewed",
+  "Reinforcement delivery was reviewed",
+  "Prompting procedures were reviewed",
+  "Error correction procedures were reviewed",
+  "Transition procedures were reviewed",
+  "Other",
+];
+
+const XP_CLIENT_RESPONSE_OPTIONS = [
+  "Increased compliance observed",
+  "Reduced problem behavior observed",
+  "Improved engagement during activities",
+  "Increased independent responding",
+  "Improved transition tolerance",
+  "No notable change during overlap",
+  "Increased behavior during overlap",
+  "Other",
+];
 
 
 function SectionHeader({ title }: { title: string }) {
@@ -42,6 +69,7 @@ function TabBar({ active, onChange, isBCBAPro }: { active: BCBATab; onChange: (t
     { id: "overview",       label: "Overview" },
     { id: "notes",          label: "RBT Notes" },
     { id: "schedule",       label: "Schedule" },
+    { id: "97153xp",        label: "97153XP" },
     { id: "supervision",    label: "Supervision Notes" },
     { id: "parent_training",label: "Parent Training" },
     { id: "reassessment",   label: "Assessment Tools", proOnly: true },
@@ -91,7 +119,25 @@ export default function BCBAClientPage() {
   const [missingHours, setMissingHours] = useState<any[]>([]);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [rbtDailySummary, setRbtDailySummary] = useState<{ behaviors: string[]; skills: string[]; interventions: string[] } | null>(null);
+
+  // 97153XP tab state
+  const [xp97153Notes, setXp97153Notes] = useState<any[]>([]);
+  const [xpSubTab, setXpSubTab] = useState<"generate" | "history">("generate");
+  const [xpDate, setXpDate] = useState(new Date().toISOString().split("T")[0]);
+  const [xpLocation, setXpLocation] = useState("");
+  const [xpRbtContext, setXpRbtContext] = useState<{ empty: boolean; behaviors?: string[]; skills?: string[]; interventions?: string[]; activities?: string[] } | null>(null);
+  const [xpContextLoading, setXpContextLoading] = useState(false);
+  const [xpBcbaActions, setXpBcbaActions] = useState<string[]>([]);
+  const [xpBcbaActionsOther, setXpBcbaActionsOther] = useState("");
+  const [xpIntegrityConcerns, setXpIntegrityConcerns] = useState("");
+  const [xpClientResponse, setXpClientResponse] = useState("");
+  const [xpClientResponseOther, setXpClientResponseOther] = useState("");
+  const [xpGenerating, setXpGenerating] = useState(false);
+  const [xpGeneratedNote, setXpGeneratedNote] = useState("");
+  const [xpGenError, setXpGenError] = useState("");
+  const [xpNoteCopied, setXpNoteCopied] = useState(false);
+  const [xpSaved, setXpSaved] = useState(false);
+  const [xpExpandedNoteId, setXpExpandedNoteId] = useState<string | null>(null);
 
   // Clinical profile editing
   const [editingProfile, setEditingProfile] = useState(false);
@@ -106,15 +152,6 @@ export default function BCBAClientPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [profileSaved, setProfileSaved] = useState(false);
-
-  useEffect(() => {
-    if (activeTab === "supervision") {
-      fetch(`/api/bcba/rbt-daily-summary?clientId=${clientId}`)
-        .then(r => r.ok ? r.json() : null)
-        .then(d => { if (d?.summary) setRbtDailySummary(d.summary); })
-        .catch(() => {});
-    }
-  }, [activeTab, clientId]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -165,6 +202,14 @@ export default function BCBAClientPage() {
 
     const hoursRes = await fetch(`/api/bcba/missing-hours?clientId=${clientId}`);
     if (hoursRes.ok) { const d = await hoursRes.json(); setMissingHours(d.entries || []); }
+
+    const { data: xpNotes, error: xpError } = await supabase
+      .from("supervision_notes_97153xp")
+      .select("id, session_date, note_text, created_at")
+      .eq("client_id", clientId)
+      .eq("bcba_id", userId)
+      .order("session_date", { ascending: false });
+    if (!xpError) setXp97153Notes(xpNotes || []);
 
     setLoading(false);
   }
@@ -234,6 +279,71 @@ export default function BCBAClientPage() {
       setSaveError("Network error. Please try again.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function fetchRbtSessionContext(date: string) {
+    if (!date) return;
+    setXpContextLoading(true);
+    setXpRbtContext(null);
+    try {
+      const res = await fetch(`/api/bcba/rbt-session-context?clientId=${clientId}&date=${date}`);
+      if (!res.ok) { setXpRbtContext({ empty: true }); return; }
+      const json = await res.json();
+      setXpRbtContext(json);
+    } catch {
+      setXpRbtContext({ empty: true });
+    } finally {
+      setXpContextLoading(false);
+    }
+  }
+
+  async function handleGenerate97153XP() {
+    setXpGenerating(true);
+    setXpGenError("");
+    setXpGeneratedNote("");
+    setXpSaved(false);
+    const bcbaActionsStr = [...xpBcbaActions.filter(a => a !== "Other"), xpBcbaActionsOther.trim()].filter(Boolean).join(", ");
+    const clientResponseStr = xpClientResponse !== "Other" ? xpClientResponse : xpClientResponseOther.trim();
+    try {
+      const res = await fetch("/api/bcba/generate-97153xp-note", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId,
+          sessionDate: xpDate,
+          location: xpLocation,
+          rbtSessionContext: xpRbtContext,
+          bcbaActionsPerformed: bcbaActionsStr,
+          treatmentIntegrityConcerns: xpIntegrityConcerns,
+          clientResponseDuringOverlap: clientResponseStr,
+        }),
+      });
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        setXpGenError(data.error || "Generation failed.");
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+      outer: while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        if (chunk.includes("__META__")) {
+          const parts = chunk.split("__META__");
+          if (parts[0]) { fullText += parts[0]; setXpGeneratedNote(fullText); }
+          try { const meta = JSON.parse(parts[1]); if (meta.error) { setXpGenError(meta.error); return; } setXpSaved(!!meta.saved); } catch {}
+          break outer;
+        }
+        fullText += chunk;
+        setXpGeneratedNote(fullText);
+      }
+    } catch {
+      setXpGenError("Network error. Please try again.");
+    } finally {
+      setXpGenerating(false);
     }
   }
 
@@ -623,31 +733,269 @@ export default function BCBAClientPage() {
           </div>
         )}
 
+        {/* ── 97153XP Tab ── */}
+        {activeTab === "97153xp" && (
+          <div>
+            <div className="flex gap-1 mb-5 border-b" style={{ borderColor: "var(--border)" }}>
+              {(["generate", "history"] as const).map(st => (
+                <button
+                  key={st}
+                  onClick={() => setXpSubTab(st)}
+                  className="px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors -mb-px"
+                  style={{
+                    borderColor: xpSubTab === st ? "var(--teal)" : "transparent",
+                    color: xpSubTab === st ? "var(--teal)" : "var(--text3)",
+                  }}
+                >
+                  {st === "generate" ? "Generate Note" : "Note History"}
+                </button>
+              ))}
+            </div>
+
+            {xpSubTab === "generate" && (
+              <div className="space-y-5 max-w-[700px]">
+                <div className="bg-white rounded-xl border p-6 space-y-5" style={{ borderColor: "var(--border)" }}>
+                  <p className="text-[15px] font-semibold" style={{ color: "var(--text1)" }}>New 97153XP Note — BCBA Overlap / Implementation Support</p>
+
+                  <div>
+                    <SectionHeader title="Session Information" />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Date</label>
+                        <input
+                          type="date"
+                          value={xpDate}
+                          onChange={e => { setXpDate(e.target.value); setXpRbtContext(null); fetchRbtSessionContext(e.target.value); }}
+                          className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
+                          style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Location</label>
+                        <select
+                          value={xpLocation}
+                          onChange={e => setXpLocation(e.target.value)}
+                          className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
+                          style={{ borderColor: "var(--border)", color: xpLocation ? "var(--text1)" : "var(--text3)" }}
+                        >
+                          <option value="">Select location…</option>
+                          <option value="home">Home</option>
+                          <option value="clinic">Clinic</option>
+                          <option value="school">School</option>
+                          <option value="telehealth">Telehealth</option>
+                          <option value="community">Community</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <SectionHeader title="RBT Session Context" />
+                    {xpContextLoading && (
+                      <p className="text-[13px]" style={{ color: "var(--text3)" }}>Loading RBT session data…</p>
+                    )}
+                    {!xpContextLoading && xpRbtContext === null && (
+                      <button
+                        onClick={() => fetchRbtSessionContext(xpDate)}
+                        className="px-4 py-2 rounded-lg text-[13px] font-medium border transition-colors hover:border-gray-400"
+                        style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+                      >
+                        Load RBT Session Data for {xpDate}
+                      </button>
+                    )}
+                    {!xpContextLoading && xpRbtContext?.empty && (
+                      <p className="text-[13px]" style={{ color: "var(--text3)" }}>No RBT session note found for this date.</p>
+                    )}
+                    {!xpContextLoading && xpRbtContext && !xpRbtContext.empty && (
+                      <div className="px-4 py-3 rounded-xl border space-y-2" style={{ background: "rgba(27,168,160,0.04)", borderColor: "rgba(27,168,160,0.2)" }}>
+                        {xpRbtContext.behaviors && xpRbtContext.behaviors.length > 0 && (
+                          <p className="text-[12px]" style={{ color: "var(--text2)" }}>
+                            <span className="font-medium" style={{ color: "var(--teal)" }}>Behaviors: </span>{xpRbtContext.behaviors.join(", ")}
+                          </p>
+                        )}
+                        {xpRbtContext.skills && xpRbtContext.skills.length > 0 && (
+                          <p className="text-[12px]" style={{ color: "var(--text2)" }}>
+                            <span className="font-medium" style={{ color: "var(--teal)" }}>Skills: </span>{xpRbtContext.skills.join(", ")}
+                          </p>
+                        )}
+                        {xpRbtContext.interventions && xpRbtContext.interventions.length > 0 && (
+                          <p className="text-[12px]" style={{ color: "var(--text2)" }}>
+                            <span className="font-medium" style={{ color: "var(--teal)" }}>Interventions: </span>{xpRbtContext.interventions.join(", ")}
+                          </p>
+                        )}
+                        {xpRbtContext.activities && xpRbtContext.activities.length > 0 && (
+                          <p className="text-[12px]" style={{ color: "var(--text2)" }}>
+                            <span className="font-medium" style={{ color: "var(--teal)" }}>Activities: </span>{xpRbtContext.activities.join(", ")}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <SectionHeader title="What BCBA Did During Overlap" />
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                      {XP_BCBA_ACTIONS.map(opt => (
+                        <div key={opt}>
+                          <label className="flex items-start gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={xpBcbaActions.includes(opt)}
+                              onChange={() => setXpBcbaActions(prev => prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt])}
+                              className="mt-0.5 flex-shrink-0"
+                              style={{ accentColor: "var(--teal)" }}
+                            />
+                            <span className="text-[13px]" style={{ color: "var(--text1)" }}>{opt}</span>
+                          </label>
+                          {opt === "Other" && xpBcbaActions.includes("Other") && (
+                            <input
+                              type="text"
+                              value={xpBcbaActionsOther}
+                              onChange={e => setXpBcbaActionsOther(e.target.value)}
+                              placeholder="Specify…"
+                              className="mt-1.5 ml-5 w-[calc(100%-1.25rem)] border rounded-lg px-3 py-1.5 text-[12px] focus:outline-none"
+                              style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <SectionHeader title="Treatment Integrity Concerns (Optional)" />
+                    <textarea
+                      value={xpIntegrityConcerns}
+                      onChange={e => setXpIntegrityConcerns(e.target.value)}
+                      placeholder="Describe any treatment integrity concerns observed during the overlap session…"
+                      className="w-full border rounded-xl px-4 py-3 text-[13px] resize-none focus:outline-none"
+                      style={{ borderColor: "var(--border)", color: "var(--text1)", minHeight: 80 }}
+                    />
+                  </div>
+
+                  <div>
+                    <SectionHeader title="Client Response During Overlap" />
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                      {XP_CLIENT_RESPONSE_OPTIONS.map(opt => (
+                        <div key={opt}>
+                          <label className="flex items-start gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="xpClientResponse"
+                              checked={xpClientResponse === opt}
+                              onChange={() => setXpClientResponse(opt)}
+                              className="mt-0.5 flex-shrink-0"
+                              style={{ accentColor: "var(--teal)" }}
+                            />
+                            <span className="text-[13px]" style={{ color: "var(--text1)" }}>{opt}</span>
+                          </label>
+                          {opt === "Other" && xpClientResponse === "Other" && (
+                            <input
+                              type="text"
+                              value={xpClientResponseOther}
+                              onChange={e => setXpClientResponseOther(e.target.value)}
+                              placeholder="Specify…"
+                              className="mt-1.5 ml-5 w-[calc(100%-1.25rem)] border rounded-lg px-3 py-1.5 text-[12px] focus:outline-none"
+                              style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {xpGenError && (
+                    <p className="text-[12px] px-3 py-2 rounded-lg border" style={{ background: "#FEF2F2", borderColor: "#FECACA", color: "#DC2626" }}>
+                      {xpGenError}
+                    </p>
+                  )}
+
+                  <button
+                    onClick={handleGenerate97153XP}
+                    disabled={!xpDate || !xpLocation || xpBcbaActions.length === 0 || !xpClientResponse || xpGenerating}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ background: "var(--teal)" }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/>
+                    </svg>
+                    {xpGenerating ? "Generating…" : "Generate 97153XP Note"}
+                  </button>
+                  {(!xpDate || !xpLocation || xpBcbaActions.length === 0 || !xpClientResponse) && !xpGenerating && (
+                    <p className="text-[12px]" style={{ color: "var(--text3)" }}>
+                      Complete: date, location, at least one BCBA action, and client response.
+                    </p>
+                  )}
+                </div>
+
+                {xpGeneratedNote && (
+                  <div className="bg-white rounded-xl border p-6" style={{ borderColor: "var(--border)" }}>
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-[13px] font-semibold" style={{ color: "var(--text1)" }}>Generated Note (97153XP)</p>
+                      <div className="flex items-center gap-3">
+                        {xpSaved && (
+                          <span className="text-[12px] font-medium" style={{ color: "#16A34A" }}>✓ Saved</span>
+                        )}
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(xpGeneratedNote); setXpNoteCopied(true); setTimeout(() => setXpNoteCopied(false), 2000); }}
+                          className="px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors"
+                          style={{ borderColor: xpNoteCopied ? "#16A34A" : "var(--border)", color: xpNoteCopied ? "#16A34A" : "var(--text2)" }}
+                        >
+                          {xpNoteCopied ? "✓ Copied" : "Copy"}
+                        </button>
+                      </div>
+                    </div>
+                    <textarea
+                      value={xpGeneratedNote}
+                      onChange={e => setXpGeneratedNote(e.target.value)}
+                      className="w-full border p-4 rounded-xl text-[13px] leading-7 resize-none focus:outline-none"
+                      style={{ borderColor: "var(--border)", color: "var(--text1)", minHeight: 280 }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {xpSubTab === "history" && (
+              <div className="space-y-4 max-w-[700px]">
+                {xp97153Notes.length === 0 ? (
+                  <p className="text-[13px]" style={{ color: "var(--text3)" }}>No 97153XP notes yet.</p>
+                ) : xp97153Notes.map(note => {
+                  const isExpanded = xpExpandedNoteId === note.id;
+                  const dateLabel = new Date(note.session_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                  return (
+                    <div key={note.id} className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
+                      <div className="flex items-start justify-between mb-2">
+                        <p className="text-[13px] font-semibold" style={{ color: "var(--text1)" }}>{dateLabel}</p>
+                        <button
+                          onClick={() => setXpExpandedNoteId(isExpanded ? null : note.id)}
+                          className="text-[12px] font-medium hover:underline"
+                          style={{ color: "var(--teal)" }}
+                        >
+                          {isExpanded ? "Collapse" : "View"}
+                        </button>
+                      </div>
+                      {!isExpanded && (
+                        <p className="text-[12px] line-clamp-2" style={{ color: "var(--text3)" }}>
+                          {(note.note_text || "").slice(0, 120)}…
+                        </p>
+                      )}
+                      {isExpanded && (
+                        <p className="text-[13px] leading-7 whitespace-pre-wrap mt-2" style={{ color: "var(--text2)" }}>
+                          {note.note_text}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── Supervision Notes Tab ── */}
         {activeTab === "supervision" && (
           <div>
-            {/* RBT daily session banner */}
-            {rbtDailySummary && (
-              <div className="mb-4 px-4 py-4 rounded-xl border" style={{ background: "rgba(27,168,160,0.05)", borderColor: "rgba(27,168,160,0.2)", borderLeftWidth: "3px", borderLeftColor: "var(--teal)" }}>
-                <p className="text-[13px] font-semibold mb-2" style={{ color: "var(--teal)" }}>RBT Session Today — Recommended Focus Areas</p>
-                {rbtDailySummary.behaviors.length > 0 && (
-                  <p className="text-[12px] mb-1" style={{ color: "var(--text2)" }}>
-                    <span className="font-medium">Behaviors addressed: </span>{rbtDailySummary.behaviors.join(", ")}
-                  </p>
-                )}
-                {rbtDailySummary.skills.length > 0 && (
-                  <p className="text-[12px] mb-1" style={{ color: "var(--text2)" }}>
-                    <span className="font-medium">Skills targeted: </span>{rbtDailySummary.skills.join(", ")}
-                  </p>
-                )}
-                {rbtDailySummary.interventions.length > 0 && (
-                  <p className="text-[12px] mb-1" style={{ color: "var(--text2)" }}>
-                    <span className="font-medium">Interventions used: </span>{rbtDailySummary.interventions.slice(0, 5).join(", ")}
-                  </p>
-                )}
-                <p className="text-[11px] mt-2" style={{ color: "var(--text3)" }}>Based on today's RBT session note</p>
-              </div>
-            )}
             <div className="flex justify-end mb-4">
               <Link
                 href={`/bcba/${clientId}/supervision-note`}

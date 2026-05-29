@@ -2,8 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "@/lib/auth";
-import { supabase } from "@/lib/supabase";
+import { signIn } from "next-auth/react";
 import { PasswordInput } from "@/app/components/PasswordInput";
 
 export const dynamic = "force-dynamic";
@@ -50,40 +49,35 @@ function LoginContent() {
     setLoading(true);
 
     if (mode === "signin") {
-      const { error: authError } = await signIn(email, password);
+      const result = await signIn("credentials", { email, password, redirect: false });
       setLoading(false);
-      if (authError) { setError("Invalid email or password. Please try again."); return; }
+      if (result?.error) { setError("Invalid email or password. Please try again."); return; }
       router.push("/dashboard");
 
     } else if (mode === "signup") {
       if (password !== confirmPassword) { setError("Passwords do not match."); setLoading(false); return; }
-      
-      // NOTE: Supabase Dashboard must be configured to send OTP codes, not magic links.
-      // Authentication → Providers → Email → disable "Confirm email" link, enable OTP (6-digit code).
-      const { data: signUpData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: undefined, // disable magic link — forces OTP code delivery
-          data: { profession },
-        }
+
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, name: email.split("@")[0], role: profession.toLowerCase() || "rbt" }),
       });
-      
-      if (authError) {
+      const data = await res.json();
+
+      if (!res.ok) {
         setLoading(false);
-        if (authError.message.toLowerCase().includes("already registered") || authError.message.toLowerCase().includes("already exists")) {
+        if (res.status === 409) {
           setError("__duplicate__");
         } else {
-          setError(authError.message);
+          setError(data.error || "Registration failed");
         }
         return;
       }
-      if (signUpData.user) {
-        setLoading(false);
-        router.push("/onboarding");
-        return;
-      }
+
+      await signIn("credentials", { email, password, redirect: false });
       setLoading(false);
+      router.push("/onboarding");
+      return;
 
     } else {
       await fetch('/api/auth/reset-password', {
