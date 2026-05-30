@@ -5,7 +5,7 @@
 //  See middleware.ts for the required server-side change.
 // ─────────────────────────────────────────────
 
-const BASE = 'https://www.path4aba.app';
+const BASE = 'https://path4aba.app';
 
 // ── State ──────────────────────────────────
 let userRole = null;     // 'rbt' | 'bcba'
@@ -718,11 +718,11 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
 
 // ── Auth screen buttons ────────────────────
 document.getElementById('loginBtn').addEventListener('click', () => {
-  chrome.tabs.create({ url: 'https://www.path4aba.app/login' });
+  chrome.tabs.create({ url: 'https://path4aba.app/login' });
 });
 
 document.getElementById('openAppBtn')?.addEventListener('click', () => {
-  chrome.tabs.create({ url: 'https://www.path4aba.app' });
+  chrome.tabs.create({ url: 'https://path4aba.app' });
 });
 
 document.getElementById('logoutBtn').addEventListener('click', async () => {

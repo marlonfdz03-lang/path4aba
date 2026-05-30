@@ -5,7 +5,7 @@
   "description": "Clinical documentation for ABA professionals — generate and refine notes from any webpage.",
   "permissions": ["storage", "activeTab"],
   "host_permissions": [
-    "https://www.path4aba.app/*"
+    "https://path4aba.app/*"
   ],
   "action": {
     "default_popup": "popup.html",
