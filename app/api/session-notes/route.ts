@@ -1,56 +1,60 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createServerClient } from '@supabase/ssr'
-import { supabaseServer } from '@/lib/supabaseServer'
+import { auth } from '@/auth'
+import { Pool } from 'pg'
+import { PrismaPg } from '@prisma/adapter-pg'
+import { PrismaClient } from '@/lib/generated/prisma/client'
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+const adapter = new PrismaPg(pool)
+const prisma = new PrismaClient({ adapter } as any)
 
 export const dynamic = 'force-dynamic'
 
-async function getAuthUser() {
-  const cookieStore = await cookies()
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-  )
-  const { data: { user } } = await authClient.auth.getUser()
-  return user
-}
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function GET(req: Request) {
-  const user = await getAuthUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const clientId = new URL(req.url).searchParams.get('clientId')
   if (!clientId) return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
 
-  const { data: notes } = await supabaseServer
-    .from('session_notes')
-    .select('id, note_text, created_at')
-    .eq('client_id', clientId)
-    .order('created_at', { ascending: false })
+  const notes = await prisma.session_notes.findMany({
+    where: { client_id: clientId },
+    select: { id: true, note_text: true, created_at: true },
+    orderBy: { created_at: 'desc' },
+  })
 
-  return NextResponse.json({ notes: notes || [] })
+  return NextResponse.json({ notes })
 }
 
 export async function POST(req: Request) {
-  const user = await getAuthUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await req.json()
-  const { clientId, noteText, sessionDate } = body
-  if (!clientId || !noteText) {
-    return NextResponse.json({ error: 'Missing clientId or noteText' }, { status: 400 })
-  }
+  const userId = (session.user as any).id as string
+  const { clientId, noteText, sessionDate } = await req.json()
+  if (!clientId || !noteText) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
 
-  const { error } = await supabaseServer
-    .from('session_notes')
-    .insert({
+  await prisma.session_notes.create({
+    data: {
       client_id: clientId,
-      user_id: user.id,
+      user_id: UUID_RE.test(userId) ? userId : null,
       note_text: noteText,
       session_date: sessionDate || new Date().toISOString().split('T')[0],
-    })
+    },
+  })
 
-  if (error) return NextResponse.json({ error: 'Failed to save note' }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}
+
+export async function DELETE(req: Request) {
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const id = new URL(req.url).searchParams.get('id')
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+
+  await prisma.session_notes.delete({ where: { id } })
   return NextResponse.json({ ok: true })
 }

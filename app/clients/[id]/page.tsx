@@ -1,10 +1,11 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { getClientProfiles } from "@/lib/clientStorage";
-import { supabase } from "@/lib/supabase";
 import { saveNote, getNotesByClientId, deleteNote } from "@/lib/noteStorage";
 
 const LOCATION_OPTIONS = [
@@ -230,28 +231,24 @@ export default function ClientProfilePage() {
   useEffect(() => {
     async function load() {
       const id = params.id as string;
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data } = await supabase
-          .from("clients")
-          .select("id, internal_code, clinical_profile")
-          .eq("id", id)
-          .eq("rbt_id", user.id)
-          .maybeSingle();
-        if (data) {
-          const found = { id: data.id, clientName: data.clinical_profile?.name || data.internal_code, clinicalProfile: data.clinical_profile };
-          setClient(found);
-          const loadedFromSupabase = await loadNotesFromSupabase(found.id);
-          if (!loadedFromSupabase) setDailyNotes(getNotesByClientId(found.id));
-          if (data.clinical_profile?.whoWasPresent?.length) {
-            setSavedPresent(data.clinical_profile.whoWasPresent);
-          } else {
-            const raw = localStorage.getItem(`path4aba_saved_present_${found.id}`);
-            if (raw) { try { setSavedPresent(JSON.parse(raw)); } catch {} }
-          }
-          return;
+
+      const res = await fetch(`/api/clients/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        const found = { id: data.id, clientName: data.clinical_profile?.name || data.internal_code || "Unnamed Client", clinicalProfile: data.clinical_profile };
+        setClient(found);
+        const loadedFromDB = await loadNotesFromSupabase(found.id);
+        if (!loadedFromDB) setDailyNotes(getNotesByClientId(found.id));
+        if (data.clinical_profile?.whoWasPresent?.length) {
+          setSavedPresent(data.clinical_profile.whoWasPresent);
+        } else {
+          const raw = localStorage.getItem(`path4aba_saved_present_${found.id}`);
+          if (raw) { try { setSavedPresent(JSON.parse(raw)); } catch {} }
         }
+        return;
       }
+
+      // Fallback to localStorage
       const clients = getClientProfiles();
       const foundClient = clients.find((c: any) => c.id === id);
       if (foundClient) {
@@ -296,9 +293,11 @@ export default function ClientProfilePage() {
     const updated = [...new Set([...savedPresent, name])];
     setSavedPresent(updated);
     localStorage.setItem(`path4aba_saved_present_${client.id}`, JSON.stringify(updated));
-    supabase.from("clients")
-      .update({ clinical_profile: { ...client.clinicalProfile, whoWasPresent: updated } })
-      .eq("id", client.id);
+    fetch(`/api/clients/${client.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clinical_profile: { ...client.clinicalProfile, whoWasPresent: updated } }),
+    });
     if (!selectedPresent.includes(name)) setSelectedPresent((prev) => [...prev, name]);
     setCustomPresent("");
   }
@@ -410,14 +409,12 @@ export default function ClientProfilePage() {
     const today = new Date();
     const backupNote = { id: crypto.randomUUID(), clientId: client.id, date: date || today.toLocaleDateString(), note: generatedNote };
     saveNote(backupNote);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await supabase.from("session_notes").insert({
-        client_id: client.id,
-        user_id: user.id,
-        note_text: generatedNote,
-        session_date: date || today.toISOString().split("T")[0],
-      });
+    const res = await fetch("/api/session-notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientId: client.id, noteText: generatedNote, sessionDate: date || today.toISOString().split("T")[0] }),
+    });
+    if (res.ok) {
       await loadNotesFromSupabase(client.id);
     } else {
       setDailyNotes(prev => [backupNote, ...prev]);
@@ -492,14 +489,12 @@ export default function ClientProfilePage() {
       note: perfectedNote,
     };
     saveNote(noteObject);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await supabase.from("session_notes").insert({
-        client_id: client.id,
-        user_id: user.id,
-        note_text: perfectedNote,
-        session_date: today.toISOString().split("T")[0],
-      });
+    const res = await fetch("/api/session-notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientId: client.id, noteText: perfectedNote, sessionDate: today.toISOString().split("T")[0] }),
+    });
+    if (res.ok) {
       await loadNotesFromSupabase(client.id);
     } else {
       setDailyNotes(prev => [noteObject, ...prev]);
@@ -511,7 +506,7 @@ export default function ClientProfilePage() {
   async function handleDeleteNote(noteId: string, fromSupabase?: boolean) {
     if (!window.confirm("Are you sure you want to delete this note?")) return;
     if (fromSupabase) {
-      await supabase.from("session_notes").delete().eq("id", noteId);
+      await fetch(`/api/session-notes?id=${noteId}`, { method: "DELETE" });
     } else {
       deleteNote(noteId);
     }
