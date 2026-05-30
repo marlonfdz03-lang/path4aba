@@ -41,6 +41,6 @@ jobs:
       - name: Deploy to Azure App Service
         uses: azure/webapps-deploy@v3
         with:
-          app-name: path4aba-app
+          app-name: path4aba-app-c2ahc4d2f4d9dwd0
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: deploy.zip
