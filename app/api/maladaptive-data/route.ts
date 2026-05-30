@@ -16,24 +16,18 @@ export async function GET(req: Request) {
   const clientId = searchParams.get('clientId')
   if (!clientId) return NextResponse.json({ error: 'clientId required' }, { status: 400 })
 
-  const dateFrom = searchParams.get('dateFrom') || undefined
-  const dateTo = searchParams.get('dateTo') || undefined
-  const skill = searchParams.get('skill') || undefined
-  const location = searchParams.get('location') || undefined
-
   const where: any = { client_id: clientId }
-  if (dateFrom || dateTo) {
-    where.session_date = {}
-    if (dateFrom) where.session_date.gte = dateFrom
-    if (dateTo) where.session_date.lte = dateTo
-  }
-  if (skill) where.replacement_skill = { contains: skill, mode: 'insensitive' }
-  if (location) where.location = location
+  const dateFrom = searchParams.get('dateFrom')
+  const dateTo   = searchParams.get('dateTo')
+  const behavior = searchParams.get('behavior')
+  if (dateFrom) where.week_start = { ...(where.week_start ?? {}), gte: dateFrom }
+  if (dateTo)   where.week_start = { ...(where.week_start ?? {}), lte: dateTo }
+  if (behavior) where.behavior_name = { contains: behavior, mode: 'insensitive' }
 
   try {
-    const data = await prisma.replacement_data.findMany({
+    const data = await prisma.maladaptive_data.findMany({
       where,
-      orderBy: [{ session_date: 'desc' }, { created_at: 'desc' }],
+      orderBy: [{ week_start: 'desc' }, { created_at: 'desc' }],
     })
     return NextResponse.json({ data })
   } catch (err: any) {
@@ -47,32 +41,27 @@ export async function POST(req: Request) {
 
   const body = await req.json()
   const records: any[] = Array.isArray(body) ? body : [body]
-
   const now = new Date()
+
   try {
     const created = await Promise.all(
       records.map((r) =>
-        prisma.replacement_data.create({
+        prisma.maladaptive_data.create({
           data: {
             client_id: r.clientId,
-            session_date: r.sessionDate ?? null,
+            behavior_name: r.behaviorName,
             week_start: r.weekStart ?? null,
             week_end: r.weekEnd ?? null,
-            location: r.location ?? null,
-            session_time_in: r.sessionTimeIn ?? null,
-            session_time_out: r.sessionTimeOut ?? null,
-            rbt_name: r.rbtName ?? null,
-            platform_source: r.platformSource ?? null,
-            replacement_skill: r.replacementSkill,
-            // accept both naming conventions from extension and web app
-            total_trials: r.totalTrials ?? r.trials ?? 10,
-            observed_percentage: r.observedPercentage ?? r.dailyPercentage ?? 0,
-            correct_count: r.correctCount ?? 0,
-            incorrect_count: r.incorrectCount ?? 0,
-            alternated_sequence: r.alternatedSequence ?? r.sequence ?? null,
+            session_date: r.sessionDate ?? null,
+            frequency: r.frequency ?? null,
+            rate: r.rate ?? null,
+            duration: r.duration ?? null,
+            trials: r.trials ?? null,
+            daily_values: r.dailyValues ?? null,
             user_confirmed: r.userConfirmed ?? false,
             confirmed_at: r.userConfirmed ? now : null,
-            autofill_completed: r.autofillCompleted ?? false,
+            projected_value: r.projectedValue ?? null,
+            goal_met: r.goalMet ?? null,
           },
         })
       )

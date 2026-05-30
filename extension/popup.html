@@ -183,45 +183,46 @@
 
         <!-- Warning -->
         <div class="data-warn">
-          ⚠️ This tool is only for organizing and entering data based on real observations.
-          The user is responsible for confirming accuracy.
+          ⚠️ Before autofill: Please confirm that these values match your real session observation.
+          This tool does not replace clinical judgment or accurate data collection.
         </div>
 
-        <!-- Session info -->
+        <!-- Week Setup Section -->
         <div class="field">
-          <label class="field-label">Session Date</label>
-          <input type="date" id="dataDate" class="input">
-        </div>
-
-        <div class="field">
-          <label class="field-label">Location</label>
-          <div class="toggle-group" id="dataLocationGroup">
-            <button class="toggle-btn" data-val="home">Home</button>
-            <button class="toggle-btn" data-val="school">School</button>
-            <button class="toggle-btn" data-val="clinic">Clinic</button>
-          </div>
+          <label class="field-label">Week Start Date</label>
+          <input type="date" id="weekStartDate" class="input">
         </div>
 
         <div class="field">
-          <label class="field-label">RBT Name</label>
-          <input type="text" id="dataRbtName" class="input" placeholder="Your name">
+          <label class="field-label">Week End Date</label>
+          <input type="date" id="weekEndDate" class="input" readonly style="background:#f3f4f6;cursor:not-allowed;">
         </div>
 
         <div class="field">
-          <label class="field-label">Session Time</label>
-          <div class="time-row">
-            <input type="time" id="dataTimeIn" class="input time-input">
-            <span class="time-sep">–</span>
-            <input type="time" id="dataTimeOut" class="input time-input">
-          </div>
+          <label class="field-label">Default Trials</label>
+          <input type="number" id="defaultTrials" class="input" value="10" min="1" max="999">
         </div>
 
-        <button id="extractBtn" class="btn-outline full-width">Extract Replacements</button>
+        <div style="display:flex;gap:8px;margin-bottom:2px;">
+          <button id="extractMaladaptivesBtn" class="btn-outline half-width" style="border-color:#f59e0b;color:#92400e;">Extract Maladaptives</button>
+          <button id="extractBtn" class="btn-outline half-width">Extract Replacements</button>
+        </div>
+
+        <!-- Maladaptive cards -->
+        <div id="maladaptiveCards" style="display:none; margin-top:12px;"></div>
 
         <!-- Skill cards -->
         <div id="skillCards" style="display:none; margin-top:12px;"></div>
 
-        <!-- Calculate + Sequence buttons -->
+        <!-- Review section -->
+        <div id="reviewSection" style="display:none; margin-top:12px;">
+          <div class="review-header" style="margin-bottom:8px;">
+            <span class="field-label">Weekly Data Preview</span>
+          </div>
+          <div id="reviewCards" style="margin-top:10px;"></div>
+        </div>
+
+        <!-- Action buttons -->
         <div id="dataActions" class="data-actions-row" style="display:none; margin-top:10px;">
           <button id="calculateBtn" class="btn-outline half-width">Calculate Data</button>
           <button id="genSeqBtn" class="btn-outline half-width">Generate Sequence</button>

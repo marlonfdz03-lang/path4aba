@@ -747,7 +747,8 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
 
 // ── State ──────────────────────────────────
 let dataLocation = null;
-let skillRows = []; // { skill, trials, percentage, notes, correct, incorrect, sequence, status }
+let skillRows = [];        // replacement skill rows
+let maladaptiveRows = [];  // { behavior, weeklyAvg, dailyValues, status }
 
 // ── Helpers ────────────────────────────────
 function generateAltSequence(correct, incorrect) {
@@ -776,12 +777,208 @@ function showDataMsg(msg, isError = true) {
   document.getElementById('tabContent-data').appendChild(el);
 }
 
-// ── Extract replacements from profile ──────
+// ── Seeded PRNG (mulberry32) ───────────────
+// Referenced by generateVariedSequence; must be defined before it's called.
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ── Week Helper Functions ──────────────────
+function calcWeekEndDate(startStr) {
+  if (!startStr) return null;
+  const start = new Date(startStr);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  return end.toISOString().split('T')[0];
+}
+
+function getWeekDays(startDate) {
+  const days = [];
+  const start = new Date(startDate);
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    days.push(d.toISOString().split('T')[0]);
+  }
+  return days;
+}
+
+function generateDailyPercentages(weeklyAvg, numDays = 5) {
+  const dailyPcts = [];
+  const maxDeviation = 15;
+
+  for (let i = 0; i < numDays; i++) {
+    let pct;
+    if (i === numDays - 1) {
+      const sum = dailyPcts.reduce((a, b) => a + b, 0);
+      pct = Math.round((weeklyAvg * numDays - sum));
+      pct = Math.max(0, Math.min(100, pct));
+    } else {
+      const deviation = (Math.random() - 0.5) * (maxDeviation * 2);
+      pct = Math.round(weeklyAvg + deviation);
+      pct = Math.max(0, Math.min(100, pct));
+    }
+    dailyPcts.push(pct);
+  }
+
+  return dailyPcts;
+}
+
+// Same distribution algorithm applied to frequency counts (integers, not percentages)
+function generateDailyFrequencies(weeklyAvg, numDays = 5) {
+  const daily = [];
+  const maxDev = Math.max(2, Math.round(weeklyAvg * 0.3));
+  for (let i = 0; i < numDays; i++) {
+    if (i === numDays - 1) {
+      const sum = daily.reduce((a, b) => a + b, 0);
+      daily.push(Math.max(0, Math.round(weeklyAvg * numDays - sum)));
+    } else {
+      const dev = Math.round((Math.random() - 0.5) * maxDev * 2);
+      daily.push(Math.max(0, Math.round(weeklyAvg + dev)));
+    }
+  }
+  return daily;
+}
+
+function generateVariedSequence(correct, incorrect, seed = null) {
+  const positions = [];
+
+  for (let i = 0; i < correct; i++) {
+    positions.push('+');
+  }
+  for (let i = 0; i < incorrect; i++) {
+    positions.push('-');
+  }
+
+  let rng = seed ? mulberry32(seed) : Math.random;
+  for (let i = positions.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [positions[i], positions[j]] = [positions[j], positions[i]];
+  }
+
+  return positions;
+}
+
+// ── Week Start Date listener ───────────────
+document.getElementById('weekStartDate').addEventListener('change', (e) => {
+  const weekStart = e.target.value;
+  const weekEnd = calcWeekEndDate(weekStart);
+  if (weekEnd) {
+    document.getElementById('weekEndDate').value = weekEnd;
+  }
+  document.getElementById('reviewSection').style.display = 'none';
+});
+
+// ── Extract Maladaptives ───────────────────
+document.getElementById('extractMaladaptivesBtn').addEventListener('click', () => {
+  document.querySelectorAll('.data-feedback').forEach(e => e.remove());
+
+  if (!selectedClientId || !selectedProfile) {
+    showDataMsg('Select a client first.');
+    return;
+  }
+
+  const weekStart = document.getElementById('weekStartDate').value;
+  if (!weekStart) { showDataMsg('Select a week start date first.'); return; }
+
+  const rawBehaviors = [
+    ...(selectedProfile.maladaptiveBehaviors || []),
+    ...(selectedProfile.activePrograms?.maladaptive || []),
+  ];
+  const behaviors = [...new Set(
+    rawBehaviors.map(b => (typeof b === 'string' ? b : b?.name || '')).filter(Boolean)
+  )];
+
+  if (!behaviors.length) {
+    showDataMsg('No maladaptive behaviors found in this client\'s profile.');
+    return;
+  }
+
+  maladaptiveRows = behaviors.map(behavior => ({
+    behavior,
+    weeklyFreq: '',
+    dailyValues: [],
+    status: 'pending',
+  }));
+
+  renderMaladaptiveCards();
+  document.getElementById('maladaptiveCards').style.display = '';
+  document.getElementById('dataActions').style.display = '';
+  document.getElementById('confirmSection').style.display = '';
+  document.getElementById('autofillBtn').disabled = true;
+});
+
+function renderMaladaptiveCards() {
+  const container = document.getElementById('maladaptiveCards');
+  container.innerHTML = '';
+  if (!maladaptiveRows.length) return;
+
+  const sectionLabel = document.createElement('p');
+  sectionLabel.style.cssText = 'font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;';
+  sectionLabel.textContent = 'Maladaptive Behaviors';
+  container.appendChild(sectionLabel);
+
+  maladaptiveRows.forEach((row, idx) => {
+    const card = document.createElement('div');
+    card.className = `skill-card ${row.status}`;
+    card.style.borderLeftColor = '#f59e0b';
+    card.id = `maladCard-${idx}`;
+    card.innerHTML = `
+      <div class="skill-card-header">
+        <span class="skill-name" title="${row.behavior}">${row.behavior}</span>
+        <span class="skill-status-badge ${row.status}" style="background:#fef3c7;color:#92400e;">${getStatusLabel(row.status)}</span>
+      </div>
+      <div class="skill-inputs">
+        <div class="skill-input-group">
+          <label>Weekly Avg Frequency</label>
+          <input type="number" min="0" max="999" class="input small" placeholder="0"
+                 value="${row.weeklyFreq}" data-idx="${idx}" data-type="malad" data-field="weeklyFreq">
+        </div>
+        <div class="skill-input-group">
+          <label>Unit</label>
+          <select class="input small" data-idx="${idx}" data-type="malad" data-field="unit" style="padding:5px 6px;">
+            <option value="count">Count</option>
+            <option value="rate">Rate/hr</option>
+          </select>
+        </div>
+      </div>
+      ${row.dailyValues.length ? `
+        <div class="skill-results">
+          ${row.dailyValues.map((v, i) => `<span style="font-size:10px;color:#6b7280;">${['M','T','W','Th','F'][i]}:<b>${v}</b></span>`).join(' ')}
+          <span class="result-pct">Avg: ${Math.round(row.dailyValues.reduce((a,b)=>a+b,0)/row.dailyValues.length)}</span>
+        </div>` : ''}
+    `;
+    container.appendChild(card);
+  });
+
+  container.querySelectorAll('input[data-type="malad"], select[data-type="malad"]').forEach(input => {
+    input.addEventListener('input', e => {
+      const idx = parseInt(e.target.dataset.idx);
+      const field = e.target.dataset.field;
+      maladaptiveRows[idx][field] = e.target.value;
+      maladaptiveRows[idx].dailyValues = [];
+      maladaptiveRows[idx].status = 'pending';
+    });
+  });
+}
+
+// ── Extract replacements (week-based) ──────
 document.getElementById('extractBtn').addEventListener('click', () => {
   document.querySelectorAll('.data-feedback').forEach(e => e.remove());
 
   if (!selectedClientId || !selectedProfile) {
     showDataMsg('Select a client first.');
+    return;
+  }
+
+  const weekStart = document.getElementById('weekStartDate').value;
+  if (!weekStart) {
+    showDataMsg('Select a week start date first.');
     return;
   }
 
@@ -799,9 +996,18 @@ document.getElementById('extractBtn').addEventListener('click', () => {
     return;
   }
 
+  const defaultTrials = parseInt(document.getElementById('defaultTrials').value) || 10;
+
   skillRows = skills.map(skill => ({
-    skill, trials: '', percentage: '', notes: '',
-    correct: null, incorrect: null, sequence: null, status: 'pending',
+    skill,
+    defaultTrials,
+    trialsOverride: null,
+    weeklyAvg: '',
+    dailyPercentages: [],
+    dailyCorrect: [],
+    dailyIncorrect: [],
+    sequences: [],
+    status: 'pending',
   }));
 
   renderSkillCards();
@@ -811,7 +1017,7 @@ document.getElementById('extractBtn').addEventListener('click', () => {
   document.getElementById('autofillBtn').disabled = true;
 });
 
-// ── Render skill cards ──────────────────────
+// ── Render skill cards (week-based) ────────
 function renderSkillCards() {
   const container = document.getElementById('skillCards');
   container.innerHTML = '';
@@ -823,18 +1029,7 @@ function renderSkillCards() {
     card.className = `skill-card ${row.status}`;
     card.id = `skillCard-${idx}`;
 
-    const resultsHtml = row.correct !== null ? `
-      <div class="skill-results">
-        <span class="result-plus">+ ${row.correct}</span>
-        <span class="result-minus">− ${row.incorrect}</span>
-        ${row.correct + row.incorrect > 0 && Math.round(row.correct / (row.correct + row.incorrect) * 100) !== Math.round(parseFloat(row.percentage))
-          ? `<span class="result-pct">Actual: ${Math.round(row.correct / (row.correct + row.incorrect) * 100)}%</span>` : ''}
-      </div>` : '';
-
-    const seqHtml = row.sequence ? `
-      <div class="sequence-display">
-        ${row.sequence.map(s => `<span class="seq-dot ${s === '+' ? 'pos' : 'neg'}">${s}</span>`).join('')}
-      </div>` : '';
+    const trials = row.trialsOverride || row.defaultTrials;
 
     card.innerHTML = `
       <div class="skill-card-header">
@@ -843,22 +1038,19 @@ function renderSkillCards() {
       </div>
       <div class="skill-inputs">
         <div class="skill-input-group">
-          <label>Trials</label>
-          <input type="number" min="1" max="999" class="input small" placeholder="0"
-                 value="${row.trials}" data-idx="${idx}" data-field="trials">
-        </div>
-        <div class="skill-input-group">
-          <label>% Observed</label>
+          <label>Weekly Avg %</label>
           <input type="number" min="0" max="100" class="input small" placeholder="0"
-                 value="${row.percentage}" data-idx="${idx}" data-field="percentage">
+                 value="${row.weeklyAvg}" data-idx="${idx}" data-field="weeklyAvg">
         </div>
         <div class="skill-input-group">
-          <label>Notes</label>
-          <input type="text" class="input small" placeholder="Optional"
-                 value="${row.notes}" data-idx="${idx}" data-field="notes">
+          <label>Trials (override)</label>
+          <input type="number" min="1" max="999" class="input small" placeholder="${row.defaultTrials}"
+                 value="${row.trialsOverride || ''}" data-idx="${idx}" data-field="trialsOverride">
         </div>
       </div>
-      ${resultsHtml}${seqHtml}
+      <div class="skill-info">
+        <span style="color:#6b7280;font-size:11px;">Using ${trials} trials</span>
+      </div>
     `;
     container.appendChild(card);
   });
@@ -868,69 +1060,190 @@ function renderSkillCards() {
     input.addEventListener('input', e => {
       const idx = parseInt(e.target.dataset.idx);
       const field = e.target.dataset.field;
-      skillRows[idx][field] = e.target.value;
-      if (field === 'trials' || field === 'percentage') {
-        skillRows[idx].correct = null;
-        skillRows[idx].incorrect = null;
-        skillRows[idx].sequence = null;
-        skillRows[idx].status = 'pending';
-        const card = document.getElementById(`skillCard-${idx}`);
-        if (card) {
-          card.className = 'skill-card pending';
-          card.querySelector('.skill-status-badge').className = 'skill-status-badge pending';
-          card.querySelector('.skill-status-badge').textContent = 'Pending';
-        }
+      const val = e.target.value;
+      
+      if (field === 'weeklyAvg') {
+        skillRows[idx].weeklyAvg = val;
+      } else if (field === 'trialsOverride') {
+        skillRows[idx].trialsOverride = val ? parseInt(val) : null;
       }
+      
+      skillRows[idx].dailyPercentages = [];
+      skillRows[idx].dailyCorrect = [];
+      skillRows[idx].dailyIncorrect = [];
+      skillRows[idx].sequences = [];
+      skillRows[idx].status = 'pending';
+      
+      const card = document.getElementById(`skillCard-${idx}`);
+      if (card) {
+        card.className = 'skill-card pending';
+        card.querySelector('.skill-status-badge').className = 'skill-status-badge pending';
+        card.querySelector('.skill-status-badge').textContent = 'Pending';
+      }
+      
+      document.getElementById('reviewSection').style.display = 'none';
     });
   });
 }
 
-// ── Calculate Data ─────────────────────────
+// ── Calculate Data (generates daily percentages & correct/incorrect) ─
 document.getElementById('calculateBtn').addEventListener('click', () => {
   document.querySelectorAll('.data-feedback').forEach(e => e.remove());
   let hasErrors = false;
 
   skillRows.forEach((row, idx) => {
-    if (!row.trials && !row.percentage) return; // skip empty rows
-    const trials = parseInt(row.trials);
-    const pct = parseFloat(row.percentage);
+    if (!row.weeklyAvg) return;
 
-    if (isNaN(trials) || trials <= 0) { skillRows[idx].status = 'error'; hasErrors = true; return; }
-    if (isNaN(pct) || pct < 0 || pct > 100) { skillRows[idx].status = 'error'; hasErrors = true; return; }
+    const pct = parseFloat(row.weeklyAvg);
+    if (isNaN(pct) || pct < 0 || pct > 100) {
+      skillRows[idx].status = 'error';
+      hasErrors = true;
+      return;
+    }
 
-    skillRows[idx].correct = Math.round((pct / 100) * trials);
-    skillRows[idx].incorrect = trials - skillRows[idx].correct;
+    const trials = row.trialsOverride || row.defaultTrials;
+
+    // Generate daily percentages with variation
+    const dailyPcts = generateDailyPercentages(pct, 5);
+    
+    // Calculate correct/incorrect for each day
+    const dailyCorrect = [];
+    const dailyIncorrect = [];
+    
+    dailyPcts.forEach(dailyPct => {
+      const correct = Math.round((dailyPct / 100) * trials);
+      const incorrect = trials - correct;
+      dailyCorrect.push(correct);
+      dailyIncorrect.push(incorrect);
+    });
+
+    skillRows[idx].dailyPercentages = dailyPcts;
+    skillRows[idx].dailyCorrect = dailyCorrect;
+    skillRows[idx].dailyIncorrect = dailyIncorrect;
     skillRows[idx].status = 'calculated';
   });
 
+  // Calculate maladaptive daily values
+  maladaptiveRows.forEach((row, idx) => {
+    if (!row.weeklyFreq) return;
+    const avg = parseFloat(row.weeklyFreq);
+    if (isNaN(avg) || avg < 0) { maladaptiveRows[idx].status = 'error'; hasErrors = true; return; }
+    // Generate daily frequency values that average to weeklyFreq
+    const daily = generateDailyFrequencies(avg, 5);
+    maladaptiveRows[idx].dailyValues = daily;
+    maladaptiveRows[idx].status = 'calculated';
+  });
+
   renderSkillCards();
-  if (hasErrors) showDataMsg('Some rows have invalid values. Trials must be > 0 and percentage must be 0–100.');
+  renderMaladaptiveCards();
+  renderReviewScreen();
+  document.getElementById('reviewSection').style.display = '';
+
+  if (hasErrors) {
+    showDataMsg('Some rows have invalid values.');
+  } else {
+    showDataMsg('Data calculated. Review above and click "Generate Sequence" next.', false);
+  }
 });
 
 // ── Generate Sequence ──────────────────────
 document.getElementById('genSeqBtn').addEventListener('click', () => {
   document.querySelectorAll('.data-feedback').forEach(e => e.remove());
-  const uncalculated = skillRows.filter(r => r.trials && r.correct === null);
+
+  const uncalculated = skillRows.filter(r => r.weeklyAvg && r.dailyPercentages.length === 0);
   if (uncalculated.length) {
-    showDataMsg('Calculate data first before generating sequences.');
+    showDataMsg('Click "Calculate Data" first to generate daily percentages.');
     return;
   }
+
   skillRows.forEach((row, idx) => {
-    if (row.correct !== null) {
-      skillRows[idx].sequence = generateAltSequence(row.correct, row.incorrect);
+    if (row.dailyCorrect.length > 0) {
+      // Generate sequence for each day
+      const sequences = [];
+      row.dailyCorrect.forEach((correct, dayIdx) => {
+        const incorrect = row.dailyIncorrect[dayIdx];
+        const seed = `${row.skill}-${document.getElementById('weekStartDate').value}-${dayIdx}`.split('').reduce((a, b) => {
+          a = ((a << 5) - a) + b.charCodeAt(0);
+          return a & a;
+        }, 0);
+        const sequence = generateVariedSequence(correct, incorrect, seed);
+        sequences.push(sequence);
+      });
+      skillRows[idx].sequences = sequences;
+      skillRows[idx].status = 'confirmed';
     }
   });
+
   renderSkillCards();
+  renderReviewScreen();
+  
+  if (skillRows.some(r => r.status === 'confirmed')) {
+    showDataMsg('Sequences generated. Ready to save and autofill.', false);
+  }
 });
 
-// ── Location for data tab ──────────────────
-document.getElementById('dataLocationGroup').addEventListener('click', e => {
-  const btn = e.target.closest('.toggle-btn');
-  if (!btn) return;
-  document.querySelectorAll('#dataLocationGroup .toggle-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  dataLocation = btn.dataset.val;
-});
+// ── Render Review Screen ───────────────────
+function renderReviewScreen() {
+  const container = document.getElementById('reviewCards');
+  container.innerHTML = '';
+
+  if (!skillRows.some(r => r.status === 'calculated' || r.status === 'confirmed')) {
+    return;
+  }
+
+  const weekStart = document.getElementById('weekStartDate').value;
+  const weekDays = getWeekDays(weekStart);
+  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+
+  skillRows.filter(r => r.dailyPercentages.length > 0).forEach(row => {
+    const card = document.createElement('div');
+    card.className = 'review-card';
+    card.style.cssText = `
+      background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:10px;
+    `;
+
+    const trials = row.trialsOverride || row.defaultTrials;
+    const dailyPcts = row.dailyPercentages;
+    const weeklyAvg = dailyPcts.reduce((a, b) => a + b, 0) / dailyPcts.length;
+
+    let daysHtml = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:8px;">';
+    dayNames.forEach((dayName, idx) => {
+      const pct = dailyPcts[idx];
+      daysHtml += `
+        <div style="text-align:center;font-size:11px;">
+          <div style="font-weight:600;color:#111827;">${pct}%</div>
+          <div style="color:#6b7280;">${dayName.slice(0, 3)}</div>
+        </div>
+      `;
+    });
+    daysHtml += '</div>';
+
+    card.innerHTML = `
+      <div style="font-weight:600;color:#111827;margin-bottom:6px;">${row.skill}</div>
+      ${daysHtml}
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#6b7280;">
+        <span>Weekly Avg: <b>${Math.round(weeklyAvg)}%</b></span>
+        <span>Trials: <b>${trials}</b></span>
+      </div>
+      <details style="margin-top:6px;cursor:pointer;">
+        <summary style="font-size:10px;color:#0d6e6e;font-weight:600;">View sequences</summary>
+        <div id="seq-${row.skill}" style="margin-top:4px;"></div>
+      </details>
+    `;
+    container.appendChild(card);
+
+    // Add sequence details
+    const seqDiv = card.querySelector(`#seq-${row.skill}`);
+    if (row.sequences && row.sequences.length > 0) {
+      row.sequences.forEach((seq, dayIdx) => {
+        const seqSpan = document.createElement('div');
+        seqSpan.style.cssText = 'font-size:10px;color:#6b7280;margin-bottom:3px;font-family:monospace;';
+        seqSpan.textContent = `${dayNames[dayIdx]}: ${seq.join(' ')}`;
+        seqDiv.appendChild(seqSpan);
+      });
+    }
+  });
+}
 
 // ── Confirmation checkbox enables autofill ─
 document.getElementById('confirmCheck').addEventListener('change', e => {
@@ -947,23 +1260,39 @@ document.getElementById('autofillBtn').addEventListener('click', async () => {
   const saved = await saveReplacementData(true);
   if (!saved) return;
 
-  // Try to inject autofill script into active tab
+  // Inject autofill script into active tab
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) { showDataMsg('Could not access the active tab.'); return; }
 
-    const rows = skillRows.filter(r => r.sequence);
+    const weekStart = document.getElementById('weekStartDate').value;
+    const weekDays = getWeekDays(weekStart);
+    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+
+    // Prepare autofill data
+    const autofillData = [];
+    skillRows.filter(r => r.sequences && r.sequences.length > 0).forEach(row => {
+      const trials = row.trialsOverride || row.defaultTrials;
+      row.sequences.forEach((seq, dayIdx) => {
+        const correct = row.dailyCorrect[dayIdx];
+        const incorrect = row.dailyIncorrect[dayIdx];
+        autofillData.push({
+          skill: row.skill,
+          day: dayNames[dayIdx],
+          date: weekDays[dayIdx],
+          trials,
+          percentage: row.dailyPercentages[dayIdx],
+          correct,
+          incorrect,
+          sequence: seq,
+        });
+      });
+    });
+
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: injectAutofill,
-      args: [rows.map(r => ({
-        skill: r.skill,
-        trials: parseInt(r.trials),
-        percentage: parseFloat(r.percentage),
-        correct: r.correct,
-        incorrect: r.incorrect,
-        sequence: r.sequence,
-      }))],
+      args: [autofillData],
     });
     showDataMsg('Autofill injected. Review the values on the page before submitting.', false);
   } catch (err) {
@@ -972,33 +1301,34 @@ document.getElementById('autofillBtn').addEventListener('click', async () => {
 });
 
 // Injected into the target page — must be self-contained (no closure refs)
-function injectAutofill(rows) {
+function injectAutofill(autofillData) {
   const overlay = document.createElement('div');
   overlay.id = '__p4a_overlay__';
   overlay.style.cssText = `
     position:fixed;bottom:20px;right:20px;z-index:999999;
     background:#fff;border:2px solid #0d6e6e;border-radius:12px;
-    padding:14px 16px;max-width:340px;font-family:system-ui,sans-serif;
-    font-size:12px;box-shadow:0 8px 32px rgba(0,0,0,0.18);
+    padding:14px 16px;max-width:360px;font-family:system-ui,sans-serif;
+    font-size:12px;box-shadow:0 8px 32px rgba(0,0,0,0.18);max-height:70vh;overflow-y:auto;
   `;
   const title = document.createElement('div');
   title.style.cssText = 'font-weight:700;color:#0d6e6e;margin-bottom:10px;font-size:13px;';
-  title.textContent = 'Path4ABA · Data Autofill';
+  title.textContent = 'Path4ABA · Weekly Data Autofill';
   overlay.appendChild(title);
 
-  rows.forEach(row => {
+  autofillData.forEach(row => {
     const card = document.createElement('div');
     card.style.cssText = 'margin-bottom:8px;padding:8px;background:#f9fafb;border-radius:7px;';
     const seq = row.sequence.join(' ');
     card.innerHTML = `
-      <div style="font-weight:600;color:#111827;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${row.skill}">${row.skill}</div>
-      <div style="display:flex;gap:10px;font-size:11px;color:#374151;">
+      <div style="font-weight:600;color:#111827;margin-bottom:2px;font-size:11px;">${row.skill}</div>
+      <div style="font-size:10px;color:#6b7280;margin-bottom:4px;">${row.day} (${row.date})</div>
+      <div style="display:flex;gap:10px;font-size:11px;color:#374151;margin-bottom:4px;">
         <span>Trials: <b>${row.trials}</b></span>
         <span style="color:#16a34a;">+${row.correct}</span>
         <span style="color:#dc2626;">−${row.incorrect}</span>
-        <span>${Math.round(row.correct / row.trials * 100)}%</span>
+        <span>${row.percentage}%</span>
       </div>
-      <div style="margin-top:4px;font-size:10px;color:#6b7280;word-break:break-all;">${seq}</div>
+      <div style="font-size:10px;color:#6b7280;word-break:break-all;font-family:monospace;">${seq}</div>
     `;
     overlay.appendChild(card);
   });
@@ -1023,44 +1353,86 @@ async function saveReplacementData(autofillCompleted) {
     return false;
   }
 
-  const records = skillRows
-    .filter(r => r.correct !== null)
-    .map(r => ({
-      clientId: selectedClientId,
-      sessionDate: document.getElementById('dataDate').value || new Date().toISOString().split('T')[0],
-      location: dataLocation,
-      sessionTimeIn: document.getElementById('dataTimeIn').value || null,
-      sessionTimeOut: document.getElementById('dataTimeOut').value || null,
-      rbtName: document.getElementById('dataRbtName').value || null,
-      platformSource: 'extension',
-      replacementSkill: r.skill,
-      totalTrials: parseInt(r.trials),
-      observedPercentage: parseFloat(r.percentage),
-      correctCount: r.correct,
-      incorrectCount: r.incorrect,
-      alternatedSequence: r.sequence ? r.sequence.join(',') : null,
-      userConfirmed: true,
-      autofillCompleted,
-    }));
+  const weekStart = document.getElementById('weekStartDate').value;
+  const weekEnd = document.getElementById('weekEndDate').value;
 
-  if (!records.length) {
-    showDataMsg('No calculated rows to save. Run "Calculate Data" first.');
+  if (!weekStart || !weekEnd) {
+    showDataMsg('Week dates not properly set.');
+    return false;
+  }
+
+  const weekDays = getWeekDays(weekStart);
+
+  const records = [];
+  skillRows.forEach(row => {
+    if (row.dailyPercentages.length === 0) return;
+
+    const trials = row.trialsOverride || row.defaultTrials;
+
+    row.dailyPercentages.forEach((dailyPct, dayIdx) => {
+      records.push({
+        clientId: selectedClientId,
+        replacementSkill: row.skill,
+        weekStart,
+        weekEnd,
+        sessionDate: weekDays[dayIdx],
+        dailyPercentage: dailyPct,
+        trials,
+        correctCount: row.dailyCorrect[dayIdx],
+        incorrectCount: row.dailyIncorrect[dayIdx],
+        sequence: row.sequences[dayIdx] ? row.sequences[dayIdx].join(',') : null,
+        userConfirmed: true,
+        autofillCompleted,
+        platformSource: 'extension',
+      });
+    });
+  });
+
+  // Build maladaptive records
+  const maladRecords = [];
+  maladaptiveRows.forEach(row => {
+    if (!row.dailyValues.length) return;
+    const weekDays = getWeekDays(weekStart);
+    row.dailyValues.forEach((freq, dayIdx) => {
+      maladRecords.push({
+        clientId: selectedClientId,
+        behaviorName: row.behavior,
+        weekStart,
+        weekEnd,
+        sessionDate: weekDays[dayIdx],
+        frequency: freq,
+        dailyValues: row.dailyValues,
+        userConfirmed: true,
+      });
+    });
+  });
+
+  const hasAnything = records.length > 0 || maladRecords.length > 0;
+  if (!hasAnything) {
+    showDataMsg('No calculated data to save. Click "Calculate Data" first.');
     return false;
   }
 
   const saveBtn = document.getElementById('saveDataBtn');
   saveBtn.disabled = true;
   try {
-    const res = await api('/api/replacement-data', {
-      method: 'POST',
-      body: JSON.stringify(records),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      showDataMsg(data.error || 'Save failed.');
-      return false;
+    const saves = [];
+    if (records.length) {
+      saves.push(api('/api/replacement-data', { method: 'POST', body: JSON.stringify(records) }));
     }
-    showDataMsg(`Saved ${records.length} record${records.length !== 1 ? 's' : ''} to Path4ABA.`, false);
+    if (maladRecords.length) {
+      saves.push(api('/api/maladaptive-data', { method: 'POST', body: JSON.stringify(maladRecords) }));
+    }
+    const results = await Promise.all(saves);
+    for (const res of results) {
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showDataMsg(data.error || 'Save failed.');
+        return false;
+      }
+    }
+    const total = records.length + maladRecords.length;
+    showDataMsg(`Saved ${total} record${total !== 1 ? 's' : ''} to Path4ABA.`, false);
     return true;
   } catch {
     showDataMsg('Network error. Make sure you are logged into Path4ABA.');
@@ -1073,18 +1445,26 @@ async function saveReplacementData(autofillCompleted) {
 // ── Cancel / reset data tab ────────────────
 document.getElementById('cancelDataBtn').addEventListener('click', () => {
   skillRows = [];
+  maladaptiveRows = [];
   document.getElementById('skillCards').style.display = 'none';
+  document.getElementById('maladaptiveCards').style.display = 'none';
   document.getElementById('dataActions').style.display = 'none';
+  document.getElementById('reviewSection').style.display = 'none';
   document.getElementById('confirmSection').style.display = 'none';
   document.getElementById('confirmCheck').checked = false;
   document.getElementById('autofillBtn').disabled = true;
   document.querySelectorAll('.data-feedback').forEach(e => e.remove());
 });
 
-// ── Set today's date on data tab open ──────
+// ── Set week start date default on tab open ─
 document.getElementById('tabData').addEventListener('click', () => {
-  if (!document.getElementById('dataDate').value) {
-    document.getElementById('dataDate').value = new Date().toISOString().split('T')[0];
+  if (!document.getElementById('weekStartDate').value) {
+    const today = new Date();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - today.getDay() + 1);
+    document.getElementById('weekStartDate').value = monday.toISOString().split('T')[0];
+    const weekEnd = calcWeekEndDate(monday.toISOString().split('T')[0]);
+    document.getElementById('weekEndDate').value = weekEnd;
   }
 });
 

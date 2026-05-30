@@ -194,10 +194,15 @@ export default function ClientProfilePage() {
   const [status, setStatus] = useState("");
   const [similarityWarning, setSimilarityWarning] = useState(false);
 
-  // Replacement data state
+  // Data tab state
   const [replacementData, setReplacementData] = useState<any[]>([]);
+  const [maladaptiveData, setMaladaptiveData] = useState<any[]>([]);
+  const [stos, setStos] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [dataFilters, setDataFilters] = useState({ dateFrom: "", dateTo: "", skill: "", location: "" });
+  const [newSto, setNewSto] = useState({ targetName: "", targetType: "replacement", baselineValue: "", goalValue: "", totalWeeks: "16", startDate: "", targetDate: "" });
+  const [addingSto, setAddingSto] = useState(false);
+  const [stoSaving, setStoSaving] = useState(false);
 
   async function loadReplacementData(filters = dataFilters) {
     if (!client) return;
@@ -208,13 +213,41 @@ export default function ClientProfilePage() {
       if (filters.dateTo) params.set("dateTo", filters.dateTo);
       if (filters.skill) params.set("skill", filters.skill);
       if (filters.location) params.set("location", filters.location);
-      const res = await fetch(`/api/replacement-data?${params}`);
-      if (res.ok) {
-        const { data } = await res.json();
-        setReplacementData(data || []);
-      }
+      const [repRes, maladRes, stosRes] = await Promise.all([
+        fetch(`/api/replacement-data?${params}`),
+        fetch(`/api/maladaptive-data?clientId=${client.id}`),
+        fetch(`/api/stos?clientId=${client.id}`),
+      ]);
+      if (repRes.ok)  setReplacementData((await repRes.json()).data  || []);
+      if (maladRes.ok) setMaladaptiveData((await maladRes.json()).data || []);
+      if (stosRes.ok)  setStos((await stosRes.json()).stos || []);
     } catch {}
     setDataLoading(false);
+  }
+
+  async function handleAddSto() {
+    if (!newSto.targetName || !newSto.baselineValue || !newSto.goalValue) return;
+    setStoSaving(true);
+    try {
+      const res = await fetch("/api/stos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId: client.id, ...newSto, baselineValue: parseFloat(newSto.baselineValue), goalValue: parseFloat(newSto.goalValue), totalWeeks: parseInt(newSto.totalWeeks) || 16 }),
+      });
+      if (res.ok) {
+        const { sto } = await res.json();
+        setStos(prev => [...prev, sto]);
+        setNewSto({ targetName: "", targetType: "replacement", baselineValue: "", goalValue: "", totalWeeks: "16", startDate: "", targetDate: "" });
+        setAddingSto(false);
+      }
+    } catch {}
+    setStoSaving(false);
+  }
+
+  async function handleDeleteSto(id: string) {
+    if (!window.confirm("Delete this STO?")) return;
+    await fetch(`/api/stos?id=${id}`, { method: "DELETE" });
+    setStos(prev => prev.filter(s => s.id !== id));
   }
 
   // Share with BCBA state
@@ -1122,165 +1155,334 @@ export default function ClientProfilePage() {
         )}
 
         {/* ── Data Tab ── */}
-        {activeTab === "data" && (
-          <div className="max-w-[900px]">
-            {/* Warning banner */}
-            <div className="mb-5 px-4 py-3 rounded-xl border text-[13px]" style={{ background: "#FFFBEB", borderColor: "#FCD34D", color: "#92400E" }}>
-              ⚠️ This section shows replacement-skill data collected from real sessions via the Path4ABA extension. The user is responsible for confirming accuracy of all entered data.
-            </div>
+        {activeTab === "data" && (() => {
+          // ── Projection engine ──────────────────────────────────────────
+          // φ, e, π as frequencies give a non-repeating, naturally irregular wave
+          function projectTrend(history: number[], sto?: { baseline: number; goal: number; totalWeeks: number }): number[] {
+            if (history.length === 0) return [];
+            const current = history[history.length - 1];
+            const goal = sto?.goal ?? (current < 50 ? Math.min(100, current + 30) : Math.max(0, current - 30));
+            const totalWeeks = sto?.totalWeeks ?? 16;
+            const weeksRemaining = Math.max(totalWeeks - history.length, 4);
+            const step = (goal - current) / weeksRemaining;
+            const φ = 1.6180339887, e = 2.7182818284, π = 3.1415926535;
+            const out: number[] = [];
+            let prev = current;
+            for (let w = 1; w <= weeksRemaining; w++) {
+              const noise = step * 0.35 * Math.sin(w * φ) + step * 0.22 * Math.sin(w * e) + step * 0.13 * Math.sin(w * π);
+              let v = prev + step + noise;
+              const isRising = goal > current;
+              if (isRising) v = Math.max(prev - Math.abs(step) * 0.3, Math.min(goal, v));
+              else          v = Math.min(prev + Math.abs(step) * 0.3, Math.max(goal, v));
+              if (w === weeksRemaining) v = goal;
+              out.push(Math.round(v * 10) / 10);
+              prev = v;
+            }
+            return out;
+          }
 
-            {/* Filters */}
-            <div className="bg-white rounded-[10px] border p-5 mb-5 flex flex-wrap gap-4 items-end" style={{ borderColor: "var(--border)" }}>
-              <div>
-                <label className="block text-[11px] font-semibold mb-1 uppercase tracking-wide" style={{ color: "var(--text3)" }}>From</label>
-                <input type="date" value={dataFilters.dateFrom}
-                  onChange={(e) => setDataFilters(f => ({ ...f, dateFrom: e.target.value }))}
-                  className="border rounded-lg px-3 py-2 text-sm focus:outline-none"
-                  style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold mb-1 uppercase tracking-wide" style={{ color: "var(--text3)" }}>To</label>
-                <input type="date" value={dataFilters.dateTo}
-                  onChange={(e) => setDataFilters(f => ({ ...f, dateTo: e.target.value }))}
-                  className="border rounded-lg px-3 py-2 text-sm focus:outline-none"
-                  style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold mb-1 uppercase tracking-wide" style={{ color: "var(--text3)" }}>Skill</label>
-                <input type="text" value={dataFilters.skill} placeholder="Filter by skill…"
-                  onChange={(e) => setDataFilters(f => ({ ...f, skill: e.target.value }))}
-                  className="border rounded-lg px-3 py-2 text-sm focus:outline-none w-44"
-                  style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold mb-1 uppercase tracking-wide" style={{ color: "var(--text3)" }}>Location</label>
-                <select value={dataFilters.location}
-                  onChange={(e) => setDataFilters(f => ({ ...f, location: e.target.value }))}
-                  className="border rounded-lg px-3 py-2 text-sm focus:outline-none"
-                  style={{ borderColor: "var(--border)", color: "var(--text1)" }}>
-                  <option value="">All</option>
-                  <option value="home">Home</option>
-                  <option value="school">School</option>
-                  <option value="clinic">Clinic</option>
-                </select>
-              </div>
-              <button onClick={() => loadReplacementData(dataFilters)}
-                className="px-4 py-2 rounded-lg text-[13px] font-semibold text-white"
-                style={{ background: "var(--teal)" }}>
-                Apply
-              </button>
-              <button onClick={() => { const f = { dateFrom: "", dateTo: "", skill: "", location: "" }; setDataFilters(f); loadReplacementData(f); }}
-                className="px-4 py-2 rounded-lg text-[13px] font-medium border"
-                style={{ borderColor: "var(--border)", color: "var(--text2)" }}>
-                Clear
-              </button>
-            </div>
+          // ── Aggregate daily records into weekly averages ───────────────
+          function weeklyAvgs(records: any[], valueKey: string): { week: string; avg: number }[] {
+            const map: Record<string, number[]> = {};
+            records.forEach(r => {
+              const week = r.week_start || r.session_date?.substring(0, 7) || "?";
+              (map[week] = map[week] || []).push(Number(r[valueKey]) || 0);
+            });
+            return Object.entries(map)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([week, vs]) => ({ week, avg: Math.round(vs.reduce((s, v) => s + v, 0) / vs.length * 10) / 10 }));
+          }
 
-            {/* Progress summary */}
-            {replacementData.length > 0 && (() => {
-              const bySkill: Record<string, number[]> = {};
-              replacementData.forEach(r => {
-                if (!bySkill[r.replacement_skill]) bySkill[r.replacement_skill] = [];
-                bySkill[r.replacement_skill].push(r.observed_percentage);
-              });
-              return (
-                <div className="bg-white rounded-[10px] border p-5 mb-5" style={{ borderColor: "var(--border)" }}>
-                  <p className="text-[11px] uppercase tracking-widest font-semibold mb-4" style={{ color: "var(--text3)" }}>Progress by Skill</p>
-                  <div className="flex flex-wrap gap-4">
-                    {Object.entries(bySkill).map(([skill, pcts]) => {
-                      const last = pcts[0];
-                      const prev = pcts[1];
-                      const delta = prev !== undefined ? last - prev : null;
+          // ── Minimal SVG line chart ─────────────────────────────────────
+          function ProgressChart({ hist, proj, goal, isRising }: {
+            hist: { week: string; avg: number }[];
+            proj: number[];
+            goal?: number;
+            isRising: boolean;
+          }) {
+            if (hist.length === 0 && proj.length === 0) return <p className="text-[12px] py-4" style={{ color: "var(--text3)" }}>Not enough data yet.</p>;
+            const W = 400, H = 120;
+            const pad = { t: 10, r: 10, b: 28, l: 36 };
+            const cW = W - pad.l - pad.r, cH = H - pad.t - pad.b;
+            const all = [...hist.map(d => d.avg), ...proj, ...(goal != null ? [goal] : [])];
+            const minV = Math.max(0, Math.min(...all) - 5);
+            const maxV = Math.min(isRising ? 105 : Math.max(...all) + 5, isRising ? 105 : 9999);
+            const span = Math.max(maxV - minV, 1);
+            const total = hist.length + proj.length;
+            const X = (i: number) => pad.l + (i / Math.max(total - 1, 1)) * cW;
+            const Y = (v: number) => pad.t + (1 - (v - minV) / span) * cH;
+            const histD = hist.map((d, i) => `${i === 0 ? "M" : "L"}${X(i).toFixed(1)} ${Y(d.avg).toFixed(1)}`).join(" ");
+            const si = Math.max(0, hist.length - 1);
+            const projPts = hist.length > 0 ? [hist[hist.length - 1].avg, ...proj] : proj;
+            const projD = projPts.map((v, i) => `${i === 0 ? "M" : "L"}${X(si + i).toFixed(1)} ${Y(v).toFixed(1)}`).join(" ");
+            const ticks = [0, 25, 50, 75, 100].filter(v => v >= minV && v <= maxV + 5);
+            return (
+              <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }} aria-label="Progress chart">
+                {ticks.map(v => (
+                  <g key={v}>
+                    <line x1={pad.l} x2={W - pad.r} y1={Y(v)} y2={Y(v)} stroke="#f3f4f6" strokeWidth="1" />
+                    <text x={pad.l - 4} y={Y(v) + 3.5} textAnchor="end" fontSize="8" fill="#9ca3af">{v}</text>
+                  </g>
+                ))}
+                {goal != null && (
+                  <line x1={pad.l} x2={W - pad.r} y1={Y(goal)} y2={Y(goal)} stroke="#6b7280" strokeWidth="1" strokeDasharray="4 3" />
+                )}
+                {hist.length > 1 && <path d={histD} fill="none" stroke="#111827" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+                {projPts.length > 1 && <path d={projD} fill="none" stroke="#0d6e6e" strokeWidth="2" strokeDasharray="5 3" strokeLinecap="round" strokeLinejoin="round" />}
+                {hist.map((d, i) => <circle key={i} cx={X(i)} cy={Y(d.avg)} r="3" fill="#111827" />)}
+                {hist.length > 0 && hist.map((d, i) => {
+                  if (i % Math.max(1, Math.floor(hist.length / 4)) !== 0 && i !== hist.length - 1) return null;
+                  return <text key={i} x={X(i)} y={H - 4} textAnchor="middle" fontSize="8" fill="#9ca3af">{d.week.substring(5)}</text>;
+                })}
+              </svg>
+            );
+          }
+
+          // ── STO lookup helper ──────────────────────────────────────────
+          const stoFor = (name: string, type: "replacement" | "maladaptive") =>
+            stos.find(s => s.target_name === name && s.target_type === type);
+
+          // ── Aggregate data by skill/behavior ──────────────────────────
+          const repBySkill: Record<string, any[]> = {};
+          replacementData.forEach(r => { (repBySkill[r.replacement_skill] = repBySkill[r.replacement_skill] || []).push(r); });
+          const maladByBehavior: Record<string, any[]> = {};
+          maladaptiveData.forEach(r => { (maladByBehavior[r.behavior_name] = maladByBehavior[r.behavior_name] || []).push(r); });
+
+          return (
+            <div className="max-w-[900px]">
+              {/* Disclaimer */}
+              <div className="mb-5 px-4 py-3 rounded-xl border text-[12px]" style={{ background: "#FFFBEB", borderColor: "#FCD34D", color: "#92400E" }}>
+                Projected values are generated by Path4ABA based on historical trends. The clinician is responsible for all clinical decisions.
+              </div>
+
+              {/* Filters */}
+              <div className="bg-white rounded-[10px] border p-5 mb-5 flex flex-wrap gap-4 items-end" style={{ borderColor: "var(--border)" }}>
+                <div>
+                  <label className="block text-[11px] font-semibold mb-1 uppercase tracking-wide" style={{ color: "var(--text3)" }}>From</label>
+                  <input type="date" value={dataFilters.dateFrom} onChange={(e) => setDataFilters(f => ({ ...f, dateFrom: e.target.value }))} className="border rounded-lg px-3 py-2 text-sm focus:outline-none" style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold mb-1 uppercase tracking-wide" style={{ color: "var(--text3)" }}>To</label>
+                  <input type="date" value={dataFilters.dateTo} onChange={(e) => setDataFilters(f => ({ ...f, dateTo: e.target.value }))} className="border rounded-lg px-3 py-2 text-sm focus:outline-none" style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold mb-1 uppercase tracking-wide" style={{ color: "var(--text3)" }}>Skill</label>
+                  <input type="text" value={dataFilters.skill} placeholder="Filter…" onChange={(e) => setDataFilters(f => ({ ...f, skill: e.target.value }))} className="border rounded-lg px-3 py-2 text-sm focus:outline-none w-40" style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
+                </div>
+                <button onClick={() => loadReplacementData(dataFilters)} className="px-4 py-2 rounded-lg text-[13px] font-semibold text-white" style={{ background: "var(--teal)" }}>Apply</button>
+                <button onClick={() => { const f = { dateFrom: "", dateTo: "", skill: "", location: "" }; setDataFilters(f); loadReplacementData(f); }} className="px-4 py-2 rounded-lg text-[13px] font-medium border" style={{ borderColor: "var(--border)", color: "var(--text2)" }}>Clear</button>
+              </div>
+
+              {/* ── STOs ── */}
+              <div className="bg-white rounded-[10px] border mb-5" style={{ borderColor: "var(--border)" }}>
+                <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: stos.length || addingSto ? "1px solid var(--border)" : undefined }}>
+                  <p className="text-[11px] uppercase tracking-widest font-semibold" style={{ color: "var(--text3)" }}>Short-Term Objectives</p>
+                  <button onClick={() => setAddingSto(v => !v)} className="text-[12px] font-medium px-3 py-1 rounded-lg border transition-colors" style={{ borderColor: "var(--border)", color: "var(--teal)" }}>
+                    {addingSto ? "Cancel" : "+ Add STO"}
+                  </button>
+                </div>
+                {addingSto && (
+                  <div className="px-5 py-4 grid grid-cols-2 gap-3" style={{ borderBottom: "1px solid var(--border)" }}>
+                    <div className="col-span-2">
+                      <label className="block text-[11px] font-semibold mb-1" style={{ color: "var(--text3)" }}>TARGET NAME</label>
+                      <input type="text" value={newSto.targetName} onChange={e => setNewSto(s => ({ ...s, targetName: e.target.value }))} placeholder="e.g. Requesting Help" className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none" style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-1" style={{ color: "var(--text3)" }}>TYPE</label>
+                      <select value={newSto.targetType} onChange={e => setNewSto(s => ({ ...s, targetType: e.target.value }))} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none" style={{ borderColor: "var(--border)", color: "var(--text1)" }}>
+                        <option value="replacement">Replacement Skill (↑)</option>
+                        <option value="maladaptive">Maladaptive (↓)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-1" style={{ color: "var(--text3)" }}>WEEKS</label>
+                      <input type="number" min="4" max="52" value={newSto.totalWeeks} onChange={e => setNewSto(s => ({ ...s, totalWeeks: e.target.value }))} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none" style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-1" style={{ color: "var(--text3)" }}>BASELINE</label>
+                      <input type="number" value={newSto.baselineValue} onChange={e => setNewSto(s => ({ ...s, baselineValue: e.target.value }))} placeholder="e.g. 40" className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none" style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-1" style={{ color: "var(--text3)" }}>GOAL</label>
+                      <input type="number" value={newSto.goalValue} onChange={e => setNewSto(s => ({ ...s, goalValue: e.target.value }))} placeholder="e.g. 80" className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none" style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-1" style={{ color: "var(--text3)" }}>START DATE</label>
+                      <input type="date" value={newSto.startDate} onChange={e => setNewSto(s => ({ ...s, startDate: e.target.value }))} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none" style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-1" style={{ color: "var(--text3)" }}>TARGET DATE</label>
+                      <input type="date" value={newSto.targetDate} onChange={e => setNewSto(s => ({ ...s, targetDate: e.target.value }))} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none" style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
+                    </div>
+                    <div className="col-span-2">
+                      <button onClick={handleAddSto} disabled={stoSaving || !newSto.targetName || !newSto.baselineValue || !newSto.goalValue} className="px-5 py-2 rounded-lg text-[13px] font-semibold text-white disabled:opacity-40" style={{ background: "var(--teal)" }}>
+                        {stoSaving ? "Saving…" : "Save STO"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {stos.length > 0 ? (
+                  <div className="divide-y" style={{ borderColor: "var(--border)" }}>
+                    {stos.map(s => {
+                      const isRising = s.target_type === "replacement";
+                      const recs = isRising ? (repBySkill[s.target_name] || []) : (maladByBehavior[s.target_name] || []);
+                      const hist = weeklyAvgs(recs, isRising ? "observed_percentage" : "frequency");
+                      const current = hist[hist.length - 1]?.avg ?? s.baseline_value;
+                      const pct = Math.round(Math.abs(current - s.baseline_value) / Math.abs(s.goal_value - s.baseline_value) * 100);
+                      const weeksLeft = Math.max(0, s.total_weeks - hist.length);
                       return (
-                        <div key={skill} className="flex-1 min-w-[160px] rounded-lg p-3 border" style={{ borderColor: "var(--border)", background: "var(--bg)" }}>
-                          <p className="text-[12px] font-medium mb-1 truncate" style={{ color: "var(--text1)" }}>{skill}</p>
-                          <div className="flex items-baseline gap-2">
-                            <span className="text-[22px] font-bold" style={{ color: "var(--teal)" }}>{last}%</span>
-                            {delta !== null && (
-                              <span className="text-[11px] font-semibold" style={{ color: delta > 0 ? "#16A34A" : delta < 0 ? "#DC2626" : "var(--text3)" }}>
-                                {delta > 0 ? `+${delta}%` : delta < 0 ? `${delta}%` : "→"}
-                              </span>
-                            )}
+                        <div key={s.id} className="px-5 py-4">
+                          <div className="flex items-start justify-between mb-2">
+                            <div>
+                              <p className="text-[13px] font-semibold" style={{ color: "var(--text1)" }}>{s.target_name}</p>
+                              <p className="text-[11px]" style={{ color: "var(--text3)" }}>
+                                {isRising ? "↑ Replacement" : "↓ Maladaptive"} · Baseline {s.baseline_value}{isRising ? "%" : ""} → Goal {s.goal_value}{isRising ? "%" : ""} · {s.total_weeks}wk
+                              </p>
+                            </div>
+                            <button onClick={() => handleDeleteSto(s.id)} className="text-[11px] text-red-400 hover:text-red-600 ml-4">Remove</button>
                           </div>
-                          <p className="text-[11px]" style={{ color: "var(--text3)" }}>{pcts.length} session{pcts.length !== 1 ? "s" : ""}</p>
+                          <div className="flex items-center gap-4 mb-2">
+                            <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
+                              <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, pct))}%`, background: isRising ? "var(--teal)" : "#F59E0B" }} />
+                            </div>
+                            <span className="text-[12px] font-semibold whitespace-nowrap" style={{ color: isRising ? "var(--teal)" : "#92400E" }}>
+                              {Math.min(100, Math.max(0, pct))}% toward goal
+                            </span>
+                          </div>
+                          <p className="text-[11px]" style={{ color: "var(--text3)" }}>
+                            Current avg: <b>{current}{isRising ? "%" : ""}</b> · {weeksLeft > 0 ? `~${weeksLeft} weeks remaining` : "Timeline reached"}
+                            {s.target_date && ` · Target: ${s.target_date}`}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : !addingSto && (
+                  <p className="px-5 py-4 text-[13px]" style={{ color: "var(--text3)" }}>No STOs yet. Click "+ Add STO" to set a target.</p>
+                )}
+              </div>
+
+              {/* ── Replacement Skills Charts ── */}
+              {Object.keys(repBySkill).length > 0 && (
+                <div className="bg-white rounded-[10px] border mb-5" style={{ borderColor: "var(--border)" }}>
+                  <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
+                    <p className="text-[11px] uppercase tracking-widest font-semibold" style={{ color: "var(--text3)" }}>Replacement Skills — trending ↑</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y sm:divide-y-0 sm:divide-x" style={{ borderColor: "var(--border)" }}>
+                    {Object.entries(repBySkill).map(([skill, recs]) => {
+                      const hist = weeklyAvgs(recs, "observed_percentage");
+                      const sto  = stoFor(skill, "replacement");
+                      const proj = projectTrend(hist.map(d => d.avg), sto ? { baseline: sto.baseline_value, goal: sto.goal_value, totalWeeks: sto.total_weeks } : undefined);
+                      const latest = hist[hist.length - 1]?.avg;
+                      const prev   = hist[hist.length - 2]?.avg;
+                      const delta  = prev != null ? Math.round((latest - prev) * 10) / 10 : null;
+                      return (
+                        <div key={skill} className="p-5">
+                          <div className="flex items-baseline justify-between mb-1">
+                            <p className="text-[13px] font-semibold truncate mr-3" style={{ color: "var(--text1)", maxWidth: "65%" }}>{skill}</p>
+                            <div className="flex items-baseline gap-2 flex-shrink-0">
+                              {latest != null && <span className="text-[18px] font-bold" style={{ color: "var(--teal)" }}>{latest}%</span>}
+                              {delta != null && <span className="text-[11px] font-semibold" style={{ color: delta >= 0 ? "#16A34A" : "#DC2626" }}>{delta >= 0 ? "+" : ""}{delta}%</span>}
+                            </div>
+                          </div>
+                          {sto && <p className="text-[11px] mb-1" style={{ color: "var(--text3)" }}>Goal: {sto.goal_value}% in {sto.total_weeks}wk</p>}
+                          <ProgressChart hist={hist} proj={proj} goal={sto?.goal_value} isRising />
                         </div>
                       );
                     })}
                   </div>
                 </div>
-              );
-            })()}
+              )}
 
-            {/* Records table */}
-            <div className="bg-white rounded-[10px] border overflow-hidden" style={{ borderColor: "var(--border)" }}>
-              <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
-                <p className="text-[11px] uppercase tracking-widest font-semibold" style={{ color: "var(--text3)" }}>
-                  Session Records {replacementData.length > 0 && `(${replacementData.length})`}
-                </p>
-              </div>
-              {dataLoading ? (
-                <p className="px-5 py-6 text-[13px]" style={{ color: "var(--text3)" }}>Loading…</p>
-              ) : replacementData.length === 0 ? (
-                <p className="px-5 py-6 text-[13px]" style={{ color: "var(--text3)" }}>
-                  No replacement data yet. Use the Path4ABA Chrome extension to record session data.
-                </p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-[12px]" style={{ borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
-                        {["Date", "Skill", "Location", "RBT", "Trials", "%", "+", "−", "Sequence", "Confirmed", "Autofilled"].map(h => (
-                          <th key={h} className="text-left px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide whitespace-nowrap" style={{ color: "var(--text3)" }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {replacementData.map((r) => {
-                        const seq = r.alternated_sequence ? r.alternated_sequence.split(",") : [];
-                        return (
-                          <tr key={r.id} style={{ borderBottom: "1px solid var(--border)" }}
-                            className="hover:bg-gray-50 transition-colors">
-                            <td className="px-4 py-2.5 whitespace-nowrap" style={{ color: "var(--text2)" }}>{r.session_date || "—"}</td>
-                            <td className="px-4 py-2.5 font-medium max-w-[160px]" style={{ color: "var(--text1)" }}>
-                              <span className="truncate block">{r.replacement_skill}</span>
-                            </td>
-                            <td className="px-4 py-2.5 capitalize" style={{ color: "var(--text2)" }}>{r.location || "—"}</td>
-                            <td className="px-4 py-2.5" style={{ color: "var(--text2)" }}>{r.rbt_name || "—"}</td>
-                            <td className="px-4 py-2.5 text-center" style={{ color: "var(--text2)" }}>{r.total_trials}</td>
-                            <td className="px-4 py-2.5 text-center font-semibold" style={{ color: "var(--teal)" }}>{r.observed_percentage}%</td>
-                            <td className="px-4 py-2.5 text-center font-semibold" style={{ color: "#16A34A" }}>{r.correct_count}</td>
-                            <td className="px-4 py-2.5 text-center font-semibold" style={{ color: "#DC2626" }}>{r.incorrect_count}</td>
-                            <td className="px-4 py-2.5">
-                              <div className="flex flex-wrap gap-0.5 max-w-[120px]">
-                                {seq.map((s: string, i: number) => (
-                                  <span key={i} className="inline-flex w-4 h-4 rounded-full items-center justify-center text-[9px] font-bold text-white"
-                                    style={{ background: s === "+" ? "#16A34A" : "#DC2626" }}>{s}</span>
-                                ))}
-                                {!seq.length && <span style={{ color: "var(--text3)" }}>—</span>}
-                              </div>
-                            </td>
-                            <td className="px-4 py-2.5 text-center">
-                              {r.user_confirmed
-                                ? <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full" style={{ background: "#DCFCE7", color: "#16A34A" }}>✓ Yes</span>
-                                : <span className="inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-full" style={{ background: "#FEF3C7", color: "#92400E" }}>Pending</span>
-                              }
-                            </td>
-                            <td className="px-4 py-2.5 text-center">
-                              {r.autofill_completed
-                                ? <span className="text-[11px] font-medium" style={{ color: "#16A34A" }}>✓</span>
-                                : <span className="text-[11px]" style={{ color: "var(--text3)" }}>—</span>
-                              }
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+              {/* ── Maladaptive Behaviors Charts ── */}
+              {Object.keys(maladByBehavior).length > 0 && (
+                <div className="bg-white rounded-[10px] border mb-5" style={{ borderColor: "var(--border)" }}>
+                  <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
+                    <p className="text-[11px] uppercase tracking-widest font-semibold" style={{ color: "var(--text3)" }}>Maladaptive Behaviors — trending ↓</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y sm:divide-y-0 sm:divide-x" style={{ borderColor: "var(--border)" }}>
+                    {Object.entries(maladByBehavior).map(([behavior, recs]) => {
+                      const hist = weeklyAvgs(recs, "frequency");
+                      const sto  = stoFor(behavior, "maladaptive");
+                      const proj = projectTrend(hist.map(d => d.avg), sto ? { baseline: sto.baseline_value, goal: sto.goal_value, totalWeeks: sto.total_weeks } : undefined);
+                      const latest = hist[hist.length - 1]?.avg;
+                      const prev   = hist[hist.length - 2]?.avg;
+                      const delta  = prev != null ? Math.round((latest - prev) * 10) / 10 : null;
+                      return (
+                        <div key={behavior} className="p-5">
+                          <div className="flex items-baseline justify-between mb-1">
+                            <p className="text-[13px] font-semibold truncate mr-3" style={{ color: "var(--text1)", maxWidth: "65%" }}>{behavior}</p>
+                            <div className="flex items-baseline gap-2 flex-shrink-0">
+                              {latest != null && <span className="text-[18px] font-bold" style={{ color: "#F59E0B" }}>{latest}</span>}
+                              {delta != null && <span className="text-[11px] font-semibold" style={{ color: delta <= 0 ? "#16A34A" : "#DC2626" }}>{delta > 0 ? "+" : ""}{delta}</span>}
+                            </div>
+                          </div>
+                          {sto && <p className="text-[11px] mb-1" style={{ color: "var(--text3)" }}>Goal: {sto.goal_value} in {sto.total_weeks}wk</p>}
+                          <ProgressChart hist={hist} proj={proj} goal={sto?.goal_value} isRising={false} />
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
+
+              {/* ── Session Records Table ── */}
+              <div className="bg-white rounded-[10px] border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+                <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
+                  <p className="text-[11px] uppercase tracking-widest font-semibold" style={{ color: "var(--text3)" }}>
+                    Session Records {replacementData.length > 0 && `(${replacementData.length})`}
+                  </p>
+                </div>
+                {dataLoading ? (
+                  <p className="px-5 py-6 text-[13px]" style={{ color: "var(--text3)" }}>Loading…</p>
+                ) : replacementData.length === 0 ? (
+                  <p className="px-5 py-6 text-[13px]" style={{ color: "var(--text3)" }}>No data yet. Use the Path4ABA Chrome extension to record session data.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[12px]" style={{ borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
+                          {["Week", "Date", "Skill", "Trials", "%", "+", "−", "Sequence", "✓"].map(h => (
+                            <th key={h} className="text-left px-3 py-2 font-semibold text-[11px] uppercase tracking-wide whitespace-nowrap" style={{ color: "var(--text3)" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {replacementData.map(r => {
+                          const seq = r.alternated_sequence ? r.alternated_sequence.split(",") : [];
+                          return (
+                            <tr key={r.id} className="hover:bg-gray-50 transition-colors" style={{ borderBottom: "1px solid var(--border)" }}>
+                              <td className="px-3 py-2 whitespace-nowrap text-[11px]" style={{ color: "var(--text3)" }}>{r.week_start || "—"}</td>
+                              <td className="px-3 py-2 whitespace-nowrap" style={{ color: "var(--text2)" }}>{r.session_date || "—"}</td>
+                              <td className="px-3 py-2 font-medium max-w-[140px]" style={{ color: "var(--text1)" }}><span className="truncate block">{r.replacement_skill}</span></td>
+                              <td className="px-3 py-2 text-center" style={{ color: "var(--text2)" }}>{r.total_trials}</td>
+                              <td className="px-3 py-2 text-center font-semibold" style={{ color: "var(--teal)" }}>{r.observed_percentage}%</td>
+                              <td className="px-3 py-2 text-center font-semibold" style={{ color: "#16A34A" }}>{r.correct_count}</td>
+                              <td className="px-3 py-2 text-center font-semibold" style={{ color: "#DC2626" }}>{r.incorrect_count}</td>
+                              <td className="px-3 py-2">
+                                <div className="flex flex-wrap gap-0.5 max-w-[100px]">
+                                  {seq.map((s: string, i: number) => (
+                                    <span key={i} className="inline-flex w-3.5 h-3.5 rounded-full items-center justify-center text-[8px] font-bold text-white" style={{ background: s === "+" ? "#16A34A" : "#DC2626" }}>{s}</span>
+                                  ))}
+                                  {!seq.length && <span style={{ color: "var(--text3)" }}>—</span>}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                {r.user_confirmed
+                                  ? <span className="text-[11px] font-medium" style={{ color: "#16A34A" }}>✓</span>
+                                  : <span className="text-[11px]" style={{ color: "var(--text3)" }}>—</span>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
       </div>
 

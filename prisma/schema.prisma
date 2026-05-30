@@ -29,6 +29,8 @@ model clients {
   parent_training_notes     parent_training_notes[]
   supervision_notes_97153xp supervision_notes_97153xp[]
   replacement_data          replacement_data[]
+  maladaptive_data          maladaptive_data[]
+  stos                      stos[]
 }
 
 model session_notes {
@@ -239,6 +241,8 @@ model replacement_data {
   id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   client_id           String    @db.Uuid
   session_date        String?
+  week_start          String?
+  week_end            String?
   location            String?
   session_time_in     String?
   session_time_out    String?
@@ -253,8 +257,51 @@ model replacement_data {
   user_confirmed      Boolean   @default(false)
   confirmed_at        DateTime? @db.Timestamptz(6)
   autofill_completed  Boolean   @default(false)
+  projected_value     Float?
+  goal_met            String?
+  week_confirmed      Boolean   @default(false)
+  week_confirmed_at   DateTime? @db.Timestamptz(6)
   created_at          DateTime? @default(now()) @db.Timestamptz(6)
   updated_at          DateTime? @default(now()) @db.Timestamptz(6)
+
+  client clients @relation(fields: [client_id], references: [id], onDelete: Cascade)
+}
+
+model maladaptive_data {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id       String    @db.Uuid
+  behavior_name   String
+  week_start      String?
+  week_end        String?
+  session_date    String?
+  frequency       Int?
+  rate            Float?
+  duration        Float?
+  trials          Int?
+  daily_values    Json?
+  user_confirmed  Boolean   @default(false)
+  confirmed_at    DateTime? @db.Timestamptz(6)
+  projected_value Float?
+  goal_met        String?
+  created_at      DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime? @default(now()) @db.Timestamptz(6)
+
+  client clients @relation(fields: [client_id], references: [id], onDelete: Cascade)
+}
+
+model stos {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id      String    @db.Uuid
+  target_name    String
+  target_type    String
+  baseline_value Float
+  goal_value     Float
+  start_date     String?
+  target_date    String?
+  total_weeks    Int       @default(16)
+  status         String    @default("active")
+  created_at     DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime? @default(now()) @db.Timestamptz(6)
 
   client clients @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }
