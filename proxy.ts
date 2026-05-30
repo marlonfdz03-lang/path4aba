@@ -1,5 +1,3 @@
-export const runtime = 'nodejs'
-
 import { auth } from '@/auth'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
@@ -11,7 +9,7 @@ const PUBLIC_ROUTES = ['/login', '/reset-password', '/pricing', '/privacy', '/te
 // Routes that require auth but skip the subscription check
 const SUBSCRIPTION_SKIP = ['/billing', '/pricing', '/onboarding']
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const origin = request.headers.get('origin') ?? ''
   const isExtension = origin.startsWith('chrome-extension://') || origin.startsWith('moz-extension://')

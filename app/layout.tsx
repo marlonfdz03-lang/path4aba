@@ -3,6 +3,7 @@ import { DM_Sans } from "next/font/google";
 import "./globals.css";
 import Sidebar from "./components/Sidebar";
 import { ContentShell } from "./components/ContentShell";
+import { Providers } from "./components/Providers";
 
 const dmSans = DM_Sans({
   subsets: ["latin"],
@@ -24,8 +25,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${dmSans.variable} h-full antialiased`}>
       <body className="min-h-full font-[family-name:var(--font-dm-sans)]">
-        <Sidebar />
-        <ContentShell>{children}</ContentShell>
+        <Providers>
+          <Sidebar />
+          <ContentShell>{children}</ContentShell>
+        </Providers>
       </body>
     </html>
   );
