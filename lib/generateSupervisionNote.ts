@@ -1,6 +1,6 @@
 import OpenAI from 'openai'
 import { MASTER_SUPERVISION_PROMPT } from '@/app/prompts/supervisionPrompt'
-import { supabaseServer as supabase } from '@/lib/supabaseServer'
+import { prisma } from '@/lib/prisma'
 
 const openai = new OpenAI({
   apiKey: process.env.AZURE_OPENAI_API_KEY,
@@ -92,17 +92,12 @@ export async function generateSupervisionNote(input: SupervisionNoteInput, onChu
   if (input.clientProfile) {
     resolvedProfile = input.clientProfile
   } else {
-    const { data: client, error } = await supabase
-      .from('clients')
-      .select('*')
-      .eq('id', input.clientId)
-      .single()
+    const client = await prisma.clients.findUnique({ where: { id: input.clientId } })
+    if (!client) throw new Error(`Client not found: ${input.clientId}`)
 
-    if (error || !client) throw new Error(`Client not found: ${input.clientId}`)
-
-    const raw = client.clinical_profile
+    const raw = client.clinical_profile as any
     resolvedProfile = {
-      diagnosis: client.diagnosis || [],
+      diagnosis: (client.diagnosis as unknown as string[]) || [],
       setting: client.primary_setting || '',
       approvedInterventions: raw?.approvedInterventions || [],
       activePrograms: {
@@ -120,14 +115,14 @@ export async function generateSupervisionNote(input: SupervisionNoteInput, onChu
   }
 
   // Step 3: Fetch note history for similarity check
-  const { data: previousNotes } = await supabase
-    .from('supervision_notes')
-    .select('note_text')
-    .eq('client_id', input.clientId)
-    .order('created_at', { ascending: false })
+  const previousNotes = await prisma.supervision_notes.findMany({
+    where: { client_id: input.clientId },
+    select: { note_text: true },
+    orderBy: { created_at: 'desc' },
+  })
 
-  const previousTexts = (previousNotes || [])
-    .map(r => r.note_text as string)
+  const previousTexts = previousNotes
+    .map((r) => r.note_text as string)
     .filter(Boolean)
 
   // Step 4: Build system prompt with contact-type dynamic section

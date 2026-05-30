@@ -1,6 +1,8 @@
 import OpenAI from 'openai';
 import { MASTER_RBT_NOTE_PROMPT } from '@/app/prompts/masterPrompt';
-import { supabaseServer as supabase } from '@/lib/supabaseServer';
+import { prisma } from '@/lib/prisma';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const openai = new OpenAI({
   apiKey: process.env.AZURE_OPENAI_API_KEY,
@@ -137,17 +139,10 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   if (input.clientProfile) {
     resolvedProfile = input.clientProfile;
   } else {
-    const { data: client, error } = await supabase
-      .from('clients')
-      .select('*')
-      .eq('id', input.clientId)
-      .single();
+    const client = await prisma.clients.findUnique({ where: { id: input.clientId } });
+    if (!client) throw new Error(`Client not found: ${input.clientId}`);
 
-    if (error || !client) {
-      throw new Error(`Client not found: ${input.clientId}`);
-    }
-
-    const raw = client.clinical_profile;
+    const raw = client.clinical_profile as any;
     resolvedProfile = {
       diagnosis: client.diagnosis || [],
       setting: client.primary_setting || '',
@@ -163,21 +158,25 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   }
 
   // Step 2: Fetch relevant topography variants from knowledge base
-  const { data: topographies } = await supabase
-    .from('topographies')
-    .select('description, vocabulary_variants, behavior_id')
-    .in('behavior_id', [
-      '00000000-0000-0000-0000-000000000001',
-      '00000000-0000-0000-0000-000000000002',
-      '00000000-0000-0000-0000-000000000003',
-      '00000000-0000-0000-0000-000000000004',
-      '00000000-0000-0000-0000-000000000005'
-    ]);
+  const topographies = await prisma.topographies.findMany({
+    where: {
+      behavior_id: {
+        in: [
+          '00000000-0000-0000-0000-000000000001',
+          '00000000-0000-0000-0000-000000000002',
+          '00000000-0000-0000-0000-000000000003',
+          '00000000-0000-0000-0000-000000000004',
+          '00000000-0000-0000-0000-000000000005',
+        ],
+      },
+    },
+    select: { description: true, vocabulary_variants: true, behavior_id: true },
+  });
 
   // Step 3: Fetch replacement skill vocabulary
-  const { data: replacementSkills } = await supabase
-    .from('replacement_skills')
-    .select('skill_description, vocabulary_variants, function_targeted');
+  const replacementSkills = await prisma.replacement_skills.findMany({
+    select: { skill_description: true, vocabulary_variants: true, function_targeted: true },
+  });
 
   // Step 4: Build the structured context for the AI
   const sessionContext = {
@@ -197,42 +196,42 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     behaviorsObserved: input.behaviorsObserved.map(b => ({
       ...b,
       topographyVariants: topographies
-        ?.filter(t => t.description.toLowerCase().includes(b.name.toLowerCase()))
-        ?.map(t => t.vocabulary_variants)
-        ?.flat()
-        ?.slice(0, 4) || []
+        .filter(t => t.description?.toLowerCase().includes(b.name.toLowerCase()))
+        .map(t => t.vocabulary_variants)
+        .flat()
+        .slice(0, 4)
     })),
     replacementSkillsAddressed: input.replacementSkillsAddressed.map(s => ({
       ...s,
       vocabularyVariants: replacementSkills
-        ?.find(r => r.skill_description.toLowerCase().includes(s.name.toLowerCase().split(' ')[0]))
+        .find(r => r.skill_description?.toLowerCase().includes(s.name.toLowerCase().split(' ')[0]))
         ?.vocabulary_variants || []
     })),
     activitiesUsed: input.activitiesUsed,
     reinforcersUsed: input.reinforcersUsed,
     clinicalEvents: input.clinicalEvents || '',
     knowledgeBase: {
-      topographyVariants: topographies?.map(t => ({
+      topographyVariants: topographies.map(t => ({
         description: t.description,
         variants: t.vocabulary_variants
-      })) || [],
-      replacementSkillVariants: replacementSkills?.map(r => ({
+      })),
+      replacementSkillVariants: replacementSkills.map(r => ({
         skill: r.skill_description,
         variants: r.vocabulary_variants,
         function: r.function_targeted
-      })) || []
+      }))
     }
   };
 
   // Step 5: Fetch full note history for this client to check similarity later
-  const { data: previousNotes } = await supabase
-    .from('session_notes')
-    .select('note_text')
-    .eq('client_id', input.clientId)
-    .order('created_at', { ascending: false });
+  const previousNotes = await prisma.session_notes.findMany({
+    where: { client_id: input.clientId },
+    select: { note_text: true },
+    orderBy: { created_at: 'desc' },
+  });
 
-  const previousTexts = (previousNotes || [])
-    .map(r => r.note_text as string)
+  const previousTexts = previousNotes
+    .map((r) => r.note_text as string)
     .filter(Boolean);
 
   // Step 6: Generate the note using the master prompt + contextual clinical factors
@@ -291,20 +290,20 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   }
 
   // Step 8: Always save to session_notes. FK violation = localStorage-only client → logged, not thrown.
-  const { error: saveError } = await supabase
-    .from('session_notes')
-    .insert({
-      client_id: input.clientId,
-      user_id: rbtId ?? null,
-      note_text: note,
-      session_date: input.sessionInfo.date || null,
-      behaviors_addressed: input.behaviorsObserved.map(b => b.name),
-      skills_addressed: input.replacementSkillsAddressed.map(s => s.name),
-      interventions_used: resolvedProfile.approvedInterventions || [],
+  try {
+    await prisma.session_notes.create({
+      data: {
+        client_id: input.clientId,
+        user_id: UUID_RE.test(rbtId ?? '') ? (rbtId as string) : null,
+        note_text: note,
+        session_date: input.sessionInfo.date || null,
+        behaviors_addressed: input.behaviorsObserved.map((b) => b.name),
+        skills_addressed: input.replacementSkillsAddressed.map((s) => s.name),
+        interventions_used: resolvedProfile.approvedInterventions || [],
+      },
     });
-
-  if (saveError) {
-    console.warn('[generateSmartNote] session_notes insert failed (localStorage-only client or missing table):', saveError.message);
+  } catch (saveError) {
+    console.warn('[generateSmartNote] session_notes insert failed (localStorage-only client or missing table):', saveError);
   }
 
   return {

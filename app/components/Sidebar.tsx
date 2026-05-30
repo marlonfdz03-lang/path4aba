@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { signOut } from "@/lib/auth";
-import { supabase } from "@/lib/supabase";
+import { useSession, signOut } from "next-auth/react";
 import { getClientProfiles } from "@/lib/clientStorage";
 
 // ── Inline SVG icons ────────────────────────────────────────────────────────
@@ -162,7 +161,7 @@ function NavItem({
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
+  const { data: session } = useSession();
   const [clientCount, setClientCount] = useState(0);
   const [pendingReviewCount, setPendingReviewCount] = useState(0);
   const [hasBCBAStudents, setHasBCBAStudents] = useState(false);
@@ -171,49 +170,30 @@ export default function Sidebar() {
 
   useEffect(() => {
     setClientCount(getClientProfiles().length);
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user) {
-        const meta = data.user.user_metadata || {};
-        const email = data.user.email || "";
-        const name = meta.full_name || email.split("@")[0] || "User";
-        const profession = meta.profession || "Clinician";
-        const initials = name.split(/\s+/).filter(Boolean).map((w: string) => w[0].toUpperCase()).slice(0, 2).join("") || "??";
-        setUser({ name, profession, initials });
 
-        // For BCBA: count pending review notes
-        const isBCBA = ["bcba", "bcaba"].includes(profession.toLowerCase());
-        if (isBCBA) {
-          supabase
-            .from("session_notes")
-            .select("id", { count: "exact", head: true })
-            .eq("review_status", "pending")
-            .then(({ count }) => setPendingReviewCount(count || 0));
-        }
+    if (session?.user) {
+      const role = ((session.user as any).role as string) || "";
+      const name = session.user.name || session.user.email?.split("@")[0] || "User";
+      const initials = name.split(/\s+/).filter(Boolean).map((w: string) => w[0].toUpperCase()).slice(0, 2).join("") || "??";
+      setUser({ name, profession: role, initials });
 
-        // Check subscriptions: bcba_students add-on + active RBT (for price display)
-        supabase
-          .from("subscriptions")
-          .select("status, plan, trial_ends_at, bcba_students_status, bcba_students_trial_ends_at")
-          .eq("user_id", data.user.id)
-          .maybeSingle()
-          .then(({ data: sub }) => {
-            const now = new Date();
-            const bcbaActive =
-              sub?.bcba_students_status === "active" ||
-              (sub?.bcba_students_status === "trialing" &&
-                sub.bcba_students_trial_ends_at &&
-                new Date(sub.bcba_students_trial_ends_at) > now);
-            setHasBCBAStudents(!!bcbaActive);
-
-            const rbtActive =
-              sub?.plan === "rbt" &&
-              (sub.status === "active" ||
-                (sub.status === "trialing" && sub.trial_ends_at && new Date(sub.trial_ends_at) > now));
-            setHasActiveRBT(!!rbtActive);
-          });
+      const isBCBA = ["bcba", "bcaba"].includes(role.toLowerCase());
+      if (isBCBA) {
+        fetch("/api/bcba/pending-count")
+          .then((r) => r.json())
+          .then((d) => setPendingReviewCount(d.count || 0))
+          .catch(() => {});
       }
-    });
-  }, []);
+
+      fetch("/api/user/subscription")
+        .then((r) => r.json())
+        .then((d) => {
+          setHasBCBAStudents(!!d.hasBCBAStudents);
+          setHasActiveRBT(!!d.hasActiveRBT);
+        })
+        .catch(() => {});
+    }
+  }, [session]);
 
   const isBCBA = ["bcba", "bcaba"].includes((user?.profession || "").toLowerCase());
 
@@ -223,8 +203,7 @@ export default function Sidebar() {
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
 
   async function handleLogout() {
-    await signOut();
-    router.push("/login");
+    await signOut({ callbackUrl: "/login" });
   }
 
   return (

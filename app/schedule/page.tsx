@@ -1,8 +1,14 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useEffect, useState } from "react";
-import { StoredClientProfile } from "@/lib/clientStorage";
-import { supabase } from "@/lib/supabase";
+import { useSession } from "next-auth/react";
+
+interface ScheduleClient {
+  id: string;
+  clientName: string;
+}
 
 const REASON_OPTIONS = [
   "Medical Appointment",
@@ -68,7 +74,7 @@ function ClientSelectionView({
   entries,
   onSelect,
 }: {
-  clients: StoredClientProfile[];
+  clients: ScheduleClient[];
   entries: MissedEntry[];
   onSelect: (id: string) => void;
 }) {
@@ -206,7 +212,7 @@ function ClientDetailView({
   onBack,
   onEntriesChange,
 }: {
-  client: StoredClientProfile;
+  client: ScheduleClient;
   allEntries: MissedEntry[];
   onBack: () => void;
   onEntriesChange: (entries: MissedEntry[]) => void;
@@ -250,20 +256,18 @@ function ClientDetailView({
     onEntriesChange(updated);
     setDate(""); setReason(""); setHours(""); setNotes("");
 
-    // Also persist to Supabase so BCBAs can see missed hours
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { error } = await supabase.from('missed_hours').insert({
-        id,
+    // Also persist to DB so BCBAs can see missed hours
+    fetch("/api/clients/log-missed-hours", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         client_id: client.id,
-        rbt_id: user.id,
         date,
         reason,
         hours: Number(hours),
         notes: notes.trim() || null,
-      });
-      if (error) console.error('[schedule] missed_hours insert error:', error.message);
-    }
+      }),
+    }).catch((err) => console.error("[schedule] log-missed-hours error:", err));
   }
 
   function handleDelete(id: string) {
@@ -412,7 +416,8 @@ function ClientDetailView({
 // ── Page Root ────────────────────────────────────────────────────────────────
 
 export default function SchedulePage() {
-  const [clients, setClients] = useState<StoredClientProfile[]>([]);
+  const { data: session, status } = useSession();
+  const [clients, setClients] = useState<ScheduleClient[]>([]);
   const [entries, setEntries] = useState<MissedEntry[]>([]);
   const [showClientId, setShowClientId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -420,55 +425,45 @@ export default function SchedulePage() {
   useEffect(() => {
     setEntries(loadEntries());
 
+    if (status === "loading") return;
+    if (!session?.user) { setLoaded(true); return; }
+
     async function loadClients() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setLoaded(true); return; }
-
-      const profession = user.user_metadata?.profession as string | undefined;
-      const isBCBA = profession === 'BCBA' || profession === 'BCaBA';
-
-      let rows: any[] = [];
+      const role = ((session!.user as any).role as string) || "";
+      const isBCBA = ["bcba", "bcaba"].includes(role.toLowerCase());
 
       if (isBCBA) {
-        const { data: links } = await supabase
-          .from('bcba_clients')
-          .select('client_id')
-          .eq('bcba_id', user.id);
-
-        const ids = (links || []).map((l: any) => l.client_id);
-        if (ids.length > 0) {
-          const { data } = await supabase
-            .from('clients')
-            .select('id, internal_code, clinical_profile')
-            .in('id', ids);
-          rows = data || [];
-        }
+        const res = await fetch("/api/bcba/clients");
+        const data = await res.json();
+        const bcbaClients: any[] = data.clients || [];
+        setClients(bcbaClients.map((c) => ({
+          id: c.id,
+          clientName: c.client_name || "Unnamed Client",
+          clinicalProfile: null,
+        })));
       } else {
-        const { data } = await supabase
-          .from('clients')
-          .select('id, clinical_profile')
-          .or(`created_by.eq.${user.id},rbt_id.eq.${user.id}`);
-        rows = data || [];
+        const res = await fetch("/api/clients");
+        const rows: any[] = await res.json();
+
+        const seen = new Set<string>();
+        const unique = rows.filter((row) => {
+          if (seen.has(row.id)) return false;
+          seen.add(row.id);
+          return true;
+        });
+
+        setClients(unique.map((row) => ({
+          id: row.id,
+          clientName: row.clinical_profile?.name || row.internal_code || "Unnamed Client",
+          clinicalProfile: row.clinical_profile,
+        })));
       }
 
-      // Deduplicate by id (OR filter can return same row twice)
-      const seen = new Set<string>();
-      const unique = rows.filter((row) => {
-        if (seen.has(row.id)) return false;
-        seen.add(row.id);
-        return true;
-      });
-
-      setClients(unique.map((row) => ({
-        id: row.id,
-        clientName: row.clinical_profile?.name || row.internal_code || 'Unnamed Client',
-        clinicalProfile: row.clinical_profile,
-      })));
       setLoaded(true);
     }
 
-    loadClients();
-  }, []);
+    loadClients().catch(() => setLoaded(true));
+  }, [status, session]);
 
   const activeClient = clients.find((c) => c.id === showClientId) ?? null;
 

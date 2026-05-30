@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { useSession } from "next-auth/react";
 
 const CHECK_ICON = (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -50,6 +50,7 @@ const PLANS: Plan[] = [
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [planError, setPlanError] = useState("");
 
@@ -91,8 +92,8 @@ export default function OnboardingPage() {
     setLoadingPlan(planKey);
     setPlanError("");
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/login"); return; }
+    const userId = (session?.user as any)?.id;
+    if (!userId) { router.push("/login"); return; }
 
     const timeout = new Promise<Response>((_, reject) =>
       setTimeout(() => reject(new Error("timeout")), 10000)
@@ -104,7 +105,7 @@ export default function OnboardingPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            userId: user.id,
+            userId,
             plan: planKey,
             promoCode: promoApplied ? promoInput.toUpperCase().trim() : undefined,
           }),

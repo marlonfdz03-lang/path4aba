@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { useSession } from "next-auth/react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -48,26 +48,25 @@ function formatDate(dateStr: string) {
 
 function BillingTab() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [sub, setSub] = useState<Sub | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
 
   useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/login"); return; }
-      setUserId(user.id);
-      const { data } = await supabase
-        .from("subscriptions")
-        .select("plan, status, trial_ends_at, current_period_ends_at, stripe_customer_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      setSub(data as Sub | null);
-      setLoaded(true);
-    }
-    load();
-  }, [router]);
+    if (status === "loading") return;
+    if (!session?.user) { router.push("/login"); return; }
+
+    fetch("/api/user/subscription")
+      .then((r) => r.json())
+      .then((d) => {
+        setSub(d.sub ?? null);
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, [status, session, router]);
+
+  const userId = (session?.user as any)?.id ?? null;
 
   async function handleManage() {
     if (!userId) return;
