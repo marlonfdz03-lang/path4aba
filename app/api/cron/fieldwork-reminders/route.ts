@@ -1,17 +1,10 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { prisma } from '@/lib/prisma'
 import { Resend } from 'resend'
 
 export const dynamic = 'force-dynamic'
 
 const FROM = 'Path4ABA <hello@path4abaapp.com>'
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
 
 function getResend() {
   return new Resend(process.env.RESEND_API_KEY!)
@@ -35,7 +28,6 @@ export async function GET(req: Request) {
     return new Response('Unauthorized', { status: 401 })
   }
 
-  const supabase = getSupabase()
   const resend = getResend()
   const now = new Date()
   const dayOfMonth = now.getDate()
@@ -45,19 +37,18 @@ export async function GET(req: Request) {
   const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
   const isLastDay = dayOfMonth === lastDay
 
-  // First day of current month = last day of following month for MVF deadline
   // MVF deadline = last day of month following the fieldwork month
   // e.g., January fieldwork → MVF due last day of February
   const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
   const prevMonthYear = prevMonth.toISOString().slice(0, 7)
 
-  // Fetch all users with bcba_students subscription
-  const { data: subs } = await supabase
-    .from('subscriptions')
-    .select('user_id, bcba_students_status')
-    .eq('bcba_students_status', 'active')
+  // Fetch all users with active bcba_students subscription
+  const subs = await prisma.subscriptions.findMany({
+    where: { bcba_students_status: 'active' },
+    select: { user_id: true },
+  })
 
-  if (!subs?.length) return NextResponse.json({ ok: true, processed: 0 })
+  if (!subs.length) return NextResponse.json({ ok: true, processed: 0 })
 
   let processed = 0
 
@@ -65,28 +56,35 @@ export async function GET(req: Request) {
     const userId = sub.user_id
 
     // Get user email + name
-    const { data: { user } } = await supabase.auth.admin.getUserById(userId)
+    const user = await prisma.users.findUnique({
+      where: { id: userId },
+      select: { email: true, name: true },
+    })
     if (!user?.email) continue
-    const name = user.user_metadata?.full_name || user.email.split('@')[0] || 'there'
+    const name = user.name || user.email.split('@')[0] || 'there'
     const email = user.email
 
-    // Fetch profile for fieldwork type + total required
-    const { data: profile } = await supabase
-      .from('fieldwork_profiles')
-      .select('fieldwork_type, certification_track')
-      .eq('user_id', userId)
-      .maybeSingle()
-
+    // Fetch profile for fieldwork type + certification track
+    const profile = await prisma.fieldwork_profiles.findUnique({
+      where: { user_id: userId },
+      select: { fieldwork_type: true, certification_track: true },
+    })
     if (!profile) continue
     const totalRequired = profile.fieldwork_type === 'concentrated' ? 1500 : 2000
 
     // Fetch current month summary
-    const { data: currentSummary } = await supabase
-      .from('fieldwork_monthly_summaries')
-      .select('total_hours, is_eligible, individual_contacts, group_contacts, client_observations, mvf_signed, supervisor_contacts')
-      .eq('user_id', userId)
-      .eq('month_year', currentMonthYear)
-      .maybeSingle()
+    const currentSummary = await prisma.fieldwork_monthly_summaries.findFirst({
+      where: { user_id: userId, month_year: currentMonthYear },
+      select: {
+        total_hours: true,
+        is_eligible: true,
+        individual_contacts: true,
+        group_contacts: true,
+        client_observations: true,
+        mvf_signed: true,
+        supervisor_contacts: true,
+      },
+    })
 
     // 1. Day 28 reminder (3 days before month end — approximate)
     if (dayOfMonth === 28) {
@@ -116,12 +114,10 @@ export async function GET(req: Request) {
 
     // 2. M-FVF deadline: last day of current month → covers previous month's fieldwork
     if (isLastDay) {
-      const { data: prevSummary } = await supabase
-        .from('fieldwork_monthly_summaries')
-        .select('mvf_signed, total_hours')
-        .eq('user_id', userId)
-        .eq('month_year', prevMonthYear)
-        .maybeSingle()
+      const prevSummary = await prisma.fieldwork_monthly_summaries.findFirst({
+        where: { user_id: userId, month_year: prevMonthYear },
+        select: { mvf_signed: true, total_hours: true },
+      })
 
       if (prevSummary && !prevSummary.mvf_signed && (prevSummary.total_hours ?? 0) > 0) {
         const prevMonthLabel = new Date(prevMonthYear + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
@@ -140,20 +136,19 @@ export async function GET(req: Request) {
     }
 
     // 3. Milestone emails (25%, 50%, 75%, 100%)
-    const { data: allSummaries } = await supabase
-      .from('fieldwork_monthly_summaries')
-      .select('total_hours')
-      .eq('user_id', userId)
+    const allSummaries = await prisma.fieldwork_monthly_summaries.findMany({
+      where: { user_id: userId },
+      select: { total_hours: true },
+    })
 
-    const totalLogged = (allSummaries || []).reduce((sum: number, s: any) => sum + (s.total_hours || 0), 0)
+    const totalLogged = allSummaries.reduce((sum, s) => sum + (s.total_hours || 0), 0)
     const pct = (totalLogged / totalRequired) * 100
 
     for (const milestone of [25, 50, 75, 100]) {
-      // Check if we just crossed this milestone today by seeing if yesterday we were below
       const prevTotal = totalLogged - (currentSummary?.total_hours ?? 0)
       const prevPct = (prevTotal / totalRequired) * 100
       if (pct >= milestone && prevPct < milestone) {
-        const label = milestone === 100 ? '100% — you\'re done!' : `${milestone}%`
+        const label = milestone === 100 ? "100% — you're done!" : `${milestone}%`
         await resend.emails.send({
           from: FROM,
           to: email,

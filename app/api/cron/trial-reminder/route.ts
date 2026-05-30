@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabaseServer } from '@/lib/supabaseServer'
+import { prisma } from '@/lib/prisma'
 import { sendTrialEndingEmail } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
@@ -15,19 +15,21 @@ export async function GET(request: Request) {
   const windowStart = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000)   // 2 days from now
   const windowEnd   = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000)   // 3 days from now
 
-  const { data: subs, error } = await supabaseServer
-    .from('subscriptions')
-    .select('user_id, trial_ends_at')
-    .eq('status', 'trialing')
-    .gte('trial_ends_at', windowStart.toISOString())
-    .lte('trial_ends_at', windowEnd.toISOString())
-
-  if (error) {
-    console.error('[trial-reminder] DB error:', error)
+  let subs: { user_id: string; trial_ends_at: Date | null }[]
+  try {
+    subs = await prisma.subscriptions.findMany({
+      where: {
+        status: 'trialing',
+        trial_ends_at: { gte: windowStart, lte: windowEnd },
+      },
+      select: { user_id: true, trial_ends_at: true },
+    })
+  } catch (err) {
+    console.error('[trial-reminder] DB error:', err)
     return NextResponse.json({ error: 'DB error' }, { status: 500 })
   }
 
-  if (!subs || subs.length === 0) {
+  if (!subs.length) {
     return NextResponse.json({ sent: 0 })
   }
 
@@ -36,14 +38,16 @@ export async function GET(request: Request) {
 
   for (const sub of subs) {
     try {
-      const { data } = await supabaseServer.auth.admin.getUserById(sub.user_id)
-      const user = data?.user
+      const user = await prisma.users.findUnique({
+        where: { id: sub.user_id },
+        select: { email: true, name: true },
+      })
       if (!user?.email) continue
 
       const daysLeft = Math.ceil(
-        (new Date(sub.trial_ends_at).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+        (new Date(sub.trial_ends_at!).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
       )
-      const name = user.user_metadata?.full_name || user.email.split('@')[0] || 'there'
+      const name = user.name || user.email.split('@')[0] || 'there'
 
       await sendTrialEndingEmail(user.email, name, daysLeft)
       sent++
