@@ -4,12 +4,14 @@ import bcrypt from 'bcryptjs'
 import { Pool } from 'pg'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from './lib/generated/prisma/client'
+import { authConfig } from './auth.config'
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter } as any)
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  ...authConfig,
   providers: [
     Credentials({
       credentials: {
@@ -41,26 +43,4 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id
-        token.role = (user as any).role
-      }
-      return token
-    },
-    async session({ session, token }) {
-      if (token) {
-        (session.user as any).id = token.id as string
-        ;(session.user as any).role = token.role as string
-      }
-      return session
-    },
-  },
-  pages: {
-    signIn: '/login',
-  },
-  session: { strategy: 'jwt' },
-  secret: process.env.NEXTAUTH_SECRET,
-  trustHost: true,
 })
