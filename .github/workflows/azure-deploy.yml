@@ -26,8 +26,9 @@ jobs:
           NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
           NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
 
-      # Package only the runtime artifacts — no node_modules, no source files.
-      # Azure installs production deps on first startup via the startup command.
+      - name: Install production dependencies for deploy
+        run: npm ci --omit=dev
+
       - name: Create deployment package
         run: |
           zip -r deploy.zip \
@@ -36,7 +37,8 @@ jobs:
             package.json \
             package-lock.json \
             next.config.ts \
-            prisma
+            prisma \
+            node_modules
 
       - name: Login to Azure
         uses: azure/login@v2
