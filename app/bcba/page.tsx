@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { useSession } from "next-auth/react";
 
 interface BCBAClient {
   id: string;
@@ -150,16 +150,16 @@ function ClientCard({ client, index }: { client: BCBAClient; index: number }) {
 
 export default function BCBADashboard() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [clients, setClients] = useState<BCBAClient[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) { router.push("/login"); return; }
-      fetchClients();
-    });
-  }, []);
+    if (status === "loading") return;
+    if (!session?.user) { router.push("/login"); return; }
+    fetchClients();
+  }, [status]);
 
   async function fetchClients() {
     try {

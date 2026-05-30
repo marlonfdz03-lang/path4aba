@@ -1,9 +1,11 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { useSession } from "next-auth/react";
 
 const CAREGIVER_RELATIONS = [
   "Mother", "Father", "Grandparent", "Foster Parent", "Legal Guardian", "Stepparent", "Sibling", "Other",
@@ -162,6 +164,7 @@ export default function ParentTrainingNotePage() {
   const params = useParams();
   const router = useRouter();
   const clientId = params.clientId as string;
+  const { data: session, status } = useSession();
 
   const [client, setClient] = useState<any>(null);
   const [bcbaName, setBcbaName] = useState("");
@@ -219,13 +222,12 @@ export default function ParentTrainingNotePage() {
   const [noteCopied, setNoteCopied] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) { router.push("/login"); return; }
-      const name = data.user.user_metadata?.full_name || data.user.email?.split("@")[0] || "";
-      setBcbaName(name);
-      loadData();
-    });
-  }, [clientId]);
+    if (status === "loading") return;
+    if (!session?.user) { router.push("/login"); return; }
+    const name = session.user.name || session.user.email?.split("@")[0] || "";
+    setBcbaName(name);
+    loadData();
+  }, [clientId, status]);
 
   async function loadData() {
     try {

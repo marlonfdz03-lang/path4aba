@@ -1,20 +1,16 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createServerClient } from '@supabase/ssr'
-import { supabaseServer } from '@/lib/supabaseServer'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function POST(request: Request) {
   console.log('[connect-with-code] === START ===')
 
-  const cookieStore = await cookies()
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-  )
-  const { data: { user }, error: authError } = await authClient.auth.getUser()
-  console.log('[connect-with-code] auth:', { userId: user?.id, authError })
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await auth()
+  const userId = (session?.user as any)?.id as string | undefined
+  console.log('[connect-with-code] auth:', { userId })
+  if (!session?.user || !userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let body: { code?: string }
   try { body = await request.json() } catch (e) {
@@ -26,26 +22,21 @@ export async function POST(request: Request) {
   console.log('[connect-with-code] raw code received:', JSON.stringify(code))
   if (!code) return NextResponse.json({ error: 'Missing code' }, { status: 400 })
 
+  if (!UUID_RE.test(userId)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const normalizedCode = code.toUpperCase().trim()
-  console.log('[connect-with-code] normalized code:', normalizedCode, '| bcba_id:', user.id)
+  console.log('[connect-with-code] normalized code:', normalizedCode, '| bcba_id:', userId)
 
   // Step 1: Look up the access code
-  const { data: accessCode, error: codeError } = await supabaseServer
-    .from('client_access_codes')
-    .select('id, client_id, rbt_id, used, expires_at')
-    .eq('code', normalizedCode)
-    .maybeSingle()
-
-  console.log('[connect-with-code] STEP 1 — code lookup:', {
-    found: !!accessCode,
-    accessCode,
-    codeError: codeError ? { message: codeError.message, code: codeError.code, details: codeError.details } : null,
+  const accessCode = await prisma.client_access_codes.findFirst({
+    where: { code: normalizedCode },
+    select: { id: true, client_id: true, rbt_id: true, used: true, expires_at: true },
   })
 
-  if (codeError) {
-    console.error('[connect-with-code] STEP 1 FAILED — DB error on code lookup:', JSON.stringify(codeError))
-    return NextResponse.json({ error: 'Invalid code. Please check and try again.' }, { status: 404 })
-  }
+  console.log('[connect-with-code] STEP 1 — code lookup:', { found: !!accessCode })
+
   if (!accessCode) {
     console.log('[connect-with-code] STEP 1 FAILED — no row found for code:', normalizedCode)
     return NextResponse.json({ error: 'Invalid code. Please check and try again.' }, { status: 404 })
@@ -61,57 +52,46 @@ export async function POST(request: Request) {
 
   console.log('[connect-with-code] STEP 1 OK — client_id:', accessCode.client_id, '| rbt_id:', accessCode.rbt_id)
 
-  const connectedAt = new Date().toISOString()
+  const connectedAt = new Date()
 
   // Step 2: Upsert bcba_clients
-  const upsertPayload = {
-    bcba_id: user.id,
-    client_id: accessCode.client_id,
-    rbt_id: accessCode.rbt_id,
-    connected_at: connectedAt,
-  }
-  console.log('[connect-with-code] STEP 2 — upserting bcba_clients:', upsertPayload)
-
-  const { data: upsertData, error: connectError } = await supabaseServer
-    .from('bcba_clients')
-    .upsert(upsertPayload, { onConflict: 'bcba_id,client_id' })
-    .select()
-
-  console.log('[connect-with-code] STEP 2 result:', {
-    upsertData,
-    connectError: connectError ? { message: connectError.message, code: connectError.code, details: connectError.details, hint: connectError.hint } : null,
-  })
-
-  if (connectError) {
-    console.error('[connect-with-code] STEP 2 FAILED — full error:', JSON.stringify(connectError))
+  console.log('[connect-with-code] STEP 2 — upserting bcba_clients')
+  try {
+    await prisma.bcba_clients.upsert({
+      where: { bcba_id_client_id: { bcba_id: userId, client_id: accessCode.client_id } },
+      update: { rbt_id: accessCode.rbt_id, connected_at: connectedAt },
+      create: { bcba_id: userId, client_id: accessCode.client_id, rbt_id: accessCode.rbt_id, connected_at: connectedAt },
+    })
+    console.log('[connect-with-code] STEP 2 OK')
+  } catch (e: any) {
+    console.error('[connect-with-code] STEP 2 FAILED:', e.message)
     return NextResponse.json({ error: 'Failed to connect client' }, { status: 500 })
   }
 
   // Step 3: Mark code as used
-  const { error: markUsedError } = await supabaseServer
-    .from('client_access_codes')
-    .update({ used: true, used_by: user.id })
-    .eq('id', accessCode.id)
-
-  console.log('[connect-with-code] STEP 3 — mark used:', { markUsedError })
+  try {
+    await prisma.client_access_codes.update({
+      where: { id: accessCode.id },
+      data: { used: true, used_by: userId },
+    })
+    console.log('[connect-with-code] STEP 3 — mark used OK')
+  } catch (e) {
+    console.error('[connect-with-code] STEP 3 — mark used error:', e)
+  }
 
   // Step 4: Fetch client data
-  const { data: clientRow, error: clientError } = await supabaseServer
-    .from('clients')
-    .select('id, internal_code, clinical_profile')
-    .eq('id', accessCode.client_id)
-    .maybeSingle()
-
-  console.log('[connect-with-code] STEP 4 — client fetch:', {
-    found: !!clientRow,
-    clientError: clientError ? { message: clientError.message, code: clientError.code } : null,
+  const clientRow = await prisma.clients.findFirst({
+    where: { id: accessCode.client_id },
+    select: { id: true, internal_code: true, clinical_profile: true },
   })
+
+  console.log('[connect-with-code] STEP 4 — client fetch:', { found: !!clientRow })
 
   const client = clientRow ? {
     id: clientRow.id,
-    client_name: clientRow.clinical_profile?.name || clientRow.internal_code || 'Unknown Client',
-    diagnosis: clientRow.clinical_profile?.maladaptiveBehaviors?.map((b: any) => b.name).slice(0, 2) || [],
-    connected_at: connectedAt,
+    client_name: (clientRow.clinical_profile as any)?.name || clientRow.internal_code || 'Unknown Client',
+    diagnosis: (clientRow.clinical_profile as any)?.maladaptiveBehaviors?.map((b: any) => b.name).slice(0, 2) || [],
+    connected_at: connectedAt.toISOString(),
     rbt_id: accessCode.rbt_id,
   } : null
 

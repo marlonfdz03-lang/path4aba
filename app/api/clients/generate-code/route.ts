@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createServerClient } from '@supabase/ssr'
-import { supabaseServer } from '@/lib/supabaseServer'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function randomCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -11,14 +12,9 @@ function randomCode(): string {
 }
 
 export async function POST(request: Request) {
-  const cookieStore = await cookies()
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-  )
-  const { data: { user } } = await authClient.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const userId = (session.user as any).id as string
 
   let body: { clientId?: string }
   try { body = await request.json() } catch {
@@ -30,20 +26,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
   }
 
+  if (!UUID_RE.test(userId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const code = randomCode()
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
-  console.log('[generate-code] inserting code for clientId:', clientId, 'rbt_id:', user.id, 'code:', code)
+  console.log('[generate-code] inserting code for clientId:', clientId, 'rbt_id:', userId, 'code:', code)
 
-  const { error } = await supabaseServer.from('client_access_codes').insert({
-    client_id: clientId,
-    rbt_id: user.id,
-    code,
-    expires_at: expiresAt,
-  })
-
-  if (error) {
-    console.error('[generate-code] insert error:', error)
+  try {
+    await prisma.client_access_codes.create({
+      data: {
+        client_id: clientId,
+        rbt_id: userId,
+        code,
+        expires_at: expiresAt,
+      },
+    })
+  } catch (e) {
+    console.error('[generate-code] insert error:', e)
     return NextResponse.json({ error: 'Failed to generate code' }, { status: 500 })
   }
 

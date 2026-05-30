@@ -1,9 +1,11 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { useSession } from "next-auth/react";
 
 const CONTACT_TYPES = [
   { value: "individual_supervision", label: "Individual" },
@@ -235,6 +237,7 @@ export default function SupervisionNotePage() {
   const params = useParams();
   const router = useRouter();
   const clientId = params.clientId as string;
+  const { data: session, status } = useSession();
 
   const [client, setClient] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -298,11 +301,10 @@ export default function SupervisionNotePage() {
   const [noteCopied, setNoteCopied] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) { router.push("/login"); return; }
-      loadData();
-    });
-  }, [clientId]);
+    if (status === "loading") return;
+    if (!session?.user) { router.push("/login"); return; }
+    loadData();
+  }, [clientId, status]);
 
   async function loadData() {
     try {

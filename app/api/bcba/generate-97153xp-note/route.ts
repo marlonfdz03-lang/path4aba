@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createServerClient } from '@supabase/ssr'
-import { supabaseServer } from '@/lib/supabaseServer'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
 import OpenAI from 'openai'
 import { build97153XPPrompt } from '@/app/prompts/supervision97153xpPrompt'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const openai = new OpenAI({
   apiKey: process.env.AZURE_OPENAI_API_KEY,
@@ -15,14 +16,9 @@ const openai = new OpenAI({
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
-  const cookieStore = await cookies()
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-  )
-  const { data: { user } } = await authClient.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const userId = (session.user as any).id as string
 
   let body: {
     clientId?: string
@@ -46,13 +42,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing clientId or sessionDate' }, { status: 400 })
   }
 
-  // Verify BCBA owns this client relationship
-  const { data: connection } = await supabaseServer
-    .from('bcba_clients')
-    .select('id')
-    .eq('bcba_id', user.id)
-    .eq('client_id', clientId)
-    .maybeSingle()
+  if (!UUID_RE.test(userId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const connection = await prisma.bcba_clients.findFirst({
+    where: { bcba_id: userId, client_id: clientId },
+    select: { id: true },
+  })
 
   if (!connection) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
@@ -89,20 +84,22 @@ export async function POST(request: Request) {
           }
         }
 
-        // Save to supervision_notes_97153xp
         let savedId: string | undefined
-        const { data: inserted } = await supabaseServer
-          .from('supervision_notes_97153xp')
-          .insert({
-            client_id: clientId,
-            bcba_id: user.id,
-            session_date: sessionDate,
-            note_text: fullNote,
-            rbt_session_context: rbtSessionContext || null,
+        try {
+          const inserted = await prisma.supervision_notes_97153xp.create({
+            data: {
+              client_id: clientId,
+              bcba_id: userId,
+              session_date: sessionDate,
+              note_text: fullNote,
+              rbt_session_context: rbtSessionContext || undefined,
+            },
+            select: { id: true },
           })
-          .select('id')
-          .single()
-        savedId = inserted?.id
+          savedId = inserted.id
+        } catch (saveError) {
+          console.error('[generate-97153xp-note] save error:', saveError)
+        }
 
         controller.enqueue(encoder.encode(`__META__${JSON.stringify({ saved: !!savedId })}`))
       } catch (err: any) {

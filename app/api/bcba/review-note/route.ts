@@ -1,17 +1,13 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createServerClient } from '@supabase/ssr'
-import { supabaseServer } from '@/lib/supabaseServer'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function POST(request: Request) {
-  const cookieStore = await cookies()
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-  )
-  const { data: { user } } = await authClient.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const userId = (session.user as any).id as string
 
   let body: { noteId?: string; status?: 'accepted' | 'rejected'; comment?: string }
   try { body = await request.json() } catch {
@@ -23,33 +19,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing or invalid noteId or status' }, { status: 400 })
   }
 
-  // Verify the note belongs to one of this BCBA's clients
-  const { data: note } = await supabaseServer
-    .from('session_notes')
-    .select('client_id')
-    .eq('id', noteId)
-    .maybeSingle()
+  if (!UUID_RE.test(userId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const note = await prisma.session_notes.findFirst({
+    where: { id: noteId },
+    select: { client_id: true },
+  })
 
   if (!note) return NextResponse.json({ error: 'Note not found' }, { status: 404 })
 
-  const { data: connection } = await supabaseServer
-    .from('bcba_clients')
-    .select('id')
-    .eq('bcba_id', user.id)
-    .eq('client_id', note.client_id)
-    .maybeSingle()
+  const connection = await prisma.bcba_clients.findFirst({
+    where: { bcba_id: userId, client_id: note.client_id! },
+    select: { id: true },
+  })
 
   if (!connection) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { error } = await supabaseServer.from('session_notes').update({
-    review_status: status,
-    reviewed_by: user.id,
-    reviewed_at: new Date().toISOString(),
-    review_comment: comment || null,
-  }).eq('id', noteId)
-
-  if (error) {
-    console.error('[bcba/review-note]', error)
+  try {
+    await prisma.session_notes.update({
+      where: { id: noteId },
+      data: {
+        review_status: status,
+        reviewed_by: userId,
+        reviewed_at: new Date(),
+        review_comment: comment || null,
+      },
+    })
+  } catch (e) {
+    console.error('[bcba/review-note]', e)
     return NextResponse.json({ error: 'Failed to update note' }, { status: 500 })
   }
 

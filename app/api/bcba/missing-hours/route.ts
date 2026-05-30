@@ -1,30 +1,31 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createServerClient } from '@supabase/ssr'
-import { supabaseServer } from '@/lib/supabaseServer'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function GET(request: Request) {
-  const cookieStore = await cookies()
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-  )
-  const { data: { user } } = await authClient.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const userId = (session.user as any).id as string
 
   const url = new URL(request.url)
   const clientId = url.searchParams.get('clientId')
-  console.log('[missing-hours] bcba_id:', user.id, 'clientId param:', clientId)
+  console.log('[missing-hours] bcba_id:', userId, 'clientId param:', clientId)
 
-  const { data: connections, error: connError } = await supabaseServer
-    .from('bcba_clients')
-    .select('client_id')
-    .eq('bcba_id', user.id)
+  if (!UUID_RE.test(userId)) {
+    console.log('[missing-hours] non-UUID user — returning empty')
+    return NextResponse.json({ entries: [] })
+  }
 
-  console.log('[missing-hours] bcba_clients connections:', connections?.length, 'connError:', connError?.message)
+  const connections = await prisma.bcba_clients.findMany({
+    where: { bcba_id: userId },
+    select: { client_id: true },
+  })
 
-  const clientIds = connections?.map(c => c.client_id) || []
+  console.log('[missing-hours] bcba_clients connections:', connections.length)
+
+  const clientIds = connections.map(c => c.client_id)
   if (clientIds.length === 0) {
     console.log('[missing-hours] no connected clients — returning empty')
     return NextResponse.json({ entries: [] })
@@ -33,33 +34,28 @@ export async function GET(request: Request) {
   const targetIds = clientId ? [clientId] : clientIds
   console.log('[missing-hours] querying missed_hours for client_ids:', targetIds)
 
-  const { data: entries, error } = await supabaseServer
-    .from('missed_hours')
-    .select('id, client_id, date, reason, hours, notes, created_at')
-    .in('client_id', targetIds)
-    .order('date', { ascending: false })
-
-  console.log('[missing-hours] rows:', entries?.length, 'error code:', error?.code, 'error msg:', error?.message)
-
-  if (error) {
-    // PGRST205 = table not in schema cache (table doesn't exist yet)
-    if (error.code === 'PGRST205' || error.message?.includes('relation') || error.message?.includes('does not exist')) {
-      console.log('[missing-hours] missed_hours table does not exist yet — returning empty')
-    } else {
-      console.error('[missing-hours] unexpected DB error:', error)
-    }
+  let entries: any[] = []
+  try {
+    entries = await prisma.missed_hours.findMany({
+      where: { client_id: { in: targetIds } },
+      select: { id: true, client_id: true, date: true, reason: true, hours: true, notes: true, created_at: true },
+      orderBy: { date: 'desc' },
+    })
+    console.log('[missing-hours] rows:', entries.length)
+  } catch (e: any) {
+    console.error('[missing-hours] DB error:', e.message)
     return NextResponse.json({ entries: [] })
   }
 
-  const { data: clients } = await supabaseServer
-    .from('clients')
-    .select('id, internal_code, clinical_profile')
-    .in('id', targetIds)
+  const clients = await prisma.clients.findMany({
+    where: { id: { in: targetIds } },
+    select: { id: true, internal_code: true, clinical_profile: true },
+  })
 
   const clientMap = Object.fromEntries(
-    (clients || []).map(c => [c.id, c.clinical_profile?.name || c.internal_code || 'Unknown Client'])
+    clients.map(c => [c.id, (c.clinical_profile as any)?.name || c.internal_code || 'Unknown Client'])
   )
-  const enriched = (entries || []).map(e => ({ ...e, clientName: clientMap[e.client_id] || 'Unknown Client' }))
+  const enriched = entries.map(e => ({ ...e, clientName: clientMap[e.client_id ?? ''] || 'Unknown Client' }))
 
   console.log('[missing-hours] returning', enriched.length, 'entries')
   return NextResponse.json({ entries: enriched })

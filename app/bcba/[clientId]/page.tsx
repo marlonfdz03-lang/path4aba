@@ -1,9 +1,11 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { useSession } from "next-auth/react";
 
 type BCBATab = "overview" | "notes" | "schedule" | "97153xp" | "supervision" | "parent_training" | "reassessment";
 
@@ -108,6 +110,7 @@ export default function BCBAClientPage() {
   const params = useParams();
   const router = useRouter();
   const clientId = params.clientId as string;
+  const { data: session, status } = useSession();
 
   const [activeTab, setActiveTab] = useState<BCBATab>("overview");
   const [isBCBAPro, setIsBCBAPro] = useState<boolean | null>(null);
@@ -154,28 +157,18 @@ export default function BCBAClientPage() {
   const [profileSaved, setProfileSaved] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) { router.push("/login"); return; }
+    if (status === "loading") return;
+    if (!session?.user) { router.push("/login"); return; }
 
-      supabase
-        .from("subscriptions")
-        .select("status, plan, trial_ends_at")
-        .eq("user_id", data.user.id)
-        .maybeSingle()
-        .then(({ data: sub }) => {
-          const now = new Date();
-          const isPro =
-            sub?.plan === "bcba_pro" &&
-            (sub.status === "active" ||
-              (sub.status === "trialing" && sub.trial_ends_at && new Date(sub.trial_ends_at) > now));
-          setIsBCBAPro(!!isPro);
-        });
+    fetch('/api/bcba/subscription-status')
+      .then(r => r.json())
+      .then(d => setIsBCBAPro(!!d.isBCBAPro))
+      .catch(() => setIsBCBAPro(false));
 
-      loadAll(data.user.id as string);
-    });
-  }, [clientId]);
+    loadAll();
+  }, [clientId, status]);
 
-  async function loadAll(userId: string) {
+  async function loadAll() {
     const clientRes = await fetch(`/api/bcba/client/${clientId}`);
     if (!clientRes.ok) { router.push("/bcba"); return; }
     const { client: clientData } = await clientRes.json();
@@ -184,32 +177,17 @@ export default function BCBAClientPage() {
     const notesRes = await fetch(`/api/bcba/rbt-notes?clientId=${clientId}`);
     if (notesRes.ok) { const d = await notesRes.json(); setNotes(d.notes || []); }
 
-    const { data: supNotes } = await supabase
-      .from("supervision_notes")
-      .select("id, session_date, supervision_type, note_text, status, created_at")
-      .eq("client_id", clientId)
-      .eq("bcba_id", userId)
-      .order("session_date", { ascending: false });
-    setSupervisionNotes(supNotes || []);
+    const supRes = await fetch(`/api/bcba/supervision-notes?clientId=${clientId}`);
+    if (supRes.ok) { const d = await supRes.json(); setSupervisionNotes(d.notes || []); }
 
-    const { data: ptNotes } = await supabase
-      .from("parent_training_notes")
-      .select("id, session_date, caregiver_name, caregiver_relation, note_text, status, created_at")
-      .eq("client_id", clientId)
-      .eq("bcba_id", userId)
-      .order("session_date", { ascending: false });
-    setParentTrainingNotes(ptNotes || []);
+    const ptRes = await fetch(`/api/bcba/parent-training-notes?clientId=${clientId}`);
+    if (ptRes.ok) { const d = await ptRes.json(); setParentTrainingNotes(d.notes || []); }
 
     const hoursRes = await fetch(`/api/bcba/missing-hours?clientId=${clientId}`);
     if (hoursRes.ok) { const d = await hoursRes.json(); setMissingHours(d.entries || []); }
 
-    const { data: xpNotes, error: xpError } = await supabase
-      .from("supervision_notes_97153xp")
-      .select("id, session_date, note_text, created_at")
-      .eq("client_id", clientId)
-      .eq("bcba_id", userId)
-      .order("session_date", { ascending: false });
-    if (!xpError) setXp97153Notes(xpNotes || []);
+    const xpRes = await fetch(`/api/bcba/97153xp-notes?clientId=${clientId}`);
+    if (xpRes.ok) { const d = await xpRes.json(); setXp97153Notes(d.notes || []); }
 
     setLoading(false);
   }
