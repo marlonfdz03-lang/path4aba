@@ -25,6 +25,14 @@ let missedSessions = false;
 let complianceLevel = 'typical';
 
 // ── API helper ─────────────────────────────
+const INIT_TIMEOUT_MS = 6000;
+
+function apiWithTimeout(path, ms) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  return api(path, { signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
+
 async function api(path, options = {}) {
   const method = (options.method || 'GET').toUpperCase();
   // Don't send Content-Type on GET/HEAD — it triggers an unnecessary CORS preflight.
@@ -71,59 +79,60 @@ function showError(msg) {
 // ── Init ───────────────────────────────────
 async function init() {
   showScreen('loading');
-  console.log('[Path4ABA] extension starting, calling:', BASE + '/api/bcba/clients');
 
-  // Try BCBA clients
-  let res;
-  try {
-    res = await api('/api/bcba/clients');
-  } catch (err) {
-    console.error('[Path4ABA] init error:', err.message);
-    showScreen('auth');
-    document.getElementById('screen-auth').insertAdjacentHTML('beforeend',
-      `<p style="color:#f87171;font-size:12px;margin-top:8px">Network error: ${err.message}</p>`);
-    return;
-  }
+  // Fire both role checks in parallel with a shared timeout.
+  const [bcbaResult, rbtResult] = await Promise.allSettled([
+    apiWithTimeout('/api/bcba/clients', INIT_TIMEOUT_MS),
+    apiWithTimeout('/api/rbt/clients', INIT_TIMEOUT_MS),
+  ]);
 
-  if (res.status === 401) {
+  const bcbaRes = bcbaResult.status === 'fulfilled' ? bcbaResult.value : null;
+  const rbtRes  = rbtResult.status  === 'fulfilled' ? rbtResult.value  : null;
+
+  // Not authenticated — 401 from either endpoint means the session is gone.
+  if (bcbaRes?.status === 401 || rbtRes?.status === 401) {
     showScreen('auth');
     return;
   }
 
-  if (res.ok) {
+  // BCBA with clients
+  if (bcbaRes?.ok) {
     let json;
-    try { json = await res.json(); } catch { showScreen('auth'); return; }
-    const bcbaClients = json.clients || [];
-    if (bcbaClients.length > 0) {
+    try { json = await bcbaRes.json(); } catch { json = {}; }
+    if (json.clients?.length) {
       userRole = 'bcba';
-      clients = bcbaClients;
+      clients = json.clients;
       setupMainScreen();
       showScreen('main');
       return;
     }
   }
 
-  // Try RBT clients
-  try {
-    const rbtRes = await api('/api/rbt/clients');
-    if (rbtRes.ok) {
-      let json;
-      try { json = await rbtRes.json(); } catch { json = {}; }
-      const rbtClients = json.clients || [];
-      if (rbtClients.length > 0) {
-        userRole = 'rbt';
-        clients = rbtClients;
-        setupMainScreen();
-        showScreen('main');
-        return;
-      }
+  // RBT with clients
+  if (rbtRes?.ok) {
+    let json;
+    try { json = await rbtRes.json(); } catch { json = {}; }
+    if (json.clients?.length) {
+      userRole = 'rbt';
+      clients = json.clients;
+      setupMainScreen();
+      showScreen('main');
+      return;
     }
-  } catch (err) {
-    console.error('[Path4ABA] RBT clients error:', err.name, err.message);
   }
 
-  // Authenticated but no clients
-  if (res.ok) {
+  // Both requests timed out or had a network error
+  const timedOut = bcbaResult.status === 'rejected' || rbtResult.status === 'rejected';
+  if (timedOut) {
+    showScreen('auth');
+    document.getElementById('screen-auth').insertAdjacentHTML('beforeend',
+      `<p style="color:#f87171;font-size:12px;margin-top:8px">Connection timed out. Make sure you are logged in to Path4ABA.</p>`
+    );
+    return;
+  }
+
+  // Authenticated but no clients assigned to this account
+  if (bcbaRes?.ok || rbtRes?.ok) {
     showScreen('no-clients');
     return;
   }
