@@ -1,55 +1,47 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createServerClient } from '@supabase/ssr'
-import { supabaseServer } from '@/lib/supabaseServer'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function GET() {
-  const cookieStore = await cookies()
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-  )
-  const { data: { user } } = await authClient.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  console.log('[bcba/clients] fetching clients for bcba_id:', user.id)
+  const userId = (session.user as any).id as string
+  if (!UUID_RE.test(userId)) return NextResponse.json({ clients: [] })
 
-  const { data: rows, error } = await supabaseServer
-    .from('bcba_clients')
-    .select('client_id, rbt_id, connected_at')
-    .eq('bcba_id', user.id)
-    .order('connected_at', { ascending: false })
+  console.log('[bcba/clients] fetching clients for bcba_id:', userId)
 
-  if (error) {
-    console.error('[bcba/clients] bcba_clients fetch error:', error)
-    return NextResponse.json({ error: 'Failed to fetch clients' }, { status: 500 })
-  }
+  const rows = await prisma.bcba_clients.findMany({
+    where: { bcba_id: userId },
+    select: { client_id: true, rbt_id: true, connected_at: true },
+    orderBy: { connected_at: 'desc' },
+  })
 
-  console.log('[bcba/clients] found', rows?.length, 'connections')
+  console.log('[bcba/clients] found', rows.length, 'connections')
 
-  if (!rows || rows.length === 0) {
-    return NextResponse.json({ clients: [] })
-  }
+  if (rows.length === 0) return NextResponse.json({ clients: [] })
 
-  const clientIds = rows.map((r) => r.client_id)
-  const { data: clientRows, error: clientError } = await supabaseServer
-    .from('clients')
-    .select('id, internal_code, clinical_profile')
-    .in('id', clientIds)
+  const clientIds = rows.map(r => r.client_id)
 
-  console.log('[bcba/clients] client rows fetched:', clientRows?.length, 'error:', clientError)
+  const clientRows = await prisma.clients.findMany({
+    where: { id: { in: clientIds } },
+    select: { id: true, internal_code: true, clinical_profile: true },
+  })
 
-  const clientMap = new Map((clientRows || []).map((c) => [c.id, c]))
+  console.log('[bcba/clients] client rows fetched:', clientRows.length)
 
-  const clients = rows.map((row) => {
+  const clientMap = new Map(clientRows.map(c => [c.id, c]))
+
+  const clients = rows.map(row => {
     const clientRow = clientMap.get(row.client_id)
     return {
       id: row.client_id,
-      client_name: clientRow?.clinical_profile?.name || clientRow?.internal_code || 'Unknown Client',
-      diagnosis: clientRow?.clinical_profile?.maladaptiveBehaviors?.map((b: any) => b.name).slice(0, 2) || [],
+      client_name: (clientRow?.clinical_profile as any)?.name || clientRow?.internal_code || 'Unknown Client',
+      diagnosis: (clientRow?.clinical_profile as any)?.maladaptiveBehaviors?.map((b: any) => b.name).slice(0, 2) || [],
       connected_at: row.connected_at,
       rbt_id: row.rbt_id,
     }

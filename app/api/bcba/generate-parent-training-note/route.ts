@@ -1,18 +1,15 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createServerClient } from '@supabase/ssr'
-import { supabaseServer } from '@/lib/supabaseServer'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
 import { generateParentTrainingNote } from '@/lib/generateParentTrainingNote'
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function POST(request: Request) {
-  const cookieStore = await cookies()
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-  )
-  const { data: { user } } = await authClient.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const userId = (session.user as any).id as string
 
   let body: {
     clientId?: string
@@ -44,13 +41,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  // Verify BCBA is connected to this client
-  const { data: connection } = await supabaseServer
-    .from('bcba_clients')
-    .select('id')
-    .eq('bcba_id', user.id)
-    .eq('client_id', clientId)
-    .maybeSingle()
+  if (!UUID_RE.test(userId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const connection = await prisma.bcba_clients.findFirst({
+    where: { bcba_id: userId, client_id: clientId },
+    select: { id: true },
+  })
 
   if (!connection) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
@@ -75,16 +71,21 @@ export async function POST(request: Request) {
           controller.enqueue(encoder.encode(text))
         })
 
-        const { error: saveError } = await supabaseServer.from('parent_training_notes').insert({
-          client_id: clientId,
-          bcba_id: user.id,
-          session_date: sessionDate,
-          caregiver_name: caregiverName,
-          caregiver_relation: caregiverRelation || null,
-          note_text: result.note,
-          status: 'draft',
-        })
-        if (saveError) console.error('[generate-parent-training-note] save error:', saveError)
+        try {
+          await prisma.parent_training_notes.create({
+            data: {
+              client_id: clientId,
+              bcba_id: userId,
+              session_date: sessionDate,
+              caregiver_name: caregiverName,
+              caregiver_relation: caregiverRelation || null,
+              note_text: result.note,
+              status: 'draft',
+            },
+          })
+        } catch (saveError) {
+          console.error('[generate-parent-training-note] save error:', saveError)
+        }
 
         controller.enqueue(encoder.encode(
           `\n__META__${JSON.stringify({ similarityWarning: result.similarityWarning || false })}`
