@@ -24,4 +24,18 @@ export const authConfig: NextAuthConfig = {
   providers: [],
   trustHost: true,
   secret: process.env.NEXTAUTH_SECRET,
+  // SameSite=None; Secure is required so the browser forwards the session
+  // cookie in cross-site fetch requests from the Chrome extension.
+  // (chrome-extension:// is treated as a cross-site origin by the browser.)
+  // The cookie stays httpOnly — JS cannot read it.
+  cookies: {
+    sessionToken: {
+      options: {
+        httpOnly: true,
+        sameSite: 'none',
+        path: '/',
+        secure: true,
+      },
+    },
+  },
 }
