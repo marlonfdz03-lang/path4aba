@@ -28,6 +28,7 @@ interface HistoryRow {
 export default function UploadAssessment() {
   const { data: session } = useSession();
   const [clientName, setClientName] = useState("");
+  const [summaryTable, setSummaryTable] = useState<any>(null);
   const [fileName, setFileName] = useState("");
   const [status, setStatus] = useState("");
   const [result, setResult] = useState<any>(null);
@@ -46,6 +47,7 @@ export default function UploadAssessment() {
     setSaved(false);
     setReviewStos([]);
     setReviewHistory([]);
+    setSummaryTable(null);
 
     try {
       const formData = new FormData();
@@ -80,7 +82,9 @@ export default function UploadAssessment() {
       }
 
       const clinicalProfile = buildClinicalProfile(extractedData);
-      setResult({ clinicalProfile });
+      const st = extractedData.extractedSummaryTable ?? null;
+      setSummaryTable(st);
+      setResult({ clinicalProfile, summaryTable: st });
 
       const stos: StoRow[] = (extractedData.extractedStos ?? []).map(
         (s: any) => ({
@@ -165,7 +169,9 @@ export default function UploadAssessment() {
       body: JSON.stringify({
         id: newClient.id,
         clientName: newClient.clientName,
-        clinicalProfile: newClient.clinicalProfile,
+        clinicalProfile: summaryTable
+          ? { ...newClient.clinicalProfile, summaryTable }
+          : newClient.clinicalProfile,
       }),
     });
 

@@ -57,6 +57,10 @@ export interface ExtractedAssessment {
     weekEnd: string | null;
     value: number;
   }[];
+  summaryTable: {
+    headers: string[];
+    rows: { name: string; values: string[] }[];
+  } | null;
 }
 
 function stripIdentifiers(data: ExtractedAssessment): ExtractedAssessment {
@@ -94,15 +98,17 @@ export async function extractAssessment(text: string): Promise<ExtractedAssessme
 Extract every piece of clinical information available. Be thorough and precise. Do not skip any items.
 
 ━━━ BEHAVIOR EXTRACTION RULES ━━━
-Extract ALL behaviors listed under ANY of these sections — do not skip any:
+Extract EVERY SINGLE behavior listed under ANY of these sections — DO NOT STOP EARLY, DO NOT LIMIT TO 8 OR 10:
 - "Behavior Targeted for Reduction"
 - "Maladaptive Behaviors"
 - "Target Behaviors"
 - "Behaviors to Reduce"
 - Any section describing behaviors the client should decrease or stop
 
+There is NO limit on how many behaviors to extract. If there are 20, extract all 20. If there are 30, extract all 30.
+
 ━━━ REPLACEMENT SKILL EXTRACTION RULES ━━━
-Extract ALL skills listed under ANY of these sections — do not skip any:
+Extract EVERY SINGLE skill listed under ANY of these sections — DO NOT STOP EARLY, DO NOT LIMIT TO 8 OR 10:
 - "Behaviors to Increase"
 - "Replacement Programs"
 - "Skill Acquisition"
@@ -112,6 +118,8 @@ Extract ALL skills listed under ANY of these sections — do not skip any:
 - "Replacement Skills"
 - "Skills to Increase"
 - Any section describing skills or behaviors the client should learn or increase
+
+There is NO limit on how many skills to extract. If there are 25, extract all 25.
 
 DEDUPLICATION RULE — CRITICAL:
 Put ALL replacement skills into ONE replacementSkills array. Do NOT create separate arrays for social skills, communication skills, etc.
@@ -134,8 +142,9 @@ For nonPreferredActivities: extract all activities listed as non-preferred, low-
 For caregivers: extract names of caregivers, parents, or guardians mentioned in the document (used for session documentation — not saved to clinical database).
 
 ━━━ STO EXTRACTION RULES ━━━
-Extract ALL Short-Term Objectives (STOs) listed anywhere in the document — do not skip any.
-Look in sections titled: "Short-Term Objectives", "STOs", "Treatment Goals", "Goals", "Objectives", or any numbered goal list.
+Extract EVERY SINGLE STO for EVERY behavior and skill — including mastered STOs, in-progress STOs, and future/upcoming STOs. DO NOT SKIP ANY.
+Look in sections titled: "Short-Term Objectives", "STOs", "Treatment Goals", "Goals", "Objectives", numbered goal lists, or any section listing incremental targets.
+A behavior may have many STOs (e.g., STO#1 through STO#16). Extract them ALL.
 For each STO extract:
 - name: the exact behavior or skill name (e.g., "Request a Break", "Aggression")
 - targetType: "replacement" if it is a skill to increase, "maladaptive" if it is a behavior to decrease
@@ -155,6 +164,13 @@ For each data point extract:
 - weekEnd: week end date as YYYY-MM-DD if stated, otherwise null
 - value: numeric value (percentage 0–100 for skills, frequency count for behaviors)
 If no historical data is present, return an empty array.
+
+━━━ SUMMARY TABLE EXTRACTION RULES ━━━
+If the document contains a summary data table (e.g., a table showing behavior names with columns for Baseline, and monthly averages like "July 2025", "August 2025", etc.), extract it exactly.
+The summaryTable must include:
+- headers: array of column headers exactly as they appear (e.g., ["Name", "Baseline", "July 2025", "August 2025"])
+- rows: array of row objects, each with: name (behavior or skill name) and values (array of string values, one per non-name column)
+If no summary table is present, return null.
 
 Return this exact JSON structure:
 {
@@ -214,7 +230,13 @@ Return this exact JSON structure:
       "weekEnd": null,
       "value": 0
     }
-  ]
+  ],
+  "summaryTable": {
+    "headers": ["Name", "Baseline", "Month Year"],
+    "rows": [
+      { "name": "behavior or skill name", "values": ["baseline value", "monthly value"] }
+    ]
+  }
 }`
       },
       {
@@ -241,6 +263,7 @@ Return this exact JSON structure:
 
     parsed.stos = parsed.stos ?? [];
     parsed.historicalData = parsed.historicalData ?? [];
+    parsed.summaryTable = parsed.summaryTable ?? null;
 
     return stripIdentifiers(parsed);
   } catch (error) {

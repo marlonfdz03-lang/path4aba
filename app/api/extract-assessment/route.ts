@@ -337,6 +337,7 @@ export async function POST(req: NextRequest) {
       ...normalized,
       extractedStos: extracted.stos ?? [],
       extractedHistoricalData: extracted.historicalData ?? [],
+      extractedSummaryTable: extracted.summaryTable ?? null,
     });
   } catch (error: any) {
     console.error(error);
