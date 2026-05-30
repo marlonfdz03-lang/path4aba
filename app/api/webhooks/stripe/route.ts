@@ -4,8 +4,6 @@ import { sendPaymentConfirmationEmail, sendPaymentFailedEmail } from '@/lib/emai
 
 export const dynamic = 'force-dynamic'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-06-20' as any,
 })
@@ -52,11 +50,6 @@ export async function POST(req: Request) {
         if (!userId) {
           console.error('No userId found in session metadata')
           return new Response('No userId', { status: 200 })
-        }
-
-        if (!UUID_RE.test(userId)) {
-          console.warn('[webhook] Non-UUID userId in metadata — skipping DB write:', userId)
-          return new Response('OK', { status: 200 })
         }
 
         const trialEnd = new Date()
