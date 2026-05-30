@@ -1,33 +1,28 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createServerClient } from '@supabase/ssr'
-import { supabaseServer } from '@/lib/supabaseServer'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function GET() {
-  const cookieStore = await cookies()
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-  )
-  const { data: { user } } = await authClient.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: rows, error } = await supabaseServer
-    .from('clients')
-    .select('id, internal_code, clinical_profile')
-    .eq('rbt_id', user.id)
-    .order('created_at', { ascending: false })
+  const userId = (session.user as any).id as string
 
-  if (error) {
-    return NextResponse.json({ error: 'Failed to fetch clients' }, { status: 500 })
-  }
+  const rows = UUID_RE.test(userId)
+    ? await prisma.clients.findMany({
+        where: { rbt_id: userId },
+        select: { id: true, internal_code: true, clinical_profile: true },
+        orderBy: { created_at: 'desc' },
+      })
+    : []
 
-  const clientList = (rows || []).map(row => ({
+  const clientList = rows.map(row => ({
     id: row.id,
-    client_name: row.clinical_profile?.name || row.internal_code || 'Unknown Client',
+    client_name: (row.clinical_profile as any)?.name || row.internal_code || 'Unknown Client',
     internal_code: row.internal_code,
     clinical_profile: row.clinical_profile,
   }))

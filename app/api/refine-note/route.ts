@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { NOTE_PERFECTOR_PROMPT } from '@/app/prompts/notePerfectorPrompt';
-import { supabaseServer } from '@/lib/supabaseServer';
+import { prisma } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
 
@@ -25,22 +25,19 @@ export async function POST(req: NextRequest) {
     const { originalNote, clientProfile, clientId } = await req.json();
 
     if (!originalNote || originalNote.trim().length < 50) {
-      return NextResponse.json(
-        { error: 'Note is too short to refine' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Note is too short to refine' }, { status: 400 });
     }
 
     // Fetch previous notes for similarity check (only if clientId provided)
     let previousTexts: string[] = [];
     if (clientId) {
-      const { data: prevNotes } = await supabaseServer
-        .from('session_notes')
-        .select('note_text')
-        .eq('client_id', clientId)
-        .order('created_at', { ascending: false })
-        .limit(10);
-      previousTexts = (prevNotes || []).map((r: any) => r.note_text as string).filter(Boolean);
+      const prevNotes = await prisma.session_notes.findMany({
+        where: { client_id: clientId },
+        select: { note_text: true },
+        orderBy: { created_at: 'desc' },
+        take: 10,
+      });
+      previousTexts = prevNotes.map(r => r.note_text).filter(Boolean) as string[];
     }
 
     const userMessage = (noteText: string, variationHint = '') =>
@@ -111,9 +108,6 @@ ${noteText}`;
 
   } catch (error) {
     console.error('Note refinement error:', error);
-    return NextResponse.json(
-      { error: 'Failed to refine note' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to refine note' }, { status: 500 });
   }
 }

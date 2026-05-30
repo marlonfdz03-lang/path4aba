@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createServerClient } from '@supabase/ssr'
-import { supabaseServer } from '@/lib/supabaseServer'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function calculateSimilarity(a: string, b: string): number {
   const w1 = new Set(a.toLowerCase().split(/\s+/))
@@ -14,14 +15,10 @@ function calculateSimilarity(a: string, b: string): number {
 }
 
 export async function POST(req: Request) {
-  const cookieStore = await cookies()
-  const authClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-  )
-  const { data: { user } } = await authClient.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const userId = (session.user as any).id as string
 
   const body = await req.json()
   const { note_text, client_id, session_date } = body
@@ -30,35 +27,31 @@ export async function POST(req: Request) {
   }
 
   // Similarity check against the last 10 notes for this client
-  const { data: prevNotes } = await supabaseServer
-    .from('session_notes')
-    .select('note_text')
-    .eq('client_id', client_id)
-    .order('created_at', { ascending: false })
-    .limit(10)
+  const prevNotes = await prisma.session_notes.findMany({
+    where: { client_id },
+    select: { note_text: true },
+    orderBy: { created_at: 'desc' },
+    take: 10,
+  })
 
-  if (prevNotes) {
-    for (const prev of prevNotes) {
-      if (prev.note_text && calculateSimilarity(note_text, prev.note_text) >= 0.60) {
-        return NextResponse.json({
-          error: 'too_similar',
-          message: 'Note is too similar to a previous session. Please vary your session details.',
-        }, { status: 422 })
-      }
+  for (const prev of prevNotes) {
+    if (prev.note_text && calculateSimilarity(note_text, prev.note_text) >= 0.60) {
+      return NextResponse.json({
+        error: 'too_similar',
+        message: 'Note is too similar to a previous session. Please vary your session details.',
+      }, { status: 422 })
     }
   }
 
-  const { data: inserted, error } = await supabaseServer
-    .from('session_notes')
-    .insert({
+  const inserted = await prisma.session_notes.create({
+    data: {
       client_id,
-      user_id: user.id,
+      user_id: UUID_RE.test(userId) ? userId : null,
       note_text,
       session_date: session_date || new Date().toISOString().split('T')[0],
-    })
-    .select('id')
-    .single()
+    },
+    select: { id: true },
+  })
 
-  if (error) return NextResponse.json({ error: 'Failed to save note' }, { status: 500 })
-  return NextResponse.json({ success: true, id: inserted?.id })
+  return NextResponse.json({ success: true, id: inserted.id })
 }

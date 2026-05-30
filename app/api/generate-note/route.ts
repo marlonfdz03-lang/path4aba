@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
+import { auth } from "@/auth";
 import { generateSmartNote, SessionInput } from "@/lib/generateSmartNote";
 
 export const runtime = "nodejs";
@@ -10,32 +9,20 @@ export async function POST(req: NextRequest) {
     const input: SessionInput = await req.json();
 
     if (!input.clientId) {
-      return NextResponse.json(
-        { error: "clientId is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "clientId is required" }, { status: 400 });
     }
-
     if (!input.sessionInfo?.date) {
-      return NextResponse.json(
-        { error: "sessionInfo.date is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "sessionInfo.date is required" }, { status: 400 });
     }
 
-    const cookieStore = await cookies();
-    const authClient = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-    );
-    const { data: { user } } = await authClient.auth.getUser();
+    const session = await auth();
+    const userId = (session?.user as any)?.id as string | undefined;
 
     const encoder = new TextEncoder();
     const readable = new ReadableStream({
       async start(controller) {
         try {
-          const result = await generateSmartNote(input, user?.id, (text) => {
+          const result = await generateSmartNote(input, userId, (text) => {
             controller.enqueue(encoder.encode(text));
           });
           controller.enqueue(encoder.encode(
