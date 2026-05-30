@@ -1,6 +1,6 @@
 "use client";
 
-import { supabase } from "@/lib/supabase";
+import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { deleteClientProfile } from "@/lib/clientStorage";
@@ -167,6 +167,7 @@ function ClientCard({
 
 export default function ClientsPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [clients, setClients] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
@@ -177,50 +178,33 @@ export default function ClientsPage() {
     );
     if (!confirmDelete) return;
     deleteClientProfile(clientId);
-    await supabase.from("clients").delete().eq("id", clientId);
+    await fetch(`/api/clients?id=${clientId}`, { method: "DELETE" });
     setClients((prev) => prev.filter((client) => client.id !== clientId));
   }
 
   useEffect(() => {
+    if (status === "loading") return;
+
+    const role = ((session?.user as any)?.role || "").toLowerCase();
+    if (role === "bcba" || role === "bcaba") {
+      router.push("/bcba");
+      return;
+    }
+
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
-      console.log('[clients] user.id:', user?.id);
-
-      if (!user) {
-        console.log('[clients] No authenticated user, cannot fetch clients');
-        setLoaded(true);
-        return;
-      }
-
-      const profession = (user.user_metadata?.profession || "").toLowerCase();
-      if (profession === "bcba" || profession === "bcaba") {
-        router.push("/bcba");
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("clients")
-        .select("id, internal_code, clinical_profile, created_at")
-        .or(`created_by.eq.${user.id},rbt_id.eq.${user.id},created_by.is.null`)
-        .order("created_at", { ascending: false });
-
-      console.log('[clients] Supabase fetch result:', { count: data?.length, error, userId: user.id });
-
-      if (error) {
-        console.error('[clients] Supabase fetch error:', error);
-      }
-
+      const res = await fetch("/api/clients");
+      const data = await res.json();
       setClients(
-        (data || []).map((row) => ({
+        (Array.isArray(data) ? data : []).map((row: any) => ({
           id: row.id,
-          clientName: row.clinical_profile?.name || row.internal_code || 'Unnamed Client',
+          clientName: row.clinical_profile?.name || row.internal_code || "Unnamed Client",
           clinicalProfile: row.clinical_profile,
         }))
       );
       setLoaded(true);
     }
     load();
-  }, []);
+  }, [session, status]);
 
   const filtered = filter === "inactive" ? [] : clients;
 
