@@ -91,7 +91,8 @@ async function init() {
   }
 
   if (res.ok) {
-    const json = await res.json();
+    let json;
+    try { json = await res.json(); } catch { showScreen('auth'); return; }
     const bcbaClients = json.clients || [];
     if (bcbaClients.length > 0) {
       userRole = 'bcba';
@@ -106,7 +107,8 @@ async function init() {
   try {
     const rbtRes = await api('/api/rbt/clients');
     if (rbtRes.ok) {
-      const json = await rbtRes.json();
+      let json;
+      try { json = await rbtRes.json(); } catch { json = {}; }
       const rbtClients = json.clients || [];
       if (rbtClients.length > 0) {
         userRole = 'rbt';

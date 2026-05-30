@@ -18,5 +18,7 @@ export const proxy = auth(function proxy(req) {
 })
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/auth).*)'],
+  // Exclude static assets and all API routes — API routes return 401 themselves.
+  // Extension and server-side callers expect JSON 401, not an HTML redirect.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/).*)'],
 }
