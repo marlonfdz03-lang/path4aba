@@ -169,6 +169,7 @@ export default function ClientProfilePage() {
   const params = useParams();
 
   const [client, setClient] = useState<any>(null);
+  const [clientLoading, setClientLoading] = useState(true);
   const [dailyNotes, setDailyNotes] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
@@ -245,6 +246,7 @@ export default function ClientProfilePage() {
           const raw = localStorage.getItem(`path4aba_saved_present_${found.id}`);
           if (raw) { try { setSavedPresent(JSON.parse(raw)); } catch {} }
         }
+        setClientLoading(false);
         return;
       }
 
@@ -257,9 +259,18 @@ export default function ClientProfilePage() {
         const raw = localStorage.getItem(`path4aba_saved_present_${foundClient.id}`);
         if (raw) { try { setSavedPresent(JSON.parse(raw)); } catch {} }
       }
+      setClientLoading(false);
     }
     load();
   }, [params.id]);
+
+  if (clientLoading) {
+    return (
+      <main className="min-h-screen p-10" style={{ background: "var(--bg)" }}>
+        <p className="text-[13px]" style={{ color: "var(--text3)" }}>Loading…</p>
+      </main>
+    );
+  }
 
   if (!client) {
     return (

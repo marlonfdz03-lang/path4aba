@@ -18,21 +18,19 @@ export async function GET(
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  const userId = (session.user as any).id as string
-  const isUuid = UUID_RE.test(userId)
 
-  const whereCondition: any = { id }
-  if (isUuid) {
-    whereCondition.OR = [{ rbt_id: userId }, { created_by: userId }]
+  try {
+    const client = await prisma.clients.findFirst({
+      where: { id },
+      select: { id: true, internal_code: true, clinical_profile: true },
+    })
+
+    if (!client) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json(client)
+  } catch (err: any) {
+    console.error('[GET /api/clients/:id] error:', err.message)
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
-
-  const client = await prisma.clients.findFirst({
-    where: whereCondition,
-    select: { id: true, internal_code: true, clinical_profile: true },
-  })
-
-  if (!client) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json(client)
 }
 
 export async function PATCH(
