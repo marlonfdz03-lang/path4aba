@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getStripe, PRICES } from '@/lib/stripe'
-import { supabaseServer } from '@/lib/supabaseServer'
+import { prisma } from '@/lib/prisma'
 import { sendWelcomeEmail } from '@/lib/email'
 
 export async function POST(request: Request) {
@@ -19,10 +19,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing userId or plan' }, { status: 400 })
   }
 
-  // Verify user exists in Supabase Auth
-  const { data: { user }, error: userError } = await supabaseServer.auth.admin.getUserById(userId)
-  if (userError || !user) {
-    console.error('[create-trial] User not found:', userError?.message)
+  // Verify user exists
+  const user = await prisma.users.findUnique({ where: { id: userId } })
+  if (!user) {
+    console.error('[create-trial] User not found:', userId)
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
@@ -34,11 +34,10 @@ export async function POST(request: Request) {
   }
 
   // Get or create Stripe customer
-  const { data: existingSub } = await supabaseServer
-    .from('subscriptions')
-    .select('stripe_customer_id')
-    .eq('user_id', userId)
-    .maybeSingle()
+  const existingSub = await prisma.subscriptions.findFirst({
+    where: { user_id: userId },
+    select: { stripe_customer_id: true },
+  })
 
   let customerId = existingSub?.stripe_customer_id ?? null
   if (!customerId) {
@@ -75,8 +74,8 @@ export async function POST(request: Request) {
   const session = await getStripe().checkout.sessions.create(sessionParams)
   console.log('[create-trial] Stripe checkout created:', session.id)
 
-  const name = user.user_metadata?.full_name || user.email?.split('@')[0] || 'there'
-  sendWelcomeEmail(user.email!, name).catch(err => console.error('[create-trial] welcome email error:', err))
+  const name = user.name || user.email.split('@')[0] || 'there'
+  sendWelcomeEmail(user.email, name).catch(err => console.error('[create-trial] welcome email error:', err))
 
   return NextResponse.json({ url: session.url })
 }

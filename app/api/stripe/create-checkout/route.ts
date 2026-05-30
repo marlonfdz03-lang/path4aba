@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getStripe, PRICES } from '@/lib/stripe'
-import { supabaseServer } from '@/lib/supabaseServer'
+import { prisma } from '@/lib/prisma'
 
 export async function POST(request: Request) {
   const { plan, interval, userId, promoCode } = await request.json()
@@ -15,18 +15,20 @@ export async function POST(request: Request) {
   }
 
   // Get or create Stripe customer
-  const { data: sub } = await supabaseServer
-    .from('subscriptions')
-    .select('stripe_customer_id')
-    .eq('user_id', userId)
-    .maybeSingle()
+  const sub = await prisma.subscriptions.findFirst({
+    where: { user_id: userId },
+    select: { stripe_customer_id: true },
+  })
 
   let customerId = sub?.stripe_customer_id ?? null
 
   if (!customerId) {
-    const { data: { user } } = await supabaseServer.auth.admin.getUserById(userId)
+    const user = await prisma.users.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    })
     const customer = await getStripe().customers.create({
-      email: user?.email,
+      email: user?.email ?? undefined,
       metadata: { userId },
     })
     customerId = customer.id

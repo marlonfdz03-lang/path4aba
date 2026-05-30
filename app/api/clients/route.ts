@@ -32,6 +32,34 @@ export async function GET() {
   return NextResponse.json(clients)
 }
 
+export async function POST(req: Request) {
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const userId = (session.user as any).id as string
+  const isUuid = UUID_RE.test(userId)
+
+  const body = await req.json()
+  const { id, clientName, clinicalProfile } = body
+  if (!id || !clientName) return NextResponse.json({ error: 'Missing id or clientName' }, { status: 400 })
+
+  await prisma.clients.upsert({
+    where: { id },
+    create: {
+      id,
+      internal_code: id,
+      created_by: isUuid ? userId : null,
+      rbt_id: isUuid ? userId : null,
+      clinical_profile: { name: clientName, ...clinicalProfile },
+    },
+    update: {
+      clinical_profile: { name: clientName, ...clinicalProfile },
+    },
+  })
+
+  return NextResponse.json({ success: true })
+}
+
 export async function DELETE(req: Request) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

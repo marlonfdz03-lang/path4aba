@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { useSession } from "next-auth/react";
 import type { PlanKey } from "@/lib/stripe";
 
 const CHECK_ICON = (
@@ -79,18 +79,19 @@ const PLANS: Plan[] = [
 
 export default function PricingPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [interval, setInterval] = useState<"month" | "year">("month");
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
   async function handleStartBCBAStudents() {
     setLoadingPlan("bcba_students");
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/login"); return; }
+    const userId = (session?.user as any)?.id;
+    if (!userId) { router.push("/login"); return; }
     try {
       const res = await fetch("/api/bcba-students/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, interval }),
+        body: JSON.stringify({ userId, interval }),
       });
       const { url, error } = await res.json();
       if (error || !url) throw new Error(error || "No checkout URL");
@@ -108,8 +109,8 @@ export default function PricingPage() {
   async function handleStart(planKey: PlanKey) {
     setLoadingPlan(planKey);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const userId = (session?.user as any)?.id;
+    if (!userId) {
       router.push("/login");
       return;
     }
@@ -118,7 +119,7 @@ export default function PricingPage() {
       const res = await fetch("/api/stripe/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: planKey, interval, userId: user.id }),
+        body: JSON.stringify({ plan: planKey, interval, userId }),
       });
       const { url, error } = await res.json();
       if (error || !url) throw new Error(error || "No checkout URL");

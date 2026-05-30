@@ -1,19 +1,14 @@
 import Stripe from 'stripe'
-import { createClient } from '@supabase/supabase-js'
+import { prisma } from '@/lib/prisma'
 import { sendPaymentConfirmationEmail, sendPaymentFailedEmail } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-06-20' as any,
 })
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
 
 function mapStripeStatus(status: string): 'active' | 'trialing' | 'canceled' | 'expired' {
   if (status === 'active') return 'active'
@@ -45,8 +40,6 @@ export async function POST(req: Request) {
 
     console.log('Webhook event:', event.type)
 
-    const supabase = getSupabase()
-
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session
@@ -61,56 +54,80 @@ export async function POST(req: Request) {
           return new Response('No userId', { status: 200 })
         }
 
+        if (!UUID_RE.test(userId)) {
+          console.warn('[webhook] Non-UUID userId in metadata — skipping DB write:', userId)
+          return new Response('OK', { status: 200 })
+        }
+
         const trialEnd = new Date()
         trialEnd.setDate(trialEnd.getDate() + 7)
-        const trial_ends_at = trialEnd.toISOString()
 
         if (plan === 'bcba_students') {
-          // Add-on: update bcba_students columns on existing row (or create row)
-          const { error } = await supabase
-            .from('subscriptions')
-            .upsert({
-              user_id: userId,
-              bcba_students_status: 'trialing',
-              bcba_students_trial_ends_at: trial_ends_at,
-              bcba_students_subscription_id: session.subscription?.toString() || null,
-              stripe_customer_id: session.customer?.toString() || null,
-            }, { onConflict: 'user_id' })
-          if (error) {
-            console.error('[webhook] bcba_students upsert error:', JSON.stringify(error))
-            return new Response('DB error: ' + error.message, { status: 500 })
+          try {
+            await prisma.subscriptions.upsert({
+              where: { user_id: userId },
+              create: {
+                user_id: userId,
+                bcba_students_status: 'trialing',
+                bcba_students_trial_ends_at: trialEnd,
+                bcba_students_subscription_id: session.subscription?.toString() || null,
+                stripe_customer_id: session.customer?.toString() || null,
+              },
+              update: {
+                bcba_students_status: 'trialing',
+                bcba_students_trial_ends_at: trialEnd,
+                bcba_students_subscription_id: session.subscription?.toString() || null,
+                stripe_customer_id: session.customer?.toString() || null,
+              },
+            })
+            console.log('[webhook] bcba_students subscription saved for:', userId)
+          } catch (err: any) {
+            console.error('[webhook] bcba_students upsert error:', err.message)
+            return new Response('DB error: ' + err.message, { status: 500 })
           }
-          console.log('[webhook] bcba_students subscription saved for:', userId)
         } else {
-          const { error } = await supabase
-            .from('subscriptions')
-            .upsert({
-              user_id: userId,
-              plan,
-              status: 'trialing',
-              trial_ends_at,
-              stripe_customer_id: session.customer?.toString() || null,
-              stripe_subscription_id: session.subscription?.toString() || null,
-            }, { onConflict: 'user_id' })
-
-          if (error) {
-            console.error('Supabase upsert error:', JSON.stringify(error))
-            return new Response('DB error: ' + error.message, { status: 500 })
+          try {
+            await prisma.subscriptions.upsert({
+              where: { user_id: userId },
+              create: {
+                user_id: userId,
+                plan,
+                status: 'trialing',
+                trial_ends_at: trialEnd,
+                stripe_customer_id: session.customer?.toString() || null,
+                stripe_subscription_id: session.subscription?.toString() || null,
+              },
+              update: {
+                plan,
+                status: 'trialing',
+                trial_ends_at: trialEnd,
+                stripe_customer_id: session.customer?.toString() || null,
+                stripe_subscription_id: session.subscription?.toString() || null,
+              },
+            })
+            console.log('Subscription saved for:', userId)
+          } catch (err: any) {
+            console.error('Prisma upsert error:', err.message)
+            return new Response('DB error: ' + err.message, { status: 500 })
           }
-          console.log('Subscription saved for:', userId)
 
           // Increment promo code usage if one was applied
           const appliedPromo = session.metadata?.promoCode
           if (appliedPromo) {
-            await supabase.rpc('increment_promo_uses', { promo_code: appliedPromo })
+            await prisma.promo_codes.updateMany({
+              where: { code: appliedPromo },
+              data: { current_uses: { increment: 1 } },
+            }).catch(err => console.error('[webhook] promo increment error:', err))
           }
         }
 
         // Send payment confirmation email (fire-and-forget)
-        supabase.auth.admin.getUserById(userId).then(({ data }) => {
-          const u = data.user
+        prisma.users.findUnique({
+          where: { id: userId },
+          select: { email: true, name: true },
+        }).then((u) => {
           if (!u?.email) return
-          const name = u.user_metadata?.full_name || u.email.split('@')[0] || 'there'
+          const name = u.name || u.email.split('@')[0] || 'there'
           const planLabel = plan.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
           sendPaymentConfirmationEmail(u.email, name, planLabel, '—').catch(
             (err) => console.error('[webhook] payment confirmation email error:', err)
@@ -122,39 +139,33 @@ export async function POST(req: Request) {
 
       case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription
-        const periodEnd = new Date((subscription as any).current_period_end * 1000).toISOString()
+        const periodEnd = new Date((subscription as any).current_period_end * 1000)
         const mappedStatus = mapStripeStatus(subscription.status)
 
         // Try updating as bcba_students subscription first
-        const { data: bcbaRow } = await supabase
-          .from('subscriptions')
-          .select('user_id')
-          .eq('bcba_students_subscription_id', subscription.id)
-          .maybeSingle()
+        const bcbaRow = await prisma.subscriptions.findFirst({
+          where: { bcba_students_subscription_id: subscription.id },
+          select: { user_id: true },
+        })
 
         if (bcbaRow) {
-          const update: any = { bcba_students_status: mappedStatus }
+          const updateData: any = { bcba_students_status: mappedStatus }
           if (subscription.status === 'trialing' && (subscription as any).trial_end) {
-            update.bcba_students_trial_ends_at = new Date((subscription as any).trial_end * 1000).toISOString()
+            updateData.bcba_students_trial_ends_at = new Date((subscription as any).trial_end * 1000)
           }
-          const { error } = await supabase
-            .from('subscriptions')
-            .update(update)
-            .eq('bcba_students_subscription_id', subscription.id)
-          if (error) console.error('[webhook] bcba_students subscription.updated error:', error)
+          await prisma.subscriptions.updateMany({
+            where: { bcba_students_subscription_id: subscription.id },
+            data: updateData,
+          }).catch(err => console.error('[webhook] bcba_students subscription.updated error:', err))
         } else {
-          const update: any = {
-            status: mappedStatus,
-            current_period_ends_at: periodEnd,
-          }
+          const updateData: any = { status: mappedStatus, current_period_ends_at: periodEnd }
           if (subscription.status === 'trialing' && (subscription as any).trial_end) {
-            update.trial_ends_at = new Date((subscription as any).trial_end * 1000).toISOString()
+            updateData.trial_ends_at = new Date((subscription as any).trial_end * 1000)
           }
-          const { error } = await supabase
-            .from('subscriptions')
-            .update(update)
-            .eq('stripe_subscription_id', subscription.id)
-          if (error) console.error('[webhook] subscription.updated error:', error)
+          await prisma.subscriptions.updateMany({
+            where: { stripe_subscription_id: subscription.id },
+            data: updateData,
+          }).catch(err => console.error('[webhook] subscription.updated error:', err))
         }
         break
       }
@@ -163,24 +174,21 @@ export async function POST(req: Request) {
         const subscription = event.data.object as Stripe.Subscription
 
         // Try bcba_students first
-        const { data: bcbaRow } = await supabase
-          .from('subscriptions')
-          .select('user_id')
-          .eq('bcba_students_subscription_id', subscription.id)
-          .maybeSingle()
+        const bcbaRow = await prisma.subscriptions.findFirst({
+          where: { bcba_students_subscription_id: subscription.id },
+          select: { user_id: true },
+        })
 
         if (bcbaRow) {
-          const { error } = await supabase
-            .from('subscriptions')
-            .update({ bcba_students_status: 'canceled' })
-            .eq('bcba_students_subscription_id', subscription.id)
-          if (error) console.error('[webhook] bcba_students subscription.deleted error:', error)
+          await prisma.subscriptions.updateMany({
+            where: { bcba_students_subscription_id: subscription.id },
+            data: { bcba_students_status: 'canceled' },
+          }).catch(err => console.error('[webhook] bcba_students subscription.deleted error:', err))
         } else {
-          const { error } = await supabase
-            .from('subscriptions')
-            .update({ status: 'canceled' })
-            .eq('stripe_subscription_id', subscription.id)
-          if (error) console.error('[webhook] subscription.deleted error:', error)
+          await prisma.subscriptions.updateMany({
+            where: { stripe_subscription_id: subscription.id },
+            data: { status: 'canceled' },
+          }).catch(err => console.error('[webhook] subscription.deleted error:', err))
         }
         break
       }
@@ -196,17 +204,18 @@ export async function POST(req: Request) {
             let name = email ? email.split('@')[0] : 'there'
 
             if (!email && customerId) {
-              const { data: sub } = await supabase
-                .from('subscriptions')
-                .select('user_id')
-                .eq('stripe_customer_id', customerId)
-                .maybeSingle()
+              const sub = await prisma.subscriptions.findFirst({
+                where: { stripe_customer_id: customerId },
+                select: { user_id: true },
+              })
               if (sub?.user_id) {
-                const { data } = await supabase.auth.admin.getUserById(sub.user_id)
-                const u = data?.user
+                const u = await prisma.users.findUnique({
+                  where: { id: sub.user_id },
+                  select: { email: true, name: true },
+                })
                 if (u?.email) {
                   email = u.email
-                  name = u.user_metadata?.full_name || u.email.split('@')[0] || 'there'
+                  name = u.name || u.email.split('@')[0] || 'there'
                 }
               }
             }

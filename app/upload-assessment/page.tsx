@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { buildClinicalProfile } from "@/lib/buildClinicalProfile";
 import { saveClientProfile } from "@/lib/clientStorage";
-import { supabase } from "@/lib/supabase";
 
 export default function UploadAssessment() {
+  const { data: session } = useSession();
   const [clientName, setClientName] = useState("");
   const [fileName, setFileName] = useState("");
   const [status, setStatus] = useState("");
@@ -77,6 +78,12 @@ export default function UploadAssessment() {
       return;
     }
 
+    const userId = (session?.user as any)?.id;
+    if (!userId) {
+      alert('You must be logged in to save a client. Please refresh and sign in again.');
+      return;
+    }
+
     const newClient = {
       id: crypto.randomUUID(),
       clientName: clientName.trim(),
@@ -85,36 +92,22 @@ export default function UploadAssessment() {
 
     saveClientProfile(newClient);
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    console.log('[upload] user:', user?.id, 'authError:', authError?.message);
+    const res = await fetch("/api/clients", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: newClient.id,
+        clientName: newClient.clientName,
+        clinicalProfile: newClient.clinicalProfile,
+      }),
+    });
 
-    if (!user) {
-      console.error('[upload] No authenticated user found — cannot save client to Supabase');
-      alert('You must be logged in to save a client. Please refresh and sign in again.');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+      console.error('[upload] client save error:', err);
+      alert('Error saving client: ' + (err.error || 'Unknown error'));
       return;
     }
-
-    const clientData = {
-      id: newClient.id,
-      created_by: user.id,
-      rbt_id: user.id,
-      internal_code: newClient.id,
-      clinical_profile: { name: newClient.clientName, ...newClient.clinicalProfile },
-    };
-
-    console.log('[upload] Saving client to Supabase:', clientData);
-
-    const { data, error } = await supabase
-      .from("clients")
-      .upsert(clientData, { onConflict: "id" });
-
-    if (error) {
-      console.error('[upload] Supabase save error:', error);
-      alert('Error saving client: ' + error.message);
-      return;
-    }
-
-    console.log('[upload] Client saved successfully:', data);
 
     setSaved(true);
     setStatus("Client profile saved successfully.");
