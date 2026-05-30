@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -205,6 +207,8 @@ export default function ClientsPage() {
     }
     load();
   }, [session, status]);
+
+  if (status === "loading") return null;
 
   const filtered = filter === "inactive" ? [] : clients;
 
