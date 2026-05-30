@@ -79,6 +79,7 @@
       <div class="tab-bar">
         <button class="tab active" data-tab="generate" id="tabGenerate">Generate Note</button>
         <button class="tab" data-tab="refine" id="tabRefine">Refine Note</button>
+        <button class="tab" data-tab="data" id="tabData">Data</button>
       </div>
 
       <!-- ── Generate Tab ── -->
@@ -175,6 +176,74 @@
         <button id="refineBtn" class="btn-primary full-width" disabled>
           ✦ Refine Note
         </button>
+      </div>
+
+      <!-- ── Data Autofill Tab ── -->
+      <div id="tabContent-data" class="tab-content" style="display:none">
+
+        <!-- Warning -->
+        <div class="data-warn">
+          ⚠️ This tool is only for organizing and entering data based on real observations.
+          The user is responsible for confirming accuracy.
+        </div>
+
+        <!-- Session info -->
+        <div class="field">
+          <label class="field-label">Session Date</label>
+          <input type="date" id="dataDate" class="input">
+        </div>
+
+        <div class="field">
+          <label class="field-label">Location</label>
+          <div class="toggle-group" id="dataLocationGroup">
+            <button class="toggle-btn" data-val="home">Home</button>
+            <button class="toggle-btn" data-val="school">School</button>
+            <button class="toggle-btn" data-val="clinic">Clinic</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">RBT Name</label>
+          <input type="text" id="dataRbtName" class="input" placeholder="Your name">
+        </div>
+
+        <div class="field">
+          <label class="field-label">Session Time</label>
+          <div class="time-row">
+            <input type="time" id="dataTimeIn" class="input time-input">
+            <span class="time-sep">–</span>
+            <input type="time" id="dataTimeOut" class="input time-input">
+          </div>
+        </div>
+
+        <button id="extractBtn" class="btn-outline full-width">Extract Replacements</button>
+
+        <!-- Skill cards -->
+        <div id="skillCards" style="display:none; margin-top:12px;"></div>
+
+        <!-- Calculate + Sequence buttons -->
+        <div id="dataActions" class="data-actions-row" style="display:none; margin-top:10px;">
+          <button id="calculateBtn" class="btn-outline half-width">Calculate Data</button>
+          <button id="genSeqBtn" class="btn-outline half-width">Generate Sequence</button>
+        </div>
+
+        <!-- Confirm + Save section -->
+        <div id="confirmSection" style="display:none; margin-top:12px;">
+          <div class="confirm-msg">
+            Before autofill: Please confirm that these values match your real session observation.
+            This tool does not replace clinical judgment or accurate data collection.
+          </div>
+          <label class="confirm-row">
+            <input type="checkbox" id="confirmCheck">
+            <span>I confirm this data reflects actual session observation.</span>
+          </label>
+          <div class="confirm-btn-row">
+            <button id="saveDataBtn" class="btn-outline">Save to Path4ABA</button>
+            <button id="autofillBtn" class="btn-primary" disabled>Autofill Data</button>
+          </div>
+          <button id="cancelDataBtn" class="btn-ghost full-width">Cancel</button>
+        </div>
+
       </div>
 
     </div>

@@ -28,6 +28,7 @@ model clients {
   supervision_notes         supervision_notes[]
   parent_training_notes     parent_training_notes[]
   supervision_notes_97153xp supervision_notes_97153xp[]
+  replacement_data          replacement_data[]
 }
 
 model session_notes {
@@ -232,6 +233,30 @@ model replacement_skills {
   created_at          DateTime? @default(now()) @db.Timestamptz(6)
 
   behavior behaviors? @relation(fields: [behavior_id], references: [id])
+}
+
+model replacement_data {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id           String    @db.Uuid
+  session_date        String?
+  location            String?
+  session_time_in     String?
+  session_time_out    String?
+  rbt_name            String?
+  platform_source     String?
+  replacement_skill   String
+  total_trials        Int
+  observed_percentage Float
+  correct_count       Int
+  incorrect_count     Int
+  alternated_sequence String?
+  user_confirmed      Boolean   @default(false)
+  confirmed_at        DateTime? @db.Timestamptz(6)
+  autofill_completed  Boolean   @default(false)
+  created_at          DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime? @default(now()) @db.Timestamptz(6)
+
+  client clients @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }
 
 model promo_codes {

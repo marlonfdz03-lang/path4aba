@@ -16,7 +16,7 @@ const LOCATION_OPTIONS = [
 
 const FIXED_PRESENT = ["Caregiver", "Teacher"];
 
-type Tab = "overview" | "generate" | "refine" | "notes";
+type Tab = "overview" | "generate" | "refine" | "notes" | "data";
 
 // ── Shared micro-components ────────────────────────────────────────────────
 
@@ -193,6 +193,29 @@ export default function ClientProfilePage() {
   const [generating, setGenerating] = useState(false);
   const [status, setStatus] = useState("");
   const [similarityWarning, setSimilarityWarning] = useState(false);
+
+  // Replacement data state
+  const [replacementData, setReplacementData] = useState<any[]>([]);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [dataFilters, setDataFilters] = useState({ dateFrom: "", dateTo: "", skill: "", location: "" });
+
+  async function loadReplacementData(filters = dataFilters) {
+    if (!client) return;
+    setDataLoading(true);
+    try {
+      const params = new URLSearchParams({ clientId: client.id });
+      if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
+      if (filters.dateTo) params.set("dateTo", filters.dateTo);
+      if (filters.skill) params.set("skill", filters.skill);
+      if (filters.location) params.set("location", filters.location);
+      const res = await fetch(`/api/replacement-data?${params}`);
+      if (res.ok) {
+        const { data } = await res.json();
+        setReplacementData(data || []);
+      }
+    } catch {}
+    setDataLoading(false);
+  }
 
   // Share with BCBA state
   const [shareCode, setShareCode] = useState("");
@@ -543,16 +566,18 @@ export default function ClientProfilePage() {
     setGeneratingCode(false);
   }
 
-  function handleTabChange(tab: Tab) {
-    setActiveTab(tab);
-  }
-
   const TABS: { key: Tab; label: string }[] = [
     { key: "overview", label: "Overview" },
     { key: "generate", label: "Generate Note" },
     { key: "refine", label: "Refine Note" },
     { key: "notes", label: "Notes" },
+    { key: "data", label: "Data" },
   ];
+
+  function handleTabChange(tab: Tab) {
+    setActiveTab(tab);
+    if (tab === "data") loadReplacementData();
+  }
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
@@ -1090,6 +1115,167 @@ export default function ClientProfilePage() {
                       <p className="whitespace-pre-wrap text-[13px] leading-7" style={{ color: "var(--text2)" }}>{note.note}</p>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Data Tab ── */}
+        {activeTab === "data" && (
+          <div className="max-w-[900px]">
+            {/* Warning banner */}
+            <div className="mb-5 px-4 py-3 rounded-xl border text-[13px]" style={{ background: "#FFFBEB", borderColor: "#FCD34D", color: "#92400E" }}>
+              ⚠️ This section shows replacement-skill data collected from real sessions via the Path4ABA extension. The user is responsible for confirming accuracy of all entered data.
+            </div>
+
+            {/* Filters */}
+            <div className="bg-white rounded-[10px] border p-5 mb-5 flex flex-wrap gap-4 items-end" style={{ borderColor: "var(--border)" }}>
+              <div>
+                <label className="block text-[11px] font-semibold mb-1 uppercase tracking-wide" style={{ color: "var(--text3)" }}>From</label>
+                <input type="date" value={dataFilters.dateFrom}
+                  onChange={(e) => setDataFilters(f => ({ ...f, dateFrom: e.target.value }))}
+                  className="border rounded-lg px-3 py-2 text-sm focus:outline-none"
+                  style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold mb-1 uppercase tracking-wide" style={{ color: "var(--text3)" }}>To</label>
+                <input type="date" value={dataFilters.dateTo}
+                  onChange={(e) => setDataFilters(f => ({ ...f, dateTo: e.target.value }))}
+                  className="border rounded-lg px-3 py-2 text-sm focus:outline-none"
+                  style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold mb-1 uppercase tracking-wide" style={{ color: "var(--text3)" }}>Skill</label>
+                <input type="text" value={dataFilters.skill} placeholder="Filter by skill…"
+                  onChange={(e) => setDataFilters(f => ({ ...f, skill: e.target.value }))}
+                  className="border rounded-lg px-3 py-2 text-sm focus:outline-none w-44"
+                  style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold mb-1 uppercase tracking-wide" style={{ color: "var(--text3)" }}>Location</label>
+                <select value={dataFilters.location}
+                  onChange={(e) => setDataFilters(f => ({ ...f, location: e.target.value }))}
+                  className="border rounded-lg px-3 py-2 text-sm focus:outline-none"
+                  style={{ borderColor: "var(--border)", color: "var(--text1)" }}>
+                  <option value="">All</option>
+                  <option value="home">Home</option>
+                  <option value="school">School</option>
+                  <option value="clinic">Clinic</option>
+                </select>
+              </div>
+              <button onClick={() => loadReplacementData(dataFilters)}
+                className="px-4 py-2 rounded-lg text-[13px] font-semibold text-white"
+                style={{ background: "var(--teal)" }}>
+                Apply
+              </button>
+              <button onClick={() => { const f = { dateFrom: "", dateTo: "", skill: "", location: "" }; setDataFilters(f); loadReplacementData(f); }}
+                className="px-4 py-2 rounded-lg text-[13px] font-medium border"
+                style={{ borderColor: "var(--border)", color: "var(--text2)" }}>
+                Clear
+              </button>
+            </div>
+
+            {/* Progress summary */}
+            {replacementData.length > 0 && (() => {
+              const bySkill: Record<string, number[]> = {};
+              replacementData.forEach(r => {
+                if (!bySkill[r.replacement_skill]) bySkill[r.replacement_skill] = [];
+                bySkill[r.replacement_skill].push(r.observed_percentage);
+              });
+              return (
+                <div className="bg-white rounded-[10px] border p-5 mb-5" style={{ borderColor: "var(--border)" }}>
+                  <p className="text-[11px] uppercase tracking-widest font-semibold mb-4" style={{ color: "var(--text3)" }}>Progress by Skill</p>
+                  <div className="flex flex-wrap gap-4">
+                    {Object.entries(bySkill).map(([skill, pcts]) => {
+                      const last = pcts[0];
+                      const prev = pcts[1];
+                      const delta = prev !== undefined ? last - prev : null;
+                      return (
+                        <div key={skill} className="flex-1 min-w-[160px] rounded-lg p-3 border" style={{ borderColor: "var(--border)", background: "var(--bg)" }}>
+                          <p className="text-[12px] font-medium mb-1 truncate" style={{ color: "var(--text1)" }}>{skill}</p>
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-[22px] font-bold" style={{ color: "var(--teal)" }}>{last}%</span>
+                            {delta !== null && (
+                              <span className="text-[11px] font-semibold" style={{ color: delta > 0 ? "#16A34A" : delta < 0 ? "#DC2626" : "var(--text3)" }}>
+                                {delta > 0 ? `+${delta}%` : delta < 0 ? `${delta}%` : "→"}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px]" style={{ color: "var(--text3)" }}>{pcts.length} session{pcts.length !== 1 ? "s" : ""}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Records table */}
+            <div className="bg-white rounded-[10px] border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+              <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
+                <p className="text-[11px] uppercase tracking-widest font-semibold" style={{ color: "var(--text3)" }}>
+                  Session Records {replacementData.length > 0 && `(${replacementData.length})`}
+                </p>
+              </div>
+              {dataLoading ? (
+                <p className="px-5 py-6 text-[13px]" style={{ color: "var(--text3)" }}>Loading…</p>
+              ) : replacementData.length === 0 ? (
+                <p className="px-5 py-6 text-[13px]" style={{ color: "var(--text3)" }}>
+                  No replacement data yet. Use the Path4ABA Chrome extension to record session data.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px]" style={{ borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
+                        {["Date", "Skill", "Location", "RBT", "Trials", "%", "+", "−", "Sequence", "Confirmed", "Autofilled"].map(h => (
+                          <th key={h} className="text-left px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide whitespace-nowrap" style={{ color: "var(--text3)" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {replacementData.map((r) => {
+                        const seq = r.alternated_sequence ? r.alternated_sequence.split(",") : [];
+                        return (
+                          <tr key={r.id} style={{ borderBottom: "1px solid var(--border)" }}
+                            className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-2.5 whitespace-nowrap" style={{ color: "var(--text2)" }}>{r.session_date || "—"}</td>
+                            <td className="px-4 py-2.5 font-medium max-w-[160px]" style={{ color: "var(--text1)" }}>
+                              <span className="truncate block">{r.replacement_skill}</span>
+                            </td>
+                            <td className="px-4 py-2.5 capitalize" style={{ color: "var(--text2)" }}>{r.location || "—"}</td>
+                            <td className="px-4 py-2.5" style={{ color: "var(--text2)" }}>{r.rbt_name || "—"}</td>
+                            <td className="px-4 py-2.5 text-center" style={{ color: "var(--text2)" }}>{r.total_trials}</td>
+                            <td className="px-4 py-2.5 text-center font-semibold" style={{ color: "var(--teal)" }}>{r.observed_percentage}%</td>
+                            <td className="px-4 py-2.5 text-center font-semibold" style={{ color: "#16A34A" }}>{r.correct_count}</td>
+                            <td className="px-4 py-2.5 text-center font-semibold" style={{ color: "#DC2626" }}>{r.incorrect_count}</td>
+                            <td className="px-4 py-2.5">
+                              <div className="flex flex-wrap gap-0.5 max-w-[120px]">
+                                {seq.map((s: string, i: number) => (
+                                  <span key={i} className="inline-flex w-4 h-4 rounded-full items-center justify-center text-[9px] font-bold text-white"
+                                    style={{ background: s === "+" ? "#16A34A" : "#DC2626" }}>{s}</span>
+                                ))}
+                                {!seq.length && <span style={{ color: "var(--text3)" }}>—</span>}
+                              </div>
+                            </td>
+                            <td className="px-4 py-2.5 text-center">
+                              {r.user_confirmed
+                                ? <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full" style={{ background: "#DCFCE7", color: "#16A34A" }}>✓ Yes</span>
+                                : <span className="inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-full" style={{ background: "#FEF3C7", color: "#92400E" }}>Pending</span>
+                              }
+                            </td>
+                            <td className="px-4 py-2.5 text-center">
+                              {r.autofill_completed
+                                ? <span className="text-[11px] font-medium" style={{ color: "#16A34A" }}>✓</span>
+                                : <span className="text-[11px]" style={{ color: "var(--text3)" }}>—</span>
+                              }
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>

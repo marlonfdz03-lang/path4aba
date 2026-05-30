@@ -732,5 +732,352 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
   showScreen('auth');
 });
 
+// ─────────────────────────────────────────────
+//  DATA AUTOFILL ASSISTANT
+// ─────────────────────────────────────────────
+
+// ── State ──────────────────────────────────
+let dataLocation = null;
+let skillRows = []; // { skill, trials, percentage, notes, correct, incorrect, sequence, status }
+
+// ── Helpers ────────────────────────────────
+function generateAltSequence(correct, incorrect) {
+  const total = correct + incorrect;
+  if (total === 0) return [];
+  const seq = Array(total).fill('+');
+  if (incorrect === 0) return seq;
+  if (correct === 0) return Array(total).fill('-');
+  for (let k = 0; k < incorrect; k++) {
+    const pos = Math.floor((k + 1) * total / incorrect) - 1;
+    if (pos >= 0 && pos < total) seq[pos] = '-';
+  }
+  return seq;
+}
+
+function getStatusLabel(status) {
+  return { pending: 'Pending', calculated: 'Calculated', confirmed: 'Confirmed', error: 'Error' }[status] || status;
+}
+
+function showDataMsg(msg, isError = true) {
+  document.querySelectorAll('.data-feedback').forEach(e => e.remove());
+  const el = document.createElement('p');
+  el.className = isError ? 'error-msg data-feedback' : 'data-feedback';
+  el.style.cssText = isError ? '' : 'font-size:12px;color:#16a34a;margin-top:8px;';
+  el.textContent = msg;
+  document.getElementById('tabContent-data').appendChild(el);
+}
+
+// ── Extract replacements from profile ──────
+document.getElementById('extractBtn').addEventListener('click', () => {
+  document.querySelectorAll('.data-feedback').forEach(e => e.remove());
+
+  if (!selectedClientId || !selectedProfile) {
+    showDataMsg('Select a client first.');
+    return;
+  }
+
+  const rawSkills = [
+    ...(selectedProfile.replacementBehaviors || []),
+    ...(selectedProfile.skillAcquisition || []),
+    ...(selectedProfile.activePrograms?.replacementSkills || []),
+  ];
+  const skills = [...new Set(
+    rawSkills.map(s => (typeof s === 'string' ? s : s?.name || '')).filter(Boolean)
+  )];
+
+  if (!skills.length) {
+    showDataMsg('No replacement skills found in this client\'s profile.');
+    return;
+  }
+
+  skillRows = skills.map(skill => ({
+    skill, trials: '', percentage: '', notes: '',
+    correct: null, incorrect: null, sequence: null, status: 'pending',
+  }));
+
+  renderSkillCards();
+  document.getElementById('skillCards').style.display = '';
+  document.getElementById('dataActions').style.display = '';
+  document.getElementById('confirmSection').style.display = '';
+  document.getElementById('autofillBtn').disabled = true;
+});
+
+// ── Render skill cards ──────────────────────
+function renderSkillCards() {
+  const container = document.getElementById('skillCards');
+  container.innerHTML = '';
+
+  if (!skillRows.length) return;
+
+  skillRows.forEach((row, idx) => {
+    const card = document.createElement('div');
+    card.className = `skill-card ${row.status}`;
+    card.id = `skillCard-${idx}`;
+
+    const resultsHtml = row.correct !== null ? `
+      <div class="skill-results">
+        <span class="result-plus">+ ${row.correct}</span>
+        <span class="result-minus">− ${row.incorrect}</span>
+        ${row.correct + row.incorrect > 0 && Math.round(row.correct / (row.correct + row.incorrect) * 100) !== Math.round(parseFloat(row.percentage))
+          ? `<span class="result-pct">Actual: ${Math.round(row.correct / (row.correct + row.incorrect) * 100)}%</span>` : ''}
+      </div>` : '';
+
+    const seqHtml = row.sequence ? `
+      <div class="sequence-display">
+        ${row.sequence.map(s => `<span class="seq-dot ${s === '+' ? 'pos' : 'neg'}">${s}</span>`).join('')}
+      </div>` : '';
+
+    card.innerHTML = `
+      <div class="skill-card-header">
+        <span class="skill-name" title="${row.skill}">${row.skill}</span>
+        <span class="skill-status-badge ${row.status}">${getStatusLabel(row.status)}</span>
+      </div>
+      <div class="skill-inputs">
+        <div class="skill-input-group">
+          <label>Trials</label>
+          <input type="number" min="1" max="999" class="input small" placeholder="0"
+                 value="${row.trials}" data-idx="${idx}" data-field="trials">
+        </div>
+        <div class="skill-input-group">
+          <label>% Observed</label>
+          <input type="number" min="0" max="100" class="input small" placeholder="0"
+                 value="${row.percentage}" data-idx="${idx}" data-field="percentage">
+        </div>
+        <div class="skill-input-group">
+          <label>Notes</label>
+          <input type="text" class="input small" placeholder="Optional"
+                 value="${row.notes}" data-idx="${idx}" data-field="notes">
+        </div>
+      </div>
+      ${resultsHtml}${seqHtml}
+    `;
+    container.appendChild(card);
+  });
+
+  // Input listeners
+  container.querySelectorAll('input[data-idx]').forEach(input => {
+    input.addEventListener('input', e => {
+      const idx = parseInt(e.target.dataset.idx);
+      const field = e.target.dataset.field;
+      skillRows[idx][field] = e.target.value;
+      if (field === 'trials' || field === 'percentage') {
+        skillRows[idx].correct = null;
+        skillRows[idx].incorrect = null;
+        skillRows[idx].sequence = null;
+        skillRows[idx].status = 'pending';
+        const card = document.getElementById(`skillCard-${idx}`);
+        if (card) {
+          card.className = 'skill-card pending';
+          card.querySelector('.skill-status-badge').className = 'skill-status-badge pending';
+          card.querySelector('.skill-status-badge').textContent = 'Pending';
+        }
+      }
+    });
+  });
+}
+
+// ── Calculate Data ─────────────────────────
+document.getElementById('calculateBtn').addEventListener('click', () => {
+  document.querySelectorAll('.data-feedback').forEach(e => e.remove());
+  let hasErrors = false;
+
+  skillRows.forEach((row, idx) => {
+    if (!row.trials && !row.percentage) return; // skip empty rows
+    const trials = parseInt(row.trials);
+    const pct = parseFloat(row.percentage);
+
+    if (isNaN(trials) || trials <= 0) { skillRows[idx].status = 'error'; hasErrors = true; return; }
+    if (isNaN(pct) || pct < 0 || pct > 100) { skillRows[idx].status = 'error'; hasErrors = true; return; }
+
+    skillRows[idx].correct = Math.round((pct / 100) * trials);
+    skillRows[idx].incorrect = trials - skillRows[idx].correct;
+    skillRows[idx].status = 'calculated';
+  });
+
+  renderSkillCards();
+  if (hasErrors) showDataMsg('Some rows have invalid values. Trials must be > 0 and percentage must be 0–100.');
+});
+
+// ── Generate Sequence ──────────────────────
+document.getElementById('genSeqBtn').addEventListener('click', () => {
+  document.querySelectorAll('.data-feedback').forEach(e => e.remove());
+  const uncalculated = skillRows.filter(r => r.trials && r.correct === null);
+  if (uncalculated.length) {
+    showDataMsg('Calculate data first before generating sequences.');
+    return;
+  }
+  skillRows.forEach((row, idx) => {
+    if (row.correct !== null) {
+      skillRows[idx].sequence = generateAltSequence(row.correct, row.incorrect);
+    }
+  });
+  renderSkillCards();
+});
+
+// ── Location for data tab ──────────────────
+document.getElementById('dataLocationGroup').addEventListener('click', e => {
+  const btn = e.target.closest('.toggle-btn');
+  if (!btn) return;
+  document.querySelectorAll('#dataLocationGroup .toggle-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  dataLocation = btn.dataset.val;
+});
+
+// ── Confirmation checkbox enables autofill ─
+document.getElementById('confirmCheck').addEventListener('change', e => {
+  document.getElementById('autofillBtn').disabled = !e.target.checked;
+});
+
+// ── Save to Path4ABA ───────────────────────
+document.getElementById('saveDataBtn').addEventListener('click', async () => {
+  await saveReplacementData(false);
+});
+
+// ── Autofill Data ──────────────────────────
+document.getElementById('autofillBtn').addEventListener('click', async () => {
+  const saved = await saveReplacementData(true);
+  if (!saved) return;
+
+  // Try to inject autofill script into active tab
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) { showDataMsg('Could not access the active tab.'); return; }
+
+    const rows = skillRows.filter(r => r.sequence);
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: injectAutofill,
+      args: [rows.map(r => ({
+        skill: r.skill,
+        trials: parseInt(r.trials),
+        percentage: parseFloat(r.percentage),
+        correct: r.correct,
+        incorrect: r.incorrect,
+        sequence: r.sequence,
+      }))],
+    });
+    showDataMsg('Autofill injected. Review the values on the page before submitting.', false);
+  } catch (err) {
+    showDataMsg('Autofill injection failed: ' + err.message);
+  }
+});
+
+// Injected into the target page — must be self-contained (no closure refs)
+function injectAutofill(rows) {
+  const overlay = document.createElement('div');
+  overlay.id = '__p4a_overlay__';
+  overlay.style.cssText = `
+    position:fixed;bottom:20px;right:20px;z-index:999999;
+    background:#fff;border:2px solid #0d6e6e;border-radius:12px;
+    padding:14px 16px;max-width:340px;font-family:system-ui,sans-serif;
+    font-size:12px;box-shadow:0 8px 32px rgba(0,0,0,0.18);
+  `;
+  const title = document.createElement('div');
+  title.style.cssText = 'font-weight:700;color:#0d6e6e;margin-bottom:10px;font-size:13px;';
+  title.textContent = 'Path4ABA · Data Autofill';
+  overlay.appendChild(title);
+
+  rows.forEach(row => {
+    const card = document.createElement('div');
+    card.style.cssText = 'margin-bottom:8px;padding:8px;background:#f9fafb;border-radius:7px;';
+    const seq = row.sequence.join(' ');
+    card.innerHTML = `
+      <div style="font-weight:600;color:#111827;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${row.skill}">${row.skill}</div>
+      <div style="display:flex;gap:10px;font-size:11px;color:#374151;">
+        <span>Trials: <b>${row.trials}</b></span>
+        <span style="color:#16a34a;">+${row.correct}</span>
+        <span style="color:#dc2626;">−${row.incorrect}</span>
+        <span>${Math.round(row.correct / row.trials * 100)}%</span>
+      </div>
+      <div style="margin-top:4px;font-size:10px;color:#6b7280;word-break:break-all;">${seq}</div>
+    `;
+    overlay.appendChild(card);
+  });
+
+  const closeBtn = document.createElement('button');
+  closeBtn.style.cssText = 'margin-top:6px;width:100%;padding:6px;background:#0d6e6e;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;';
+  closeBtn.textContent = 'Close';
+  closeBtn.addEventListener('click', () => overlay.remove());
+  overlay.appendChild(closeBtn);
+
+  document.getElementById('__p4a_overlay__')?.remove();
+  document.body.appendChild(overlay);
+}
+
+// ── Save helper ────────────────────────────
+async function saveReplacementData(autofillCompleted) {
+  document.querySelectorAll('.data-feedback').forEach(e => e.remove());
+
+  if (!selectedClientId) { showDataMsg('No client selected.'); return false; }
+  if (!document.getElementById('confirmCheck').checked) {
+    showDataMsg('Check the confirmation box before saving.');
+    return false;
+  }
+
+  const records = skillRows
+    .filter(r => r.correct !== null)
+    .map(r => ({
+      clientId: selectedClientId,
+      sessionDate: document.getElementById('dataDate').value || new Date().toISOString().split('T')[0],
+      location: dataLocation,
+      sessionTimeIn: document.getElementById('dataTimeIn').value || null,
+      sessionTimeOut: document.getElementById('dataTimeOut').value || null,
+      rbtName: document.getElementById('dataRbtName').value || null,
+      platformSource: 'extension',
+      replacementSkill: r.skill,
+      totalTrials: parseInt(r.trials),
+      observedPercentage: parseFloat(r.percentage),
+      correctCount: r.correct,
+      incorrectCount: r.incorrect,
+      alternatedSequence: r.sequence ? r.sequence.join(',') : null,
+      userConfirmed: true,
+      autofillCompleted,
+    }));
+
+  if (!records.length) {
+    showDataMsg('No calculated rows to save. Run "Calculate Data" first.');
+    return false;
+  }
+
+  const saveBtn = document.getElementById('saveDataBtn');
+  saveBtn.disabled = true;
+  try {
+    const res = await api('/api/replacement-data', {
+      method: 'POST',
+      body: JSON.stringify(records),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      showDataMsg(data.error || 'Save failed.');
+      return false;
+    }
+    showDataMsg(`Saved ${records.length} record${records.length !== 1 ? 's' : ''} to Path4ABA.`, false);
+    return true;
+  } catch {
+    showDataMsg('Network error. Make sure you are logged into Path4ABA.');
+    return false;
+  } finally {
+    saveBtn.disabled = false;
+  }
+}
+
+// ── Cancel / reset data tab ────────────────
+document.getElementById('cancelDataBtn').addEventListener('click', () => {
+  skillRows = [];
+  document.getElementById('skillCards').style.display = 'none';
+  document.getElementById('dataActions').style.display = 'none';
+  document.getElementById('confirmSection').style.display = 'none';
+  document.getElementById('confirmCheck').checked = false;
+  document.getElementById('autofillBtn').disabled = true;
+  document.querySelectorAll('.data-feedback').forEach(e => e.remove());
+});
+
+// ── Set today's date on data tab open ──────
+document.getElementById('tabData').addEventListener('click', () => {
+  if (!document.getElementById('dataDate').value) {
+    document.getElementById('dataDate').value = new Date().toISOString().split('T')[0];
+  }
+});
+
 // ── Boot ───────────────────────────────────
 init();
