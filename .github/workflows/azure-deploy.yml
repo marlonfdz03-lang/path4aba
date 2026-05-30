@@ -26,19 +26,13 @@ jobs:
           NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
           NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
 
-      - name: Install production dependencies for deploy
-        run: npm ci --omit=dev
+      - name: Assemble standalone package
+        run: |
+          cp -r public .next/standalone/public
+          cp -r .next/static .next/standalone/.next/static
 
       - name: Create deployment package
-        run: |
-          zip -r deploy.zip \
-            .next \
-            public \
-            package.json \
-            package-lock.json \
-            next.config.ts \
-            prisma \
-            node_modules
+        run: zip -r deploy.zip .next/standalone
 
       - name: Login to Azure
         uses: azure/login@v2
