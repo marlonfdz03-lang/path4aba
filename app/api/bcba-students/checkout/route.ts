@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getStripe, BCBA_STUDENTS_PRICES } from '@/lib/stripe'
-import { supabaseServer } from '@/lib/supabaseServer'
+import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,17 +20,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
   }
 
-  const { data: { user }, error: userError } = await supabaseServer.auth.admin.getUserById(userId)
-  if (userError || !user) {
+  const user = await prisma.users.findUnique({ where: { id: userId }, select: { email: true } })
+  if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
-  // Check if user has an active RBT subscription → use addon price
-  const { data: sub } = await supabaseServer
-    .from('subscriptions')
-    .select('status, plan, stripe_customer_id, trial_ends_at')
-    .eq('user_id', userId)
-    .maybeSingle()
+  const sub = await prisma.subscriptions.findFirst({
+    where: { user_id: userId },
+    select: { status: true, plan: true, stripe_customer_id: true, trial_ends_at: true },
+  })
 
   const now = new Date()
   const hasActiveRBT =
@@ -45,7 +43,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Price not configured' }, { status: 500 })
   }
 
-  // Reuse existing Stripe customer if one exists
   let customerId = sub?.stripe_customer_id ?? null
   if (!customerId) {
     const customer = await getStripe().customers.create({

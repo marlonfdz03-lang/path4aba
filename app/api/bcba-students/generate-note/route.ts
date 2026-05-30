@@ -1,27 +1,10 @@
 import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
-import { cookies } from 'next/headers'
-import { createServerClient } from '@supabase/ssr'
-import { supabaseServer } from '@/lib/supabaseServer'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
 import { BCBA_STUDENTS_NOTE_PROMPT } from '@/app/prompts/bcbaStudentsNotePrompt'
 
 export const dynamic = 'force-dynamic'
-
-async function getUser() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll() {},
-      },
-    }
-  )
-  const { data: { user } } = await supabase.auth.getUser()
-  return user
-}
 
 function calculateSimilarity(text1: string, text2: string): number {
   const words1 = new Set(text1.toLowerCase().split(/\s+/))
@@ -97,8 +80,9 @@ EXAMPLE PHRASES:
 }
 
 export async function POST(req: Request) {
-  const user = await getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const userId = (session.user as any).id as string
 
   let body: { activityType?: string; contactType?: string; setting?: string; category?: string }
   try {
@@ -117,15 +101,12 @@ export async function POST(req: Request) {
   ].filter(Boolean).join('\n')
 
   // Fetch existing session notes for this user to run similarity check
-  const { data: noteRows } = await supabaseServer
-    .from('fieldwork_sessions')
-    .select('session_note')
-    .eq('user_id', user.id)
-    .not('session_note', 'is', null)
+  const noteRows = await prisma.fieldwork_sessions.findMany({
+    where: { user_id: userId, session_note: { not: null } },
+    select: { session_note: true },
+  })
 
-  const previousNotes = (noteRows || [])
-    .map(r => r.session_note as string)
-    .filter(Boolean)
+  const previousNotes = noteRows.map(r => r.session_note as string).filter(Boolean)
 
   const openai = new OpenAI({
     apiKey: process.env.AZURE_OPENAI_API_KEY,
@@ -163,7 +144,7 @@ export async function POST(req: Request) {
       const stillTooSimilar = previousNotes.some(prev => calculateSimilarity(note, prev) >= 0.80)
       if (stillTooSimilar) {
         similarityWarning = true
-        console.warn('[generate-note] note similarity still >=80% after regeneration for user:', user.id)
+        console.warn('[generate-note] note similarity still >=80% after regeneration for user:', userId)
       }
     }
   }

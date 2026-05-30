@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { useSession } from "next-auth/react";
 import { type FieldworkType } from "@/lib/bcba-students/calculations";
 import MonthlyTable from "@/app/components/bcba-students/MonthlyTable";
 import MonthDrawer from "@/app/components/bcba-students/MonthDrawer";
@@ -41,6 +41,7 @@ interface Profile {
 
 export default function MonthlyPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [fieldworkType, setFieldworkType] = useState<FieldworkType>("supervised");
   const [summaries, setSummaries] = useState<Summary[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -49,11 +50,6 @@ export default function MonthlyPage() {
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
 
   async function loadData() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/login"); return; }
-
-    setTraineeName(user.user_metadata?.full_name || user.email?.split("@")[0] || "");
-
     const [profileRes, monthlyRes] = await Promise.all([
       fetch("/api/bcba-students/profile"),
       fetch("/api/bcba-students/monthly"),
@@ -70,7 +66,13 @@ export default function MonthlyPage() {
     setLoading(false);
   }
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    if (status === "loading") return;
+    if (!session?.user) { router.push("/login"); return; }
+    setTraineeName(session.user.name || session.user.email?.split("@")[0] || "");
+    loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, session, router]);
 
   const selectedSummary = selectedMonth ? summaries.find(s => s.month_year === selectedMonth) ?? null : null;
 

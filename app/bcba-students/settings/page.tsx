@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { useSession } from "next-auth/react";
 
 interface Profile {
   certification_track: string;
@@ -21,6 +21,7 @@ interface Profile {
 
 export default function BCBAStudentsSettingsPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -37,11 +38,10 @@ export default function BCBAStudentsSettingsPage() {
   const [country, setCountry] = useState("United States");
 
   useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/login"); return; }
-      const res = await fetch("/api/bcba-students/profile");
-      const data = await res.json();
+    if (status === "loading") return;
+    if (!session?.user) { router.push("/login"); return; }
+
+    fetch("/api/bcba-students/profile").then(r => r.json()).then(data => {
       if (data.profile) {
         const p = data.profile as Profile;
         setProfile(p);
@@ -54,9 +54,8 @@ export default function BCBAStudentsSettingsPage() {
         setCountry(p.country_of_fieldwork || "United States");
       }
       setLoading(false);
-    }
-    load();
-  }, [router]);
+    });
+  }, [status, session, router]);
 
   async function handleSave() {
     setSaving(true);

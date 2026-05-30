@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
-import { supabaseServer } from '@/lib/supabaseServer'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,36 +17,30 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
   }
 
-  // Get authenticated user from cookie session
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll() {},
-      },
-    }
-  )
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const session = await auth()
+  if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  const userId = (session.user as any).id as string
 
-  const { error } = await supabaseServer
-    .from('fieldwork_profiles')
-    .upsert({
-      user_id: user.id,
-      certification_track: certificationTrack,
-      fieldwork_type: fieldworkType,
-      onboarding_complete: true,
-    }, { onConflict: 'user_id' })
-
-  if (error) {
-    console.error('[bcba-students/onboarding] error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  try {
+    await prisma.fieldwork_profiles.upsert({
+      where: { user_id: userId },
+      create: {
+        user_id: userId,
+        certification_track: certificationTrack,
+        fieldwork_type: fieldworkType,
+        onboarding_complete: true,
+      },
+      update: {
+        certification_track: certificationTrack,
+        fieldwork_type: fieldworkType,
+        onboarding_complete: true,
+      },
+    })
+    return NextResponse.json({ ok: true })
+  } catch (err: any) {
+    console.error('[bcba-students/onboarding] error:', err)
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
-
-  return NextResponse.json({ ok: true })
 }

@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { useSession } from "next-auth/react";
 import { type FieldworkType, type CertificationTrack } from "@/lib/bcba-students/calculations";
 import DashboardMetrics from "@/app/components/bcba-students/DashboardMetrics";
 import ProgressBars from "@/app/components/bcba-students/ProgressBars";
@@ -36,15 +36,16 @@ interface MonthSummary {
 
 export default function BCBAStudentsDashboard() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [summaries, setSummaries] = useState<MonthSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/login"); return; }
+    if (status === "loading") return;
+    if (!session?.user) { router.push("/login"); return; }
 
+    async function load() {
       const [profileRes, monthlyRes] = await Promise.all([
         fetch("/api/bcba-students/profile"),
         fetch("/api/bcba-students/monthly"),
@@ -58,7 +59,7 @@ export default function BCBAStudentsDashboard() {
       setLoading(false);
     }
     load();
-  }, [router]);
+  }, [status, session, router]);
 
   if (loading) {
     return (

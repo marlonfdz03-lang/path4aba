@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { useSession } from "next-auth/react";
 import { type FieldworkType } from "@/lib/bcba-students/calculations";
 import LogSessionForm, { type SavedSession } from "@/app/components/bcba-students/LogSessionForm";
 import type { SupervisionPdfData } from "@/lib/bcba-students/generateSupervisionPdf";
@@ -20,6 +20,7 @@ const CONTACT_LABELS: Record<string, string> = {
 
 export default function LogSessionPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [fieldworkType, setFieldworkType] = useState<FieldworkType>("supervised");
   const [supervisorName, setSupervisorName] = useState("");
   const [traineeName, setTraineeName] = useState("");
@@ -30,21 +31,19 @@ export default function LogSessionPage() {
   const [pdfData, setPdfData] = useState<SupervisionPdfData | null>(null);
 
   useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/login"); return; }
-      setTraineeName(user.user_metadata?.full_name || user.email?.split("@")[0] || "");
-      const res = await fetch("/api/bcba-students/profile");
-      const data = await res.json();
+    if (status === "loading") return;
+    if (!session?.user) { router.push("/login"); return; }
+    setTraineeName(session.user.name || session.user.email?.split("@")[0] || "");
+
+    fetch("/api/bcba-students/profile").then(r => r.json()).then(data => {
       if (data.profile) {
         setFieldworkType(data.profile.fieldwork_type || "supervised");
         setSupervisorName(data.profile.supervisor_name || "");
         setCertificationTrack(data.profile.certification_track || "BCBA");
       }
       setLoading(false);
-    }
-    load();
-  }, [router]);
+    });
+  }, [status, session, router]);
 
   async function handleSaved(session: SavedSession) {
     setSavedSession(session);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import PDFParser from "pdf2json";
 import { extractAssessment, ExtractedAssessment } from "@/lib/extractAssessment";
-import { supabaseServer } from "@/lib/supabaseServer";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
@@ -230,64 +230,46 @@ async function saveKnowledgeBase(extracted: ExtractedAssessment) {
 
     const cleanName = cleanText(behavior.name);
 
-    const { data: existing } = await supabaseServer
-      .from("behaviors")
-      .select("id")
-      .ilike("name", cleanName)
-      .maybeSingle();
+    const existing = await prisma.behaviors.findFirst({
+      where: { name: { equals: cleanName, mode: "insensitive" } },
+      select: { id: true },
+    });
 
     let behaviorId = existing?.id;
 
     if (!behaviorId) {
-      const { data: inserted } = await supabaseServer
-        .from("behaviors")
-        .insert({
+      const inserted = await prisma.behaviors.create({
+        data: {
           name: cleanName,
           category: behavior.function?.[0] || "unknown",
-        })
-        .select("id")
-        .single();
-      behaviorId = inserted?.id;
+        },
+        select: { id: true },
+      });
+      behaviorId = inserted.id;
     }
 
     if (behaviorId && behavior.topography) {
       const cleanTop = cleanText(behavior.topography);
       if (!hasBlockedTerm(cleanTop)) {
-        const { data: existingTop } = await supabaseServer
-          .from("topographies")
-          .select("id")
-          .eq("behavior_id", behaviorId)
-          .ilike("description", cleanTop)
-          .maybeSingle();
+        const existingTop = await prisma.topographies.findFirst({
+          where: {
+            behavior_id: behaviorId,
+            description: { equals: cleanTop, mode: "insensitive" },
+          },
+          select: { id: true },
+        });
 
         if (!existingTop) {
-          await supabaseServer.from("topographies").insert({
-            behavior_id: behaviorId,
-            description: cleanTop,
-            measurable_unit: behavior.measurableUnit || "frequency",
-            severity_level: behavior.intensity || 3,
+          await prisma.topographies.create({
+            data: {
+              behavior_id: behaviorId,
+              description: cleanTop,
+              measurable_unit: behavior.measurableUnit || "frequency",
+              severity_level: behavior.intensity || 3,
+            },
           });
         }
       }
-    }
-  }
-
-  // Interventions
-  for (const intervention of extracted.approvedInterventions) {
-    if (!intervention || hasBlockedTerm(intervention)) continue;
-
-    const cleanName = cleanText(intervention);
-
-    const { data: existing } = await supabaseServer
-      .from("interventions")
-      .select("id")
-      .ilike("name", cleanName)
-      .maybeSingle();
-
-    if (!existing) {
-      await supabaseServer
-        .from("interventions")
-        .insert({ name: cleanName });
     }
   }
 
@@ -297,23 +279,23 @@ async function saveKnowledgeBase(extracted: ExtractedAssessment) {
 
     const cleanName = cleanText(skill.name);
 
-    const { data: existing } = await supabaseServer
-      .from("replacement_skills")
-      .select("id")
-      .ilike("skill_description", cleanName)
-      .maybeSingle();
+    const existing = await prisma.replacement_skills.findFirst({
+      where: { skill_description: { equals: cleanName, mode: "insensitive" } },
+      select: { id: true },
+    });
 
     if (!existing) {
-      const { data: matchingBehavior } = await supabaseServer
-        .from("behaviors")
-        .select("id")
-        .ilike("category", skill.targetFunction)
-        .maybeSingle();
+      const matchingBehavior = await prisma.behaviors.findFirst({
+        where: { category: { equals: skill.targetFunction, mode: "insensitive" } },
+        select: { id: true },
+      });
 
-      await supabaseServer.from("replacement_skills").insert({
-        skill_description: cleanName,
-        function_targeted: skill.targetFunction || "unknown",
-        behavior_id: matchingBehavior?.id || null,
+      await prisma.replacement_skills.create({
+        data: {
+          skill_description: cleanName,
+          function_targeted: skill.targetFunction || "unknown",
+          behavior_id: matchingBehavior?.id || null,
+        },
       });
     }
   }

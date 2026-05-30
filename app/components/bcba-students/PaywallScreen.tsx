@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
+import { useSession } from "next-auth/react";
 
 const CHECK_ICON = (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -23,35 +23,25 @@ export default function PaywallScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [hasActiveRBT, setHasActiveRBT] = useState<boolean | null>(null);
+  const { data: session, status } = useSession();
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data?.user) { setHasActiveRBT(false); return; }
-      const { data: sub } = await supabase
-        .from("subscriptions")
-        .select("status, plan, trial_ends_at")
-        .eq("user_id", data.user.id)
-        .maybeSingle();
-      const now = new Date();
-      const active =
-        sub?.plan === "rbt" &&
-        (sub.status === "active" ||
-          (sub.status === "trialing" && sub.trial_ends_at && new Date(sub.trial_ends_at) > now));
-      setHasActiveRBT(!!active);
-    });
-  }, []);
+    if (status === "loading") return;
+    if (!session?.user) { setHasActiveRBT(false); return; }
+    fetch("/api/user/subscription").then(r => r.json()).then(d => setHasActiveRBT(!!d.hasActiveRBT));
+  }, [status, session]);
 
   async function handleStart() {
     setLoading(true);
     setError("");
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { window.location.href = "/login"; return; }
+    const userId = (session?.user as any)?.id;
+    if (!userId) { window.location.href = "/login"; return; }
 
     try {
       const res = await fetch("/api/bcba-students/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, interval }),
+        body: JSON.stringify({ userId, interval }),
       });
       const { url, error: err } = await res.json();
       if (err || !url) throw new Error(err || "No checkout URL");

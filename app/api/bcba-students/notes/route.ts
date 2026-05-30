@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabaseServer } from '@/lib/supabaseServer'
+import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,33 +13,22 @@ export async function GET(req: Request) {
 
   console.log('[notes] params received:', { category, activityType, q })
 
-  let query = supabaseServer
-    .from('bcba_notes')
-    .select('id, note, category, activity_type')
-    .order('id')
+  try {
+    const notes = await prisma.bcba_notes.findMany({
+      where: {
+        ...(category ? { category } : {}),
+        ...(activityType ? { OR: [{ activity_type: activityType }, { activity_type: null }] } : {}),
+        ...(q ? { note: { contains: q, mode: 'insensitive' } } : {}),
+      },
+      select: { id: true, note: true, category: true, activity_type: true },
+      orderBy: { id: 'asc' },
+      take: 100,
+    })
 
-  if (category) {
-    console.log('[notes] applying category filter:', category)
-    query = query.eq('category', category)
+    console.log('[notes] result — count:', notes.length)
+    return NextResponse.json({ notes })
+  } catch (err: any) {
+    console.error('[notes] error detail:', err)
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
-  if (activityType) {
-    const orFilter = `activity_type.eq.${activityType},activity_type.is.null`
-    console.log('[notes] applying activity_type filter (or):', orFilter)
-    query = query.or(orFilter)
-  }
-  if (q) {
-    console.log('[notes] applying search filter:', q)
-    query = query.ilike('note', `%${q}%`)
-  }
-
-  console.log('[notes] executing Supabase query...')
-  const { data, error } = await query.limit(100)
-
-  console.log('[notes] result — count:', data?.length ?? 'null', '| error:', error?.message ?? 'none', '| error code:', error?.code ?? 'none')
-
-  if (error) {
-    console.error('[notes] Supabase error detail:', JSON.stringify(error))
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-  return NextResponse.json({ notes: data || [] })
 }

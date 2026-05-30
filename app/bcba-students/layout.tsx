@@ -4,45 +4,32 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { useSession } from "next-auth/react";
 import PaywallScreen from "@/app/components/bcba-students/PaywallScreen";
 
 export default function BCBAStudentsLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [state, setState] = useState<"loading" | "paywall" | "onboarding" | "ready">("loading");
 
   useEffect(() => {
+    if (status === "loading") return;
+    if (!session?.user) { router.push("/login"); return; }
+
     async function check() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/login"); return; }
+      const [subRes, profileRes] = await Promise.all([
+        fetch("/api/user/subscription"),
+        fetch("/api/bcba-students/profile"),
+      ]);
+      const subData = await subRes.json();
+      const profileData = await profileRes.json();
 
-      // Check bcba_students_status on subscriptions row
-      const { data: sub } = await supabase
-        .from("subscriptions")
-        .select("bcba_students_status, bcba_students_trial_ends_at")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      const now = new Date();
-      const hasAccess =
-        sub?.bcba_students_status === "active" ||
-        (sub?.bcba_students_status === "trialing" &&
-          sub.bcba_students_trial_ends_at &&
-          new Date(sub.bcba_students_trial_ends_at) > now);
-
-      if (!hasAccess) {
+      if (!subData.hasBCBAStudents) {
         setState("paywall");
         return;
       }
 
-      // Check onboarding
-      const { data: profile } = await supabase
-        .from("fieldwork_profiles")
-        .select("onboarding_complete")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!profile?.onboarding_complete) {
+      if (!profileData.profile?.onboarding_complete) {
         setState("onboarding");
         router.push("/bcba-students/onboarding");
         return;
@@ -51,7 +38,7 @@ export default function BCBAStudentsLayout({ children }: { children: React.React
       setState("ready");
     }
     check();
-  }, [router]);
+  }, [status, session, router]);
 
   if (state === "loading") {
     return (
