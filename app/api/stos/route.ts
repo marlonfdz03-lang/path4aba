@@ -31,22 +31,28 @@ export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const r = await req.json()
+  const body = await req.json()
+  const records: any[] = Array.isArray(body) ? body : [body]
+
   try {
-    const sto = await prisma.stos.create({
-      data: {
-        client_id: r.clientId,
-        target_name: r.targetName,
-        target_type: r.targetType,
-        baseline_value: r.baselineValue,
-        goal_value: r.goalValue,
-        start_date: r.startDate ?? null,
-        target_date: r.targetDate ?? null,
-        total_weeks: r.totalWeeks ?? 16,
-        status: r.status ?? 'active',
-      },
-    })
-    return NextResponse.json({ sto })
+    const created = await Promise.all(
+      records.map(r =>
+        prisma.stos.create({
+          data: {
+            client_id: r.clientId,
+            target_name: r.targetName,
+            target_type: r.targetType,
+            baseline_value: r.baselineValue,
+            goal_value: r.goalValue,
+            start_date: r.startDate ?? null,
+            target_date: r.targetDate ?? null,
+            total_weeks: r.totalWeeks ?? 16,
+            status: r.status ?? 'active',
+          },
+        })
+      )
+    )
+    return NextResponse.json({ ok: true, count: created.length })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }

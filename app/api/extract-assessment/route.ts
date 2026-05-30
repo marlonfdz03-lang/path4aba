@@ -333,7 +333,11 @@ export async function POST(req: NextRequest) {
 
     const normalized = mapToLegacyFormat(extracted);
 
-    return NextResponse.json(normalized);
+    return NextResponse.json({
+      ...normalized,
+      extractedStos: extracted.stos ?? [],
+      extractedHistoricalData: extracted.historicalData ?? [],
+    });
   } catch (error: any) {
     console.error(error);
 

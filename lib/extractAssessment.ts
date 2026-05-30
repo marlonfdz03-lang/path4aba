@@ -41,6 +41,22 @@ export interface ExtractedAssessment {
   caregivers: string[];
   medications: string[];
   setting_details: string;
+  stos: {
+    name: string;
+    targetType: 'replacement' | 'maladaptive';
+    baselineValue: number;
+    goalValue: number;
+    totalWeeks: number | null;
+    targetDate: string | null;
+    startDate: string | null;
+  }[];
+  historicalData: {
+    name: string;
+    targetType: 'replacement' | 'maladaptive';
+    weekStart: string;
+    weekEnd: string | null;
+    value: number;
+  }[];
 }
 
 function stripIdentifiers(data: ExtractedAssessment): ExtractedAssessment {
@@ -117,6 +133,29 @@ For preferredActivities: extract all activities listed as preferred or high-pref
 For nonPreferredActivities: extract all activities listed as non-preferred, low-preference, or avoided.
 For caregivers: extract names of caregivers, parents, or guardians mentioned in the document (used for session documentation — not saved to clinical database).
 
+━━━ STO EXTRACTION RULES ━━━
+Extract ALL Short-Term Objectives (STOs) listed anywhere in the document — do not skip any.
+Look in sections titled: "Short-Term Objectives", "STOs", "Treatment Goals", "Goals", "Objectives", or any numbered goal list.
+For each STO extract:
+- name: the exact behavior or skill name (e.g., "Request a Break", "Aggression")
+- targetType: "replacement" if it is a skill to increase, "maladaptive" if it is a behavior to decrease
+- baselineValue: numeric baseline (use percentage 0–100 for skills, frequency count for behaviors; parse "40%" as 40, "3x/week" as 3)
+- goalValue: numeric goal using the same unit as baselineValue
+- totalWeeks: number of weeks if stated (e.g., "within 16 weeks" → 16), otherwise null
+- targetDate: target date as YYYY-MM-DD if a specific date is stated, otherwise null
+- startDate: start date as YYYY-MM-DD if stated, otherwise null
+If no STOs are present, return an empty array.
+
+━━━ HISTORICAL DATA EXTRACTION RULES ━━━
+If the document contains graphs, data tables, or historical progress data showing weekly values for any skill or behavior, extract each data point.
+For each data point extract:
+- name: the exact skill or behavior name
+- targetType: "replacement" for skills, "maladaptive" for behaviors
+- weekStart: week start date as YYYY-MM-DD if parseable; if only a relative label (e.g., "Week 1") use a placeholder like "2025-01-06"
+- weekEnd: week end date as YYYY-MM-DD if stated, otherwise null
+- value: numeric value (percentage 0–100 for skills, frequency count for behaviors)
+If no historical data is present, return an empty array.
+
 Return this exact JSON structure:
 {
   "clientCode": "generated internal code like initials-DOB-001",
@@ -155,7 +194,27 @@ Return this exact JSON structure:
   "nonPreferredActivities": ["all activities listed as non-preferred or avoided"],
   "caregivers": ["names of caregivers, parents, or guardians"],
   "medications": ["list of medications"],
-  "setting_details": "detailed description of home/school environment and routine with client name replaced by 'the client'"
+  "setting_details": "detailed description of home/school environment and routine with client name replaced by 'the client'",
+  "stos": [
+    {
+      "name": "exact target name as written in document",
+      "targetType": "replacement|maladaptive",
+      "baselineValue": 0,
+      "goalValue": 0,
+      "totalWeeks": null,
+      "targetDate": null,
+      "startDate": null
+    }
+  ],
+  "historicalData": [
+    {
+      "name": "exact target name as written in document",
+      "targetType": "replacement|maladaptive",
+      "weekStart": "YYYY-MM-DD",
+      "weekEnd": null,
+      "value": 0
+    }
+  ]
 }`
       },
       {
@@ -179,6 +238,9 @@ Return this exact JSON structure:
       seen.add(key);
       return true;
     });
+
+    parsed.stos = parsed.stos ?? [];
+    parsed.historicalData = parsed.historicalData ?? [];
 
     return stripIdentifiers(parsed);
   } catch (error) {
