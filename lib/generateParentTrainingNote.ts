@@ -3,7 +3,7 @@ import { MASTER_PARENT_TRAINING_PROMPT } from '@/app/prompts/parentTrainingPromp
 import { prisma } from '@/lib/prisma'
 
 const openai = new OpenAI({
-  apiKey: process.env.AZURE_OPENAI_API_KEY,
+  apiKey: process.env.AZURE_OPENAI_API_KEY || 'azure-openai',
   baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/deployments/gpt-4o`,
   defaultQuery: { 'api-version': '2024-12-01-preview' },
   defaultHeaders: { 'api-key': process.env.AZURE_OPENAI_API_KEY },

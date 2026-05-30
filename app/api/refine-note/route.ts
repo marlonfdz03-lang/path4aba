@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 export const runtime = 'nodejs';
 
 const openai = new OpenAI({
-  apiKey: process.env.AZURE_OPENAI_API_KEY,
+  apiKey: process.env.AZURE_OPENAI_API_KEY || 'azure-openai',
   baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/deployments/gpt-4o`,
   defaultQuery: { 'api-version': '2025-01-01-preview' },
   defaultHeaders: { 'api-key': process.env.AZURE_OPENAI_API_KEY },

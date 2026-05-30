@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const openai = new OpenAI({
-  apiKey: process.env.AZURE_OPENAI_API_KEY,
+  apiKey: process.env.AZURE_OPENAI_API_KEY || 'azure-openai',
   baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/deployments/gpt-4o`,
   defaultQuery: { 'api-version': '2024-12-01-preview' },
   defaultHeaders: { 'api-key': process.env.AZURE_OPENAI_API_KEY },
