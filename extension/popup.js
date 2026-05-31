@@ -1931,6 +1931,7 @@ document.getElementById('extractChartsBtn').addEventListener('click', async () =
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: officePuzzleExtractor,
+      world: 'MAIN',
     });
 
     const data = results?.[0]?.result;
