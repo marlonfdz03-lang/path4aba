@@ -128,7 +128,10 @@ function chartsToHistoricalPoints(charts: PageChart[]): ChartHistoricalPoint[] {
   return points
 }
 
-async function analyzePageBatch(base64Pngs: string[]): Promise<PageChart[]> {
+async function analyzePageBatch(base64Pngs: string[], batchLabel: string): Promise<PageChart[]> {
+  const sizesKB = base64Pngs.map(b => Math.round(b.length * 0.75 / 1024))
+  console.log(`[ChartVision] ${batchLabel}: sending ${base64Pngs.length} image(s), sizes: ${sizesKB.join(', ')} KB`)
+
   const imageContent = base64Pngs.map(b64 => ({
     type: 'image_url' as const,
     image_url: { url: `data:image/png;base64,${b64}`, detail: 'high' as const },
@@ -138,7 +141,7 @@ async function analyzePageBatch(base64Pngs: string[]): Promise<PageChart[]> {
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',
       temperature: 0,
-      max_tokens: 4000,
+      max_tokens: 8000,
       messages: [
         {
           role: 'user',
@@ -151,11 +154,24 @@ async function analyzePageBatch(base64Pngs: string[]): Promise<PageChart[]> {
     })
 
     const content = response.choices[0].message.content || '{}'
+    console.log(`[ChartVision] ${batchLabel} raw response (first 800 chars):`, content.substring(0, 800))
+
     const clean = content.replace(/```json|```/g, '').trim()
-    const parsed = JSON.parse(clean)
-    return Array.isArray(parsed.charts) ? parsed.charts : []
+    let parsed: any
+    try {
+      parsed = JSON.parse(clean)
+    } catch (parseErr) {
+      console.error(`[ChartVision] ${batchLabel} JSON parse failed:`, parseErr, '\nRaw:', content.substring(0, 300))
+      return []
+    }
+
+    const charts: PageChart[] = Array.isArray(parsed.charts) ? parsed.charts : []
+    console.log(`[ChartVision] ${batchLabel} found ${charts.length} chart(s):`,
+      charts.map(c => `"${c.name}" (${c.category}, ${c.dataPoints?.length ?? 0} pts)`).join(' | ') || 'none'
+    )
+    return charts
   } catch (err) {
-    console.error('Chart Vision batch failed:', err)
+    console.error(`[ChartVision] ${batchLabel} Vision API call failed:`, err)
     return []
   }
 }
@@ -173,8 +189,9 @@ export async function extractChartDataFromPdf(buffer: Buffer): Promise<ChartHist
   }).promise
 
   const numPages: number = Math.min(pdf.numPages, 25)
+  console.log(`[ChartVision] PDF has ${pdf.numPages} pages; processing first ${numPages} at 3× scale`)
 
-  // Render each page to PNG base64 at scale 2× for readability
+  // Render each page to PNG base64 at 3× scale for readability
   const base64Pages: string[] = []
   for (let i = 1; i <= numPages; i++) {
     try {
@@ -185,23 +202,41 @@ export async function extractChartDataFromPdf(buffer: Buffer): Promise<ChartHist
       ctx.fillStyle = 'white'
       ctx.fillRect(0, 0, canvas.width, canvas.height)
       await page.render({ canvasContext: ctx, viewport }).promise
-      base64Pages.push((canvas.toBuffer('image/png') as Buffer).toString('base64'))
+      const pngB64 = (canvas.toBuffer('image/png') as Buffer).toString('base64')
+      console.log(`[ChartVision] Page ${i} rendered: ${Math.round(pngB64.length * 0.75 / 1024)} KB`)
+      base64Pages.push(pngB64)
     } catch (err) {
-      console.error(`PDF page ${i} render failed:`, err)
+      console.error(`[ChartVision] Page ${i} render failed:`, err)
     }
   }
 
-  if (base64Pages.length === 0) return []
+  if (base64Pages.length === 0) {
+    console.log('[ChartVision] No pages rendered — aborting')
+    return []
+  }
 
-  // Send pages to GPT-4o Vision in batches of 5 (reduces API calls, respects rate limits)
-  const BATCH = 5
+  // Process 2 pages per Vision call — smaller batches mean better per-chart attention
+  // and avoid token overflow that causes Vision to silently drop later charts
+  const BATCH = 2
   const allCharts: PageChart[] = []
 
   for (let i = 0; i < base64Pages.length; i += BATCH) {
     const batch = base64Pages.slice(i, i + BATCH)
-    const charts = await analyzePageBatch(batch)
+    const startPage = i + 1
+    const endPage = i + batch.length
+    const label = startPage === endPage ? `page ${startPage}` : `pages ${startPage}-${endPage}`
+    const charts = await analyzePageBatch(batch, label)
     allCharts.push(...charts)
   }
 
-  return chartsToHistoricalPoints(allCharts)
+  const points = chartsToHistoricalPoints(allCharts)
+  const replacementPts = points.filter(p => p.targetType === 'replacement')
+  const maladaptivePts = points.filter(p => p.targetType === 'maladaptive')
+  console.log(`[ChartVision] Done — ${allCharts.length} charts total → ${points.length} data points`)
+  console.log(`[ChartVision]   replacement: ${replacementPts.length} pts | maladaptive: ${maladaptivePts.length} pts`)
+  if (replacementPts.length > 0) {
+    const names = [...new Set(replacementPts.map(p => p.name))]
+    console.log(`[ChartVision]   replacement skills found: ${names.join(', ')}`)
+  }
+  return points
 }
