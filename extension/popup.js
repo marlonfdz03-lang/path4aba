@@ -1590,7 +1590,20 @@ async function checkOfficePuzzlePage() {
 }
 
 // Runs inside the Office Puzzle page — must be fully self-contained (no outer scope refs).
-function officePuzzleExtractor() {
+async function officePuzzleExtractor() {
+  // Scroll incrementally to force lazy-rendered charts to mount, then wait for them.
+  await new Promise(resolve => {
+    const total = document.documentElement.scrollHeight;
+    let pos = 0;
+    const step = 500;
+    function tick() {
+      pos = Math.min(pos + step, total);
+      window.scrollTo(0, pos);
+      if (pos < total) { setTimeout(tick, 60); }
+      else { setTimeout(resolve, 600); }
+    }
+    tick();
+  });
   // ── Helpers ────────────────────────────────────────────────────────────────
   function parseDateLabel(raw) {
     if (!raw) return null;
@@ -1721,12 +1734,17 @@ function officePuzzleExtractor() {
         if (!canvas) return;
 
         const chartCategory = detectCategory(canvas) || activeCategory;
-        // Maladaptive tab → 'Total' dataset (frequency counts)
-        // Replacement tab → 'Average' dataset (percentage 0-100%)
-        const targetLabel = chartCategory === 'replacement' ? 'average' : 'total';
-        const targetDataset = (chart.data.datasets || []).find(
-          d => d.label && d.label.toLowerCase() === targetLabel
-        );
+        const datasets = chart.data.datasets || [];
+        // Maladaptive → 'Total'; Replacement → 'Average', then 'Total', then first non-Baseline
+        let targetDataset;
+        if (chartCategory === 'replacement') {
+          targetDataset = datasets.find(d => d.label && d.label.toLowerCase() === 'average')
+            || datasets.find(d => d.label && d.label.toLowerCase() === 'total')
+            || datasets.find(d => d.label && !/baseline/i.test(d.label) && d.data?.length);
+        } else {
+          targetDataset = datasets.find(d => d.label && d.label.toLowerCase() === 'total')
+            || datasets.find(d => d.label && !/baseline/i.test(d.label) && d.data?.length);
+        }
         if (!targetDataset?.data) return;
 
         const name = getChartName(canvas);
@@ -1923,8 +1941,8 @@ document.getElementById('extractChartsBtn').addEventListener('click', async () =
 
   const btn = document.getElementById('extractChartsBtn');
   btn.disabled = true;
-  btn.textContent = 'Extracting…';
-  showExtractStatus('Reading chart data from Office Puzzle…', 'info');
+  btn.textContent = 'Scrolling…';
+  showExtractStatus('Scrolling page to load all charts…', 'info');
 
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
