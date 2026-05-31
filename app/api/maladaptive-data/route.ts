@@ -35,6 +35,34 @@ export async function GET(req: Request) {
   }
 }
 
+export async function DELETE(req: Request) {
+  const user = await getExtensionAuth()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { searchParams } = new URL(req.url)
+  const id           = searchParams.get('id')
+  const clientId     = searchParams.get('clientId')
+  const behaviorName = searchParams.get('behaviorName')
+  const weekStart    = searchParams.get('weekStart')
+
+  try {
+    if (id) {
+      await prisma.maladaptive_data.delete({ where: { id } })
+      return NextResponse.json({ ok: true, deleted: 1 })
+    }
+    if (!clientId) return NextResponse.json({ error: 'clientId or id required' }, { status: 400 })
+
+    const where: any = { client_id: clientId }
+    if (behaviorName) where.behavior_name = { contains: behaviorName, mode: 'insensitive' }
+    if (weekStart)    where.week_start    = weekStart
+
+    const result = await prisma.maladaptive_data.deleteMany({ where })
+    return NextResponse.json({ ok: true, deleted: result.count })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
+}
+
 export async function POST(req: Request) {
   const user = await getExtensionAuth()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

@@ -1730,33 +1730,42 @@ async function officePuzzleExtractor() {
   try {
     const instances = window.Chart?.instances;
     if (instances && typeof instances === 'object' && Object.keys(instances).length > 0) {
-      const activeCategory = detectActiveCategory();
+      // seenNames deduplicates: Office Puzzle can show the same behavior in multiple category sections.
+      const seenNames = new Set();
 
       Object.values(instances).forEach(chart => {
         if (!chart?.data?.labels?.length) return;
         const canvas = chart.canvas || (chart.ctx && chart.ctx.canvas);
         if (!canvas) return;
 
-        const chartCategory = detectCategory(canvas) || activeCategory;
         const datasets = chart.data.datasets || [];
-        // Maladaptive → 'Total'; Replacement → 'Average', then 'Total', then first non-Baseline
-        let targetDataset;
-        if (chartCategory === 'replacement') {
-          targetDataset = datasets.find(d => d.label && d.label.toLowerCase() === 'average')
-            || datasets.find(d => d.label && d.label.toLowerCase() === 'total')
-            || datasets.find(d => d.label && !/baseline/i.test(d.label) && d.data?.length);
+        // Dataset label is 100% reliable for routing — do NOT use DOM-detected category.
+        // 'Average' dataset → replacement_data; 'Total' dataset → maladaptive_data.
+        const avgDataset   = datasets.find(d => d.label && d.label.toLowerCase() === 'average');
+        const totalDataset = datasets.find(d => d.label && d.label.toLowerCase() === 'total');
+
+        let targetDataset, chartCategory;
+        if (avgDataset?.data?.length) {
+          targetDataset = avgDataset;
+          chartCategory = 'replacement';
+        } else if (totalDataset?.data?.length) {
+          targetDataset = totalDataset;
+          chartCategory = 'maladaptive';
         } else {
-          targetDataset = datasets.find(d => d.label && d.label.toLowerCase() === 'total')
-            || datasets.find(d => d.label && !/baseline/i.test(d.label) && d.data?.length);
+          return; // no reliable dataset — skip
         }
-        if (!targetDataset?.data) return;
 
         const name = getChartName(canvas);
         if (!name) return;
 
+        // Skip if this chart name was already collected (duplicate section on the same page)
+        const nameKey = name.toLowerCase().trim();
+        if (seenNames.has(nameKey)) return;
+        seenNames.add(nameKey);
+
         const dataPoints = [];
         chart.data.labels.forEach((label, i) => {
-          const dateStr = parseDateLabel(label); // filters <, >, |, and unparseable
+          const dateStr = parseDateLabel(label);
           if (!dateStr) return;
           const val = targetDataset.data[i];
           if (val === null || val === undefined || typeof val === 'object') return;
@@ -2074,12 +2083,10 @@ document.getElementById('saveChartsBtn').addEventListener('click', async () => {
         const weekStart = pt.date ? String(pt.date) : null;
         const weekEnd   = weekStart ? calcWeekEndDate(weekStart) : null;
 
-        // Use datasetLabel as authoritative routing: 'Average' → replacement, 'Total' → maladaptive.
-        // Falls back to category if no label (Highcharts / other strategies).
+        // datasetLabel is now always 'Average' or 'Total' (set by extractor).
+        // 'Average' → replacement_data; anything else (or no label) → maladaptive_data.
         const label = (chart.datasetLabel || '').toLowerCase();
-        const isReplacement = label
-          ? label.includes('average')
-          : chart.category === 'replacement';
+        const isReplacement = label.includes('average');
 
         if (!isReplacement) {
           maladRecs.push({

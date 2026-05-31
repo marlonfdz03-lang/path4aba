@@ -41,6 +41,36 @@ export async function GET(req: Request) {
   }
 }
 
+export async function DELETE(req: Request) {
+  const user = await getExtensionAuth()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { searchParams } = new URL(req.url)
+  const id             = searchParams.get('id')
+  const clientId       = searchParams.get('clientId')
+  const replacementSkill = searchParams.get('replacementSkill')
+  const weekStart      = searchParams.get('weekStart')
+  const sessionDate    = searchParams.get('sessionDate')
+
+  try {
+    if (id) {
+      await prisma.replacement_data.delete({ where: { id } })
+      return NextResponse.json({ ok: true, deleted: 1 })
+    }
+    if (!clientId) return NextResponse.json({ error: 'clientId or id required' }, { status: 400 })
+
+    const where: any = { client_id: clientId }
+    if (replacementSkill) where.replacement_skill = { contains: replacementSkill, mode: 'insensitive' }
+    if (weekStart)        where.week_start         = weekStart
+    if (sessionDate)      where.session_date        = sessionDate
+
+    const result = await prisma.replacement_data.deleteMany({ where })
+    return NextResponse.json({ ok: true, deleted: result.count })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
+}
+
 export async function POST(req: Request) {
   const user = await getExtensionAuth()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
