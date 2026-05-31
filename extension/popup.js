@@ -1583,8 +1583,7 @@ async function checkOfficePuzzlePage() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const url = tab?.url || '';
-    const isOPCharts = url.includes('officepuzzle.com') &&
-      (url.includes('chart') || url.includes('progress') || url.includes('data'));
+    const isOPCharts = url.includes('officepuzzle.com') && url.includes('/data/charts');
     const section = document.getElementById('extractChartsSection');
     if (section) section.style.display = isOPCharts ? '' : 'none';
   } catch { /* ignore — happens in non-tab contexts */ }
@@ -1592,10 +1591,91 @@ async function checkOfficePuzzlePage() {
 
 // Runs inside the Office Puzzle page — must be fully self-contained (no outer scope refs).
 function officePuzzleExtractor() {
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function parseDateLabel(raw) {
+    if (!raw) return null;
+    const s = String(raw).trim();
+    if (!s || s === '<' || s === '>' || s === '|') return null;
+    // MM/DD/YYYY or MM/DD
+    const m = s.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+    if (m) {
+      const mo = parseInt(m[1]), d = parseInt(m[2]);
+      let y = m[3] ? parseInt(m[3]) : new Date().getFullYear();
+      if (y < 100) y += 2000;
+      return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    return null;
+  }
+
+  function nearestHeading(el) {
+    let node = el;
+    for (let i = 0; i < 8 && node; i++, node = node.parentElement) {
+      const h = node.previousElementSibling;
+      if (h && /^H[3-6]$/.test(h.tagName)) return h.textContent.trim();
+      const inner = node.querySelector('h3,h4,h5,h6,[class*="chart-title"],[class*="behavior-name"],[class*="skill-name"]');
+      if (inner) return inner.textContent.trim();
+    }
+    return null;
+  }
+
+  // Walk up exactly 3 levels from canvas, then find nearest H4 without 'Marker'
+  function getChartName(canvas) {
+    let el = canvas;
+    for (let i = 0; i < 3 && el.parentElement; i++) el = el.parentElement;
+
+    function findH4In(root) {
+      if (!root || !root.querySelectorAll) return null;
+      for (const h4 of root.querySelectorAll('h4')) {
+        const t = h4.textContent.trim();
+        if (t && !t.includes('Marker')) return t;
+      }
+      return null;
+    }
+
+    const direct = findH4In(el);
+    if (direct) return direct;
+
+    let node = el;
+    for (let i = 0; i < 6 && node; i++, node = node.parentElement) {
+      let prev = node.previousElementSibling;
+      while (prev) {
+        if (prev.tagName === 'H4') {
+          const t = prev.textContent.trim();
+          if (t && !t.includes('Marker')) return t;
+        }
+        const inner = findH4In(prev);
+        if (inner) return inner;
+        prev = prev.previousElementSibling;
+      }
+      const fromParent = findH4In(node.parentElement);
+      if (fromParent) return fromParent;
+    }
+    return nearestHeading(canvas);
+  }
+
+  // Check which category tab is active — 'Behavior Replacement Goals' → replacement
+  function detectActiveCategory() {
+    const tabEls = document.querySelectorAll('button,a,li,[role="tab"]');
+    for (const el of tabEls) {
+      if (!/active|selected/i.test(el.className || '')) continue;
+      const text = el.textContent.trim();
+      if (text.length < 4 || text.length > 80) continue;
+      if (/behavior replacement goals|replacement skill|communication goal|social goal|skill acquisition/i.test(text)) return 'replacement';
+      if (/maladaptive|target behavior|behavior reduction|behaviors to reduce/i.test(text)) return 'maladaptive';
+    }
+    for (const h of document.querySelectorAll('h1,h2,h3,h4')) {
+      const cs = window.getComputedStyle(h);
+      if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+      if (/behavior replacement goals|replacement skill|communication goal/i.test(h.textContent)) return 'replacement';
+    }
+    return 'maladaptive';
+  }
+
   function getClientName() {
     const candidates = [
-      document.querySelector('.patient-name, .client-name, [data-client-name], .chart-patient-title'),
-      document.querySelector('.patient-header h1, .client-header h1, .page-header h1'),
+      document.querySelector('.patient-name,.client-name,[data-client-name],.chart-patient-title'),
+      document.querySelector('.patient-header h1,.client-header h1,.page-header h1'),
       document.querySelector('header h1'),
       document.querySelector('h1'),
     ];
@@ -1611,7 +1691,8 @@ function officePuzzleExtractor() {
   function detectCategory(el) {
     const MALAD = ['maladaptive', 'behavior targeted for reduction', 'behaviors to reduce', 'target behaviors'];
     const REPL  = ['communication goal', 'social goal', 'behavior replacement', 'replacement skill',
-                   'skill acquisition', 'behaviors to increase', 'skills to increase', 'replacement program'];
+                   'skill acquisition', 'behaviors to increase', 'skills to increase', 'replacement program',
+                   'behavior replacement goals'];
     let node = el;
     for (let i = 0; i < 12 && node; i++, node = node.parentElement) {
       const search = [
@@ -1626,20 +1707,52 @@ function officePuzzleExtractor() {
     return null;
   }
 
-  function nearestHeading(el) {
-    let node = el;
-    for (let i = 0; i < 8 && node; i++, node = node.parentElement) {
-      const h = node.previousElementSibling;
-      if (h && /^H[3-6]$/.test(h.tagName)) return h.textContent.trim();
-      const inner = node.querySelector('h3,h4,h5,h6,[class*="chart-title"],[class*="behavior-name"],[class*="skill-name"]');
-      if (inner) return inner.textContent.trim();
-    }
-    return null;
-  }
-
   const result = { clientName: getClientName(), charts: [], method: 'none', errors: [] };
 
-  // Strategy 1: Highcharts global
+  // ── Strategy 1: Chart.js via window.Chart.instances (Office Puzzle) ───────
+  try {
+    const instances = window.Chart?.instances;
+    if (instances && typeof instances === 'object' && Object.keys(instances).length > 0) {
+      const activeCategory = detectActiveCategory();
+
+      Object.values(instances).forEach(chart => {
+        if (!chart?.data?.labels?.length) return;
+        const canvas = chart.canvas || (chart.ctx && chart.ctx.canvas);
+        if (!canvas) return;
+
+        // Only use the 'Total' dataset — skip 'Baseline' and any others
+        const totalDataset = (chart.data.datasets || []).find(
+          d => d.label && d.label.toLowerCase() === 'total'
+        );
+        if (!totalDataset?.data) return;
+
+        const name = getChartName(canvas);
+        if (!name) return;
+
+        const dataPoints = [];
+        chart.data.labels.forEach((label, i) => {
+          const dateStr = parseDateLabel(label); // filters <, >, |, and unparseable
+          if (!dateStr) return;
+          const val = totalDataset.data[i];
+          if (val === null || val === undefined || typeof val === 'object') return;
+          dataPoints.push({ date: dateStr, value: Number(val) });
+        });
+
+        if (!dataPoints.length) return;
+
+        result.charts.push({
+          name,
+          category: detectCategory(canvas) || activeCategory,
+          dataPoints,
+          baseline: dataPoints[0]?.value ?? null,
+        });
+      });
+
+      if (result.charts.length) { result.method = 'chartjs'; return result; }
+    }
+  } catch(e) { result.errors.push('chartjs:' + e.message); }
+
+  // ── Strategy 2: Highcharts global ─────────────────────────────────────────
   try {
     if (window.Highcharts?.charts?.length) {
       window.Highcharts.charts.filter(Boolean).forEach(hc => {
@@ -1652,7 +1765,7 @@ function officePuzzleExtractor() {
             const x = pt.x;
             const dateStr = x instanceof Date ? x.toISOString().split('T')[0]
               : typeof x === 'number' && x > 1e9 ? new Date(x).toISOString().split('T')[0]
-              : String(x);
+              : parseDateLabel(String(x));
             return { date: dateStr, value: pt.y };
           }).filter(p => p.date && p.value !== null);
           if (dataPoints.length) {
@@ -1664,7 +1777,7 @@ function officePuzzleExtractor() {
     }
   } catch(e) { result.errors.push('highcharts:' + e.message); }
 
-  // Strategy 2: ApexCharts elements
+  // ── Strategy 3: ApexCharts ─────────────────────────────────────────────────
   try {
     document.querySelectorAll('[id*="apexcharts"],[class*="apexcharts"]').forEach(el => {
       const inst = el._chart || el.__apexCharts;
@@ -1674,8 +1787,8 @@ function officePuzzleExtractor() {
       (g.series || []).forEach((series, si) => {
         if (!Array.isArray(series) || !series.length) return;
         const dataPoints = series.map((val, i) => ({
-          date: g.labels?.[i] || g.categories?.[i] || null,
-          value: val
+          date: parseDateLabel(g.labels?.[i] || g.categories?.[i] || null),
+          value: val,
         })).filter(p => p.date && p.value !== null);
         if (dataPoints.length) {
           result.charts.push({ name: names[si] || nearestHeading(el) || 'Unknown', category: detectCategory(el) || 'replacement', dataPoints, baseline: dataPoints[0]?.value ?? null });
@@ -1685,7 +1798,7 @@ function officePuzzleExtractor() {
     if (result.charts.length) { result.method = 'apexcharts'; return result; }
   } catch(e) { result.errors.push('apex:' + e.message); }
 
-  // Strategy 3: React fiber — works for recharts and similar libraries
+  // ── Strategy 4: React fiber (Recharts etc.) ────────────────────────────────
   try {
     const CHART_SELECTORS = '.recharts-wrapper,.recharts-responsive-container,[class*="ChartWrapper"],[class*="chart-wrapper"],[class*="chart-container"]';
     document.querySelectorAll(CHART_SELECTORS).forEach(wrapper => {
@@ -1714,7 +1827,7 @@ function officePuzzleExtractor() {
     if (result.charts.length) { result.method = 'recharts'; return result; }
   } catch(e) { result.errors.push('react:' + e.message); }
 
-  // Strategy 4: window.__NEXT_DATA__
+  // ── Strategy 5: window.__NEXT_DATA__ ──────────────────────────────────────
   try {
     const nd = window.__NEXT_DATA__?.props?.pageProps;
     if (nd) {
@@ -1725,7 +1838,7 @@ function officePuzzleExtractor() {
           if (!c.name) return;
           const pts = (c.data || c.dataPoints || c.history || []);
           const dataPoints = pts.map(p => ({
-            date: p.date || p.weekStart || p.week_start || p.x || null,
+            date: parseDateLabel(p.date || p.weekStart || p.week_start || p.x || null),
             value: typeof p.value !== 'undefined' ? p.value : (p.y ?? p.frequency ?? p.percentage ?? null)
           })).filter(p => p.date && p.value !== null);
           const catRaw = (c.category || c.type || c.section || '').toLowerCase();
@@ -1738,11 +1851,12 @@ function officePuzzleExtractor() {
     }
   } catch(e) { result.errors.push('nextdata:' + e.message); }
 
-  // Strategy 5: DOM heading scan — extracts names even without data values
+  // ── Strategy 6: DOM heading scan ──────────────────────────────────────────
   try {
     const MALAD_KW = ['maladaptive', 'behavior targeted for reduction', 'behaviors to reduce', 'target behaviors'];
     const REPL_KW  = ['communication goal', 'social goal', 'behavior replacement', 'replacement skill',
-                      'skill acquisition', 'behaviors to increase', 'skills to increase', 'replacement program'];
+                      'skill acquisition', 'behaviors to increase', 'skills to increase', 'replacement program',
+                      'behavior replacement goals'];
     let curCat = null;
     const seen = new Set();
     document.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(h => {
@@ -1819,14 +1933,38 @@ document.getElementById('extractChartsBtn').addEventListener('click', async () =
     const data = results?.[0]?.result;
     if (!data) throw new Error('Page did not return data. Make sure you are on the charts page.');
 
-    extractedCharts = data.charts || [];
+    const rawCharts = data.charts || [];
     extractedClientName = data.clientName;
 
     if (extractedClientName) tryAutoMatchClient(extractedClientName);
 
-    const totalPts  = extractedCharts.reduce((s, c) => s + c.dataPoints.length, 0);
-    const maladCnt  = extractedCharts.filter(c => c.category === 'maladaptive').length;
-    const replCnt   = extractedCharts.filter(c => c.category === 'replacement').length;
+    // Match chart names against the client's profile behaviors/skills
+    const profileBehaviors = (selectedProfile?.maladaptiveBehaviors || [])
+      .map(b => typeof b === 'string' ? b : b?.name || '').filter(Boolean);
+    const profileSkills = [
+      ...(selectedProfile?.replacementBehaviors || []),
+      ...(selectedProfile?.skillAcquisition || []),
+    ].map(s => typeof s === 'string' ? s : s?.name || '').filter(Boolean);
+
+    function resolveChartName(chartName, isReplacement) {
+      const pool = isReplacement ? profileSkills : profileBehaviors;
+      const lower = chartName.toLowerCase().trim();
+      const exact = pool.find(n => n.toLowerCase().trim() === lower);
+      if (exact) return { resolvedName: exact, matched: true };
+      const partial = pool.find(n => {
+        const nl = n.toLowerCase().trim();
+        return nl.includes(lower) || lower.includes(nl);
+      });
+      return { resolvedName: partial || chartName, matched: !!partial };
+    }
+
+    extractedCharts = rawCharts.map(c => {
+      const { resolvedName, matched } = resolveChartName(c.name, c.category === 'replacement');
+      return { ...c, resolvedName, matched };
+    });
+
+    const totalPts       = extractedCharts.reduce((s, c) => s + c.dataPoints.length, 0);
+    const chartsWithData = extractedCharts.filter(c => c.dataPoints.length > 0);
 
     if (extractedCharts.length === 0) {
       const errDetail = data.errors?.length ? ` Errors: ${data.errors.join('; ')}` : '';
@@ -1844,7 +1982,7 @@ document.getElementById('extractChartsBtn').addEventListener('click', async () =
     }
 
     showExtractStatus(
-      `Found: ${maladCnt} behavior${maladCnt !== 1 ? 's' : ''}, ${replCnt} skill${replCnt !== 1 ? 's' : ''} — ${totalPts} data point${totalPts !== 1 ? 's' : ''}`,
+      `Extracted ${chartsWithData.length} chart${chartsWithData.length !== 1 ? 's' : ''} with ${totalPts} total data point${totalPts !== 1 ? 's' : ''}`,
       'success'
     );
 
@@ -1857,8 +1995,14 @@ document.getElementById('extractChartsBtn').addEventListener('click', async () =
     html += '<div class="op-chart-list">';
     extractedCharts.slice(0, 12).forEach(c => {
       const catLabel = c.category === 'maladaptive' ? 'Behavior' : 'Skill';
+      const matchNote = c.matched || c.resolvedName !== c.name
+        ? `<span style="color:#16a34a;font-size:10px;">&#10003; ${escapeHtml(c.resolvedName)}</span>`
+        : `<span style="color:#9ca3af;font-size:10px;">no profile match</span>`;
       html += `<div class="op-chart-item">
-        <span class="op-chart-name">${escapeHtml(c.name)}</span>
+        <div style="display:flex;flex-direction:column;gap:1px;min-width:0;">
+          <span class="op-chart-name">${escapeHtml(c.name)}</span>
+          ${matchNote}
+        </div>
         <span class="op-chart-meta">${catLabel} · ${c.dataPoints.length} pts</span>
       </div>`;
     });
@@ -1906,7 +2050,7 @@ document.getElementById('saveChartsBtn').addEventListener('click', async () => {
         if (chart.category === 'maladaptive') {
           maladRecs.push({
             clientId: selectedClientId,
-            behaviorName: chart.name,
+            behaviorName: chart.resolvedName || chart.name,
             weekStart,
             weekEnd,
             frequency: Math.round(pt.value),
@@ -1915,7 +2059,7 @@ document.getElementById('saveChartsBtn').addEventListener('click', async () => {
         } else {
           replRecs.push({
             clientId: selectedClientId,
-            replacementSkill: chart.name,
+            replacementSkill: chart.resolvedName || chart.name,
             weekStart,
             weekEnd,
             observedPercentage: pt.value,
