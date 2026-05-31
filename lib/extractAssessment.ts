@@ -63,6 +63,46 @@ export interface ExtractedAssessment {
   } | null;
 }
 
+const MONTH_TO_NUM: Record<string, string> = {
+  january: '01', february: '02', march: '03', april: '04',
+  may: '05', june: '06', july: '07', august: '08',
+  september: '09', october: '10', november: '11', december: '12',
+}
+
+// Convert a summaryTable (Name + monthly-average columns) into historicalData points.
+// This is deterministic and runs after AI extraction so it can't be truncated.
+function summaryTableToHistoricalData(
+  table: NonNullable<ExtractedAssessment['summaryTable']>,
+  maladaptiveNames: Set<string>,
+): ExtractedAssessment['historicalData'] {
+  // headers[0] = "Name"; headers[1..] map 1:1 to row.values[0..]
+  const dateColumns: { valueIndex: number; weekStart: string }[] = []
+  for (let h = 1; h < table.headers.length; h++) {
+    const match = table.headers[h].match(/^([A-Za-z]+)\s+(\d{4})$/)
+    if (match) {
+      const mon = MONTH_TO_NUM[match[1].toLowerCase()]
+      if (mon) dateColumns.push({ valueIndex: h - 1, weekStart: `${match[2]}-${mon}-01` })
+    }
+  }
+  if (dateColumns.length === 0) return []
+
+  const points: ExtractedAssessment['historicalData'] = []
+  for (const row of table.rows) {
+    if (!row.name?.trim()) continue
+    const targetType: 'maladaptive' | 'replacement' =
+      maladaptiveNames.has(row.name.trim().toLowerCase()) ? 'maladaptive' : 'replacement'
+
+    for (const col of dateColumns) {
+      const raw = row.values[col.valueIndex]
+      if (!raw || raw === '-' || raw.toLowerCase() === 'n/a') continue
+      const value = parseFloat(raw.replace(/[^\d.]/g, ''))
+      if (isNaN(value)) continue
+      points.push({ name: row.name.trim(), targetType, weekStart: col.weekStart, weekEnd: null, value })
+    }
+  }
+  return points
+}
+
 function stripIdentifiers(data: ExtractedAssessment): ExtractedAssessment {
   const fullName = /\b[A-Z][a-z]{1,}\s[A-Z][a-z]{1,}\b(?:'s)?/g;
   const possessiveName = /\b[A-Z][a-z]{2,}'s\b/g;
@@ -145,7 +185,7 @@ For caregivers: extract names of caregivers, parents, or guardians mentioned in 
 ━━━ STO EXTRACTION RULES ━━━
 Extract EVERY SINGLE STO for EVERY behavior and skill — including mastered STOs, in-progress STOs, and future/upcoming STOs. DO NOT SKIP ANY.
 Look in sections titled: "Short-Term Objectives", "STOs", "Treatment Goals", "Goals", "Objectives", numbered goal lists, or any section listing incremental targets.
-A behavior may have many STOs (e.g., STO#1 through STO#16). Extract them ALL as SEPARATE records.
+A behavior may have many STOs (e.g., STO#1 through STO#19). Extract them ALL as SEPARATE records.
 
 CRITICAL — EACH STO IS ONE STEP, NOT THE FULL JOURNEY:
 Each STO describes a single incremental step: a starting value and an ending value for that step only.
@@ -153,18 +193,33 @@ DO NOT collapse all STOs into one record.
 DO NOT use the original baseline as baselineValue for every STO.
 DO NOT use 0 or the final LTO as goalValue for every STO.
 
-CONCRETE EXAMPLE — you MUST follow this pattern exactly:
-If "Tantrums" has these STOs in the document:
+CONCRETE EXAMPLE FOR ONE BEHAVIOR — you MUST follow this pattern:
+If "Tantrums" has STOs in the document:
   STO#1: reduce from 85 to 80 occurrences per week
   STO#2: reduce from 80 to 75 occurrences per week
   STO#3: reduce from 75 to 70 occurrences per week
-  STO#14: reduce from 25 to 20 occurrences per week
-You must produce FOUR SEPARATE records:
+  ...continuing through...
+  STO#19: reduce from 5 to 0 occurrences per week
+You must produce 19 SEPARATE records for Tantrums alone:
   { "name": "Tantrums", "baselineValue": 85, "goalValue": 80 }
   { "name": "Tantrums", "baselineValue": 80, "goalValue": 75 }
   { "name": "Tantrums", "baselineValue": 75, "goalValue": 70 }
-  { "name": "Tantrums", "baselineValue": 25, "goalValue": 20 }
+  ... (one record per STO step, all the way through STO#19)
+  { "name": "Tantrums", "baselineValue": 5, "goalValue": 0 }
 You must NEVER produce: { "name": "Tantrums", "baselineValue": 85, "goalValue": 0 }
+
+MULTI-BEHAVIOR RULE — ABSOLUTELY CRITICAL:
+EVERY behavior and EVERY skill listed in the document has its OWN INDEPENDENT STO sequence.
+You must scan the ENTIRE document and extract ALL STO sequences for ALL behaviors and skills.
+Do NOT stop after finding STOs for one behavior. Continue until every behavior and skill has been processed.
+
+MULTI-BEHAVIOR EXAMPLE:
+If the document has "Tantrums" (19 STOs: 85→80→75→...→5→0)
+AND "Physical Aggression" (8 STOs: 54→46→38→30→22→14→8→0)
+AND "Request a Break" replacement skill (6 STOs: 20%→35%→50%→65%→80%→90%)
+You must produce 19 + 8 + 6 = 33 TOTAL records in the stos array.
+
+SELF-CHECK BEFORE RETURNING: Count your stos array entries. If a document lists N behaviors each with M STOs, your array must have N×M (approximately) entries. If your count seems low, re-read the document for STOs you may have missed.
 
 For each STO record extract:
 - name: the exact behavior or skill name (e.g., "Request a Break", "Tantrums")
@@ -177,11 +232,12 @@ For each STO record extract:
 If no STOs are present, return an empty array.
 
 ━━━ HISTORICAL DATA EXTRACTION RULES ━━━
-If the document contains graphs, data tables, or historical progress data showing weekly values for any skill or behavior, extract each data point.
+If the document contains graphs, data tables, or historical progress data showing weekly or monthly values for any skill or behavior, extract each data point.
+THIS INCLUDES the Summary Table (see below) — extract monthly averages from it as historical data points.
 For each data point extract:
 - name: the exact skill or behavior name
 - targetType: "replacement" for skills, "maladaptive" for behaviors
-- weekStart: week start date as YYYY-MM-DD if parseable; if only a relative label (e.g., "Week 1") use a placeholder like "2025-01-06"
+- weekStart: week start date as YYYY-MM-DD if parseable; for a month column like "July 2025" use "2025-07-01"; if only a relative label (e.g., "Week 1") use a placeholder like "2025-01-06"
 - weekEnd: week end date as YYYY-MM-DD if stated, otherwise null
 - value: numeric value (percentage 0–100 for skills, frequency count for behaviors)
 If no historical data is present, return an empty array.
@@ -285,6 +341,24 @@ Return this exact JSON structure:
     parsed.stos = parsed.stos ?? [];
     parsed.historicalData = parsed.historicalData ?? [];
     parsed.summaryTable = parsed.summaryTable ?? null;
+
+    // Convert summaryTable monthly columns → historicalData points (deterministic, never truncated).
+    // This supplements anything GPT-4o already put in historicalData from text or charts.
+    if (parsed.summaryTable) {
+      const maladaptiveNames = new Set(
+        parsed.maladaptiveBehaviors.map(b => b.name.toLowerCase().trim())
+      );
+      const tablePoints = summaryTableToHistoricalData(parsed.summaryTable, maladaptiveNames);
+
+      // Deduplicate against existing historicalData by (name, weekStart)
+      const existing = new Set(
+        parsed.historicalData.map(p => `${p.name.toLowerCase()}|${p.weekStart}`)
+      );
+      const newPoints = tablePoints.filter(
+        p => !existing.has(`${p.name.toLowerCase()}|${p.weekStart}`)
+      );
+      parsed.historicalData = [...parsed.historicalData, ...newPoints];
+    }
 
     return stripIdentifiers(parsed);
   } catch (error) {

@@ -22,20 +22,31 @@ interface PageChart {
   dataPoints: { date: string; value: number }[]
 }
 
-const VISION_PROMPT = `Analyze these ABA assessment PDF pages for behavior/skill progress charts.
+const VISION_PROMPT = `You are analyzing ABA behavior progress charts. These images are pages from an ABA assessment PDF.
 
-For EACH chart found on ANY of these pages, extract:
-- name: the behavior or skill name (from chart title, axis label, or nearest heading)
-- category: "maladaptive" if tracking a behavior to REDUCE, "replacement" if tracking a skill to INCREASE
-  Clues for maladaptive: section headings like "Maladaptive Behaviors", "Problem Behavior", "Target Behaviors"; Y-axis values decreasing toward goal; frequency/rate units
-  Clues for replacement: section headings like "Skill Acquisition", "Communication Goals", "Replacement"; Y-axis shows percentages or accuracy; values increasing toward goal
-- baseline: the numeric baseline value if visible (red marker, dotted line, "B" label, or phase before intervention). null if unclear.
-- dataPoints: ALL visible data points as { "date": "...", "value": number }
-  Date format rules:
-  - If MM/DD/YYYY or MM/DD/YY visible: convert to YYYY-MM-DD
-  - If only Month Year (e.g. "Jul 2024"): use first day — "2024-07-01"
-  - If only relative labels (e.g. "Week 1", "Session 3"): use the label as-is
-  Extract EVERY data point you can read. Do not skip any.
+TASK: Find every line chart or dot plot on these pages and extract ALL data points.
+
+HOW TO READ EACH CHART:
+1. Find the chart title or the nearest heading above/beside the chart — that is the behavior or skill name.
+2. Look at every dot or data marker on the line. Count them. There may be 20–40 dots per chart.
+3. For each dot: read the date from the X-axis directly below it, and the numeric value from the Y-axis to its left.
+4. Read the Y-axis scale carefully — note the min, max, and intervals so you calibrate each dot's height correctly.
+5. Do NOT skip dots that are close together or that overlap.
+
+DATE READING RULES:
+- X-axis dates shown as MM/DD or MM/DD/YY → convert to YYYY-MM-DD
+- X-axis shows month labels (e.g. "Jul", "Aug") → use first day of that month, e.g. "2025-07-01"
+- X-axis shows only week or session numbers → use the label as-is (e.g. "Week 1")
+
+CATEGORY RULES:
+- "maladaptive": chart tracks a behavior to REDUCE (frequency counts, rate; goal is lower)
+  Section headings: "Maladaptive Behaviors", "Problem Behavior", "Target Behaviors"
+- "replacement": chart tracks a skill to INCREASE (percentages, accuracy; goal is higher)
+  Section headings: "Skill Acquisition", "Communication Goals", "Replacement Behaviors"
+
+BASELINE: the value shown before intervention started — often a dotted vertical line, red dot, or "B" phase label. null if not shown.
+
+SELF-CHECK before returning: for each chart, count the dots you actually see in the image. Your dataPoints array for that chart should have the same count.
 
 Return ONLY valid JSON — no markdown, no explanation:
 {
@@ -45,8 +56,9 @@ Return ONLY valid JSON — no markdown, no explanation:
       "category": "maladaptive",
       "baseline": 85,
       "dataPoints": [
-        { "date": "2024-07-01", "value": 85 },
-        { "date": "2024-07-08", "value": 78 }
+        { "date": "2025-07-07", "value": 85 },
+        { "date": "2025-07-14", "value": 80 },
+        { "date": "2025-07-21", "value": 78 }
       ]
     }
   ]
@@ -148,7 +160,7 @@ export async function extractChartDataFromPdf(buffer: Buffer): Promise<ChartHist
   for (let i = 1; i <= numPages; i++) {
     try {
       const page = await pdf.getPage(i)
-      const viewport = page.getViewport({ scale: 2.0 })
+      const viewport = page.getViewport({ scale: 3.0 })
       const canvas = createCanvas(Math.round(viewport.width), Math.round(viewport.height))
       const ctx = canvas.getContext('2d')
       ctx.fillStyle = 'white'
