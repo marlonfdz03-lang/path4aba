@@ -257,6 +257,7 @@ async function loadClientProfile(clientId) {
   renderBehaviors();
   renderSkills();
   renderPresent();
+  renderAutofillSheetsInputs();
 }
 
 // ── Behaviors grid ─────────────────────────
@@ -1583,9 +1584,12 @@ async function checkOfficePuzzlePage() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const url = tab?.url || '';
-    const isOPCharts = url.includes('officepuzzle.com') && url.includes('/data/charts');
-    const section = document.getElementById('extractChartsSection');
-    if (section) section.style.display = isOPCharts ? '' : 'none';
+    const isOPCharts  = url.includes('officepuzzle.com') && url.includes('/data/charts');
+    const isOPSheets  = url.includes('officepuzzle.com') && url.includes('/data/sheets');
+    const chartsEl = document.getElementById('extractChartsSection');
+    const sheetsEl = document.getElementById('autofillSheetsSection');
+    if (chartsEl) chartsEl.style.display = isOPCharts ? '' : 'none';
+    if (sheetsEl) sheetsEl.style.display = isOPSheets ? '' : 'none';
   } catch { /* ignore — happens in non-tab contexts */ }
 }
 
@@ -2124,6 +2128,264 @@ document.getElementById('saveChartsBtn').addEventListener('click', async () => {
     btn.textContent = 'Save to Path4ABA';
   }
 });
+
+// ─────────────────────────────────────────────
+//  OFFICE PUZZLE — AUTOFILL DATASHEET
+// ─────────────────────────────────────────────
+
+function renderAutofillSheetsInputs() {
+  const skillsEl    = document.getElementById('autofillSheetSkills');
+  const behaviorsEl = document.getElementById('autofillSheetBehaviors');
+  const emptyEl     = document.getElementById('autofillSheetEmpty');
+  const btn         = document.getElementById('autofillSheetBtn');
+  if (!skillsEl) return;
+
+  if (!selectedProfile) {
+    skillsEl.style.display = 'none';
+    behaviorsEl.style.display = 'none';
+    if (emptyEl) emptyEl.style.display = '';
+    btn.disabled = true;
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  const rowStyle = 'display:flex;align-items:center;gap:6px;margin-bottom:5px;';
+  const inputStyle = 'width:52px;padding:3px 6px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;text-align:right;';
+  const labelStyle = 'font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin:0 0 5px;';
+
+  // Replacement skills
+  const rawSkills = [
+    ...(selectedProfile.replacementBehaviors || []),
+    ...(selectedProfile.skillAcquisition || []),
+  ].map(s => (typeof s === 'string' ? s : s?.name || '')).filter(Boolean);
+  const skills = [...new Set(rawSkills)];
+
+  skillsEl.innerHTML = '';
+  if (skills.length) {
+    const lbl = document.createElement('p');
+    lbl.style.cssText = labelStyle;
+    lbl.textContent = 'Replacement Skills (%)';
+    skillsEl.appendChild(lbl);
+    skills.forEach(name => {
+      const row = document.createElement('div');
+      row.className = 'autofill-sheet-row';
+      row.dataset.name = name;
+      row.dataset.type = 'replacement';
+      row.style.cssText = rowStyle;
+      row.innerHTML = `
+        <span style="flex:1;font-size:11px;color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+        <input type="number" min="0" max="100" placeholder="%" style="${inputStyle}">
+        <span style="font-size:11px;color:#6b7280;">%</span>
+      `;
+      skillsEl.appendChild(row);
+    });
+    skillsEl.style.display = '';
+  } else {
+    skillsEl.style.display = 'none';
+  }
+
+  // Maladaptive behaviors
+  const rawBehaviors = [
+    ...(selectedProfile.maladaptiveBehaviors || []),
+  ].map(b => (typeof b === 'string' ? b : b?.name || '')).filter(Boolean);
+  const behaviors = [...new Set(rawBehaviors)];
+
+  behaviorsEl.innerHTML = '';
+  if (behaviors.length) {
+    const lbl = document.createElement('p');
+    lbl.style.cssText = labelStyle;
+    lbl.style.marginTop = skills.length ? '8px' : '0';
+    lbl.textContent = 'Maladaptive Behaviors (freq)';
+    behaviorsEl.appendChild(lbl);
+    behaviors.forEach(name => {
+      const row = document.createElement('div');
+      row.className = 'autofill-sheet-row';
+      row.dataset.name = name;
+      row.dataset.type = 'maladaptive';
+      row.style.cssText = rowStyle;
+      row.innerHTML = `
+        <span style="flex:1;font-size:11px;color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+        <input type="number" min="0" placeholder="#" style="${inputStyle}">
+      `;
+      behaviorsEl.appendChild(row);
+    });
+    behaviorsEl.style.display = '';
+  } else {
+    behaviorsEl.style.display = 'none';
+  }
+
+  btn.disabled = !(skills.length || behaviors.length);
+}
+
+function showAutofillSheetStatus(msg, isError) {
+  const el = document.getElementById('autofillSheetStatus');
+  if (!el) return;
+  el.innerHTML = '';
+  el.textContent = msg;
+  el.style.display  = '';
+  el.style.background = isError ? '#fef2f2' : '#f0fdf4';
+  el.style.color      = isError ? '#991b1b'  : '#166534';
+}
+
+document.getElementById('autofillSheetBtn').addEventListener('click', async () => {
+  const day = parseInt(document.getElementById('autofillDay').value);
+  if (!day || day < 1 || day > 31) {
+    showAutofillSheetStatus('Enter the day of month (1–31).', true);
+    return;
+  }
+
+  const tasks = [];
+  document.querySelectorAll('.autofill-sheet-row').forEach(row => {
+    const raw = row.querySelector('input')?.value.trim();
+    if (!raw) return;
+    const num = parseFloat(raw);
+    if (isNaN(num)) return;
+    tasks.push({ name: row.dataset.name, dayNumber: day, value: num, type: row.dataset.type });
+  });
+
+  if (!tasks.length) {
+    showAutofillSheetStatus('Enter at least one value.', true);
+    return;
+  }
+
+  const btn = document.getElementById('autofillSheetBtn');
+  btn.disabled = true;
+  btn.textContent = 'Filling cells…';
+  document.getElementById('autofillSheetStatus').style.display = 'none';
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const result = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: officePuzzleDatasheetAutofiller,
+      args: [tasks],
+      world: 'MAIN',
+    });
+
+    const log  = result?.[0]?.result || [];
+    const ok   = log.filter(l => l.startsWith('✓'));
+    const errs = log.filter(l => l.startsWith('❌'));
+
+    showAutofillSheetStatus(
+      `${ok.length} section${ok.length !== 1 ? 's' : ''} filled${errs.length ? `, ${errs.length} not found` : ''}.`,
+      errs.length > 0 && ok.length === 0,
+    );
+    if (errs.length) {
+      const statusEl = document.getElementById('autofillSheetStatus');
+      const detail = document.createElement('div');
+      detail.style.cssText = 'margin-top:4px;font-size:10px;opacity:0.75;word-break:break-word;';
+      detail.textContent = errs.join(' · ');
+      statusEl.appendChild(detail);
+    }
+  } catch (err) {
+    showAutofillSheetStatus('Error: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Autofill Datasheet';
+  }
+});
+
+// Injected into the Office Puzzle datasheet page — must be fully self-contained.
+function officePuzzleDatasheetAutofiller(tasks) {
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+  function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
+
+  // Generates an evenly alternated +/- sequence (e.g. 8 correct of 12 → ++ - ++ - ++ - ++ -)
+  function generateSequence(correctCount, total) {
+    if (correctCount <= 0) return Array(total).fill('-');
+    if (correctCount >= total) return Array(total).fill('+');
+    const incorrect = total - correctCount;
+    const g = gcd(correctCount, incorrect);
+    const cycle = [
+      ...Array(correctCount / g).fill('+'),
+      ...Array(incorrect   / g).fill('-'),
+    ];
+    const seq = [];
+    for (let i = 0; i < g; i++) seq.push(...cycle);
+    return seq;
+  }
+
+  // Walk up from a heading that contains the target name, finding the nearest ancestor
+  // that contains td.value cells (the datasheet section container).
+  function findSectionByName(name) {
+    const lower = name.toLowerCase().trim();
+    const candidates = [
+      ...document.querySelectorAll('h1,h2,h3,h4,h5,h6'),
+      ...document.querySelectorAll('[class*="title"],[class*="heading"],[class*="name"],[class*="label"]'),
+    ];
+    for (const el of candidates) {
+      const text = el.textContent.trim().toLowerCase();
+      if (!text.includes(lower)) continue;
+      if (text.length > lower.length * 5) continue; // skip large containers
+      let node = el;
+      for (let i = 0; i < 10 && node; i++, node = node.parentElement) {
+        if (node.querySelector && node.querySelector('table td.value')) return node;
+      }
+    }
+    return null;
+  }
+
+  // Find the column index (absolute, including any label columns) for a given day-of-month.
+  function findDayColumn(table, dayNumber) {
+    const day = parseInt(dayNumber);
+    const headerRow = table.querySelector('thead tr') || table.querySelector('tr');
+    if (!headerRow) return -1;
+    const cells = Array.from(headerRow.querySelectorAll('th, td'));
+    for (let i = 1; i < cells.length; i++) { // skip col 0 (trial label)
+      const nums = (cells[i].textContent.match(/\d+/g) || [])
+        .map(Number)
+        .filter(n => n >= 1 && n <= 31);
+      if (nums.includes(day)) return i;
+    }
+    return -1;
+  }
+
+  // ── Main loop ─────────────────────────────────────────────────────────────────
+  const log = [];
+
+  for (const { name, dayNumber, value, type } of tasks) {
+    const section = findSectionByName(name);
+    if (!section) { log.push(`❌ "${name}" — section not found`); continue; }
+
+    const table = section.querySelector('table');
+    if (!table) { log.push(`❌ "${name}" — no table in section`); continue; }
+
+    const colIndex = findDayColumn(table, dayNumber);
+    if (colIndex === -1) { log.push(`❌ "${name}" — day ${dayNumber} column not found`); continue; }
+
+    const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
+    let clicks = 0;
+
+    if (type === 'replacement') {
+      const totalTrials = 12;
+      const correct = Math.min(totalTrials, Math.max(0, Math.round(value / 100 * totalTrials)));
+      const seq = generateSequence(correct, totalTrials);
+
+      bodyRows.slice(0, totalTrials).forEach((row, i) => {
+        const cell = row.children[colIndex];
+        if (!cell || !cell.classList.contains('value')) return;
+        if (cell.textContent.trim() !== seq[i]) { cell.click(); clicks++; }
+      });
+
+      log.push(`✓ "${name}" — ${value}% → ${correct}/${totalTrials} correct, ${clicks} clicks`);
+
+    } else {
+      // maladaptive: mark first N rows with X, clear the rest
+      const freq = Math.round(value);
+      bodyRows.forEach((row, i) => {
+        const cell = row.children[colIndex];
+        if (!cell || !cell.classList.contains('value')) return;
+        const shouldMark = i < freq;
+        const isMarked   = cell.textContent.trim().toUpperCase() === 'X';
+        if (shouldMark !== isMarked) { cell.click(); clicks++; }
+      });
+
+      log.push(`✓ "${name}" — freq ${freq}, ${clicks} clicks`);
+    }
+  }
+
+  return log;
+}
 
 // ── Boot ───────────────────────────────────
 init();

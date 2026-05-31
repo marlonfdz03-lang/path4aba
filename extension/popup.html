@@ -109,6 +109,29 @@
       </div>
     </div>
 
+    <!-- ── Office Puzzle: Autofill Datasheet ── -->
+    <div id="autofillSheetsSection" style="display:none">
+      <div class="op-section">
+        <div class="op-header">
+          <span class="op-badge">Office Puzzle</span>
+          <span class="op-label">Datasheet detected</span>
+        </div>
+        <p class="muted-text" style="margin:4px 0 8px">Enter today's session values and autofill the datasheet cells.</p>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <label class="field-label" style="margin:0;white-space:nowrap;">Day of month</label>
+          <input type="number" id="autofillDay" class="input" min="1" max="31" placeholder="e.g. 5" style="width:72px;margin:0;">
+        </div>
+
+        <div id="autofillSheetSkills" style="display:none"></div>
+        <div id="autofillSheetBehaviors" style="display:none"></div>
+        <p id="autofillSheetEmpty" class="muted-text" style="display:none">Select a client above to load their profile.</p>
+
+        <button id="autofillSheetBtn" class="btn-primary full-width" style="margin-top:10px;" disabled>Autofill Datasheet</button>
+        <div id="autofillSheetStatus" style="display:none;margin-top:8px;font-size:11px;padding:6px 8px;border-radius:6px;"></div>
+      </div>
+    </div>
+
     <!-- Action tabs — shown after client selected -->
     <div id="actionSection" style="display:none">
 
