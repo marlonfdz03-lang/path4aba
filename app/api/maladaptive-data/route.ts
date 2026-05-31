@@ -63,6 +63,32 @@ export async function DELETE(req: Request) {
   }
 }
 
+export async function PATCH(req: Request) {
+  const user = await getExtensionAuth()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { searchParams } = new URL(req.url)
+  const id = searchParams.get('id')
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  const body = await req.json()
+  const now = new Date()
+
+  try {
+    const data: any = { updated_at: now }
+    if (body.frequency != null)            data.frequency             = body.frequency
+    if (body.isAnomaly != null)            data.is_anomaly            = body.isAnomaly
+    if (body.anomalyReviewed != null)      data.anomaly_reviewed      = body.anomalyReviewed
+    if (body.anomalyJustification != null) data.anomaly_justification = body.anomalyJustification
+    if (body.originalValue != null)        data.original_value        = body.originalValue
+
+    const updated = await prisma.maladaptive_data.update({ where: { id }, data })
+    return NextResponse.json({ ok: true, data: updated })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
+}
+
 export async function POST(req: Request) {
   const user = await getExtensionAuth()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

@@ -16,9 +16,19 @@ import {
 
 type Section = "maladaptive" | "replacement";
 
-interface WeekPoint { week: string; avg: number }
+interface WeekPoint {
+  week: string;
+  avg: number;
+  recordId?: string;
+  isAnomaly?: boolean;
+  anomalyReviewed?: boolean;
+  anomalyJustification?: string | null;
+  originalValue?: number | null;
+}
 
 // ── Utilities ──────────────────────────────────────────────────────────────
+
+const ANOMALY_THRESHOLD = 5;
 
 function hashStr(s: string): number {
   return s.split("").reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 0);
@@ -49,13 +59,10 @@ function addWeeksToDate(dateStr: string, n: number): string {
 }
 
 function weeklyAvgs(records: any[], valueKey: string): WeekPoint[] {
-  // Records arrive newest-first from the API (ordered by date desc, created_at desc).
   const map: Record<string, any[]> = {};
   records.forEach((r) => {
     const rawDate = r.week_start || r.session_date;
     if (!rawDate) return;
-    // Strip any timestamp suffix (e.g. "T00:00:00.000Z") to get bare YYYY-MM-DD.
-    // Never truncate to month — each distinct date is its own weekly bucket.
     const dateStr = String(rawDate).replace(/T.*$/, "");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
     (map[dateStr] = map[dateStr] || []).push(r);
@@ -63,15 +70,21 @@ function weeklyAvgs(records: any[], valueKey: string): WeekPoint[] {
   return Object.entries(map)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([week, recs]) => {
-      // Prefer the newest confirmed record; fall back to average of all records.
       const confirmed = recs.filter((r) => r.user_confirmed);
-      if (confirmed.length > 0) {
-        return { week, avg: Number(confirmed[0][valueKey]) || 0 };
-      }
+      const primary = confirmed.length > 0 ? confirmed[0] : recs[0];
       const vs = recs.map((r) => Number(r[valueKey]) || 0);
+      const avg =
+        confirmed.length > 0
+          ? Number(primary[valueKey]) || 0
+          : Math.round((vs.reduce((s, v) => s + v, 0) / vs.length) * 10) / 10;
       return {
         week,
-        avg: Math.round((vs.reduce((s, v) => s + v, 0) / vs.length) * 10) / 10,
+        avg,
+        recordId: primary?.id,
+        isAnomaly: primary?.is_anomaly ?? false,
+        anomalyReviewed: primary?.anomaly_reviewed ?? false,
+        anomalyJustification: primary?.anomaly_justification ?? null,
+        originalValue: primary?.original_value ?? null,
       };
     });
 }
@@ -107,12 +120,9 @@ function buildProjection(
   const goalDir: 1 | -1 = rising ? 1 : -1;
   const totalDist = Math.abs(goal - start);
 
-  // "10 units = 12 weeks minimum" → ~1.2 weeks per unit of distance
-  // Plus nameIndex-based stagger so each behavior finishes at a different time
   const stagger = (Math.abs(nameIndex) * 3) % 11;
   const completionWeek = Math.ceil(totalDist * 1.2) + stagger;
 
-  // Max forward step scales with distance so large gaps don't jump unrealistically
   const maxStep = Math.max(1, Math.min(5, Math.ceil(totalDist / 12)));
 
   const seed = Math.abs(hashStr(String(nameIndex).padStart(4, "X")));
@@ -133,13 +143,10 @@ function buildProjection(
     const weeksLeft = Math.max(1, completionWeek - w);
     const neededPace = distLeft / weeksLeft;
 
-    // Direction decision
     let towardGoal: boolean;
     if (consecCount >= 3) {
-      // Force flip: if last steps went toward goal, take one back (and vice versa)
       towardGoal = lastDir !== goalDir;
     } else if (neededPace >= maxStep * 0.85) {
-      // Behind schedule — must push toward goal
       towardGoal = true;
     } else {
       towardGoal = rng() < 0.70;
@@ -147,13 +154,11 @@ function buildProjection(
 
     const changeDir: 1 | -1 = towardGoal ? goalDir : (-goalDir as 1 | -1);
 
-    // Toward-goal steps vary 1..maxStep; backward steps are always 1
     const magCap = towardGoal ? Math.min(maxStep, distLeft) : 1;
     const mag = Math.floor(rng() * magCap) + 1;
 
     let v = prev + changeDir * mag;
 
-    // Clamp: never overshoot goal; allow small backward slack
     const slack = Math.max(1, Math.floor(totalDist * 0.1));
     if (rising) {
       v = Math.max(start - slack, Math.min(goal, v));
@@ -163,7 +168,6 @@ function buildProjection(
 
     v = Math.round(v);
 
-    // Guarantee no consecutive repeat — nudge 1 toward goal if clamping caused no change
     if (v === prev) {
       v = Math.round(rising ? Math.min(goal, prev + 1) : Math.max(goal, prev - 1));
     }
@@ -211,11 +215,10 @@ function SetStartingValueModal({
     setSaving(true);
     try {
       const today = new Date().toISOString().split("T")[0];
-      const weekStart = today;
       const endpoint = isReplacement ? "/api/replacement-data" : "/api/maladaptive-data";
       const body = isReplacement
-        ? [{ clientId, replacementSkill: name, sessionDate: today, weekStart, observedPercentage: num, totalTrials: 10, userConfirmed: true }]
-        : [{ clientId, behaviorName: name, sessionDate: today, weekStart, frequency: num, userConfirmed: true }];
+        ? [{ clientId, replacementSkill: name, sessionDate: today, weekStart: today, observedPercentage: num, totalTrials: 10, userConfirmed: true }]
+        : [{ clientId, behaviorName: name, sessionDate: today, weekStart: today, frequency: num, userConfirmed: true }];
       await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       onSaved();
       onClose();
@@ -415,6 +418,248 @@ function ConfirmWeekModal({
   );
 }
 
+// ── Anomaly Modal ───────────────────────────────────────────────────────────
+
+function AnomalyModal({
+  week,
+  currentValue,
+  recordId,
+  isReplacement,
+  unit,
+  name,
+  isReviewed,
+  justification,
+  onSaved,
+  onClose,
+}: {
+  week: string;
+  currentValue: number;
+  recordId: string;
+  isReplacement: boolean;
+  unit: string;
+  name: string;
+  isReviewed: boolean;
+  justification: string | null | undefined;
+  onSaved: () => void;
+  onClose: () => void;
+}) {
+  const [mode, setMode] = useState<"choose" | "justify" | "fix">(
+    isReviewed ? "justify" : "choose",
+  );
+  const [reason, setReason] = useState(justification || "");
+  const [fixValue, setFixValue] = useState(String(currentValue));
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const endpoint = isReplacement ? "/api/replacement-data" : "/api/maladaptive-data";
+
+  async function handleJustify() {
+    if (!reason.trim()) return;
+    setSaving(true);
+    try {
+      await fetch(`${endpoint}?id=${recordId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          isAnomaly: true,
+          anomalyReviewed: true,
+          anomalyJustification: reason.trim(),
+        }),
+      });
+      setSaved(true);
+      setTimeout(() => { onSaved(); onClose(); }, 800);
+    } catch { /* silent */ }
+    setSaving(false);
+  }
+
+  async function handleFix() {
+    const num = isReplacement ? parseFloat(fixValue) : parseInt(fixValue);
+    if (isNaN(num)) return;
+    setSaving(true);
+    try {
+      const justMsg = `Data corrected: was ${currentValue}${unit}, changed to ${num}${unit}`;
+      const body: any = {
+        isAnomaly: true,
+        anomalyReviewed: true,
+        anomalyJustification: justMsg,
+        originalValue: currentValue,
+      };
+      if (isReplacement) {
+        body.observedPercentage = num;
+        body.autofillCompleted = false;
+      } else {
+        body.frequency = num;
+      }
+      await fetch(`${endpoint}?id=${recordId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      setSaved(true);
+      setTimeout(() => { onSaved(); onClose(); }, 800);
+    } catch { /* silent */ }
+    setSaving(false);
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.45)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm"
+        style={{ border: "1px solid var(--border)" }}
+      >
+        <div
+          className="flex items-center justify-between px-6 py-4"
+          style={{ borderBottom: "1px solid var(--border)" }}
+        >
+          <div>
+            <p className="text-[14px] font-semibold" style={{ color: "var(--text1)" }}>
+              ⚠ Anomaly Detected
+            </p>
+            <p className="text-[11px] truncate max-w-[240px]" style={{ color: "var(--text3)" }}>
+              {name} · {fmtWeek(week)} · {currentValue}{unit}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-[20px] leading-none ml-4"
+            style={{ color: "var(--text3)" }}
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="px-6 py-5">
+          {mode === "choose" && (
+            <div className="space-y-3">
+              <p className="text-[12px]" style={{ color: "var(--text2)" }}>
+                This data point changed by more than {ANOMALY_THRESHOLD}{unit} from the previous week. What would you like to do?
+              </p>
+              <button
+                onClick={() => setMode("justify")}
+                className="w-full py-2.5 rounded-lg text-[13px] font-semibold border"
+                style={{ borderColor: "#F59E0B", color: "#92400E", background: "#FFFBEB" }}
+              >
+                Justify — explain the change
+              </button>
+              <button
+                onClick={() => setMode("fix")}
+                className="w-full py-2.5 rounded-lg text-[13px] font-semibold border"
+                style={{ borderColor: "var(--teal)", color: "var(--teal)", background: "white" }}
+              >
+                Fix Data — enter correct value
+              </button>
+            </div>
+          )}
+
+          {mode === "justify" && (
+            <div className="space-y-3">
+              {isReviewed && justification && (
+                <p
+                  className="text-[11px] px-3 py-2 rounded-lg"
+                  style={{ background: "#FEF9C3", color: "#713F12" }}
+                >
+                  Previously: "{justification}"
+                </p>
+              )}
+              <div>
+                <p
+                  className="text-[11px] font-semibold uppercase tracking-wide mb-2"
+                  style={{ color: "var(--text3)" }}
+                >
+                  REASON
+                </p>
+                <textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="e.g. Missed sessions, vacation week, new environment…"
+                  rows={3}
+                  autoFocus
+                  className="w-full border rounded-lg px-3 py-2 text-[12px] focus:outline-none focus:ring-2 resize-none"
+                  style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                />
+              </div>
+              <div className="flex gap-2">
+                {!isReviewed && (
+                  <button
+                    onClick={() => setMode("choose")}
+                    className="flex-1 py-2 rounded-lg text-[12px] border"
+                    style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+                  >
+                    Back
+                  </button>
+                )}
+                <button
+                  onClick={handleJustify}
+                  disabled={saving || saved || !reason.trim()}
+                  className="flex-1 py-2 rounded-lg text-[13px] font-semibold text-white disabled:opacity-50 transition-colors"
+                  style={{ background: saved ? "#16A34A" : "#F59E0B" }}
+                >
+                  {saved ? "✓ Saved!" : saving ? "Saving…" : "Save Justification"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {mode === "fix" && (
+            <div className="space-y-3">
+              <div>
+                <p
+                  className="text-[11px] font-semibold uppercase tracking-wide mb-2"
+                  style={{ color: "var(--text3)" }}
+                >
+                  CORRECT VALUE
+                </p>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min="0"
+                    max={isReplacement ? 100 : undefined}
+                    value={fixValue}
+                    onChange={(e) => setFixValue(e.target.value)}
+                    autoFocus
+                    className="w-28 border rounded-lg px-3 py-2.5 text-[15px] font-semibold focus:outline-none focus:ring-2"
+                    style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                  />
+                  <span className="text-[13px]" style={{ color: "var(--text2)" }}>
+                    {unit || "occurrences/wk"}
+                  </span>
+                  <span className="text-[11px] ml-auto flex-shrink-0" style={{ color: "var(--text3)" }}>
+                    was: {currentValue}{unit}
+                  </span>
+                </div>
+              </div>
+              <p className="text-[11px]" style={{ color: "var(--text3)" }}>
+                Original value is saved for audit. Use the extension&apos;s Autofill button on the OP datasheet page to apply the correction.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setMode("choose")}
+                  className="flex-1 py-2 rounded-lg text-[12px] border"
+                  style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+                >
+                  Back
+                </button>
+                <button
+                  onClick={handleFix}
+                  disabled={saving || saved}
+                  className="flex-1 py-2 rounded-lg text-[13px] font-semibold text-white disabled:opacity-50 transition-colors"
+                  style={{ background: saved ? "#16A34A" : "var(--teal)" }}
+                >
+                  {saved ? "✓ Saved!" : saving ? "Saving…" : "Fix Data"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── ProgressChart ───────────────────────────────────────────────────────────
 
 function ProgressChart({
@@ -423,16 +668,20 @@ function ProgressChart({
   isRising,
   unit,
   yMax,
+  anomalies,
   onSelectProjected,
   onSelectActual,
+  onSelectAnomaly,
 }: {
   histData: WeekPoint[];
   projValues: number[];
   isRising: boolean;
   unit: string;
   yMax: number;
+  anomalies?: Map<string, { reviewed: boolean; justification: string | null }>;
   onSelectProjected?: (week: string, value: number) => void;
   onSelectActual?: (week: string, value: number) => void;
+  onSelectAnomaly?: (week: string) => void;
 }) {
   const lastHistWeek = histData.length > 0 ? histData[histData.length - 1].week : null;
   const today = todayWeekStr();
@@ -460,17 +709,33 @@ function ProgressChart({
   const CustomActualDot = (props: any) => {
     const { cx, cy, payload } = props;
     if (payload?.actual == null) return null;
+    const anomaly = anomalies?.get(payload.week);
     return (
-      <circle
-        cx={cx}
-        cy={cy}
-        r={4}
-        fill="#111827"
-        stroke="white"
-        strokeWidth={1.5}
-        style={{ cursor: "pointer" }}
-        onClick={() => onSelectActual?.(payload.week, payload.actual)}
-      />
+      <g>
+        <circle
+          cx={cx}
+          cy={cy}
+          r={4}
+          fill="#111827"
+          stroke="white"
+          strokeWidth={1.5}
+          style={{ cursor: "pointer" }}
+          onClick={() => onSelectActual?.(payload.week, payload.actual)}
+        />
+        {anomaly && (
+          <polygon
+            points={`${cx},${cy - 14} ${cx - 6},${cy - 3} ${cx + 6},${cy - 3}`}
+            fill={anomaly.reviewed ? "#FCD34D" : "#EF4444"}
+            stroke="white"
+            strokeWidth={1}
+            style={{ cursor: "pointer" }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectAnomaly?.(payload.week);
+            }}
+          />
+        )}
+      </g>
     );
   };
 
@@ -493,7 +758,7 @@ function ProgressChart({
 
   return (
     <ResponsiveContainer width="100%" height={160}>
-      <LineChart data={chartData} margin={{ top: 10, right: 16, bottom: 24, left: 28 }}>
+      <LineChart data={chartData} margin={{ top: 16, right: 16, bottom: 24, left: 28 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
         <XAxis
           dataKey="week"
@@ -576,6 +841,13 @@ function TargetCard({
   const [showSetStart, setShowSetStart] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<{ week: string; value: number } | null>(null);
   const [editingActual, setEditingActual] = useState<{ week: string; value: number } | null>(null);
+  const [anomalyTarget, setAnomalyTarget] = useState<{
+    week: string;
+    currentValue: number;
+    recordId: string;
+    isReviewed: boolean;
+    justification: string | null;
+  } | null>(null);
 
   const goal = isRising ? 100 : 0;
 
@@ -593,6 +865,35 @@ function TargetCard({
     const allVals = [...histData.map((d) => d.avg), ...projValues];
     return allVals.length > 0 ? Math.ceil(Math.max(...allVals) * 1.1) : 10;
   }, [histData, projValues, isRising]);
+
+  // Compute anomaly map: client-side delta detection + DB-stored anomaly flags
+  const anomalyMap = useMemo(() => {
+    const m = new Map<string, { reviewed: boolean; justification: string | null }>();
+    for (let i = 1; i < histData.length; i++) {
+      const pt = histData[i];
+      const deltaAbs = Math.abs(pt.avg - histData[i - 1].avg);
+      if (deltaAbs > ANOMALY_THRESHOLD || pt.isAnomaly) {
+        m.set(pt.week, {
+          reviewed: pt.anomalyReviewed ?? false,
+          justification: pt.anomalyJustification ?? null,
+        });
+      }
+    }
+    return m;
+  }, [histData]);
+
+  function handleSelectAnomaly(week: string) {
+    const pt = histData.find((p) => p.week === week);
+    if (!pt?.recordId) return;
+    const anomaly = anomalyMap.get(week);
+    setAnomalyTarget({
+      week,
+      currentValue: pt.avg,
+      recordId: pt.recordId,
+      isReviewed: anomaly?.reviewed ?? false,
+      justification: anomaly?.justification ?? null,
+    });
+  }
 
   return (
     <div
@@ -648,8 +949,10 @@ function TargetCard({
             isRising={isRising}
             unit={unit}
             yMax={yMax}
+            anomalies={anomalyMap}
             onSelectProjected={(week, value) => setPendingConfirm({ week, value })}
             onSelectActual={(week, value) => setEditingActual({ week, value })}
+            onSelectAnomaly={handleSelectAnomaly}
           />
         )}
 
@@ -664,7 +967,7 @@ function TargetCard({
           </button>
         ) : (
           <p className="text-[10px] mt-1" style={{ color: "var(--text3)" }}>
-            Click a black dot to edit a past value · click a green dot to confirm the projected value.
+            Click a black dot to edit · green dot to confirm projection · red/yellow triangle to review anomaly
           </p>
         )}
       </div>
@@ -702,6 +1005,20 @@ function TargetCard({
           onSaved={onDataConfirmed}
           onClose={() => setEditingActual(null)}
           isEdit
+        />
+      )}
+      {anomalyTarget && (
+        <AnomalyModal
+          week={anomalyTarget.week}
+          currentValue={anomalyTarget.currentValue}
+          recordId={anomalyTarget.recordId}
+          isReplacement={isRising}
+          unit={unit}
+          name={name}
+          isReviewed={anomalyTarget.isReviewed}
+          justification={anomalyTarget.justification}
+          onSaved={onDataConfirmed}
+          onClose={() => setAnomalyTarget(null)}
         />
       )}
     </div>
