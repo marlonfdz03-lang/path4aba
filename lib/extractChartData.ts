@@ -15,6 +15,20 @@ export interface ChartHistoricalPoint {
   value: number
 }
 
+export interface ChartExtractionLog {
+  pagesProcessed: number
+  totalPagesInPdf: number
+  totalChartsFound: number
+  replacementPointsFound: number
+  maladaptivePointsFound: number
+  batches: {
+    label: string
+    chartsFound: { name: string; category: string; dataPoints: number }[]
+    rawResponsePreview: string
+  }[]
+  error?: string
+}
+
 interface PageChart {
   name: string
   category: 'maladaptive' | 'replacement'
@@ -128,7 +142,12 @@ function chartsToHistoricalPoints(charts: PageChart[]): ChartHistoricalPoint[] {
   return points
 }
 
-async function analyzePageBatch(base64Pngs: string[], batchLabel: string): Promise<PageChart[]> {
+interface BatchResult {
+  charts: PageChart[]
+  logEntry: ChartExtractionLog['batches'][number]
+}
+
+async function analyzePageBatch(base64Pngs: string[], batchLabel: string): Promise<BatchResult> {
   const sizesKB = base64Pngs.map(b => Math.round(b.length * 0.75 / 1024))
   console.log(`[ChartVision] ${batchLabel}: sending ${base64Pngs.length} image(s), sizes: ${sizesKB.join(', ')} KB`)
 
@@ -161,82 +180,119 @@ async function analyzePageBatch(base64Pngs: string[], batchLabel: string): Promi
     try {
       parsed = JSON.parse(clean)
     } catch (parseErr) {
-      console.error(`[ChartVision] ${batchLabel} JSON parse failed:`, parseErr, '\nRaw:', content.substring(0, 300))
-      return []
+      console.error(`[ChartVision] ${batchLabel} JSON parse failed:`, parseErr)
+      return {
+        charts: [],
+        logEntry: { label: batchLabel, chartsFound: [], rawResponsePreview: `JSON parse error: ${content.substring(0, 200)}` },
+      }
     }
 
     const charts: PageChart[] = Array.isArray(parsed.charts) ? parsed.charts : []
     console.log(`[ChartVision] ${batchLabel} found ${charts.length} chart(s):`,
       charts.map(c => `"${c.name}" (${c.category}, ${c.dataPoints?.length ?? 0} pts)`).join(' | ') || 'none'
     )
-    return charts
-  } catch (err) {
+    return {
+      charts,
+      logEntry: {
+        label: batchLabel,
+        chartsFound: charts.map(c => ({ name: c.name, category: c.category, dataPoints: c.dataPoints?.length ?? 0 })),
+        rawResponsePreview: content.substring(0, 400),
+      },
+    }
+  } catch (err: any) {
     console.error(`[ChartVision] ${batchLabel} Vision API call failed:`, err)
-    return []
+    return {
+      charts: [],
+      logEntry: { label: batchLabel, chartsFound: [], rawResponsePreview: `API error: ${err?.message ?? String(err)}` },
+    }
   }
 }
 
-export async function extractChartDataFromPdf(buffer: Buffer): Promise<ChartHistoricalPoint[]> {
-  // Dynamic imports — pdfjs-dist legacy build requires ESM, @napi-rs/canvas is prebuilt native
-  const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs') as any
-  const { createCanvas } = require('@napi-rs/canvas')
+export interface ChartExtractionResult {
+  points: ChartHistoricalPoint[]
+  log: ChartExtractionLog
+}
 
-  const pdf = await getDocument({
-    data: new Uint8Array(buffer),
-    useWorkerFetch: false,
-    isEvalSupported: false,
-    useSystemFonts: true,
-  }).promise
+export async function extractChartDataFromPdf(buffer: Buffer): Promise<ChartExtractionResult> {
+  const log: ChartExtractionLog = {
+    pagesProcessed: 0,
+    totalPagesInPdf: 0,
+    totalChartsFound: 0,
+    replacementPointsFound: 0,
+    maladaptivePointsFound: 0,
+    batches: [],
+  }
 
-  const numPages: number = Math.min(pdf.numPages, 25)
-  console.log(`[ChartVision] PDF has ${pdf.numPages} pages; processing first ${numPages} at 3× scale`)
+  try {
+    // Dynamic imports — pdfjs-dist legacy build requires ESM, @napi-rs/canvas is prebuilt native
+    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs') as any
+    const { createCanvas } = require('@napi-rs/canvas')
 
-  // Render each page to PNG base64 at 3× scale for readability
-  const base64Pages: string[] = []
-  for (let i = 1; i <= numPages; i++) {
-    try {
-      const page = await pdf.getPage(i)
-      const viewport = page.getViewport({ scale: 3.0 })
-      const canvas = createCanvas(Math.round(viewport.width), Math.round(viewport.height))
-      const ctx = canvas.getContext('2d')
-      ctx.fillStyle = 'white'
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-      await page.render({ canvasContext: ctx, viewport }).promise
-      const pngB64 = (canvas.toBuffer('image/png') as Buffer).toString('base64')
-      console.log(`[ChartVision] Page ${i} rendered: ${Math.round(pngB64.length * 0.75 / 1024)} KB`)
-      base64Pages.push(pngB64)
-    } catch (err) {
-      console.error(`[ChartVision] Page ${i} render failed:`, err)
+    const pdf = await getDocument({
+      data: new Uint8Array(buffer),
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true,
+    }).promise
+
+    const numPages: number = Math.min(pdf.numPages, 25)
+    log.totalPagesInPdf = pdf.numPages
+    console.log(`[ChartVision] PDF has ${pdf.numPages} pages; processing first ${numPages} at 3× scale`)
+
+    // Render each page to PNG base64 at 3× scale for readability
+    const base64Pages: string[] = []
+    for (let i = 1; i <= numPages; i++) {
+      try {
+        const page = await pdf.getPage(i)
+        const viewport = page.getViewport({ scale: 3.0 })
+        const canvas = createCanvas(Math.round(viewport.width), Math.round(viewport.height))
+        const ctx = canvas.getContext('2d')
+        ctx.fillStyle = 'white'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        await page.render({ canvasContext: ctx, viewport }).promise
+        const pngB64 = (canvas.toBuffer('image/png') as Buffer).toString('base64')
+        console.log(`[ChartVision] Page ${i} rendered: ${Math.round(pngB64.length * 0.75 / 1024)} KB`)
+        base64Pages.push(pngB64)
+      } catch (err) {
+        console.error(`[ChartVision] Page ${i} render failed:`, err)
+      }
     }
-  }
 
-  if (base64Pages.length === 0) {
-    console.log('[ChartVision] No pages rendered — aborting')
-    return []
-  }
+    log.pagesProcessed = base64Pages.length
 
-  // Process 2 pages per Vision call — smaller batches mean better per-chart attention
-  // and avoid token overflow that causes Vision to silently drop later charts
-  const BATCH = 2
-  const allCharts: PageChart[] = []
+    if (base64Pages.length === 0) {
+      console.log('[ChartVision] No pages rendered — aborting')
+      log.error = 'No pages could be rendered from the PDF'
+      return { points: [], log }
+    }
 
-  for (let i = 0; i < base64Pages.length; i += BATCH) {
-    const batch = base64Pages.slice(i, i + BATCH)
-    const startPage = i + 1
-    const endPage = i + batch.length
-    const label = startPage === endPage ? `page ${startPage}` : `pages ${startPage}-${endPage}`
-    const charts = await analyzePageBatch(batch, label)
-    allCharts.push(...charts)
-  }
+    // Process 2 pages per Vision call — smaller batches give Vision better per-chart focus
+    const BATCH = 2
+    const allCharts: PageChart[] = []
 
-  const points = chartsToHistoricalPoints(allCharts)
-  const replacementPts = points.filter(p => p.targetType === 'replacement')
-  const maladaptivePts = points.filter(p => p.targetType === 'maladaptive')
-  console.log(`[ChartVision] Done — ${allCharts.length} charts total → ${points.length} data points`)
-  console.log(`[ChartVision]   replacement: ${replacementPts.length} pts | maladaptive: ${maladaptivePts.length} pts`)
-  if (replacementPts.length > 0) {
-    const names = [...new Set(replacementPts.map(p => p.name))]
-    console.log(`[ChartVision]   replacement skills found: ${names.join(', ')}`)
+    for (let i = 0; i < base64Pages.length; i += BATCH) {
+      const batch = base64Pages.slice(i, i + BATCH)
+      const startPage = i + 1
+      const endPage = i + batch.length
+      const label = startPage === endPage ? `page ${startPage}` : `pages ${startPage}–${endPage}`
+      const { charts, logEntry } = await analyzePageBatch(batch, label)
+      allCharts.push(...charts)
+      log.batches.push(logEntry)
+    }
+
+    const points = chartsToHistoricalPoints(allCharts)
+    const replacementPts = points.filter(p => p.targetType === 'replacement')
+    const maladaptivePts = points.filter(p => p.targetType === 'maladaptive')
+
+    log.totalChartsFound = allCharts.length
+    log.replacementPointsFound = replacementPts.length
+    log.maladaptivePointsFound = maladaptivePts.length
+
+    console.log(`[ChartVision] Done — ${allCharts.length} charts → ${points.length} pts (${replacementPts.length} replacement, ${maladaptivePts.length} maladaptive)`)
+    return { points, log }
+  } catch (err: any) {
+    log.error = err?.message ?? String(err)
+    console.error('[ChartVision] Fatal error:', err)
+    return { points: [], log }
   }
-  return points
 }

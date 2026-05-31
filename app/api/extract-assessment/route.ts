@@ -340,7 +340,10 @@ export async function POST(req: NextRequest) {
     if (chartResult.status === "rejected") {
       console.error("Chart vision extraction failed:", chartResult.reason);
     }
-    const chartPoints = chartResult.status === "fulfilled" ? chartResult.value : [];
+    const chartPoints = chartResult.status === "fulfilled" ? chartResult.value.points : [];
+    const chartExtractionLog = chartResult.status === "fulfilled"
+      ? chartResult.value.log
+      : { error: String((chartResult as any).reason), pagesProcessed: 0, totalPagesInPdf: 0, totalChartsFound: 0, replacementPointsFound: 0, maladaptivePointsFound: 0, batches: [] };
 
     saveKnowledgeBase(extracted).catch(err =>
       console.error("Knowledge base save error:", err)
@@ -360,6 +363,7 @@ export async function POST(req: NextRequest) {
       extractedHistoricalData: allHistoricalData,
       extractedSummaryTable: extracted.summaryTable ?? null,
       extractedChartCount: chartPoints.length,
+      chartExtractionLog,
     });
   } catch (error: any) {
     console.error(error);
