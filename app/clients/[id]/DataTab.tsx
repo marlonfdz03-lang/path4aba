@@ -80,6 +80,52 @@ function mulberry32(seed: number) {
   };
 }
 
+// ── Weekly confirmation utilities ──────────────────────────────────────────
+
+type SessionQuality = "normal" | "missed" | "poor";
+
+function getWeekDates(weekStr: string): { dayIdx: number; label: string; dateStr: string }[] {
+  const LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const base = new Date(weekStr.substring(0, 7) + "-15T12:00:00Z");
+  const dow = base.getUTCDay();
+  const sunday = new Date(base);
+  sunday.setUTCDate(base.getUTCDate() - dow);
+  return LABELS.map((label, i) => {
+    const d = new Date(sunday);
+    d.setUTCDate(sunday.getUTCDate() + i);
+    return { dayIdx: i, label, dateStr: d.toISOString().slice(0, 10) };
+  });
+}
+
+function distributeWeekly(
+  weeklyValue: number,
+  dayIdxs: number[],
+  isReplacement: boolean,
+  seed: number,
+): Record<number, number> {
+  if (dayIdxs.length === 0) return {};
+  const rng = mulberry32(seed);
+  const n = dayIdxs.length;
+  if (isReplacement) {
+    const raw = dayIdxs.map(() =>
+      Math.max(0, Math.min(100, weeklyValue + (rng() - 0.5) * 14)),
+    );
+    const avg = raw.reduce((s, v) => s + v, 0) / n;
+    const scale = avg > 0 ? weeklyValue / avg : 1;
+    return Object.fromEntries(
+      dayIdxs.map((d, i) => [d, Math.round(Math.min(100, Math.max(0, raw[i] * scale)))]),
+    );
+  }
+  const base = Math.floor(weeklyValue / n);
+  const extra = Math.round(weeklyValue) - base * n;
+  const vals = dayIdxs.map((_, i) => base + (i < extra ? 1 : 0));
+  for (let i = vals.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [vals[i], vals[j]] = [vals[j], vals[i]];
+  }
+  return Object.fromEntries(dayIdxs.map((d, i) => [d, vals[i]]));
+}
+
 // ── Projection engine ──────────────────────────────────────────────────────
 // Generates an irregular, organic-looking 26-week projection toward the goal.
 // Rules enforced:
@@ -315,6 +361,278 @@ function StoStatusBar({
   );
 }
 
+// ── Weekly Confirm Modal ────────────────────────────────────────────────────
+
+function WeeklyConfirmModal({
+  week,
+  projectedValue,
+  isReplacement,
+  unit,
+  name,
+  clientId,
+  onSaved,
+  onClose,
+}: {
+  week: string;
+  projectedValue: number;
+  isReplacement: boolean;
+  unit: string;
+  name: string;
+  clientId: string;
+  onSaved: () => void;
+  onClose: () => void;
+}) {
+  const [step, setStep] = useState<1 | 2>(1);
+  const [inputValue, setInputValue] = useState(String(projectedValue));
+  const [quality, setQuality] = useState<SessionQuality>("normal");
+  const [qualityAdj, setQualityAdj] = useState(0);
+  const [selectedDays, setSelectedDays] = useState<Set<number>>(new Set([1, 2, 3, 4, 5]));
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const weekDates = useMemo(() => getWeekDates(week), [week]);
+  const weekLabel = `${weekDates[1]?.dateStr ?? ""} – ${weekDates[6]?.dateStr ?? ""}`;
+  const enteredValue = parseFloat(inputValue) || projectedValue;
+
+  // Compute a fresh random regression amount each time quality changes
+  useEffect(() => {
+    if (quality === "normal") { setQualityAdj(0); return; }
+    const rng = mulberry32(Date.now() >>> 0);
+    setQualityAdj(quality === "missed" ? 3 + Math.floor(rng() * 4) : 1 + Math.floor(rng() * 3));
+  }, [quality]);
+
+  const adjustedValue = useMemo(() => {
+    if (quality === "normal") return enteredValue;
+    return isReplacement
+      ? Math.max(0, Math.round(enteredValue - qualityAdj))
+      : Math.round(enteredValue + qualityAdj);
+  }, [enteredValue, quality, qualityAdj, isReplacement]);
+
+  const distSeed = useMemo(
+    () => hashStr(`${week}|${name}|${adjustedValue}|${quality}`) >>> 0,
+    [week, name, adjustedValue, quality],
+  );
+  const dailyDist = useMemo(() => {
+    const days = [...selectedDays].sort((a, b) => a - b);
+    return distributeWeekly(adjustedValue, days, isReplacement, distSeed);
+  }, [adjustedValue, selectedDays, isReplacement, distSeed]);
+
+  function toggleDay(idx: number) {
+    setSelectedDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const weekStart = week.substring(0, 7) + "-01";
+      const endpoint = isReplacement ? "/api/replacement-data" : "/api/maladaptive-data";
+      const records = weekDates
+        .filter((d) => selectedDays.has(d.dayIdx))
+        .map((d) => {
+          const dayVal = dailyDist[d.dayIdx] ?? adjustedValue;
+          if (isReplacement) {
+            return {
+              clientId, replacementSkill: name, sessionDate: d.dateStr,
+              weekStart, observedPercentage: dayVal, totalTrials: 10, userConfirmed: true,
+            };
+          }
+          return {
+            clientId, behaviorName: name, sessionDate: d.dateStr,
+            weekStart, frequency: Math.round(dayVal), userConfirmed: true,
+          };
+        });
+
+      await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(records),
+      });
+
+      setSaved(true);
+      setTimeout(() => { onSaved(); onClose(); }, 1400);
+    } catch { /* silent */ }
+    setSaving(false);
+  }
+
+  const qualityOpts: { key: SessionQuality; label: string; color: string }[] = [
+    { key: "normal",  label: "Normal Session",      color: "#16A34A" },
+    { key: "missed",  label: "Missed / Vacation",   color: "#DC2626" },
+    { key: "poor",    label: "Difficult Session",   color: "#D97706" },
+  ];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.45)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" style={{ border: "1px solid var(--border)" }}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
+          <div>
+            <p className="text-[14px] font-semibold truncate" style={{ color: "var(--text1)", maxWidth: 280 }}>{name}</p>
+            <p className="text-[11px]" style={{ color: "var(--text3)" }}>Week of {weekLabel}</p>
+          </div>
+          <button onClick={onClose} className="text-[20px] leading-none ml-4" style={{ color: "var(--text3)" }}>×</button>
+        </div>
+
+        <div className="px-6 py-5">
+          {/* ── Step 1: Value + Quality ── */}
+          {step === 1 && (
+            <div className="space-y-5">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--text3)" }}>
+                  ACTUAL VALUE
+                </p>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    className="w-28 border rounded-lg px-3 py-2.5 text-[15px] font-semibold focus:outline-none focus:ring-2"
+                    style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                  />
+                  <span className="text-[13px]" style={{ color: "var(--text2)" }}>
+                    {unit || "occurrences/wk"}
+                  </span>
+                  <span className="text-[11px] ml-auto flex-shrink-0" style={{ color: "var(--text3)" }}>
+                    Projected: {projectedValue}{unit}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--text3)" }}>
+                  SESSION QUALITY
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {qualityOpts.map((opt) => (
+                    <button
+                      key={opt.key}
+                      onClick={() => setQuality(opt.key)}
+                      className="py-2 px-2 rounded-lg border text-[11px] font-semibold transition-colors"
+                      style={{
+                        background: quality === opt.key ? opt.color : "white",
+                        borderColor: quality === opt.key ? opt.color : "var(--border)",
+                        color: quality === opt.key ? "white" : "var(--text2)",
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                {quality !== "normal" && qualityAdj > 0 && (
+                  <div className="mt-2 px-3 py-2 rounded-lg text-[11px]" style={{ background: "#FFFBEB", color: "#92400E" }}>
+                    {quality === "missed"
+                      ? `Regression applied (missed session): ${isReplacement ? "−" : "+"}${qualityAdj}${unit} → stored as ${adjustedValue}${unit}`
+                      : `Slight regression (difficult session): ${isReplacement ? "−" : "+"}${qualityAdj}${unit} → stored as ${adjustedValue}${unit}`
+                    }
+                    <p className="mt-1 opacity-70">Recovery trend starts next week.</p>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={() => setStep(2)}
+                className="w-full py-2.5 rounded-lg text-[13px] font-semibold text-white"
+                style={{ background: "var(--teal)" }}
+              >
+                Next: Select Working Days →
+              </button>
+            </div>
+          )}
+
+          {/* ── Step 2: Day selection + Distribution ── */}
+          {step === 2 && (
+            <div className="space-y-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide mb-3" style={{ color: "var(--text3)" }}>
+                  SELECT DAYS YOU WORKED WITH THIS CLIENT
+                </p>
+                <div className="grid grid-cols-7 gap-1">
+                  {weekDates.map(({ dayIdx, label, dateStr }) => {
+                    const selected = selectedDays.has(dayIdx);
+                    return (
+                      <button
+                        key={dayIdx}
+                        onClick={() => toggleDay(dayIdx)}
+                        className="flex flex-col items-center py-2.5 rounded-lg border text-[10px] font-semibold transition-colors"
+                        style={{
+                          background: selected ? "var(--teal)" : "white",
+                          borderColor: selected ? "var(--teal)" : "var(--border)",
+                          color: selected ? "white" : "var(--text2)",
+                        }}
+                      >
+                        <span>{label}</span>
+                        <span className="opacity-70 mt-0.5" style={{ fontSize: 9 }}>{dateStr.slice(8)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {selectedDays.size > 0 && (
+                <div className="rounded-lg p-3" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--text3)" }}>
+                    DISTRIBUTION PREVIEW
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {weekDates
+                      .filter((d) => selectedDays.has(d.dayIdx))
+                      .map((d) => (
+                        <span
+                          key={d.dayIdx}
+                          className="text-[11px] px-2 py-1 rounded font-medium"
+                          style={{ background: "white", border: "1px solid var(--border)", color: "var(--text2)" }}
+                        >
+                          {d.label}: <strong>{dailyDist[d.dayIdx]}{unit}</strong>
+                        </span>
+                      ))}
+                  </div>
+                  <p className="text-[10px] mt-1.5" style={{ color: "var(--text3)" }}>
+                    {isReplacement
+                      ? `Avg ≈ ${adjustedValue}${unit} across ${selectedDays.size} day${selectedDays.size !== 1 ? "s" : ""}`
+                      : `Total = ${[...selectedDays].reduce((s, d) => s + (dailyDist[d] ?? 0), 0)} across ${selectedDays.size} day${selectedDays.size !== 1 ? "s" : ""}`
+                    }
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setStep(1)}
+                  className="px-4 py-2.5 rounded-lg border text-[13px] font-medium"
+                  style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving || selectedDays.size === 0 || saved}
+                  className="flex-1 py-2.5 rounded-lg text-[13px] font-semibold text-white disabled:opacity-50 transition-colors"
+                  style={{ background: saved ? "#16A34A" : "var(--teal)" }}
+                >
+                  {saved ? "✓ Saved!" : saving ? "Saving…" : "Save & Record Daily Values"}
+                </button>
+              </div>
+
+              {saved && (
+                <p className="text-[11px] text-center" style={{ color: "var(--text3)" }}>
+                  Daily values saved. Open Office Puzzle and use the extension to autofill.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── ProgressChart (recharts) ────────────────────────────────────────────────
 
 function ProgressChart({
@@ -324,7 +642,7 @@ function ProgressChart({
   goalValue,
   isRising,
   unit,
-  onConfirmProjected,
+  onSelectProjected,
 }: {
   histData: WeekPoint[];
   projValues: number[];
@@ -332,10 +650,8 @@ function ProgressChart({
   goalValue?: number;
   isRising: boolean;
   unit: string;
-  onConfirmProjected?: (week: string, value: number) => void;
+  onSelectProjected?: (week: string, value: number) => void;
 }) {
-  const [pendingConfirm, setPendingConfirm] = useState<{ week: string; value: number } | null>(null);
-  const [confirmInput, setConfirmInput] = useState("");
 
   const lastHistWeek = histData.length > 0 ? histData[histData.length - 1].week : null;
   const today = todayWeekStr();
@@ -403,10 +719,7 @@ function ProgressChart({
         stroke="white"
         strokeWidth={1.5}
         style={{ cursor: "pointer" }}
-        onClick={() => {
-          setPendingConfirm({ week: payload.week, value: payload.projected });
-          setConfirmInput(String(payload.projected));
-        }}
+        onClick={() => onSelectProjected?.(payload.week, payload.projected)}
       />
     );
   };
@@ -511,43 +824,6 @@ function ProgressChart({
         </LineChart>
       </ResponsiveContainer>
 
-      {/* Inline confirm popover */}
-      {pendingConfirm && (
-        <div
-          className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg border text-[12px]"
-          style={{ background: "#F0FDF4", borderColor: "#86EFAC" }}
-        >
-          <span style={{ color: "#166534" }}>
-            Confirm actual value for {fmtWeek(pendingConfirm.week)}:
-          </span>
-          <input
-            type="number"
-            value={confirmInput}
-            onChange={(e) => setConfirmInput(e.target.value)}
-            className="w-20 border rounded px-2 py-1 text-[12px]"
-            style={{ borderColor: "#86EFAC", color: "#166534" }}
-          />
-          <span className="text-[11px]" style={{ color: "#166534" }}>{unit}</span>
-          <button
-            onClick={() => {
-              const v = parseFloat(confirmInput);
-              if (!isNaN(v)) onConfirmProjected?.(pendingConfirm.week, v);
-              setPendingConfirm(null);
-            }}
-            className="px-3 py-1 rounded-lg text-[11px] font-semibold text-white"
-            style={{ background: "#16A34A" }}
-          >
-            Save
-          </button>
-          <button
-            onClick={() => setPendingConfirm(null)}
-            className="text-[11px]"
-            style={{ color: "var(--text3)" }}
-          >
-            Cancel
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -576,6 +852,7 @@ function TargetCard({
 
   const histData = useMemo(() => weeklyAvgs(records, valueKey), [records, valueKey]);
   const currentValue = histData.length > 0 ? histData[histData.length - 1].avg : null;
+  const [pendingConfirm, setPendingConfirm] = useState<{ week: string; value: number } | null>(null);
 
   // Find active STO (current in-progress)
   const sortedStos = useMemo(
@@ -606,19 +883,6 @@ function TargetCard({
       nameIndex
     );
   }, [histData, activeSto, nameIndex]);
-
-  async function handleConfirmProjected(week: string, value: number) {
-    const endpoint = isRising ? "/api/replacement-data" : "/api/maladaptive-data";
-    const body = isRising
-      ? { clientId, replacementSkill: name, weekStart: week, observedPercentage: value, totalTrials: 10, userConfirmed: true }
-      : { clientId, behaviorName: name, weekStart: week, frequency: Math.round(value), userConfirmed: true };
-    await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    onDataConfirmed();
-  }
 
   const latest = histData[histData.length - 1]?.avg;
   const prev = histData[histData.length - 2]?.avg;
@@ -678,7 +942,7 @@ function TargetCard({
           goalValue={activeSto?.goal_value}
           isRising={isRising}
           unit={unit}
-          onConfirmProjected={handleConfirmProjected}
+          onSelectProjected={(week, value) => setPendingConfirm({ week, value })}
         />
 
         {histData.length === 0 && stoList.length === 0 && (
@@ -686,7 +950,25 @@ function TargetCard({
             No data recorded yet.
           </p>
         )}
+
+        <p className="text-[10px] mt-1" style={{ color: "var(--text3)" }}>
+          Click any green dot to confirm the week's actual value.
+        </p>
       </div>
+
+      {/* Weekly confirmation modal */}
+      {pendingConfirm && (
+        <WeeklyConfirmModal
+          week={pendingConfirm.week}
+          projectedValue={pendingConfirm.value}
+          isReplacement={isRising}
+          unit={unit}
+          name={name}
+          clientId={clientId}
+          onSaved={onDataConfirmed}
+          onClose={() => setPendingConfirm(null)}
+        />
+      )}
     </div>
   );
 }

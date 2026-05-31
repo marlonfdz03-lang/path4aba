@@ -35,6 +35,7 @@ export default function UploadAssessment() {
   const [saved, setSaved] = useState(false);
   const [reviewStos, setReviewStos] = useState<StoRow[]>([]);
   const [reviewHistory, setReviewHistory] = useState<HistoryRow[]>([]);
+  const [currentValues, setCurrentValues] = useState<{ name: string; type: "replacement" | "maladaptive"; value: string }[]>([]);
 
   async function handleFileUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -47,6 +48,7 @@ export default function UploadAssessment() {
     setSaved(false);
     setReviewStos([]);
     setReviewHistory([]);
+    setCurrentValues([]);
     setSummaryTable(null);
 
     try {
@@ -110,6 +112,31 @@ export default function UploadAssessment() {
         })
       );
       setReviewHistory(history);
+
+      // Build latest-value lookup from extracted historical data
+      const latestByName: Record<string, number> = {};
+      for (const h of extractedData.extractedHistoricalData ?? []) {
+        const key = (h.name ?? "").toLowerCase();
+        if (latestByName[key] == null || (h.weekStart ?? "") >= (latestByName[key + "_date"] ?? "")) {
+          latestByName[key] = h.value;
+          latestByName[key + "_date"] = h.weekStart ?? "";
+        }
+      }
+
+      const cvRows: { name: string; type: "replacement" | "maladaptive"; value: string }[] = [];
+      for (const b of extractedData.maladaptiveBehaviors ?? []) {
+        const n = typeof b === "string" ? b : b.name;
+        if (!n) continue;
+        const latest = latestByName[n.toLowerCase()];
+        cvRows.push({ name: n, type: "maladaptive", value: latest != null ? String(latest) : "" });
+      }
+      for (const s of [...(extractedData.replacementBehaviors ?? []), ...(extractedData.skillAcquisition ?? [])]) {
+        const n = typeof s === "string" ? s : s.name;
+        if (!n) continue;
+        const latest = latestByName[n.toLowerCase()];
+        cvRows.push({ name: n, type: "replacement", value: latest != null ? String(latest) : "" });
+      }
+      setCurrentValues(cvRows);
 
       setStatus("Clinical profile extracted. Review and save the client profile.");
     } catch (error) {
@@ -245,6 +272,51 @@ export default function UploadAssessment() {
           }))
         ),
       }).catch(err => console.error("[upload] maladaptive history save error:", err));
+    }
+
+    // Save current starting values (today's baseline for each target)
+    const today = new Date().toISOString().split("T")[0];
+    const weekStart = today.substring(0, 7) + "-01";
+
+    const cvReplacement = currentValues.filter(
+      (cv) => cv.type === "replacement" && cv.name.trim() && cv.value.trim()
+    );
+    if (cvReplacement.length > 0) {
+      await fetch("/api/replacement-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          cvReplacement.map((cv) => ({
+            clientId: newClient.id,
+            replacementSkill: cv.name.trim(),
+            sessionDate: today,
+            weekStart,
+            observedPercentage: parseFloat(cv.value) || 0,
+            totalTrials: 10,
+            userConfirmed: true,
+          }))
+        ),
+      }).catch((err) => console.error("[upload] current values (replacement) save error:", err));
+    }
+
+    const cvMaladaptive = currentValues.filter(
+      (cv) => cv.type === "maladaptive" && cv.name.trim() && cv.value.trim()
+    );
+    if (cvMaladaptive.length > 0) {
+      await fetch("/api/maladaptive-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          cvMaladaptive.map((cv) => ({
+            clientId: newClient.id,
+            behaviorName: cv.name.trim(),
+            sessionDate: today,
+            weekStart,
+            frequency: parseInt(cv.value) || 0,
+            userConfirmed: true,
+          }))
+        ),
+      }).catch((err) => console.error("[upload] current values (maladaptive) save error:", err));
     }
 
     setSaved(true);
@@ -477,6 +549,51 @@ export default function UploadAssessment() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {/* ── Current Starting Values ── */}
+            {currentValues.length > 0 && (
+              <div className="bg-yellow-50 border border-yellow-200 p-6 rounded-2xl">
+                <h3 className="text-xl font-bold mb-1">Current Starting Values</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  These become the first data point on each progress chart. Pre-filled from the assessment — update any values that have changed since the assessment was written.
+                </p>
+                <div className="grid grid-cols-1 gap-3">
+                  {currentValues.map((cv, i) => (
+                    <div key={i} className="flex items-center gap-3 bg-white border border-yellow-100 rounded-xl px-4 py-3">
+                      <span
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                        style={{
+                          background: cv.type === "maladaptive" ? "#FEF3E2" : "#E6F9F5",
+                          color: cv.type === "maladaptive" ? "#B7791F" : "#0D8A6A",
+                        }}
+                      >
+                        {cv.type === "maladaptive" ? "BEHAVIOR" : "SKILL"}
+                      </span>
+                      <span className="flex-1 text-sm font-medium text-gray-800 truncate">{cv.name}</span>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <input
+                          type="number"
+                          min="0"
+                          max={cv.type === "replacement" ? "100" : undefined}
+                          value={cv.value}
+                          onChange={(e) =>
+                            setCurrentValues((prev) =>
+                              prev.map((row, j) => (j === i ? { ...row, value: e.target.value } : row))
+                            )
+                          }
+                          placeholder={cv.type === "replacement" ? "0–100" : "count"}
+                          className="w-24 border rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none"
+                          style={{ borderColor: "#FCD34D" }}
+                        />
+                        <span className="text-xs text-gray-400">
+                          {cv.type === "replacement" ? "%" : "/ wk"}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
