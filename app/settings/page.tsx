@@ -170,10 +170,20 @@ function BillingTab() {
 
 // ── Extension tab ─────────────────────────────────────────────────────────────
 
+function fmtTimestamp(dateStr: string): string {
+  const d = new Date(dateStr);
+  return (
+    d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) +
+    " at " +
+    d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+  );
+}
+
 function ExtensionTab() {
   const [hasToken, setHasToken] = useState(false);
   const [newToken, setNewToken] = useState<string | null>(null);
   const [lastUsed, setLastUsed] = useState<string | null>(null);
+  const [createdAt, setCreatedAt] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -184,6 +194,7 @@ function ExtensionTab() {
       .then((d) => {
         setHasToken(d.hasToken ?? false);
         setLastUsed(d.lastUsedAt ?? null);
+        setCreatedAt(d.createdAt ?? null);
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
@@ -195,7 +206,12 @@ function ExtensionTab() {
     try {
       const res = await fetch("/api/extension/token", { method: "POST" });
       const d = await res.json();
-      if (d.token) { setNewToken(d.token); setHasToken(true); }
+      if (d.token) {
+        setNewToken(d.token);
+        setHasToken(true);
+        setLastUsed(null);
+        setCreatedAt(new Date().toISOString());
+      }
     } finally {
       setLoading(false);
     }
@@ -209,6 +225,7 @@ function ExtensionTab() {
       setHasToken(false);
       setNewToken(null);
       setLastUsed(null);
+      setCreatedAt(null);
     } finally {
       setLoading(false);
     }
@@ -229,14 +246,14 @@ function ExtensionTab() {
         <div className="h-[3px] -mx-6 -mt-6 mb-6 rounded-t-xl" style={{ background: "linear-gradient(90deg, #16a34a, #0d6e6e)" }} />
         <p className="text-[14px] font-semibold mb-1" style={{ color: "var(--text1)" }}>Chrome Extension Token</p>
         <p className="text-[13px] mb-5" style={{ color: "var(--text3)" }}>
-          Generate a personal token to activate the Path4ABA Chrome extension. Tokens never expire — revoke and regenerate if compromised.
+          Generate a personal token to activate the Path4ABA Chrome extension. Only one token can be active at a time — generating a new one immediately revokes the previous. Revoke immediately if you suspect unauthorized access.
         </p>
 
         {newToken ? (
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-[12px] font-semibold text-green-700">✓ Token generated</span>
-              <span className="text-[11px]" style={{ color: "var(--text3)" }}>— copy it now, it won't be shown again</span>
+              <span className="text-[11px]" style={{ color: "var(--text3)" }}>— copy it now, it won&apos;t be shown again</span>
             </div>
             <div className="flex gap-2 mt-3 mb-4">
               <code className="flex-1 bg-gray-50 rounded-lg px-3 py-2.5 text-[11px] font-mono break-all leading-relaxed" style={{ border: "1px solid var(--border)", color: "var(--text1)" }}>
@@ -256,14 +273,29 @@ function ExtensionTab() {
           </div>
         ) : hasToken ? (
           <div>
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-2 mb-3">
               <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
               <span className="text-[13px] text-green-700 font-medium">Token active</span>
-              {lastUsed && (
-                <span className="text-[12px]" style={{ color: "var(--text3)" }}>
-                  · last used {new Date(lastUsed).toLocaleDateString()}
-                </span>
+            </div>
+            <div className="space-y-1 mb-5 pl-4" style={{ borderLeft: "2px solid var(--border)" }}>
+              {createdAt && (
+                <p className="text-[12px]" style={{ color: "var(--text3)" }}>
+                  Created{" "}
+                  <span style={{ color: "var(--text2)", fontWeight: 500 }}>
+                    {fmtTimestamp(createdAt)}
+                  </span>
+                </p>
               )}
+              <p className="text-[12px]" style={{ color: "var(--text3)" }}>
+                Last used{" "}
+                {lastUsed ? (
+                  <span style={{ color: "var(--text1)", fontWeight: 500 }}>
+                    {fmtTimestamp(lastUsed)}
+                  </span>
+                ) : (
+                  <span style={{ color: "var(--text3)" }}>never</span>
+                )}
+              </p>
             </div>
             <div className="flex gap-3">
               <button onClick={generate} disabled={loading} className="px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white disabled:opacity-60" style={{ background: "var(--teal)" }}>
