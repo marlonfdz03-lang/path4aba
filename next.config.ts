@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  // Native Node.js modules used in API routes — must not be bundled by Turbopack/webpack
+  serverExternalPackages: ['@napi-rs/canvas', 'pdfjs-dist', 'pdf2json'],
   async headers() {
     return [
       {
