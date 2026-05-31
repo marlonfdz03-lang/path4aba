@@ -1720,11 +1720,14 @@ function officePuzzleExtractor() {
         const canvas = chart.canvas || (chart.ctx && chart.ctx.canvas);
         if (!canvas) return;
 
-        // Only use the 'Total' dataset — skip 'Baseline' and any others
-        const totalDataset = (chart.data.datasets || []).find(
-          d => d.label && d.label.toLowerCase() === 'total'
+        const chartCategory = detectCategory(canvas) || activeCategory;
+        // Maladaptive tab → 'Total' dataset (frequency counts)
+        // Replacement tab → 'Average' dataset (percentage 0-100%)
+        const targetLabel = chartCategory === 'replacement' ? 'average' : 'total';
+        const targetDataset = (chart.data.datasets || []).find(
+          d => d.label && d.label.toLowerCase() === targetLabel
         );
-        if (!totalDataset?.data) return;
+        if (!targetDataset?.data) return;
 
         const name = getChartName(canvas);
         if (!name) return;
@@ -1733,7 +1736,7 @@ function officePuzzleExtractor() {
         chart.data.labels.forEach((label, i) => {
           const dateStr = parseDateLabel(label); // filters <, >, |, and unparseable
           if (!dateStr) return;
-          const val = totalDataset.data[i];
+          const val = targetDataset.data[i];
           if (val === null || val === undefined || typeof val === 'object') return;
           dataPoints.push({ date: dateStr, value: Number(val) });
         });
@@ -1742,7 +1745,7 @@ function officePuzzleExtractor() {
 
         result.charts.push({
           name,
-          category: detectCategory(canvas) || activeCategory,
+          category: chartCategory,
           dataPoints,
           baseline: dataPoints[0]?.value ?? null,
         });
