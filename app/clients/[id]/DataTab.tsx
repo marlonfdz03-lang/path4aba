@@ -78,74 +78,92 @@ function mulberry32(seed: number) {
 // ── Projection engine ──────────────────────────────────────────────────────
 
 const TOTAL_WEEKS = 26;
-const MAX_STEP = 4;
 
 function buildProjection(
   histValues: number[],
   sto: { baseline: number; goal: number; totalWeeks: number | null },
   nameIndex: number,
 ): number[] {
-  const start = histValues.length > 0 ? histValues[histValues.length - 1] : sto.baseline;
+  const rawStart = histValues.length > 0 ? histValues[histValues.length - 1] : sto.baseline;
+  const start = Math.round(rawStart);
   const { goal } = sto;
+
   if (start === goal) return [];
 
   const rising = goal > start;
+  const goalDir: 1 | -1 = rising ? 1 : -1;
   const totalDist = Math.abs(goal - start);
-  const completionWeek = 18 + (Math.abs(nameIndex) % 8);
-  const avgStep = totalDist / completionWeek;
 
-  const magMultipliers = [0.5, 1.2, 0.3, 2.0, 0.8, 1.6, 0.4, 2.4, 1.0, 1.8, 0.6, 2.8, 1.4, 0.7, 2.2, 0.9];
-  const magPool = magMultipliers.map((m) => Math.min(m * avgStep, MAX_STEP));
+  // "10 units = 12 weeks minimum" → ~1.2 weeks per unit of distance
+  // Plus nameIndex-based stagger so each behavior finishes at a different time
+  const stagger = (Math.abs(nameIndex) * 3) % 11;
+  const completionWeek = Math.ceil(totalDist * 1.2) + stagger;
+
+  // Max forward step scales with distance so large gaps don't jump unrealistically
+  const maxStep = Math.max(1, Math.min(5, Math.ceil(totalDist / 12)));
 
   const seed = Math.abs(hashStr(String(nameIndex).padStart(4, "X")));
   const rng = mulberry32(seed);
 
   const out: number[] = [];
   let prev = start;
-  let consecutiveDir = 0;
+  let consecCount = 0;
   let lastDir = 0;
-  let lastMagIdx = -1;
 
   for (let w = 0; w < TOTAL_WEEKS; w++) {
-    if (w >= completionWeek) {
-      out.push(Math.round(goal * 10) / 10);
-      continue;
-    }
-    if (w === completionWeek - 1) {
-      out.push(Math.round(goal * 10) / 10);
-      prev = goal;
+    if (prev === goal) {
+      out.push(goal);
       continue;
     }
 
-    let magIdx = Math.floor(rng() * magPool.length);
-    if (magIdx === lastMagIdx) magIdx = (magIdx + 1) % magPool.length;
-    lastMagIdx = magIdx;
-    const mag = magPool[magIdx];
-
-    const remaining = completionWeek - w;
     const distLeft = Math.abs(goal - prev);
+    const weeksLeft = Math.max(1, completionWeek - w);
+    const neededPace = distLeft / weeksLeft;
 
-    let dir: 1 | -1;
-    if (consecutiveDir >= 3) {
-      dir = (-lastDir || 1) as 1 | -1;
-    } else if (remaining <= 3 && distLeft > avgStep * 1.5) {
-      dir = 1;
+    // Direction decision
+    let towardGoal: boolean;
+    if (consecCount >= 3) {
+      // Force flip: if last steps went toward goal, take one back (and vice versa)
+      towardGoal = lastDir !== goalDir;
+    } else if (neededPace >= maxStep * 0.85) {
+      // Behind schedule — must push toward goal
+      towardGoal = true;
     } else {
-      dir = rng() < 0.62 ? 1 : -1;
+      towardGoal = rng() < 0.70;
     }
 
-    const delta = (rising ? 1 : -1) * dir * mag;
-    let v = prev + delta;
+    const changeDir: 1 | -1 = towardGoal ? goalDir : (-goalDir as 1 | -1);
 
-    const slack = totalDist * 0.15;
-    if (rising) v = Math.max(start - slack, Math.min(goal, v));
-    else v = Math.min(start + slack, Math.max(goal, v));
+    // Toward-goal steps vary 1..maxStep; backward steps are always 1
+    const magCap = towardGoal ? Math.min(maxStep, distLeft) : 1;
+    const mag = Math.floor(rng() * magCap) + 1;
 
-    const actualDir = v > prev ? 1 : v < prev ? -1 : lastDir;
-    if (actualDir === lastDir) consecutiveDir++;
-    else { consecutiveDir = 1; lastDir = actualDir; }
+    let v = prev + changeDir * mag;
 
-    out.push(Math.round(v * 10) / 10);
+    // Clamp: never overshoot goal; allow small backward slack
+    const slack = Math.max(1, Math.floor(totalDist * 0.1));
+    if (rising) {
+      v = Math.max(start - slack, Math.min(goal, v));
+    } else {
+      v = Math.min(start + slack, Math.max(goal, v));
+    }
+
+    v = Math.round(v);
+
+    // Guarantee no consecutive repeat — nudge 1 toward goal if clamping caused no change
+    if (v === prev) {
+      v = Math.round(rising ? Math.min(goal, prev + 1) : Math.max(goal, prev - 1));
+    }
+
+    const actualDir: 1 | -1 = v > prev ? 1 : -1;
+    if (actualDir === lastDir) {
+      consecCount++;
+    } else {
+      consecCount = 1;
+      lastDir = actualDir;
+    }
+
+    out.push(v);
     prev = v;
   }
 
@@ -687,22 +705,29 @@ export function DataTab({ client }: { client: any }) {
   }, [maladaptiveData]);
 
   const behaviorNames: string[] = useMemo(() => {
-    const set = new Set<string>();
-    Object.keys(maladByBehavior).forEach((n) => set.add(n));
-    (client.clinicalProfile?.maladaptiveBehaviors || []).forEach((b: any) =>
-      set.add(typeof b === "string" ? b : b.name),
-    );
-    return [...set].filter(Boolean);
+    const profileNames = (client.clinicalProfile?.maladaptiveBehaviors || [])
+      .map((b: any) => (typeof b === "string" ? b : b.name))
+      .filter(Boolean) as string[];
+    const profileSet = new Set(profileNames);
+    const dbExtra = Object.keys(maladByBehavior).filter((n) => !profileSet.has(n));
+    return [...profileNames, ...dbExtra];
   }, [maladByBehavior, client.clinicalProfile]);
 
   const skillNames: string[] = useMemo(() => {
-    const set = new Set<string>();
-    Object.keys(repBySkill).forEach((n) => set.add(n));
-    [
+    const raw = [
       ...(client.clinicalProfile?.replacementBehaviors || []),
       ...(client.clinicalProfile?.skillAcquisition || []),
-    ].forEach((s: any) => set.add(typeof s === "string" ? s : s.name));
-    return [...set].filter(Boolean);
+    ]
+      .map((s: any) => (typeof s === "string" ? s : s.name))
+      .filter(Boolean) as string[];
+    const seen = new Set<string>();
+    const profileNames = raw.filter((n) => {
+      if (seen.has(n)) return false;
+      seen.add(n);
+      return true;
+    });
+    const dbExtra = Object.keys(repBySkill).filter((n) => !seen.has(n));
+    return [...profileNames, ...dbExtra];
   }, [repBySkill, client.clinicalProfile]);
 
   if (loading) {
