@@ -22,43 +22,62 @@ interface PageChart {
   dataPoints: { date: string; value: number }[]
 }
 
-const VISION_PROMPT = `You are analyzing ABA behavior progress charts. These images are pages from an ABA assessment PDF.
+const VISION_PROMPT = `You are analyzing ABA behavior and skill progress charts. These images are pages from an ABA assessment PDF.
 
-TASK: Find every line chart or dot plot on these pages and extract ALL data points.
+TASK: Find every line chart or dot plot and extract ALL data points from EACH chart.
+
+THERE ARE TWO TYPES OF CHARTS — read both:
+
+TYPE 1 — MALADAPTIVE BEHAVIOR CHARTS (category: "maladaptive"):
+- Y-axis shows raw frequency counts (e.g. 0, 10, 20, 30 … 85)
+- Tracks a behavior that should DECREASE over time (tantrums, aggression, etc.)
+- Section headings: "Maladaptive Behaviors", "Problem Behavior", "Target Behaviors", "Behaviors to Reduce"
+- Values are whole numbers representing occurrences per week
+
+TYPE 2 — REPLACEMENT SKILL CHARTS (category: "replacement"):
+- Y-axis shows PERCENTAGE values (0%, 10%, 20% … 100%) or decimal accuracy (0.0–1.0)
+- Tracks a skill that should INCREASE over time (communication, social skills, etc.)
+- Section headings: "Skill Acquisition", "Replacement Behaviors", "Communication Goals", "Social Skills", "Academic Skills"
+- Values represent accuracy percentage — a dot at 75% height on a 0–100% chart = value 75
+- IMPORTANT: If the Y-axis goes from 0 to 100 with a "%" label, each dot's value IS its percentage (0–100). Do not multiply.
 
 HOW TO READ EACH CHART:
-1. Find the chart title or the nearest heading above/beside the chart — that is the behavior or skill name.
-2. Look at every dot or data marker on the line. Count them. There may be 20–40 dots per chart.
-3. For each dot: read the date from the X-axis directly below it, and the numeric value from the Y-axis to its left.
-4. Read the Y-axis scale carefully — note the min, max, and intervals so you calibrate each dot's height correctly.
-5. Do NOT skip dots that are close together or that overlap.
+1. Find the chart title or nearest heading above/beside the chart — that is the skill or behavior name.
+2. Read the Y-axis scale: note the min, max, and grid line intervals.
+3. Look at EVERY dot on the line. There may be 5–40 dots. Count them before extracting.
+4. For each dot: read the date from the X-axis label below it, and estimate the Y value by comparing the dot's height to the Y-axis gridlines.
+5. Do NOT skip dots that are close together.
 
 DATE READING RULES:
-- X-axis dates shown as MM/DD or MM/DD/YY → convert to YYYY-MM-DD
-- X-axis shows month labels (e.g. "Jul", "Aug") → use first day of that month, e.g. "2025-07-01"
-- X-axis shows only week or session numbers → use the label as-is (e.g. "Week 1")
+- X-axis dates shown as MM/DD or MM/DD/YY → convert to YYYY-MM-DD (assume 2024 or 2025 based on context)
+- X-axis shows month labels ("Jul", "Aug 2025") → use first day: "2025-07-01"
+- X-axis shows session or week numbers only → use the label as-is ("Week 1")
 
-CATEGORY RULES:
-- "maladaptive": chart tracks a behavior to REDUCE (frequency counts, rate; goal is lower)
-  Section headings: "Maladaptive Behaviors", "Problem Behavior", "Target Behaviors"
-- "replacement": chart tracks a skill to INCREASE (percentages, accuracy; goal is higher)
-  Section headings: "Skill Acquisition", "Communication Goals", "Replacement Behaviors"
+BASELINE: the value before intervention — often a dotted vertical line, "B" phase marker, or the first phase's data. null if unclear.
 
-BASELINE: the value shown before intervention started — often a dotted vertical line, red dot, or "B" phase label. null if not shown.
-
-SELF-CHECK before returning: for each chart, count the dots you actually see in the image. Your dataPoints array for that chart should have the same count.
+SELF-CHECK: before returning, count the dots in each chart. Your dataPoints array length should match.
 
 Return ONLY valid JSON — no markdown, no explanation:
 {
   "charts": [
+    {
+      "name": "Request a Break",
+      "category": "replacement",
+      "baseline": 20,
+      "dataPoints": [
+        { "date": "2025-07-07", "value": 20 },
+        { "date": "2025-07-14", "value": 35 },
+        { "date": "2025-07-21", "value": 48 },
+        { "date": "2025-07-28", "value": 55 }
+      ]
+    },
     {
       "name": "Tantrums",
       "category": "maladaptive",
       "baseline": 85,
       "dataPoints": [
         { "date": "2025-07-07", "value": 85 },
-        { "date": "2025-07-14", "value": 80 },
-        { "date": "2025-07-21", "value": 78 }
+        { "date": "2025-07-14", "value": 80 }
       ]
     }
   ]

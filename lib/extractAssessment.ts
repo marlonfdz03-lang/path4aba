@@ -71,9 +71,11 @@ const MONTH_TO_NUM: Record<string, string> = {
 
 // Convert a summaryTable (Name + monthly-average columns) into historicalData points.
 // This is deterministic and runs after AI extraction so it can't be truncated.
+// Defaults to 'maladaptive' — summary tables in ABA assessments are almost always behavior tables.
+// Only classifies as 'replacement' if the name explicitly matches a known replacement skill.
 function summaryTableToHistoricalData(
   table: NonNullable<ExtractedAssessment['summaryTable']>,
-  maladaptiveNames: Set<string>,
+  replacementNames: Set<string>,
 ): ExtractedAssessment['historicalData'] {
   // headers[0] = "Name"; headers[1..] map 1:1 to row.values[0..]
   const dateColumns: { valueIndex: number; weekStart: string }[] = []
@@ -89,8 +91,9 @@ function summaryTableToHistoricalData(
   const points: ExtractedAssessment['historicalData'] = []
   for (const row of table.rows) {
     if (!row.name?.trim()) continue
+    // Default maladaptive — only override if name matches a known replacement skill
     const targetType: 'maladaptive' | 'replacement' =
-      maladaptiveNames.has(row.name.trim().toLowerCase()) ? 'maladaptive' : 'replacement'
+      replacementNames.has(row.name.trim().toLowerCase()) ? 'replacement' : 'maladaptive'
 
     for (const col of dateColumns) {
       const raw = row.values[col.valueIndex]
@@ -243,10 +246,21 @@ For each data point extract:
 If no historical data is present, return an empty array.
 
 ━━━ SUMMARY TABLE EXTRACTION RULES ━━━
-If the document contains a summary data table (e.g., a table showing behavior names with columns for Baseline, and monthly averages like "July 2025", "August 2025", etc.), extract it exactly.
+If the document contains a summary data table (e.g., a table showing behavior names with columns for Baseline, and monthly averages like "July 2025", "August 2025", etc.), extract it completely.
 The summaryTable must include:
 - headers: array of column headers exactly as they appear (e.g., ["Name", "Baseline", "July 2025", "August 2025"])
-- rows: array of row objects, each with: name (behavior or skill name) and values (array of string values, one per non-name column)
+- rows: array of ALL row objects — DO NOT SKIP ANY ROWS. If the table has 8 behaviors, rows must have 8 entries.
+  Each row has: name (behavior or skill name) and values (array of string values, one per non-name column, in column order)
+
+EXAMPLE: A table with 3 behaviors across 3 months must produce:
+{
+  "headers": ["Name", "Baseline", "July 2025", "August 2025"],
+  "rows": [
+    { "name": "Tantrums", "values": ["85", "72", "68"] },
+    { "name": "Physical Aggression", "values": ["54", "48", "41"] },
+    { "name": "Disruptive Behavior", "values": ["32", "28", "25"] }
+  ]
+}
 If no summary table is present, return null.
 
 Return this exact JSON structure:
@@ -345,10 +359,10 @@ Return this exact JSON structure:
     // Convert summaryTable monthly columns → historicalData points (deterministic, never truncated).
     // This supplements anything GPT-4o already put in historicalData from text or charts.
     if (parsed.summaryTable) {
-      const maladaptiveNames = new Set(
-        parsed.maladaptiveBehaviors.map(b => b.name.toLowerCase().trim())
+      const replacementNames = new Set(
+        parsed.replacementSkills.map(s => s.name.toLowerCase().trim())
       );
-      const tablePoints = summaryTableToHistoricalData(parsed.summaryTable, maladaptiveNames);
+      const tablePoints = summaryTableToHistoricalData(parsed.summaryTable, replacementNames);
 
       // Deduplicate against existing historicalData by (name, weekStart)
       const existing = new Set(

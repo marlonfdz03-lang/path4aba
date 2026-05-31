@@ -28,7 +28,9 @@ function hashStr(s: string): number {
 function fmtWeek(week: string): string {
   if (!week || week === "?") return "";
   try {
-    const d = new Date(week + "-01");
+    // Accept both "YYYY-MM" and "YYYY-MM-DD" — always extract just the month part
+    const yymm = week.substring(0, 7);
+    const d = new Date(yymm + "-01");
     return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
   } catch {
     return week;
@@ -41,7 +43,8 @@ function todayWeekStr(): string {
 
 function addWeeksToMonth(weekStr: string, n: number): string {
   try {
-    const d = new Date(weekStr + "-01");
+    const yymm = weekStr.substring(0, 7);
+    const d = new Date(yymm + "-01");
     d.setDate(d.getDate() + n * 7);
     return d.toISOString().substring(0, 7);
   } catch {
@@ -52,7 +55,9 @@ function addWeeksToMonth(weekStr: string, n: number): string {
 function weeklyAvgs(records: any[], valueKey: string): WeekPoint[] {
   const map: Record<string, number[]> = {};
   records.forEach((r) => {
-    const week = r.week_start || r.session_date?.substring(0, 7) || "?";
+    const raw = r.week_start || r.session_date || "?";
+    // Normalize to YYYY-MM so YYYY-MM-DD and YYYY-MM records group together
+    const week = raw !== "?" ? raw.substring(0, 7) : "?";
     (map[week] = map[week] || []).push(Number(r[valueKey]) || 0);
   });
   return Object.entries(map)
