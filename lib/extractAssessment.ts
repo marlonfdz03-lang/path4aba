@@ -90,6 +90,7 @@ export async function extractAssessment(text: string): Promise<ExtractedAssessme
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',
     temperature: 0,
+    max_tokens: 16000,
     messages: [
       {
         role: 'system',

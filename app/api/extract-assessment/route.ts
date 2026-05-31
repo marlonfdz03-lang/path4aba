@@ -199,14 +199,10 @@ function mapToLegacyFormat(extracted: ExtractedAssessment) {
       .filter(i => !hasBlockedTerm(i))
       .map(i => ({ name: cleanText(i), status: "active" })),
     skillAcquisition: extracted.replacementSkills
-      .filter(s => s.status === "mastered" && !hasBlockedTerm(s.name))
+      .filter(s => s.status?.toLowerCase() === "mastered" && !hasBlockedTerm(s.name))
       .map(s => ({ name: cleanText(s.name), status: "active" })),
     replacementBehaviors: extracted.replacementSkills
-      .filter(
-        s =>
-          ["acquisition", "new", "maintenance"].includes(s.status) &&
-          !hasBlockedTerm(s.name)
-      )
+      .filter(s => s.status?.toLowerCase() !== "mastered" && !hasBlockedTerm(s.name))
       .map(s => ({ name: cleanText(s.name), status: "active" })),
     reinforcers: [
       extracted.reinforcers.tangibles,
@@ -215,7 +211,10 @@ function mapToLegacyFormat(extracted: ExtractedAssessment) {
       extracted.reinforcers.people,
     ]
       .filter(Boolean)
-      .flatMap(r => r.split(",").map(s => s.trim()))
+      .flatMap(r => {
+        const str = Array.isArray(r) ? r.join(", ") : String(r);
+        return str.split(",").map(s => s.trim());
+      })
       .filter(r => r && !hasBlockedTerm(r))
       .map(cleanText),
     homeActivities: [],
