@@ -17,6 +17,10 @@ let selectedSkills = [];     // names
 let selectedLocation = null;
 let activeTab = 'generate';
 
+// Office Puzzle extraction state
+let extractedCharts = [];
+let extractedClientName = null;
+
 // Session condition state
 let selectedPresent = [];
 let environmentalChange = false;
@@ -167,6 +171,9 @@ function setupMainScreen() {
 
   // Check for daily suggestion banner if any client is pre-selected
   checkSuggestionBanner();
+
+  // Show Extract Charts section if on Office Puzzle charts page
+  checkOfficePuzzlePage();
 }
 
 // ── Client selection ───────────────────────
@@ -1465,6 +1472,382 @@ document.getElementById('tabData').addEventListener('click', () => {
     document.getElementById('weekStartDate').value = monday.toISOString().split('T')[0];
     const weekEnd = calcWeekEndDate(monday.toISOString().split('T')[0]);
     document.getElementById('weekEndDate').value = weekEnd;
+  }
+});
+
+// ─────────────────────────────────────────────
+//  OFFICE PUZZLE — EXTRACT CHARTS
+// ─────────────────────────────────────────────
+
+async function checkOfficePuzzlePage() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const url = tab?.url || '';
+    const isOPCharts = url.includes('officepuzzle.com') &&
+      (url.includes('chart') || url.includes('progress') || url.includes('data'));
+    const section = document.getElementById('extractChartsSection');
+    if (section) section.style.display = isOPCharts ? '' : 'none';
+  } catch { /* ignore — happens in non-tab contexts */ }
+}
+
+// Runs inside the Office Puzzle page — must be fully self-contained (no outer scope refs).
+function officePuzzleExtractor() {
+  function getClientName() {
+    const candidates = [
+      document.querySelector('.patient-name, .client-name, [data-client-name], .chart-patient-title'),
+      document.querySelector('.patient-header h1, .client-header h1, .page-header h1'),
+      document.querySelector('header h1'),
+      document.querySelector('h1'),
+    ];
+    for (const el of candidates) {
+      const text = el?.textContent?.trim();
+      if (text && text.length < 70 && !/office puzzle/i.test(text)) return text;
+    }
+    const title = document.title.replace(/\s*[-|].*$/, '').trim();
+    if (title && title.length < 70 && !/office puzzle/i.test(title)) return title;
+    return null;
+  }
+
+  function detectCategory(el) {
+    const MALAD = ['maladaptive', 'behavior targeted for reduction', 'behaviors to reduce', 'target behaviors'];
+    const REPL  = ['communication goal', 'social goal', 'behavior replacement', 'replacement skill',
+                   'skill acquisition', 'behaviors to increase', 'skills to increase', 'replacement program'];
+    let node = el;
+    for (let i = 0; i < 12 && node; i++, node = node.parentElement) {
+      const search = [
+        node.previousElementSibling?.textContent,
+        node.parentElement?.querySelector('h1,h2,h3,h4')?.textContent,
+        node.closest('section,article,[class*="section"],[class*="category"]')
+            ?.querySelector('h1,h2,h3,h4')?.textContent,
+      ].filter(Boolean).join(' ').toLowerCase();
+      if (MALAD.some(k => search.includes(k))) return 'maladaptive';
+      if (REPL.some(k => search.includes(k))) return 'replacement';
+    }
+    return null;
+  }
+
+  function nearestHeading(el) {
+    let node = el;
+    for (let i = 0; i < 8 && node; i++, node = node.parentElement) {
+      const h = node.previousElementSibling;
+      if (h && /^H[3-6]$/.test(h.tagName)) return h.textContent.trim();
+      const inner = node.querySelector('h3,h4,h5,h6,[class*="chart-title"],[class*="behavior-name"],[class*="skill-name"]');
+      if (inner) return inner.textContent.trim();
+    }
+    return null;
+  }
+
+  const result = { clientName: getClientName(), charts: [], method: 'none', errors: [] };
+
+  // Strategy 1: Highcharts global
+  try {
+    if (window.Highcharts?.charts?.length) {
+      window.Highcharts.charts.filter(Boolean).forEach(hc => {
+        const container = hc.renderTo || hc.container;
+        const category = detectCategory(container);
+        const title = hc.title?.textStr || nearestHeading(container) || 'Unknown';
+        (hc.series || []).forEach(series => {
+          if (!series?.data?.length) return;
+          const dataPoints = series.data.map(pt => {
+            const x = pt.x;
+            const dateStr = x instanceof Date ? x.toISOString().split('T')[0]
+              : typeof x === 'number' && x > 1e9 ? new Date(x).toISOString().split('T')[0]
+              : String(x);
+            return { date: dateStr, value: pt.y };
+          }).filter(p => p.date && p.value !== null);
+          if (dataPoints.length) {
+            result.charts.push({ name: title, category: category || 'replacement', dataPoints, baseline: series.data[0]?.y ?? null });
+          }
+        });
+      });
+      if (result.charts.length) { result.method = 'highcharts'; return result; }
+    }
+  } catch(e) { result.errors.push('highcharts:' + e.message); }
+
+  // Strategy 2: ApexCharts elements
+  try {
+    document.querySelectorAll('[id*="apexcharts"],[class*="apexcharts"]').forEach(el => {
+      const inst = el._chart || el.__apexCharts;
+      if (!inst?.w?.globals) return;
+      const g = inst.w.globals;
+      const names = g.seriesNames || [];
+      (g.series || []).forEach((series, si) => {
+        if (!Array.isArray(series) || !series.length) return;
+        const dataPoints = series.map((val, i) => ({
+          date: g.labels?.[i] || g.categories?.[i] || null,
+          value: val
+        })).filter(p => p.date && p.value !== null);
+        if (dataPoints.length) {
+          result.charts.push({ name: names[si] || nearestHeading(el) || 'Unknown', category: detectCategory(el) || 'replacement', dataPoints, baseline: dataPoints[0]?.value ?? null });
+        }
+      });
+    });
+    if (result.charts.length) { result.method = 'apexcharts'; return result; }
+  } catch(e) { result.errors.push('apex:' + e.message); }
+
+  // Strategy 3: React fiber — works for recharts and similar libraries
+  try {
+    const CHART_SELECTORS = '.recharts-wrapper,.recharts-responsive-container,[class*="ChartWrapper"],[class*="chart-wrapper"],[class*="chart-container"]';
+    document.querySelectorAll(CHART_SELECTORS).forEach(wrapper => {
+      const category = detectCategory(wrapper);
+      const fKey = Object.keys(wrapper).find(k => k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance'));
+      if (!fKey) return;
+      let fiber = wrapper[fKey];
+      for (let depth = 0; depth < 40 && fiber; depth++) {
+        const props = fiber.memoizedProps || fiber.pendingProps;
+        if (props?.data && Array.isArray(props.data) && props.data.length > 1) {
+          const sample = props.data[0];
+          const dateKey = Object.keys(sample).find(k => /date|week|time|start|x/i.test(k) && typeof sample[k] === 'string');
+          const valKey  = Object.keys(sample).find(k => /value|freq|count|percent|rate|y/i.test(k) && typeof sample[k] === 'number');
+          if (dateKey && valKey) {
+            const dataPoints = props.data.map(p => ({ date: String(p[dateKey]), value: Number(p[valKey]) })).filter(p => !isNaN(p.value));
+            if (dataPoints.length > 1) {
+              const name = nearestHeading(wrapper) || 'Unknown';
+              result.charts.push({ name, category: category || 'replacement', dataPoints, baseline: dataPoints[0]?.value ?? null });
+              break;
+            }
+          }
+        }
+        fiber = fiber.return;
+      }
+    });
+    if (result.charts.length) { result.method = 'recharts'; return result; }
+  } catch(e) { result.errors.push('react:' + e.message); }
+
+  // Strategy 4: window.__NEXT_DATA__
+  try {
+    const nd = window.__NEXT_DATA__?.props?.pageProps;
+    if (nd) {
+      const candidates = [nd.charts, nd.chartData, nd.behaviors, nd.data,
+                          nd.patient?.charts, nd.client?.charts, nd.clientData?.charts].filter(Array.isArray);
+      for (const arr of candidates) {
+        arr.forEach(c => {
+          if (!c.name) return;
+          const pts = (c.data || c.dataPoints || c.history || []);
+          const dataPoints = pts.map(p => ({
+            date: p.date || p.weekStart || p.week_start || p.x || null,
+            value: typeof p.value !== 'undefined' ? p.value : (p.y ?? p.frequency ?? p.percentage ?? null)
+          })).filter(p => p.date && p.value !== null);
+          const catRaw = (c.category || c.type || c.section || '').toLowerCase();
+          const category = catRaw.includes('malad') || catRaw.includes('reduc') ? 'maladaptive' : 'replacement';
+          result.charts.push({ name: c.name, category, dataPoints, baseline: c.baseline ?? c.baselineValue ?? null });
+        });
+        if (result.charts.length) break;
+      }
+      if (result.charts.length) { result.method = 'nextdata'; return result; }
+    }
+  } catch(e) { result.errors.push('nextdata:' + e.message); }
+
+  // Strategy 5: DOM heading scan — extracts names even without data values
+  try {
+    const MALAD_KW = ['maladaptive', 'behavior targeted for reduction', 'behaviors to reduce', 'target behaviors'];
+    const REPL_KW  = ['communication goal', 'social goal', 'behavior replacement', 'replacement skill',
+                      'skill acquisition', 'behaviors to increase', 'skills to increase', 'replacement program'];
+    let curCat = null;
+    const seen = new Set();
+    document.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(h => {
+      const text = h.textContent.toLowerCase().trim();
+      if (MALAD_KW.some(k => text.includes(k))) { curCat = 'maladaptive'; return; }
+      if (REPL_KW.some(k => text.includes(k)))  { curCat = 'replacement';  return; }
+      if (!curCat) return;
+      const name = h.textContent.trim();
+      if (!name || name.length > 100 || seen.has(name.toLowerCase())) return;
+      seen.add(name.toLowerCase());
+      result.charts.push({ name, category: curCat, dataPoints: [], baseline: null });
+    });
+    if (result.charts.length) result.method = 'dom_headings';
+  } catch(e) { result.errors.push('dom:' + e.message); }
+
+  return result;
+}
+
+function showExtractStatus(msg, type) {
+  const el = document.getElementById('extractChartsStatus');
+  if (!el) return;
+  el.style.display = '';
+  el.textContent = msg;
+  el.className = 'op-status op-status-' + type;
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function tryAutoMatchClient(pageName) {
+  if (!pageName || !clients.length || selectedClientId) return;
+  const lower = pageName.toLowerCase();
+  const match = clients.find(c => {
+    const name = (c.client_name || '').toLowerCase();
+    const nameParts = name.split(/\s+/);
+    const pageParts = lower.split(/\s+/);
+    return nameParts.some(p => p.length > 2 && pageParts.includes(p)) ||
+           pageParts.some(p => p.length > 2 && nameParts.includes(p));
+  });
+  if (match) {
+    const sel = document.getElementById('clientSelect');
+    if (sel) {
+      sel.value = match.id;
+      sel.dispatchEvent(new Event('change'));
+    }
+  }
+}
+
+document.getElementById('extractChartsBtn').addEventListener('click', async () => {
+  extractedCharts = [];
+  extractedClientName = null;
+  document.getElementById('extractChartsPreview').style.display = 'none';
+
+  if (!selectedClientId) {
+    showExtractStatus('Select a client from the dropdown above first.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('extractChartsBtn');
+  btn.disabled = true;
+  btn.textContent = 'Extracting…';
+  showExtractStatus('Reading chart data from Office Puzzle…', 'info');
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: officePuzzleExtractor,
+    });
+
+    const data = results?.[0]?.result;
+    if (!data) throw new Error('Page did not return data. Make sure you are on the charts page.');
+
+    extractedCharts = data.charts || [];
+    extractedClientName = data.clientName;
+
+    if (extractedClientName) tryAutoMatchClient(extractedClientName);
+
+    const totalPts  = extractedCharts.reduce((s, c) => s + c.dataPoints.length, 0);
+    const maladCnt  = extractedCharts.filter(c => c.category === 'maladaptive').length;
+    const replCnt   = extractedCharts.filter(c => c.category === 'replacement').length;
+
+    if (extractedCharts.length === 0) {
+      const errDetail = data.errors?.length ? ` Errors: ${data.errors.join('; ')}` : '';
+      showExtractStatus(`No chart data found on this page.${errDetail}`, 'error');
+      return;
+    }
+
+    if (totalPts === 0) {
+      showExtractStatus(
+        `Found ${extractedCharts.length} chart name${extractedCharts.length !== 1 ? 's' : ''} but could not read data values. ` +
+        `Office Puzzle may use a chart format the extractor cannot read yet.`,
+        'error'
+      );
+      return;
+    }
+
+    showExtractStatus(
+      `Found: ${maladCnt} behavior${maladCnt !== 1 ? 's' : ''}, ${replCnt} skill${replCnt !== 1 ? 's' : ''} — ${totalPts} data point${totalPts !== 1 ? 's' : ''}`,
+      'success'
+    );
+
+    // Build preview
+    const summary = document.getElementById('extractChartsSummary');
+    let html = '';
+    if (data.clientName) {
+      html += `<div class="op-matched-client">Page client: <strong>${escapeHtml(data.clientName)}</strong></div>`;
+    }
+    html += '<div class="op-chart-list">';
+    extractedCharts.slice(0, 12).forEach(c => {
+      const catLabel = c.category === 'maladaptive' ? 'Behavior' : 'Skill';
+      html += `<div class="op-chart-item">
+        <span class="op-chart-name">${escapeHtml(c.name)}</span>
+        <span class="op-chart-meta">${catLabel} · ${c.dataPoints.length} pts</span>
+      </div>`;
+    });
+    if (extractedCharts.length > 12) {
+      html += `<div class="op-chart-item op-more">+ ${extractedCharts.length - 12} more</div>`;
+    }
+    html += '</div>';
+    summary.innerHTML = html;
+    document.getElementById('extractChartsPreview').style.display = '';
+
+  } catch (err) {
+    console.error('[Extract Charts]', err);
+    showExtractStatus('Error: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Extract Charts';
+  }
+});
+
+document.getElementById('saveChartsBtn').addEventListener('click', async () => {
+  if (!selectedClientId) {
+    showExtractStatus('Select a client above before saving.', 'error');
+    return;
+  }
+
+  const chartsWithData = extractedCharts.filter(c => c.dataPoints.length > 0);
+  if (!chartsWithData.length) {
+    showExtractStatus('No data points to save.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('saveChartsBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    const maladRecs = [];
+    const replRecs  = [];
+
+    for (const chart of chartsWithData) {
+      for (const pt of chart.dataPoints) {
+        const weekStart = pt.date ? String(pt.date) : null;
+        const weekEnd   = weekStart ? calcWeekEndDate(weekStart) : null;
+
+        if (chart.category === 'maladaptive') {
+          maladRecs.push({
+            clientId: selectedClientId,
+            behaviorName: chart.name,
+            weekStart,
+            weekEnd,
+            frequency: Math.round(pt.value),
+            userConfirmed: true,
+          });
+        } else {
+          replRecs.push({
+            clientId: selectedClientId,
+            replacementSkill: chart.name,
+            weekStart,
+            weekEnd,
+            observedPercentage: pt.value,
+            totalTrials: 10,
+            userConfirmed: true,
+          });
+        }
+      }
+    }
+
+    const saves = [];
+    if (replRecs.length)  saves.push(api('/api/replacement-data',  { method: 'POST', body: JSON.stringify(replRecs)  }));
+    if (maladRecs.length) saves.push(api('/api/maladaptive-data',  { method: 'POST', body: JSON.stringify(maladRecs) }));
+
+    const responses = await Promise.all(saves);
+    for (const res of responses) {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+    }
+
+    const total = replRecs.length + maladRecs.length;
+    showExtractStatus(`✓ ${total} data point${total !== 1 ? 's' : ''} saved to Path4ABA`, 'success');
+    document.getElementById('extractChartsPreview').style.display = 'none';
+    extractedCharts = [];
+
+  } catch (err) {
+    showExtractStatus('Save failed: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save to Path4ABA';
   }
 });
 
