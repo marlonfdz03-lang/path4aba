@@ -32,13 +32,19 @@ export async function getExtensionAuth(): Promise<ExtensionUser | null> {
             .catch(() => {})
           return { id: record.user.id, role: record.user.role || 'rbt', email: record.user.email }
         }
-      } catch {
-        // fall through to session auth
+        // Token hash not found in DB — token was revoked or never existed.
+        return null
+      } catch (err) {
+        // DB error: log and return null immediately.
+        // Don't fall through to session auth — the caller sent a Bearer token
+        // so they are not using cookies, and session auth will also fail.
+        console.error('[extensionAuth] token lookup failed:', err)
+        return null
       }
     }
   }
 
-  // 2. Fall back to NextAuth session cookie
+  // 2. Fall back to NextAuth session cookie (web app users, no Bearer header)
   const session = await auth()
   if (!session?.user) return null
   return {

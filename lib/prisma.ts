@@ -10,5 +10,10 @@ function createPrisma() {
   return new PrismaClient({ adapter } as any)
 }
 
+// Always cache on globalThis — not just in dev.
+// In Vercel's Node.js runtime, module evaluation is cached per function instance,
+// but multiple concurrent instances each get their own globalThis. Caching here
+// ensures we reuse the same connection pool within a single instance lifecycle
+// instead of recreating it on every request after a module cache miss.
 export const prisma = globalForPrisma.prisma ?? createPrisma()
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+globalForPrisma.prisma = prisma
