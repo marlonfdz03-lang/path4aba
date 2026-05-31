@@ -1764,6 +1764,7 @@ async function officePuzzleExtractor() {
         result.charts.push({
           name,
           category: chartCategory,
+          datasetLabel: targetDataset.label || '',
           dataPoints,
           baseline: dataPoints[0]?.value ?? null,
         });
@@ -2069,7 +2070,14 @@ document.getElementById('saveChartsBtn').addEventListener('click', async () => {
         const weekStart = pt.date ? String(pt.date) : null;
         const weekEnd   = weekStart ? calcWeekEndDate(weekStart) : null;
 
-        if (chart.category === 'maladaptive') {
+        // Use datasetLabel as authoritative routing: 'Average' → replacement, 'Total' → maladaptive.
+        // Falls back to category if no label (Highcharts / other strategies).
+        const label = (chart.datasetLabel || '').toLowerCase();
+        const isReplacement = label
+          ? label.includes('average')
+          : chart.category === 'replacement';
+
+        if (!isReplacement) {
           maladRecs.push({
             clientId: selectedClientId,
             behaviorName: chart.resolvedName || chart.name,

@@ -27,40 +27,49 @@ function hashStr(s: string): number {
 function fmtWeek(week: string): string {
   if (!week || week === "?") return "";
   try {
-    const d = new Date(week.substring(0, 7) + "-01");
-    return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+    const d = new Date(week + "T00:00:00");
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   } catch {
     return week;
   }
 }
 
 function todayWeekStr(): string {
-  return new Date().toISOString().substring(0, 7);
+  return new Date().toISOString().split("T")[0];
 }
 
-function addWeeksToMonth(weekStr: string, n: number): string {
+function addWeeksToDate(dateStr: string, n: number): string {
   try {
-    const d = new Date(weekStr.substring(0, 7) + "-01");
+    const d = new Date(dateStr + "T00:00:00");
     d.setDate(d.getDate() + n * 7);
-    return d.toISOString().substring(0, 7);
+    return d.toISOString().split("T")[0];
   } catch {
-    return weekStr;
+    return dateStr;
   }
 }
 
 function weeklyAvgs(records: any[], valueKey: string): WeekPoint[] {
-  const map: Record<string, number[]> = {};
+  // Records arrive newest-first from the API (ordered by date desc, created_at desc).
+  const map: Record<string, any[]> = {};
   records.forEach((r) => {
     const raw = r.week_start || r.session_date || "?";
-    const week = raw !== "?" ? raw.substring(0, 7) : "?";
-    (map[week] = map[week] || []).push(Number(r[valueKey]) || 0);
+    const week = raw !== "?" ? raw.substring(0, 10) : "?";
+    (map[week] = map[week] || []).push(r);
   });
   return Object.entries(map)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([week, vs]) => ({
-      week,
-      avg: Math.round((vs.reduce((s, v) => s + v, 0) / vs.length) * 10) / 10,
-    }));
+    .map(([week, recs]) => {
+      // If any confirmed record exists, prefer the newest one (recs[0] is newest).
+      const confirmed = recs.filter((r) => r.user_confirmed);
+      if (confirmed.length > 0) {
+        return { week, avg: Number(confirmed[0][valueKey]) || 0 };
+      }
+      const vs = recs.map((r) => Number(r[valueKey]) || 0);
+      return {
+        week,
+        avg: Math.round((vs.reduce((s, v) => s + v, 0) / vs.length) * 10) / 10,
+      };
+    });
 }
 
 // ── Seeded PRNG (mulberry32) ───────────────────────────────────────────────
@@ -198,7 +207,7 @@ function SetStartingValueModal({
     setSaving(true);
     try {
       const today = new Date().toISOString().split("T")[0];
-      const weekStart = today.substring(0, 7) + "-01";
+      const weekStart = today;
       const endpoint = isReplacement ? "/api/replacement-data" : "/api/maladaptive-data";
       const body = isReplacement
         ? [{ clientId, replacementSkill: name, sessionDate: today, weekStart, observedPercentage: num, totalTrials: 10, userConfirmed: true }]
@@ -292,6 +301,7 @@ function ConfirmWeekModal({
   clientId,
   onSaved,
   onClose,
+  isEdit = false,
 }: {
   week: string;
   projectedValue: number;
@@ -301,6 +311,7 @@ function ConfirmWeekModal({
   clientId: string;
   onSaved: () => void;
   onClose: () => void;
+  isEdit?: boolean;
 }) {
   const [value, setValue] = useState(String(projectedValue));
   const [saving, setSaving] = useState(false);
@@ -311,11 +322,10 @@ function ConfirmWeekModal({
     if (isNaN(num)) return;
     setSaving(true);
     try {
-      const weekStart = week.substring(0, 7) + "-01";
       const endpoint = isReplacement ? "/api/replacement-data" : "/api/maladaptive-data";
       const body = isReplacement
-        ? [{ clientId, replacementSkill: name, sessionDate: weekStart, weekStart, observedPercentage: num, totalTrials: 10, userConfirmed: true }]
-        : [{ clientId, behaviorName: name, sessionDate: weekStart, weekStart, frequency: num, userConfirmed: true }];
+        ? [{ clientId, replacementSkill: name, sessionDate: week, weekStart: week, observedPercentage: num, totalTrials: 10, userConfirmed: true }]
+        : [{ clientId, behaviorName: name, sessionDate: week, weekStart: week, frequency: num, userConfirmed: true }];
       await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       setSaved(true);
       setTimeout(() => { onSaved(); onClose(); }, 1000);
@@ -345,7 +355,7 @@ function ConfirmWeekModal({
               {name}
             </p>
             <p className="text-[11px]" style={{ color: "var(--text3)" }}>
-              {fmtWeek(week)}
+              {fmtWeek(week)} {isEdit ? "· edit" : ""}
             </p>
           </div>
           <button
@@ -363,7 +373,7 @@ function ConfirmWeekModal({
               className="text-[11px] font-semibold uppercase tracking-wide mb-2"
               style={{ color: "var(--text3)" }}
             >
-              ACTUAL VALUE
+              {isEdit ? "CORRECTED VALUE" : "ACTUAL VALUE"}
             </p>
             <div className="flex items-center gap-3">
               <input
@@ -380,9 +390,11 @@ function ConfirmWeekModal({
               <span className="text-[13px]" style={{ color: "var(--text2)" }}>
                 {unit || "occurrences/wk"}
               </span>
-              <span className="text-[11px] ml-auto flex-shrink-0" style={{ color: "var(--text3)" }}>
-                Projected: {projectedValue}{unit}
-              </span>
+              {!isEdit && (
+                <span className="text-[11px] ml-auto flex-shrink-0" style={{ color: "var(--text3)" }}>
+                  Projected: {projectedValue}{unit}
+                </span>
+              )}
             </div>
           </div>
           <button
@@ -391,7 +403,7 @@ function ConfirmWeekModal({
             className="w-full py-2.5 rounded-lg text-[13px] font-semibold text-white disabled:opacity-50 transition-colors"
             style={{ background: saved ? "#16A34A" : "var(--teal)" }}
           >
-            {saved ? "✓ Saved!" : saving ? "Saving…" : "Confirm Value"}
+            {saved ? "✓ Saved!" : saving ? "Saving…" : isEdit ? "Update Value" : "Confirm Value"}
           </button>
         </div>
       </div>
@@ -408,6 +420,7 @@ function ProgressChart({
   unit,
   yMax,
   onSelectProjected,
+  onSelectActual,
 }: {
   histData: WeekPoint[];
   projValues: number[];
@@ -415,11 +428,12 @@ function ProgressChart({
   unit: string;
   yMax: number;
   onSelectProjected?: (week: string, value: number) => void;
+  onSelectActual?: (week: string, value: number) => void;
 }) {
   const lastHistWeek = histData.length > 0 ? histData[histData.length - 1].week : null;
   const today = todayWeekStr();
   const baseWeek = lastHistWeek || today;
-  const projWeeks = projValues.map((_, i) => addWeeksToMonth(baseWeek, i + 1));
+  const projWeeks = projValues.map((_, i) => addWeeksToDate(baseWeek, i + 1));
 
   const chartData: any[] = [
     ...histData.map((d) => ({ week: d.week, actual: d.avg, projected: null })),
@@ -442,7 +456,18 @@ function ProgressChart({
   const CustomActualDot = (props: any) => {
     const { cx, cy, payload } = props;
     if (payload?.actual == null) return null;
-    return <circle cx={cx} cy={cy} r={3} fill="#111827" stroke="white" strokeWidth={1.5} />;
+    return (
+      <circle
+        cx={cx}
+        cy={cy}
+        r={4}
+        fill="#111827"
+        stroke="white"
+        strokeWidth={1.5}
+        style={{ cursor: "pointer" }}
+        onClick={() => onSelectActual?.(payload.week, payload.actual)}
+      />
+    );
   };
 
   const CustomProjDot = (props: any) => {
@@ -546,6 +571,7 @@ function TargetCard({
 
   const [showSetStart, setShowSetStart] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<{ week: string; value: number } | null>(null);
+  const [editingActual, setEditingActual] = useState<{ week: string; value: number } | null>(null);
 
   const goal = isRising ? 100 : 0;
 
@@ -619,6 +645,7 @@ function TargetCard({
             unit={unit}
             yMax={yMax}
             onSelectProjected={(week, value) => setPendingConfirm({ week, value })}
+            onSelectActual={(week, value) => setEditingActual({ week, value })}
           />
         )}
 
@@ -633,7 +660,7 @@ function TargetCard({
           </button>
         ) : (
           <p className="text-[10px] mt-1" style={{ color: "var(--text3)" }}>
-            Click any green dot to confirm the week&apos;s actual value.
+            Click a black dot to edit a past value · click a green dot to confirm the projected value.
           </p>
         )}
       </div>
@@ -658,6 +685,19 @@ function TargetCard({
           clientId={clientId}
           onSaved={onDataConfirmed}
           onClose={() => setPendingConfirm(null)}
+        />
+      )}
+      {editingActual && (
+        <ConfirmWeekModal
+          week={editingActual.week}
+          projectedValue={editingActual.value}
+          isReplacement={isRising}
+          unit={unit}
+          name={name}
+          clientId={clientId}
+          onSaved={onDataConfirmed}
+          onClose={() => setEditingActual(null)}
+          isEdit
         />
       )}
     </div>
