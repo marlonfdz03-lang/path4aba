@@ -52,14 +52,18 @@ function weeklyAvgs(records: any[], valueKey: string): WeekPoint[] {
   // Records arrive newest-first from the API (ordered by date desc, created_at desc).
   const map: Record<string, any[]> = {};
   records.forEach((r) => {
-    const raw = r.week_start || r.session_date || "?";
-    const week = raw !== "?" ? raw.substring(0, 10) : "?";
-    (map[week] = map[week] || []).push(r);
+    const rawDate = r.week_start || r.session_date;
+    if (!rawDate) return;
+    // Strip any timestamp suffix (e.g. "T00:00:00.000Z") to get bare YYYY-MM-DD.
+    // Never truncate to month — each distinct date is its own weekly bucket.
+    const dateStr = String(rawDate).replace(/T.*$/, "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
+    (map[dateStr] = map[dateStr] || []).push(r);
   });
   return Object.entries(map)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([week, recs]) => {
-      // If any confirmed record exists, prefer the newest one (recs[0] is newest).
+      // Prefer the newest confirmed record; fall back to average of all records.
       const confirmed = recs.filter((r) => r.user_confirmed);
       if (confirmed.length > 0) {
         return { week, avg: Number(confirmed[0][valueKey]) || 0 };

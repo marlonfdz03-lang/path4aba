@@ -77,37 +77,65 @@ export async function POST(req: Request) {
 
   const body = await req.json()
   const records: any[] = Array.isArray(body) ? body : [body]
-
   const now = new Date()
+
   try {
-    const created = await Promise.all(
-      records.map((r) =>
-        prisma.replacement_data.create({
+    const results = await Promise.all(
+      records.map(async (r) => {
+        // Upsert: if a record for the same client+skill+week already exists, update it.
+        const existing = r.weekStart
+          ? await prisma.replacement_data.findFirst({
+              where: {
+                client_id:         r.clientId,
+                replacement_skill: r.replacementSkill,
+                week_start:        r.weekStart,
+              },
+              select: { id: true },
+            })
+          : null
+
+        if (existing) {
+          return prisma.replacement_data.update({
+            where: { id: existing.id },
+            data: {
+              observed_percentage: r.observedPercentage ?? r.dailyPercentage ?? 0,
+              total_trials:        r.totalTrials ?? r.trials ?? 10,
+              correct_count:       r.correctCount     ?? 0,
+              incorrect_count:     r.incorrectCount   ?? 0,
+              alternated_sequence: r.alternatedSequence ?? r.sequence ?? null,
+              user_confirmed:      r.userConfirmed    ?? false,
+              confirmed_at:        r.userConfirmed    ? now : null,
+              autofill_completed:  r.autofillCompleted ?? false,
+              updated_at:          now,
+            },
+          })
+        }
+
+        return prisma.replacement_data.create({
           data: {
-            client_id: r.clientId,
-            session_date: r.sessionDate ?? null,
-            week_start: r.weekStart ?? null,
-            week_end: r.weekEnd ?? null,
-            location: r.location ?? null,
-            session_time_in: r.sessionTimeIn ?? null,
-            session_time_out: r.sessionTimeOut ?? null,
-            rbt_name: r.rbtName ?? null,
-            platform_source: r.platformSource ?? null,
-            replacement_skill: r.replacementSkill,
-            // accept both naming conventions from extension and web app
-            total_trials: r.totalTrials ?? r.trials ?? 10,
+            client_id:           r.clientId,
+            session_date:        r.sessionDate        ?? null,
+            week_start:          r.weekStart          ?? null,
+            week_end:            r.weekEnd            ?? null,
+            location:            r.location           ?? null,
+            session_time_in:     r.sessionTimeIn      ?? null,
+            session_time_out:    r.sessionTimeOut     ?? null,
+            rbt_name:            r.rbtName            ?? null,
+            platform_source:     r.platformSource     ?? null,
+            replacement_skill:   r.replacementSkill,
+            total_trials:        r.totalTrials ?? r.trials ?? 10,
             observed_percentage: r.observedPercentage ?? r.dailyPercentage ?? 0,
-            correct_count: r.correctCount ?? 0,
-            incorrect_count: r.incorrectCount ?? 0,
+            correct_count:       r.correctCount       ?? 0,
+            incorrect_count:     r.incorrectCount     ?? 0,
             alternated_sequence: r.alternatedSequence ?? r.sequence ?? null,
-            user_confirmed: r.userConfirmed ?? false,
-            confirmed_at: r.userConfirmed ? now : null,
-            autofill_completed: r.autofillCompleted ?? false,
+            user_confirmed:      r.userConfirmed      ?? false,
+            confirmed_at:        r.userConfirmed      ? now : null,
+            autofill_completed:  r.autofillCompleted  ?? false,
           },
         })
-      )
+      })
     )
-    return NextResponse.json({ ok: true, count: created.length })
+    return NextResponse.json({ ok: true, count: results.length })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }

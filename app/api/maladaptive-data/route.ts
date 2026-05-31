@@ -72,29 +72,58 @@ export async function POST(req: Request) {
   const now = new Date()
 
   try {
-    const created = await Promise.all(
-      records.map((r) =>
-        prisma.maladaptive_data.create({
+    const results = await Promise.all(
+      records.map(async (r) => {
+        // Upsert: if a record for the same client+behavior+week already exists, update it.
+        const existing = r.weekStart
+          ? await prisma.maladaptive_data.findFirst({
+              where: {
+                client_id:     r.clientId,
+                behavior_name: r.behaviorName,
+                week_start:    r.weekStart,
+              },
+              select: { id: true },
+            })
+          : null
+
+        if (existing) {
+          return prisma.maladaptive_data.update({
+            where: { id: existing.id },
+            data: {
+              frequency:       r.frequency      ?? null,
+              rate:            r.rate           ?? null,
+              duration:        r.duration       ?? null,
+              daily_values:    r.dailyValues    ?? null,
+              user_confirmed:  r.userConfirmed  ?? false,
+              confirmed_at:    r.userConfirmed  ? now : null,
+              projected_value: r.projectedValue ?? null,
+              goal_met:        r.goalMet        ?? null,
+              updated_at:      now,
+            },
+          })
+        }
+
+        return prisma.maladaptive_data.create({
           data: {
-            client_id: r.clientId,
-            behavior_name: r.behaviorName,
-            week_start: r.weekStart ?? null,
-            week_end: r.weekEnd ?? null,
-            session_date: r.sessionDate ?? null,
-            frequency: r.frequency ?? null,
-            rate: r.rate ?? null,
-            duration: r.duration ?? null,
-            trials: r.trials ?? null,
-            daily_values: r.dailyValues ?? null,
-            user_confirmed: r.userConfirmed ?? false,
-            confirmed_at: r.userConfirmed ? now : null,
+            client_id:       r.clientId,
+            behavior_name:   r.behaviorName,
+            week_start:      r.weekStart      ?? null,
+            week_end:        r.weekEnd        ?? null,
+            session_date:    r.sessionDate    ?? null,
+            frequency:       r.frequency      ?? null,
+            rate:            r.rate           ?? null,
+            duration:        r.duration       ?? null,
+            trials:          r.trials         ?? null,
+            daily_values:    r.dailyValues    ?? null,
+            user_confirmed:  r.userConfirmed  ?? false,
+            confirmed_at:    r.userConfirmed  ? now : null,
             projected_value: r.projectedValue ?? null,
-            goal_met: r.goalMet ?? null,
+            goal_met:        r.goalMet        ?? null,
           },
         })
-      )
+      })
     )
-    return NextResponse.json({ ok: true, count: created.length })
+    return NextResponse.json({ ok: true, count: results.length })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
