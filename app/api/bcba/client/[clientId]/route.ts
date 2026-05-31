@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/auth'
+import { getExtensionAuth } from '@/lib/extensionAuth'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -10,10 +10,10 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ clientId: string }> }
 ) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const user = await getExtensionAuth()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const userId = (session.user as any).id as string
+  const userId = user.id
   const { clientId } = await params
 
   if (!UUID_RE.test(userId)) return NextResponse.json({ error: 'Not connected to this client' }, { status: 403 })
@@ -48,10 +48,10 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ clientId: string }> }
 ) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const user = await getExtensionAuth()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const userId = (session.user as any).id as string
+  const userId = user.id
   const { clientId } = await params
 
   if (!UUID_RE.test(userId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

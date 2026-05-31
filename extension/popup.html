@@ -31,6 +31,25 @@
     </div>
   </div>
 
+  <!-- ── Screen: Token Setup ── -->
+  <div id="screen-token" class="screen" style="display:none">
+    <div class="auth-card">
+      <div class="auth-icon">🔑</div>
+      <p class="auth-title">Activate Extension</p>
+      <p class="auth-sub">Go to <strong>Path4ABA → Settings → Extension</strong>, generate a token, and paste it below.</p>
+      <textarea
+        id="tokenInput"
+        class="textarea"
+        placeholder="Paste your p4a_… token here"
+        rows="3"
+        style="font-family:monospace;font-size:11px;margin-bottom:8px;"
+      ></textarea>
+      <button id="activateBtn" class="btn-primary full-width">Activate</button>
+      <button id="openSettingsBtn" class="btn-outline full-width" style="margin-top:6px">Open Path4ABA Settings</button>
+      <p id="tokenError" class="error-msg" style="display:none;margin-top:8px"></p>
+    </div>
+  </div>
+
   <!-- ── Screen: Unauthenticated ── -->
   <div id="screen-auth" class="screen" style="display:none">
     <div class="auth-card">

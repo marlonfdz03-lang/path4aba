@@ -8,7 +8,7 @@ import { useSession } from "next-auth/react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type SettingsTab = "billing" | "help";
+type SettingsTab = "billing" | "extension" | "help";
 
 type Sub = {
   plan: string;
@@ -168,6 +168,134 @@ function BillingTab() {
   );
 }
 
+// ── Extension tab ─────────────────────────────────────────────────────────────
+
+function ExtensionTab() {
+  const [hasToken, setHasToken] = useState(false);
+  const [newToken, setNewToken] = useState<string | null>(null);
+  const [lastUsed, setLastUsed] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/extension/token")
+      .then((r) => r.json())
+      .then((d) => {
+        setHasToken(d.hasToken ?? false);
+        setLastUsed(d.lastUsedAt ?? null);
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, []);
+
+  async function generate() {
+    setLoading(true);
+    setNewToken(null);
+    try {
+      const res = await fetch("/api/extension/token", { method: "POST" });
+      const d = await res.json();
+      if (d.token) { setNewToken(d.token); setHasToken(true); }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function revoke() {
+    if (!confirm("Revoke the extension token? The extension will stop working until you generate a new one.")) return;
+    setLoading(true);
+    try {
+      await fetch("/api/extension/token", { method: "DELETE" });
+      setHasToken(false);
+      setNewToken(null);
+      setLastUsed(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function copy() {
+    if (!newToken) return;
+    await navigator.clipboard.writeText(newToken).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  if (!loaded) return <div className="text-sm" style={{ color: "var(--text3)" }}>Loading…</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl p-6" style={{ border: "1px solid var(--border)" }}>
+        <div className="h-[3px] -mx-6 -mt-6 mb-6 rounded-t-xl" style={{ background: "linear-gradient(90deg, #16a34a, #0d6e6e)" }} />
+        <p className="text-[14px] font-semibold mb-1" style={{ color: "var(--text1)" }}>Chrome Extension Token</p>
+        <p className="text-[13px] mb-5" style={{ color: "var(--text3)" }}>
+          Generate a personal token to activate the Path4ABA Chrome extension. Tokens never expire — revoke and regenerate if compromised.
+        </p>
+
+        {newToken ? (
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[12px] font-semibold text-green-700">✓ Token generated</span>
+              <span className="text-[11px]" style={{ color: "var(--text3)" }}>— copy it now, it won't be shown again</span>
+            </div>
+            <div className="flex gap-2 mt-3 mb-4">
+              <code className="flex-1 bg-gray-50 rounded-lg px-3 py-2.5 text-[11px] font-mono break-all leading-relaxed" style={{ border: "1px solid var(--border)", color: "var(--text1)" }}>
+                {newToken}
+              </code>
+              <button
+                onClick={copy}
+                className="px-4 py-2 rounded-lg text-[13px] font-semibold text-white flex-shrink-0 self-start"
+                style={{ background: copied ? "#16a34a" : "var(--teal)" }}
+              >
+                {copied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+            <p className="text-[12px]" style={{ color: "var(--text3)" }}>
+              Open the Path4ABA extension → paste this token → click Activate.
+            </p>
+          </div>
+        ) : hasToken ? (
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+              <span className="text-[13px] text-green-700 font-medium">Token active</span>
+              {lastUsed && (
+                <span className="text-[12px]" style={{ color: "var(--text3)" }}>
+                  · last used {new Date(lastUsed).toLocaleDateString()}
+                </span>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={generate} disabled={loading} className="px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white disabled:opacity-60" style={{ background: "var(--teal)" }}>
+                {loading ? "Generating…" : "Regenerate Token"}
+              </button>
+              <button onClick={revoke} disabled={loading} className="px-5 py-2.5 rounded-xl text-[13px] font-semibold disabled:opacity-60" style={{ color: "var(--text3)", border: "1px solid var(--border)" }}>
+                Revoke
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={generate} disabled={loading} className="px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white disabled:opacity-60" style={{ background: "var(--teal)" }}>
+            {loading ? "Generating…" : "Generate Extension Token"}
+          </button>
+        )}
+      </div>
+
+      <div className="bg-white rounded-xl p-6" style={{ border: "1px solid var(--border)" }}>
+        <p className="text-[13px] font-semibold mb-3" style={{ color: "var(--text1)" }}>How to activate</p>
+        <ol className="space-y-2">
+          {["Generate a token using the button above.", "Click Copy to copy it to your clipboard.", "Open the Path4ABA Chrome extension popup.", "Paste the token in the activation field and click Activate."].map((step, i) => (
+            <li key={i} className="flex gap-3 text-[13px]" style={{ color: "var(--text2)" }}>
+              <span className="flex-shrink-0 w-5 h-5 rounded-full text-[11px] font-bold flex items-center justify-center" style={{ background: "var(--border)", color: "var(--text3)" }}>{i + 1}</span>
+              {step}
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
+  );
+}
+
 // ── Help tab ──────────────────────────────────────────────────────────────────
 
 function HelpTab() {
@@ -277,6 +405,7 @@ export default function SettingsPage() {
 
   const TABS: { id: SettingsTab; label: string }[] = [
     { id: "billing", label: "Billing" },
+    { id: "extension", label: "Extension" },
     { id: "help", label: "Help" },
   ];
 
@@ -310,6 +439,7 @@ export default function SettingsPage() {
         </div>
 
         {tab === "billing" && <BillingTab />}
+        {tab === "extension" && <ExtensionTab />}
         {tab === "help" && <HelpTab />}
       </div>
     </div>

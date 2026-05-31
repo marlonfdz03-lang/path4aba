@@ -334,8 +334,19 @@ model users {
   image         String?
   created_at    DateTime  @default(now()) @db.Timestamptz(6)
 
-  accounts accounts[]
-  sessions sessions[]
+  accounts         accounts[]
+  sessions         sessions[]
+  extension_tokens extension_tokens[]
+}
+
+model extension_tokens {
+  id           String    @id @default(cuid())
+  user_id      String
+  token_hash   String    @unique
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  last_used_at DateTime? @db.Timestamptz(6)
+
+  user users @relation(fields: [user_id], references: [id], onDelete: Cascade)
 }
 
 model accounts {
