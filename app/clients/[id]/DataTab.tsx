@@ -187,116 +187,6 @@ function buildProjection(
   return out;
 }
 
-// ── Set Starting Value Modal ────────────────────────────────────────────────
-
-function SetStartingValueModal({
-  name,
-  isReplacement,
-  unit,
-  clientId,
-  onSaved,
-  onClose,
-}: {
-  name: string;
-  isReplacement: boolean;
-  unit: string;
-  clientId: string;
-  onSaved: () => void;
-  onClose: () => void;
-}) {
-  const [value, setValue] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  async function handleSave() {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    const num = isReplacement ? parseFloat(trimmed) : parseInt(trimmed);
-    if (isNaN(num)) return;
-    setSaving(true);
-    try {
-      const today = new Date().toISOString().split("T")[0];
-      const endpoint = isReplacement ? "/api/replacement-data" : "/api/maladaptive-data";
-      const body = isReplacement
-        ? [{ clientId, replacementSkill: name, sessionDate: today, weekStart: today, observedPercentage: num, totalTrials: 10, userConfirmed: true }]
-        : [{ clientId, behaviorName: name, sessionDate: today, weekStart: today, frequency: num, userConfirmed: true }];
-      await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      onSaved();
-      onClose();
-    } catch { /* silent */ }
-    setSaving(false);
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.45)" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm"
-        style={{ border: "1px solid var(--border)" }}
-      >
-        <div
-          className="flex items-center justify-between px-6 py-4"
-          style={{ borderBottom: "1px solid var(--border)" }}
-        >
-          <div>
-            <p className="text-[14px] font-semibold" style={{ color: "var(--text1)" }}>
-              Set Starting Value
-            </p>
-            <p className="text-[11px] truncate max-w-[240px]" style={{ color: "var(--text3)" }}>
-              {name}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-[20px] leading-none ml-4"
-            style={{ color: "var(--text3)" }}
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="px-6 py-5 space-y-4">
-          <div>
-            <p
-              className="text-[11px] font-semibold uppercase tracking-wide mb-2"
-              style={{ color: "var(--text3)" }}
-            >
-              CURRENT VALUE
-            </p>
-            <div className="flex items-center gap-3">
-              <input
-                type="number"
-                min="0"
-                max={isReplacement ? 100 : undefined}
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
-                placeholder={isReplacement ? "0–100" : "e.g. 20"}
-                autoFocus
-                className="w-28 border rounded-lg px-3 py-2.5 text-[15px] font-semibold focus:outline-none focus:ring-2"
-                style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-              />
-              <span className="text-[13px]" style={{ color: "var(--text2)" }}>
-                {unit || "occurrences/wk"}
-              </span>
-            </div>
-          </div>
-          <button
-            onClick={handleSave}
-            disabled={saving || value.trim() === ""}
-            className="w-full py-2.5 rounded-lg text-[13px] font-semibold text-white disabled:opacity-50"
-            style={{ background: "var(--teal)" }}
-          >
-            {saving ? "Saving…" : "Save & Generate Projection"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Confirm Week Modal ──────────────────────────────────────────────────────
 
 function ConfirmWeekModal({
@@ -838,7 +728,6 @@ function TargetCard({
       ? Math.round((currentValue - prevValue) * 10) / 10
       : null;
 
-  const [showSetStart, setShowSetStart] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<{ week: string; value: number } | null>(null);
   const [editingActual, setEditingActual] = useState<{ week: string; value: number } | null>(null);
   const [anomalyTarget, setAnomalyTarget] = useState<{
@@ -940,7 +829,9 @@ function TargetCard({
             className="flex items-center justify-center h-28 rounded-lg border-2 border-dashed"
             style={{ borderColor: "var(--border)" }}
           >
-            <p className="text-[12px] italic" style={{ color: "var(--text3)" }}>No data yet</p>
+            <p className="text-[12px] italic text-center px-4" style={{ color: "var(--text3)" }}>
+              Extract charts from Office Puzzle to populate this graph.
+            </p>
           </div>
         ) : (
           <ProgressChart
@@ -956,32 +847,14 @@ function TargetCard({
           />
         )}
 
-        {/* Action */}
-        {histData.length === 0 ? (
-          <button
-            onClick={() => setShowSetStart(true)}
-            className="mt-3 w-full py-2.5 rounded-lg text-[13px] font-semibold text-white"
-            style={{ background: "var(--teal)" }}
-          >
-            Set Starting Value
-          </button>
-        ) : (
+        {/* Action hint */}
+        {histData.length > 0 && (
           <p className="text-[10px] mt-1" style={{ color: "var(--text3)" }}>
             Click a black dot to edit · green dot to confirm projection · red/yellow triangle to review anomaly
           </p>
         )}
       </div>
 
-      {showSetStart && (
-        <SetStartingValueModal
-          name={name}
-          isReplacement={isRising}
-          unit={unit}
-          clientId={clientId}
-          onSaved={onDataConfirmed}
-          onClose={() => setShowSetStart(false)}
-        />
-      )}
       {pendingConfirm && (
         <ConfirmWeekModal
           week={pendingConfirm.week}
