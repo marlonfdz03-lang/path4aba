@@ -374,6 +374,40 @@ Return this exact JSON structure:
       parsed.historicalData = [...parsed.historicalData, ...newPoints];
     }
 
+    // Add currentAccuracy for active replacement skills as a single historical data point.
+    // Use the latest summaryTable month date as the data point date, or today if no table.
+    let accuracyDate = new Date().toISOString().substring(0, 7) + '-01'
+    if (parsed.summaryTable) {
+      let latest = ''
+      for (const h of parsed.summaryTable.headers) {
+        const m = h.match(/^([A-Za-z]+)\s+(\d{4})$/)
+        if (m) {
+          const mon = MONTH_TO_NUM[m[1].toLowerCase()]
+          if (mon) {
+            const dt = `${m[2]}-${mon}-01`
+            if (dt > latest) latest = dt
+          }
+        }
+      }
+      if (latest) accuracyDate = latest
+    }
+    const accuracyKeys = new Set(parsed.historicalData.map(p => `${p.name.toLowerCase()}|${p.weekStart}`))
+    for (const skill of parsed.replacementSkills) {
+      if (!skill.currentAccuracy || skill.status?.toLowerCase() === 'mastered') continue
+      const pct = parseFloat(String(skill.currentAccuracy).replace(/[^0-9.]/g, ''))
+      if (isNaN(pct) || pct <= 0) continue
+      const key = `${skill.name.toLowerCase()}|${accuracyDate}`
+      if (accuracyKeys.has(key)) continue
+      accuracyKeys.add(key)
+      parsed.historicalData.push({
+        name: skill.name,
+        targetType: 'replacement',
+        weekStart: accuracyDate,
+        weekEnd: null,
+        value: pct,
+      })
+    }
+
     return stripIdentifiers(parsed);
   } catch (error) {
     console.error('Failed to parse assessment extraction:', error);

@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import PDFParser from "pdf2json";
 import { extractAssessment, ExtractedAssessment } from "@/lib/extractAssessment";
-import { extractChartDataFromPdf } from "@/lib/extractChartData";
 import { prisma } from "@/lib/prisma";
 
-// Vision chart extraction can take several minutes on large PDFs
-export const maxDuration = 180;
+export const maxDuration = 60;
 
 export const runtime = "nodejs";
 
@@ -328,22 +326,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Run text extraction and chart vision extraction in parallel
-    const [textResult, chartResult] = await Promise.allSettled([
-      extractAssessment(text.slice(0, 90000)),
-      extractChartDataFromPdf(buffer),
-    ]);
-
-    if (textResult.status === "rejected") throw textResult.reason;
-    const extracted = textResult.value;
-
-    if (chartResult.status === "rejected") {
-      console.error("Chart vision extraction failed:", chartResult.reason);
-    }
-    const chartPoints = chartResult.status === "fulfilled" ? chartResult.value.points : [];
-    const chartExtractionLog = chartResult.status === "fulfilled"
-      ? chartResult.value.log
-      : { error: String((chartResult as any).reason), pagesProcessed: 0, totalPagesInPdf: 0, totalChartsFound: 0, replacementPointsFound: 0, maladaptivePointsFound: 0, batches: [] };
+    const extracted = await extractAssessment(text.slice(0, 90000));
 
     saveKnowledgeBase(extracted).catch(err =>
       console.error("Knowledge base save error:", err)
@@ -351,19 +334,11 @@ export async function POST(req: NextRequest) {
 
     const normalized = mapToLegacyFormat(extracted);
 
-    // Merge data points from text extraction and visual chart extraction
-    const allHistoricalData = [
-      ...(extracted.historicalData ?? []),
-      ...chartPoints,
-    ];
-
     return NextResponse.json({
       ...normalized,
       extractedStos: extracted.stos ?? [],
-      extractedHistoricalData: allHistoricalData,
+      extractedHistoricalData: extracted.historicalData ?? [],
       extractedSummaryTable: extracted.summaryTable ?? null,
-      extractedChartCount: chartPoints.length,
-      chartExtractionLog,
     });
   } catch (error: any) {
     console.error(error);

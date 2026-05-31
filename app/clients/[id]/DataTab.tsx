@@ -81,16 +81,20 @@ function mulberry32(seed: number) {
 }
 
 // ── Projection engine ──────────────────────────────────────────────────────
-// Generates an irregular, organic-looking trend toward the goal.
+// Generates an irregular, organic-looking 26-week projection toward the goal.
 // Rules enforced:
+//   • Max change per week: 4 units (MAX_STEP)
 //   • No two consecutive weeks have the same change magnitude
 //   • Never more than 3 consecutive weeks in the same direction
-//   • Overall trend reaches goal in 12–16 weeks (3–4 months)
+//   • Reaches goal by completionWeek (18–25), then flat at goal through week 26
 //   • nameIndex seeds the PRNG so every behavior has a unique pattern
+
+const TOTAL_WEEKS = 26;
+const MAX_STEP = 4;
 
 function buildProjection(
   histValues: number[],
-  sto: { baseline: number; goal: number; totalWeeks: number },
+  sto: { baseline: number; goal: number; totalWeeks: number | null },
   nameIndex: number
 ): number[] {
   const start = histValues.length > 0 ? histValues[histValues.length - 1] : sto.baseline;
@@ -99,52 +103,56 @@ function buildProjection(
 
   const rising = goal > start;
   const totalDist = Math.abs(goal - start);
+  // Stagger completion week per behavior so charts don't all plateau together
+  const completionWeek = 18 + (Math.abs(nameIndex) % 8);
+  const avgStep = totalDist / completionWeek;
 
-  // 12–16 weeks, staggered by name so completions never land the same month
-  const totalW = 12 + (Math.abs(nameIndex) % 5);
-  const avgStep = totalDist / totalW;
+  // Magnitude pool scaled by avgStep, clamped to MAX_STEP
+  const magMultipliers = [0.5, 1.2, 0.3, 2.0, 0.8, 1.6, 0.4, 2.4, 1.0, 1.8, 0.6, 2.8, 1.4, 0.7, 2.2, 0.9];
+  const magPool = magMultipliers.map(m => Math.min(m * avgStep, MAX_STEP));
 
-  // Magnitude pool: multiples of avgStep — deliberately uneven
-  const magPool = [0.6, 1.8, 0.4, 2.4, 1.0, 3.2, 0.5, 1.5, 0.8, 2.0, 1.3, 0.7];
   const seed = Math.abs(hashStr(String(nameIndex).padStart(4, "X")));
   const rng = mulberry32(seed);
 
   const out: number[] = [];
   let prev = start;
   let consecutiveDir = 0;
-  let lastDir = 0;   // +1 or -1
+  let lastDir = 0;
   let lastMagIdx = -1;
 
-  for (let w = 0; w < totalW; w++) {
-    // Last week: snap to goal exactly
-    if (w === totalW - 1) {
+  for (let w = 0; w < TOTAL_WEEKS; w++) {
+    // After completionWeek: flat at goal
+    if (w >= completionWeek) {
       out.push(Math.round(goal * 10) / 10);
-      break;
+      continue;
     }
 
-    const remaining = totalW - w;
+    // Snap to goal on the last active week
+    if (w === completionWeek - 1) {
+      out.push(Math.round(goal * 10) / 10);
+      prev = goal;
+      continue;
+    }
+
+    const remaining = completionWeek - w;
     const distLeft = Math.abs(goal - prev);
 
     // Pick magnitude, never the same index twice in a row
     let magIdx = Math.floor(rng() * magPool.length);
     if (magIdx === lastMagIdx) magIdx = (magIdx + 1) % magPool.length;
     lastMagIdx = magIdx;
-    const mag = magPool[magIdx] * avgStep;
+    const mag = magPool[magIdx];
 
     // Determine direction
     let dir: 1 | -1;
     if (consecutiveDir >= 3) {
-      // Force a reversal
       dir = (-lastDir || 1) as 1 | -1;
     } else if (remaining <= 3 && distLeft > avgStep * 1.5) {
-      // In last 3 weeks, force toward goal if still far
       dir = 1;
     } else {
-      // 62% toward goal, 38% against — irregular but trending
       dir = rng() < 0.62 ? 1 : -1;
     }
 
-    // Convert +1/-1 relative to goal into an absolute delta
     const delta = (rising ? 1 : -1) * dir * mag;
     let v = prev + delta;
 
@@ -153,7 +161,6 @@ function buildProjection(
     if (rising) v = Math.max(start - slack, Math.min(goal, v));
     else v = Math.min(start + slack, Math.max(goal, v));
 
-    // Track consecutive direction
     const actualDir = v > prev ? 1 : v < prev ? -1 : lastDir;
     if (actualDir === lastDir) consecutiveDir++;
     else { consecutiveDir = 1; lastDir = actualDir; }
@@ -463,20 +470,20 @@ function ProgressChart({
             />
           )}
 
-          {/* Baseline red dot */}
-          {baselineValue != null && histData.length > 0 && (
+          {/* New Baseline — last historical point, orange dot */}
+          {histData.length > 0 && (
             <ReferenceDot
-              x={histData[0].week}
-              y={baselineValue}
+              x={histData[histData.length - 1].week}
+              y={histData[histData.length - 1].avg}
               r={5}
-              fill="#EF4444"
+              fill="#EA580C"
               stroke="white"
               strokeWidth={2}
               label={{
-                value: `Baseline ${baselineValue}${unit}`,
+                value: `New Baseline ${histData[histData.length - 1].avg}${unit}`,
                 position: "insideTopRight",
                 fontSize: 9,
-                fill: "#EF4444",
+                fill: "#EA580C",
               }}
             />
           )}
