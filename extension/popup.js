@@ -46,15 +46,17 @@ async function api(path, options = {}) {
     ? {}
     : { 'Content-Type': 'application/json' };
 
-  // Inject Bearer token if available, otherwise fall back to cookies
+  // Bearer token auth: omit cookies (not needed), send token in header.
+  // Cookie auth fallback: include cookies for session-based auth.
   const authHeaders = extensionToken
     ? { 'Authorization': `Bearer ${extensionToken}` }
     : {};
+  const credentialsMode = extensionToken ? 'omit' : 'include';
 
   const url = `${BASE}${path}`;
   try {
     const res = await fetch(url, {
-      credentials: 'include',
+      credentials: credentialsMode,
       ...options,
       headers: {
         ...baseHeaders,
@@ -799,25 +801,36 @@ document.getElementById('activateBtn').addEventListener('click', async () => {
   btn.textContent = 'Verifying…';
 
   try {
-    // Verify by hitting both endpoints — token is valid if at least one is NOT 401
-    const authHeaders = { 'Authorization': `Bearer ${raw}` };
-    const [bcbaR, rbtR] = await Promise.allSettled([
-      fetch(`${BASE}/api/bcba/clients`, { credentials: 'include', headers: authHeaders }),
-      fetch(`${BASE}/api/rbt/clients`,  { credentials: 'include', headers: authHeaders }),
+    // Set token temporarily so api() / apiWithTimeout() send the Bearer header
+    extensionToken = raw;
+
+    // Use apiWithTimeout (6 s abort) — same pattern as init()
+    const [bcbaResult, rbtResult] = await Promise.allSettled([
+      apiWithTimeout('/api/bcba/clients', 6000),
+      apiWithTimeout('/api/rbt/clients',  6000),
     ]);
 
-    const responses = [bcbaR, rbtR].filter(r => r.status === 'fulfilled').map(r => r.value);
-    const allRejected = responses.every(r => r.status === 401);
+    const responses = [bcbaResult, rbtResult]
+      .filter(r => r.status === 'fulfilled')
+      .map(r => r.value);
 
-    if (allRejected) {
+    if (responses.length === 0) {
+      // Both timed out or had a network error
       extensionToken = null;
-      errEl.textContent = 'Token not recognized. Make sure you copied the full token and it hasn\'t been revoked.';
+      errEl.textContent = 'Connection timed out. Check your network and try again.';
       errEl.style.display = '';
       return;
     }
-    extensionToken = raw;
 
-    // Token works — persist and re-init
+    const allUnauthorized = responses.every(r => r.status === 401);
+    if (allUnauthorized) {
+      extensionToken = null;
+      errEl.textContent = 'Token not recognized. Regenerate a new one in Path4ABA Settings → Extension.';
+      errEl.style.display = '';
+      return;
+    }
+
+    // Token valid — persist and boot normally
     await chrome.storage.local.set({ extensionToken: raw });
     if (input) input.value = '';
     await init();
