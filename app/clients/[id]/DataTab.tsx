@@ -63,10 +63,25 @@ function weeklyAvgs(records: any[], valueKey: string): WeekPoint[] {
     }));
 }
 
+// ── Seeded PRNG (mulberry32) ───────────────────────────────────────────────
+
+function mulberry32(seed: number) {
+  return function () {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 // ── Projection engine ──────────────────────────────────────────────────────
-// Uses φ, e, π as frequencies for non-repeating natural variability.
-// nameIndex is used to stagger completion dates: each behavior/skill finishes
-// 2–4 weeks apart so they never all complete the same month.
+// Generates an irregular, organic-looking trend toward the goal.
+// Rules enforced:
+//   • No two consecutive weeks have the same change magnitude
+//   • Never more than 3 consecutive weeks in the same direction
+//   • Overall trend reaches goal in 12–16 weeks (3–4 months)
+//   • nameIndex seeds the PRNG so every behavior has a unique pattern
 
 function buildProjection(
   histValues: number[],
@@ -74,27 +89,74 @@ function buildProjection(
   nameIndex: number
 ): number[] {
   const start = histValues.length > 0 ? histValues[histValues.length - 1] : sto.baseline;
-  const { goal, totalWeeks } = sto;
-  // Each target gets a unique 2-4 week stagger based on its index
-  const stagger = 2 + (Math.abs(nameIndex) % 3);
-  const weeksRemaining = Math.max(totalWeeks - histValues.length + stagger, 4);
-  const step = (goal - start) / weeksRemaining;
-  const φ = 1.6180339887, e = 2.7182818284, π = 3.1415926535;
+  const { goal } = sto;
+  if (start === goal) return [];
+
+  const rising = goal > start;
+  const totalDist = Math.abs(goal - start);
+
+  // 12–16 weeks, staggered by name so completions never land the same month
+  const totalW = 12 + (Math.abs(nameIndex) % 5);
+  const avgStep = totalDist / totalW;
+
+  // Magnitude pool: multiples of avgStep — deliberately uneven
+  const magPool = [0.6, 1.8, 0.4, 2.4, 1.0, 3.2, 0.5, 1.5, 0.8, 2.0, 1.3, 0.7];
+  const seed = Math.abs(hashStr(String(nameIndex).padStart(4, "X")));
+  const rng = mulberry32(seed);
+
   const out: number[] = [];
   let prev = start;
-  for (let w = 1; w <= weeksRemaining; w++) {
-    const noise =
-      step * 0.35 * Math.sin(w * φ) +
-      step * 0.22 * Math.sin(w * e) +
-      step * 0.13 * Math.sin(w * π);
-    let v = prev + step + noise;
-    const rising = goal > start;
-    if (rising) v = Math.max(prev - Math.abs(step) * 0.3, Math.min(goal, v));
-    else v = Math.min(prev + Math.abs(step) * 0.3, Math.max(goal, v));
-    if (w === weeksRemaining) v = goal;
+  let consecutiveDir = 0;
+  let lastDir = 0;   // +1 or -1
+  let lastMagIdx = -1;
+
+  for (let w = 0; w < totalW; w++) {
+    // Last week: snap to goal exactly
+    if (w === totalW - 1) {
+      out.push(Math.round(goal * 10) / 10);
+      break;
+    }
+
+    const remaining = totalW - w;
+    const distLeft = Math.abs(goal - prev);
+
+    // Pick magnitude, never the same index twice in a row
+    let magIdx = Math.floor(rng() * magPool.length);
+    if (magIdx === lastMagIdx) magIdx = (magIdx + 1) % magPool.length;
+    lastMagIdx = magIdx;
+    const mag = magPool[magIdx] * avgStep;
+
+    // Determine direction
+    let dir: 1 | -1;
+    if (consecutiveDir >= 3) {
+      // Force a reversal
+      dir = (-lastDir || 1) as 1 | -1;
+    } else if (remaining <= 3 && distLeft > avgStep * 1.5) {
+      // In last 3 weeks, force toward goal if still far
+      dir = 1;
+    } else {
+      // 62% toward goal, 38% against — irregular but trending
+      dir = rng() < 0.62 ? 1 : -1;
+    }
+
+    // Convert +1/-1 relative to goal into an absolute delta
+    const delta = (rising ? 1 : -1) * dir * mag;
+    let v = prev + delta;
+
+    // Soft boundary: don't wander more than 15% of totalDist past the start
+    const slack = totalDist * 0.15;
+    if (rising) v = Math.max(start - slack, Math.min(goal, v));
+    else v = Math.min(start + slack, Math.max(goal, v));
+
+    // Track consecutive direction
+    const actualDir = v > prev ? 1 : v < prev ? -1 : lastDir;
+    if (actualDir === lastDir) consecutiveDir++;
+    else { consecutiveDir = 1; lastDir = actualDir; }
+
     out.push(Math.round(v * 10) / 10);
     prev = v;
   }
+
   return out;
 }
 
@@ -325,9 +387,9 @@ function ProgressChart({
         cx={cx}
         cy={cy}
         r={4}
-        fill="white"
-        stroke="#16A34A"
-        strokeWidth={2}
+        fill="#16A34A"
+        stroke="white"
+        strokeWidth={1.5}
         style={{ cursor: "pointer" }}
         onClick={() => {
           setPendingConfirm({ week: payload.week, value: payload.projected });

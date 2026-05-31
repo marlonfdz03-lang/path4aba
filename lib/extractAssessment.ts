@@ -144,15 +144,35 @@ For caregivers: extract names of caregivers, parents, or guardians mentioned in 
 ━━━ STO EXTRACTION RULES ━━━
 Extract EVERY SINGLE STO for EVERY behavior and skill — including mastered STOs, in-progress STOs, and future/upcoming STOs. DO NOT SKIP ANY.
 Look in sections titled: "Short-Term Objectives", "STOs", "Treatment Goals", "Goals", "Objectives", numbered goal lists, or any section listing incremental targets.
-A behavior may have many STOs (e.g., STO#1 through STO#16). Extract them ALL.
-For each STO extract:
-- name: the exact behavior or skill name (e.g., "Request a Break", "Aggression")
+A behavior may have many STOs (e.g., STO#1 through STO#16). Extract them ALL as SEPARATE records.
+
+CRITICAL — EACH STO IS ONE STEP, NOT THE FULL JOURNEY:
+Each STO describes a single incremental step: a starting value and an ending value for that step only.
+DO NOT collapse all STOs into one record.
+DO NOT use the original baseline as baselineValue for every STO.
+DO NOT use 0 or the final LTO as goalValue for every STO.
+
+CONCRETE EXAMPLE — you MUST follow this pattern exactly:
+If "Tantrums" has these STOs in the document:
+  STO#1: reduce from 85 to 80 occurrences per week
+  STO#2: reduce from 80 to 75 occurrences per week
+  STO#3: reduce from 75 to 70 occurrences per week
+  STO#14: reduce from 25 to 20 occurrences per week
+You must produce FOUR SEPARATE records:
+  { "name": "Tantrums", "baselineValue": 85, "goalValue": 80 }
+  { "name": "Tantrums", "baselineValue": 80, "goalValue": 75 }
+  { "name": "Tantrums", "baselineValue": 75, "goalValue": 70 }
+  { "name": "Tantrums", "baselineValue": 25, "goalValue": 20 }
+You must NEVER produce: { "name": "Tantrums", "baselineValue": 85, "goalValue": 0 }
+
+For each STO record extract:
+- name: the exact behavior or skill name (e.g., "Request a Break", "Tantrums")
 - targetType: "replacement" if it is a skill to increase, "maladaptive" if it is a behavior to decrease
-- baselineValue: numeric baseline (use percentage 0–100 for skills, frequency count for behaviors; parse "40%" as 40, "3x/week" as 3)
-- goalValue: numeric goal using the same unit as baselineValue
-- totalWeeks: number of weeks if stated (e.g., "within 16 weeks" → 16), otherwise null
-- targetDate: target date as YYYY-MM-DD if a specific date is stated, otherwise null
-- startDate: start date as YYYY-MM-DD if stated, otherwise null
+- baselineValue: THE STARTING VALUE OF THIS SPECIFIC STEP (e.g., for STO#2 "80 → 75", baselineValue = 80)
+- goalValue: THE ENDING VALUE OF THIS SPECIFIC STEP (e.g., for STO#2 "80 → 75", goalValue = 75)
+- totalWeeks: number of weeks for this step if stated, otherwise null
+- targetDate: target date as YYYY-MM-DD if stated for this step, otherwise null
+- startDate: start date as YYYY-MM-DD if stated for this step, otherwise null
 If no STOs are present, return an empty array.
 
 ━━━ HISTORICAL DATA EXTRACTION RULES ━━━
