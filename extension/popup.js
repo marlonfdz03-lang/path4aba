@@ -32,6 +32,25 @@ let medicationChange = false;
 let missedSessions = false;
 let complianceLevel = 'typical';
 
+// ── Storage change tracer ──────────────────
+// Fires for any change to chrome.storage.local from ANY source (popup, background, etc.)
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !('extensionToken' in changes)) return;
+  const { oldValue, newValue } = changes.extensionToken;
+  if (!newValue) {
+    console.warn(
+      '[Path4ABA] STORAGE: extensionToken REMOVED from storage.',
+      'old:', oldValue ? oldValue.slice(0, 12) + '…' : 'null',
+      '| stack:', new Error('storage-removal-trace').stack,
+    );
+  } else {
+    console.log(
+      '[Path4ABA] STORAGE: extensionToken SET in storage.',
+      'new:', newValue.slice(0, 12) + '…',
+    );
+  }
+});
+
 // ── API helper ─────────────────────────────
 const INIT_TIMEOUT_MS = 6000;
 
@@ -69,6 +88,7 @@ async function api(path, options = {}) {
     // deploy-window 401s don't force re-entry. Storage is only cleared on
     // explicit logout or when the user activates a new token.
     if (res.status === 401 && extensionToken) {
+      console.warn('[Path4ABA] api: 401 on', path, '— clearing in-memory token ONLY (storage untouched)');
       extensionToken = null;
       showScreen('token');
       const errEl = document.getElementById('tokenError');
@@ -104,8 +124,10 @@ async function init() {
   showScreen('loading');
 
   // Load persisted token before making any API call
+  console.log('[Path4ABA] init: reading token from storage…');
   const stored = await chrome.storage.local.get('extensionToken');
   extensionToken = stored.extensionToken || null;
+  console.log('[Path4ABA] init: token from storage =', extensionToken ? extensionToken.slice(0, 12) + '…' : 'null (none stored)');
 
   // No token → ask user to set one up (don't hit the API)
   if (!extensionToken) {
@@ -126,6 +148,7 @@ async function init() {
   // deploy-window error doesn't force the user to re-enter their token.
   // Storage is only cleared on explicit logout or new-token activation.
   if (bcbaRes?.status === 401 || rbtRes?.status === 401) {
+    console.warn('[Path4ABA] init: 401 received — clearing in-memory token ONLY (storage untouched, reopen popup after server restarts)');
     extensionToken = null;
     showScreen('token');
     const errEl = document.getElementById('tokenError');
@@ -801,7 +824,8 @@ document.getElementById('openAppBtn')?.addEventListener('click', () => {
 
 document.getElementById('logoutBtn').addEventListener('click', async () => {
   await api('/api/auth/signout', { method: 'POST' }).catch(() => {});
-  // Clear token so the user must re-activate the extension
+  // Explicit logout — this is the ONLY place storage should be cleared
+  console.log('[Path4ABA] logout: explicit user action — removing token from storage + memory');
   extensionToken = null;
   await chrome.storage.local.remove('extensionToken');
   showScreen('token');
@@ -827,6 +851,7 @@ document.getElementById('activateBtn').addEventListener('click', async () => {
 
   try {
     // Set token temporarily so api() / apiWithTimeout() send the Bearer header
+    console.log('[Path4ABA] activateBtn: testing token (in-memory only until verified):', raw.slice(0, 12) + '…');
     extensionToken = raw;
 
     // Use apiWithTimeout (6 s abort) — same pattern as init()
@@ -841,6 +866,7 @@ document.getElementById('activateBtn').addEventListener('click', async () => {
 
     if (responses.length === 0) {
       // Both timed out or had a network error
+      console.warn('[Path4ABA] activateBtn: network failure — clearing in-memory token (storage unchanged)');
       extensionToken = null;
       const rejectedResult = bcbaResult.status === 'rejected' ? bcbaResult : rbtResult;
       const err = rejectedResult.reason;
@@ -856,6 +882,7 @@ document.getElementById('activateBtn').addEventListener('click', async () => {
 
     const allUnauthorized = responses.every(r => r.status === 401);
     if (allUnauthorized) {
+      console.warn('[Path4ABA] activateBtn: token rejected by server — clearing in-memory token (storage unchanged)');
       extensionToken = null;
       errEl.textContent = 'Token not recognized. Regenerate a new one in Path4ABA Settings → Extension.';
       errEl.style.display = '';
@@ -863,10 +890,12 @@ document.getElementById('activateBtn').addEventListener('click', async () => {
     }
 
     // Token valid — persist and boot normally
+    console.log('[Path4ABA] activateBtn: token verified — saving to storage:', raw.slice(0, 12) + '…');
     await chrome.storage.local.set({ extensionToken: raw });
     if (input) input.value = '';
     await init();
-  } catch {
+  } catch (err) {
+    console.warn('[Path4ABA] activateBtn: caught error — clearing in-memory token (storage unchanged):', err);
     extensionToken = null;
     errEl.textContent = 'Network error. Check your connection and try again.';
     errEl.style.display = '';
