@@ -159,11 +159,18 @@ async function init() {
   }
 
   // Both requests timed out or had a network error
-  const timedOut = bcbaResult.status === 'rejected' || rbtResult.status === 'rejected';
-  if (timedOut) {
+  const anyRejected = bcbaResult.status === 'rejected' || rbtResult.status === 'rejected';
+  if (anyRejected) {
+    const rejectedResult = bcbaResult.status === 'rejected' ? bcbaResult : rbtResult;
+    const err = rejectedResult.reason;
+    const isTimeout = err?.name === 'AbortError';
+    const msg = isTimeout
+      ? `Request timed out after ${INIT_TIMEOUT_MS / 1000}s. Check your network and try again.`
+      : `Connection failed: ${err?.message || String(err)}. Check your network and try again.`;
+    console.error('[Path4ABA] init() network error:', err);
     showScreen('token');
     const errEl = document.getElementById('tokenError');
-    if (errEl) { errEl.textContent = 'Connection timed out. Check your network and try again.'; errEl.style.display = ''; }
+    if (errEl) { errEl.textContent = msg; errEl.style.display = ''; }
     return;
   }
 
@@ -820,7 +827,14 @@ document.getElementById('activateBtn').addEventListener('click', async () => {
     if (responses.length === 0) {
       // Both timed out or had a network error
       extensionToken = null;
-      errEl.textContent = 'Connection timed out. Check your network and try again.';
+      const rejectedResult = bcbaResult.status === 'rejected' ? bcbaResult : rbtResult;
+      const err = rejectedResult.reason;
+      const isTimeout = err?.name === 'AbortError';
+      const msg = isTimeout
+        ? 'Request timed out. Check your network and try again.'
+        : `Connection failed: ${err?.message || String(err)}`;
+      console.error('[Path4ABA] activateBtn network error:', err);
+      errEl.textContent = msg;
       errEl.style.display = '';
       return;
     }
