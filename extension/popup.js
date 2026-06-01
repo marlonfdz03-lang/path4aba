@@ -64,13 +64,14 @@ async function api(path, options = {}) {
         ...(options.headers || {}),
       },
     });
-    // Token rejected — clear it and show setup screen
+    // Token rejected — clear in-memory copy only; keep storage so transient
+    // deploy-window 401s don't force re-entry. Storage is only cleared on
+    // explicit logout or when the user activates a new token.
     if (res.status === 401 && extensionToken) {
       extensionToken = null;
-      chrome.storage.local.remove('extensionToken');
       showScreen('token');
       const errEl = document.getElementById('tokenError');
-      if (errEl) { errEl.textContent = 'Token expired or revoked. Generate a new one.'; errEl.style.display = ''; }
+      if (errEl) { errEl.textContent = 'Connection failed. Reopen the extension to retry, or generate a new token if this persists.'; errEl.style.display = ''; }
     }
     return res;
   } catch (err) {
@@ -120,13 +121,14 @@ async function init() {
   const bcbaRes = bcbaResult.status === 'fulfilled' ? bcbaResult.value : null;
   const rbtRes  = rbtResult.status  === 'fulfilled' ? rbtResult.value  : null;
 
-  // 401 with a token means the token was revoked — clear it and ask for a new one
+  // 401 with a token — clear in-memory only; keep chrome.storage so a transient
+  // deploy-window error doesn't force the user to re-enter their token.
+  // Storage is only cleared on explicit logout or new-token activation.
   if (bcbaRes?.status === 401 || rbtRes?.status === 401) {
     extensionToken = null;
-    chrome.storage.local.remove('extensionToken');
     showScreen('token');
     const errEl = document.getElementById('tokenError');
-    if (errEl) { errEl.textContent = 'Token is no longer valid. Generate a new one in Path4ABA Settings.'; errEl.style.display = ''; }
+    if (errEl) { errEl.textContent = 'Connection failed. Reopen the extension to retry, or generate a new token in Path4ABA Settings if this persists.'; errEl.style.display = ''; }
     return;
   }
 
