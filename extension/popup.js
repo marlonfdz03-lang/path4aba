@@ -1982,16 +1982,26 @@ function officePuzzleDatasheetAutofiller(tasks) {
     return seq;
   }
 
+  // Scan ALL rows for a "Days" row (cells contain bare day numbers 1–31).
+  // OP puts this row at the bottom of tbody, not in thead.
   function findDayColumn(table, dayNumber) {
     const day = parseInt(dayNumber);
-    const headerRow = table.querySelector('thead tr') || table.querySelector('tr');
-    if (!headerRow) return -1;
-    const cells = Array.from(headerRow.querySelectorAll('th, td'));
-    for (let i = 1; i < cells.length; i++) {
-      const nums = (cells[i].textContent.match(/\d+/g) || [])
-        .map(Number)
-        .filter(n => n >= 1 && n <= 31);
-      if (nums.includes(day)) return i;
+    const allRows = Array.from(table.querySelectorAll('tr'));
+
+    for (const row of allRows) {
+      const cells = Array.from(row.querySelectorAll('th, td'));
+      let dayHits = 0;
+      let targetCol = -1;
+      cells.forEach((cell, colIdx) => {
+        const raw = cell.textContent.trim();
+        if (!/^\d{1,2}$/.test(raw)) return; // must be a bare 1–2 digit number
+        const n = parseInt(raw, 10);
+        if (n < 1 || n > 31) return;
+        dayHits++;
+        if (n === day) targetCol = colIdx;
+      });
+      // ≥5 day-number cells → this is the Days row
+      if (dayHits >= 5 && targetCol !== -1) return targetCol;
     }
     return -1;
   }
@@ -2015,13 +2025,16 @@ function officePuzzleDatasheetAutofiller(tasks) {
 
   // Fuzzy match: does task name match detected page name?
   function namesMatch(a, b) {
-    const al = a.toLowerCase().trim();
-    const bl = b.toLowerCase().trim();
+    function norm(s) {
+      return s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+    const al = norm(a);
+    const bl = norm(b);
     if (al === bl) return true;
     if (al.includes(bl) || bl.includes(al)) return true;
-    const aWords = al.split(/\s+/).filter(w => w.length > 2);
-    const bWords = bl.split(/\s+/).filter(w => w.length > 2);
-    return aWords.some(w => bWords.includes(w));
+    const aWords = al.split(' ').filter(w => w.length > 2);
+    const bWords = new Set(bl.split(' ').filter(w => w.length > 2));
+    return aWords.some(w => bWords.has(w));
   }
 
   // ── Detect which behavior is on this page ─────────────────────────────────
