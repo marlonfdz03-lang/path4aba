@@ -858,6 +858,10 @@ let dataLocation = null;
 let skillRows = [];        // replacement skill rows
 let maladaptiveRows = [];  // { behavior, weeklyAvg, dailyValues, status }
 
+// Projected-values autofill state (OP datasheet)
+let autofillProjectedItems = [];   // [{ name, type, projectedValue, unit }]
+let autofillSelections = {};       // name → { met: boolean, actualValue: number|null }
+
 // ── Helpers ────────────────────────────────
 function generateAltSequence(correct, incorrect) {
   const total = correct + incorrect;
@@ -2140,88 +2144,118 @@ document.getElementById('saveChartsBtn').addEventListener('click', async () => {
 //  OFFICE PUZZLE — AUTOFILL DATASHEET
 // ─────────────────────────────────────────────
 
-function renderAutofillSheetsInputs() {
-  const skillsEl    = document.getElementById('autofillSheetSkills');
-  const behaviorsEl = document.getElementById('autofillSheetBehaviors');
-  const emptyEl     = document.getElementById('autofillSheetEmpty');
-  const btn         = document.getElementById('autofillSheetBtn');
-  if (!skillsEl) return;
+async function renderAutofillSheetsInputs() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const url = tab?.url || '';
+    if (!url.includes('officepuzzle.com') || !url.includes('/data/sheets')) return;
+  } catch { return; }
 
-  if (!selectedProfile) {
-    skillsEl.style.display = 'none';
-    behaviorsEl.style.display = 'none';
-    if (emptyEl) emptyEl.style.display = '';
-    btn.disabled = true;
+  if (!selectedClientId) {
+    showAutofillProjectedState('empty');
+    const el = document.getElementById('autofillProjectedEmpty');
+    if (el) el.textContent = "Select a client above to load this week's projected values.";
     return;
   }
-  if (emptyEl) emptyEl.style.display = 'none';
 
-  const rowStyle = 'display:flex;align-items:center;gap:6px;margin-bottom:5px;';
-  const inputStyle = 'width:52px;padding:3px 6px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;text-align:right;';
-  const labelStyle = 'font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin:0 0 5px;';
+  showAutofillProjectedState('loading');
 
-  // Replacement skills
-  const rawSkills = [
-    ...(selectedProfile.replacementBehaviors || []),
-    ...(selectedProfile.skillAcquisition || []),
-  ].map(s => (typeof s === 'string' ? s : s?.name || '')).filter(Boolean);
-  const skills = [...new Set(rawSkills)];
+  try {
+    const today = new Date();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    const weekStr = monday.toISOString().split('T')[0];
 
-  skillsEl.innerHTML = '';
-  if (skills.length) {
-    const lbl = document.createElement('p');
-    lbl.style.cssText = labelStyle;
-    lbl.textContent = 'Replacement Skills (%)';
-    skillsEl.appendChild(lbl);
-    skills.forEach(name => {
-      const row = document.createElement('div');
-      row.className = 'autofill-sheet-row';
-      row.dataset.name = name;
-      row.dataset.type = 'replacement';
-      row.style.cssText = rowStyle;
-      row.innerHTML = `
-        <span style="flex:1;font-size:11px;color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
-        <input type="number" min="0" max="100" placeholder="%" style="${inputStyle}">
-        <span style="font-size:11px;color:#6b7280;">%</span>
-      `;
-      skillsEl.appendChild(row);
+    const res = await api(`/api/projected-values?clientId=${selectedClientId}&week=${weekStr}`);
+    const data = res.ok ? await res.json().catch(() => ({})) : {};
+    autofillProjectedItems = data.items || [];
+    autofillSelections = {};
+
+    if (!autofillProjectedItems.length) {
+      showAutofillProjectedState('empty');
+      const el = document.getElementById('autofillProjectedEmpty');
+      if (el) el.textContent = 'No chart data yet. Extract charts from the Office Puzzle charts page first.';
+      return;
+    }
+
+    autofillProjectedItems.forEach(item => {
+      autofillSelections[item.name] = { met: true, actualValue: null };
     });
-    skillsEl.style.display = '';
-  } else {
-    skillsEl.style.display = 'none';
+
+    renderProjectedConfirmList();
+    showAutofillProjectedState('confirm');
+
+    const dayInput = document.getElementById('autofillDay');
+    if (dayInput && !dayInput.value) dayInput.value = String(new Date().getDate());
+  } catch {
+    showAutofillProjectedState('empty');
+    const el = document.getElementById('autofillProjectedEmpty');
+    if (el) el.textContent = 'Could not load projected values. Check your connection.';
   }
+}
 
-  // Maladaptive behaviors
-  const rawBehaviors = [
-    ...(selectedProfile.maladaptiveBehaviors || []),
-  ].map(b => (typeof b === 'string' ? b : b?.name || '')).filter(Boolean);
-  const behaviors = [...new Set(rawBehaviors)];
+function showAutofillProjectedState(state) {
+  document.getElementById('autofillProjectedLoading').style.display = state === 'loading' ? '' : 'none';
+  document.getElementById('autofillProjectedEmpty').style.display   = state === 'empty'   ? '' : 'none';
+  document.getElementById('autofillProjectedConfirm').style.display = state === 'confirm'  ? '' : 'none';
+}
 
-  behaviorsEl.innerHTML = '';
-  if (behaviors.length) {
-    const lbl = document.createElement('p');
-    lbl.style.cssText = labelStyle;
-    lbl.style.marginTop = skills.length ? '8px' : '0';
-    lbl.textContent = 'Maladaptive Behaviors (freq)';
-    behaviorsEl.appendChild(lbl);
-    behaviors.forEach(name => {
-      const row = document.createElement('div');
-      row.className = 'autofill-sheet-row';
-      row.dataset.name = name;
-      row.dataset.type = 'maladaptive';
-      row.style.cssText = rowStyle;
-      row.innerHTML = `
-        <span style="flex:1;font-size:11px;color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
-        <input type="number" min="0" placeholder="#" style="${inputStyle}">
+function renderProjectedConfirmList() {
+  const list = document.getElementById('autofillProjectedList');
+  if (!list) return;
+  list.innerHTML = '';
+
+  autofillProjectedItems.forEach(item => {
+    const sel = autofillSelections[item.name] || { met: true, actualValue: null };
+    const valueLabel = item.type === 'replacement'
+      ? `${item.projectedValue}%`
+      : `${item.projectedValue} occ.`;
+
+    const row = document.createElement('div');
+    row.style.cssText = 'padding:5px 0;border-bottom:1px solid #f3f4f6;';
+
+    const topRow = document.createElement('div');
+    topRow.style.cssText = 'display:flex;align-items:center;gap:6px;';
+    topRow.innerHTML = `
+      <span style="flex:1;font-size:11px;font-weight:600;color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+      <span style="font-size:10px;color:#6b7280;white-space:nowrap;">${valueLabel}</span>
+      <button class="proj-yes" data-name="${escapeHtml(item.name)}" style="padding:2px 7px;font-size:10px;font-weight:700;border-radius:4px;border:1.5px solid ${sel.met ? '#16a34a' : '#d1d5db'};background:${sel.met ? '#16a34a' : 'white'};color:${sel.met ? 'white' : '#9ca3af'};cursor:pointer;line-height:1.4;">Yes</button>
+      <button class="proj-no" data-name="${escapeHtml(item.name)}" style="padding:2px 7px;font-size:10px;font-weight:700;border-radius:4px;border:1.5px solid ${!sel.met ? '#dc2626' : '#d1d5db'};background:${!sel.met ? '#dc2626' : 'white'};color:${!sel.met ? 'white' : '#9ca3af'};cursor:pointer;line-height:1.4;">No</button>
+    `;
+    row.appendChild(topRow);
+
+    if (!sel.met) {
+      const inputRow = document.createElement('div');
+      inputRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:4px;padding-left:2px;';
+      inputRow.innerHTML = `
+        <label style="font-size:10px;color:#6b7280;white-space:nowrap;">Actual value:</label>
+        <input type="number" min="0" ${item.type === 'replacement' ? 'max="100"' : ''} class="proj-actual" data-name="${escapeHtml(item.name)}" placeholder="${item.projectedValue}" value="${sel.actualValue ?? ''}" style="width:60px;padding:2px 5px;border:1px solid #d1d5db;border-radius:4px;font-size:11px;">
+        <span style="font-size:10px;color:#6b7280;">${item.unit || 'occ.'}</span>
       `;
-      behaviorsEl.appendChild(row);
-    });
-    behaviorsEl.style.display = '';
-  } else {
-    behaviorsEl.style.display = 'none';
-  }
+      row.appendChild(inputRow);
+    }
 
-  btn.disabled = !(skills.length || behaviors.length);
+    list.appendChild(row);
+  });
+
+  list.querySelectorAll('.proj-yes').forEach(btn => {
+    btn.addEventListener('click', () => {
+      autofillSelections[btn.dataset.name] = { met: true, actualValue: null };
+      renderProjectedConfirmList();
+    });
+  });
+  list.querySelectorAll('.proj-no').forEach(btn => {
+    btn.addEventListener('click', () => {
+      autofillSelections[btn.dataset.name] = { met: false, actualValue: null };
+      renderProjectedConfirmList();
+    });
+  });
+  list.querySelectorAll('.proj-actual').forEach(input => {
+    input.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      autofillSelections[e.target.dataset.name] = { met: false, actualValue: isNaN(v) ? null : v };
+    });
+  });
 }
 
 function showAutofillSheetStatus(msg, isError) {
@@ -2241,19 +2275,16 @@ document.getElementById('autofillSheetBtn').addEventListener('click', async () =
     return;
   }
 
-  const tasks = [];
-  document.querySelectorAll('.autofill-sheet-row').forEach(row => {
-    const raw = row.querySelector('input')?.value.trim();
-    if (!raw) return;
-    const num = parseFloat(raw);
-    if (isNaN(num)) return;
-    tasks.push({ name: row.dataset.name, dayNumber: day, value: num, type: row.dataset.type });
-  });
-
-  if (!tasks.length) {
-    showAutofillSheetStatus('Enter at least one value.', true);
+  if (!autofillProjectedItems.length) {
+    showAutofillSheetStatus('No projected values loaded. Select a client first.', true);
     return;
   }
+
+  const tasks = autofillProjectedItems.map(item => {
+    const sel = autofillSelections[item.name] || { met: true, actualValue: null };
+    const value = sel.met ? item.projectedValue : (sel.actualValue ?? item.projectedValue);
+    return { name: item.name, dayNumber: day, value, type: item.type };
+  });
 
   const btn = document.getElementById('autofillSheetBtn');
   btn.disabled = true;
@@ -2393,6 +2424,21 @@ function officePuzzleDatasheetAutofiller(tasks) {
 
   return log;
 }
+
+// ── Projected values: All Yes / All No ────
+document.getElementById('autofillAllYesBtn').addEventListener('click', () => {
+  autofillProjectedItems.forEach(item => {
+    autofillSelections[item.name] = { met: true, actualValue: null };
+  });
+  renderProjectedConfirmList();
+});
+
+document.getElementById('autofillAllNoBtn').addEventListener('click', () => {
+  autofillProjectedItems.forEach(item => {
+    autofillSelections[item.name] = { met: false, actualValue: null };
+  });
+  renderProjectedConfirmList();
+});
 
 // ── Boot ───────────────────────────────────
 init();
