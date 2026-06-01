@@ -2424,18 +2424,8 @@ document.getElementById('autofillSheetBtn').addEventListener('click', async () =
     const log  = result?.[0]?.result || [];
     const ok   = log.filter(l => l.startsWith('✓'));
     const errs = log.filter(l => l.startsWith('❌'));
-
-    showAutofillSheetStatus(
-      `${ok.length} section${ok.length !== 1 ? 's' : ''} filled${errs.length ? `, ${errs.length} not found` : ''}.`,
-      errs.length > 0 && ok.length === 0,
-    );
-    if (errs.length) {
-      const statusEl = document.getElementById('autofillSheetStatus');
-      const detail = document.createElement('div');
-      detail.style.cssText = 'margin-top:4px;font-size:10px;opacity:0.75;word-break:break-word;';
-      detail.textContent = errs.join(' · ');
-      statusEl.appendChild(detail);
-    }
+    const msg  = log[0] || 'No result returned from page.';
+    showAutofillSheetStatus(msg.replace(/^[✓❌]\s*/, ''), errs.length > 0);
   } catch (err) {
     showAutofillSheetStatus('Error: ' + err.message, true);
   } finally {
@@ -2445,11 +2435,12 @@ document.getElementById('autofillSheetBtn').addEventListener('click', async () =
 });
 
 // Injected into the Office Puzzle datasheet page — must be fully self-contained.
+// Office Puzzle shows ONE behavior/skill per datasheet page. This function reads
+// the page header to identify which behavior is currently shown, then fills only that one.
 function officePuzzleDatasheetAutofiller(tasks) {
   // ── Helpers ──────────────────────────────────────────────────────────────────
   function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
 
-  // Generates an evenly alternated +/- sequence (e.g. 8 correct of 12 → ++ - ++ - ++ - ++ -)
   function generateSequence(correctCount, total) {
     if (correctCount <= 0) return Array(total).fill('-');
     if (correctCount >= total) return Array(total).fill('+');
@@ -2464,33 +2455,12 @@ function officePuzzleDatasheetAutofiller(tasks) {
     return seq;
   }
 
-  // Walk up from a heading that contains the target name, finding the nearest ancestor
-  // that contains td.value cells (the datasheet section container).
-  function findSectionByName(name) {
-    const lower = name.toLowerCase().trim();
-    const candidates = [
-      ...document.querySelectorAll('h1,h2,h3,h4,h5,h6'),
-      ...document.querySelectorAll('[class*="title"],[class*="heading"],[class*="name"],[class*="label"]'),
-    ];
-    for (const el of candidates) {
-      const text = el.textContent.trim().toLowerCase();
-      if (!text.includes(lower)) continue;
-      if (text.length > lower.length * 5) continue; // skip large containers
-      let node = el;
-      for (let i = 0; i < 10 && node; i++, node = node.parentElement) {
-        if (node.querySelector && node.querySelector('table td.value')) return node;
-      }
-    }
-    return null;
-  }
-
-  // Find the column index (absolute, including any label columns) for a given day-of-month.
   function findDayColumn(table, dayNumber) {
     const day = parseInt(dayNumber);
     const headerRow = table.querySelector('thead tr') || table.querySelector('tr');
     if (!headerRow) return -1;
     const cells = Array.from(headerRow.querySelectorAll('th, td'));
-    for (let i = 1; i < cells.length; i++) { // skip col 0 (trial label)
+    for (let i = 1; i < cells.length; i++) {
       const nums = (cells[i].textContent.match(/\d+/g) || [])
         .map(Number)
         .filter(n => n >= 1 && n <= 31);
@@ -2499,51 +2469,83 @@ function officePuzzleDatasheetAutofiller(tasks) {
     return -1;
   }
 
-  // ── Main loop ─────────────────────────────────────────────────────────────────
-  const log = [];
-
-  for (const { name, dayNumber, value, type } of tasks) {
-    const section = findSectionByName(name);
-    if (!section) { log.push(`❌ "${name}" — section not found`); continue; }
-
-    const table = section.querySelector('table');
-    if (!table) { log.push(`❌ "${name}" — no table in section`); continue; }
-
-    const colIndex = findDayColumn(table, dayNumber);
-    if (colIndex === -1) { log.push(`❌ "${name}" — day ${dayNumber} column not found`); continue; }
-
-    const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
-    let clicks = 0;
-
-    if (type === 'replacement') {
-      const totalTrials = 12;
-      const correct = Math.min(totalTrials, Math.max(0, Math.round(value / 100 * totalTrials)));
-      const seq = generateSequence(correct, totalTrials);
-
-      bodyRows.slice(0, totalTrials).forEach((row, i) => {
-        const cell = row.children[colIndex];
-        if (!cell || !cell.classList.contains('value')) return;
-        if (cell.textContent.trim() !== seq[i]) { cell.click(); clicks++; }
-      });
-
-      log.push(`✓ "${name}" — ${value}% → ${correct}/${totalTrials} correct, ${clicks} clicks`);
-
-    } else {
-      // maladaptive: mark first N rows with X, clear the rest
-      const freq = Math.round(value);
-      bodyRows.forEach((row, i) => {
-        const cell = row.children[colIndex];
-        if (!cell || !cell.classList.contains('value')) return;
-        const shouldMark = i < freq;
-        const isMarked   = cell.textContent.trim().toUpperCase() === 'X';
-        if (shouldMark !== isMarked) { cell.click(); clicks++; }
-      });
-
-      log.push(`✓ "${name}" — freq ${freq}, ${clicks} clicks`);
+  // Read the page header to identify which behavior/skill this datasheet page shows.
+  function detectCurrentPageName() {
+    const selectors = [
+      'h4', 'h3', 'h2',
+      '[class*="behavior-name"],[class*="skill-name"],[class*="program-name"]',
+      '[class*="sheet-title"],[class*="goal-name"],[class*="chart-title"]',
+      '.page-title',
+    ];
+    for (const sel of selectors) {
+      for (const el of document.querySelectorAll(sel)) {
+        const text = el.textContent.trim();
+        if (text.length > 2 && text.length < 120 && !/marker|office puzzle/i.test(text)) return text;
+      }
     }
+    return null;
   }
 
-  return log;
+  // Fuzzy match: does the task name match the detected page name?
+  function namesMatch(a, b) {
+    const al = a.toLowerCase().trim();
+    const bl = b.toLowerCase().trim();
+    if (al === bl) return true;
+    if (al.includes(bl) || bl.includes(al)) return true;
+    const aWords = al.split(/\s+/).filter(w => w.length > 2);
+    const bWords = bl.split(/\s+/).filter(w => w.length > 2);
+    return aWords.some(w => bWords.includes(w));
+  }
+
+  // ── Detect which behavior is on this page ─────────────────────────────────
+  const pageName = detectCurrentPageName();
+  if (!pageName) {
+    return ['❌ Could not detect behavior name from this page. Make sure you are on a datasheet page.'];
+  }
+
+  const task = tasks.find(t => namesMatch(t.name, pageName));
+  if (!task) {
+    const available = tasks.map(t => t.name).join(', ');
+    return [`❌ "${pageName}" not found in your loaded data. Navigate to a sheet for one of: ${available}`];
+  }
+
+  // ── Find the datasheet table ──────────────────────────────────────────────
+  const table = Array.from(document.querySelectorAll('table')).find(t => t.querySelector('td.value'))
+    || document.querySelector('table');
+  if (!table) {
+    return [`❌ "${task.name}" — no datasheet table found on this page`];
+  }
+
+  const colIndex = findDayColumn(table, task.dayNumber);
+  if (colIndex === -1) {
+    return [`❌ "${task.name}" — day ${task.dayNumber} column not found in table header`];
+  }
+
+  const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
+  let clicks = 0;
+
+  if (task.type === 'replacement') {
+    const totalTrials = 12;
+    const correct = Math.min(totalTrials, Math.max(0, Math.round(task.value / 100 * totalTrials)));
+    const seq = generateSequence(correct, totalTrials);
+    bodyRows.slice(0, totalTrials).forEach((row, i) => {
+      const cell = row.children[colIndex];
+      if (!cell || !cell.classList.contains('value')) return;
+      if (cell.textContent.trim() !== seq[i]) { cell.click(); clicks++; }
+    });
+    return [`✓ "${task.name}" filled — navigate to the next behavior sheet to continue`];
+  } else {
+    // maladaptive: mark first N rows with X, clear the rest
+    const freq = Math.round(task.value);
+    bodyRows.forEach((row, i) => {
+      const cell = row.children[colIndex];
+      if (!cell || !cell.classList.contains('value')) return;
+      const shouldMark = i < freq;
+      const isMarked   = cell.textContent.trim().toUpperCase() === 'X';
+      if (shouldMark !== isMarked) { cell.click(); clicks++; }
+    });
+    return [`✓ "${task.name}" filled — navigate to the next behavior sheet to continue`];
+  }
 }
 
 // ── Projected values: All Yes / All No ────
