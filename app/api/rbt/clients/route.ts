@@ -27,5 +27,5 @@ export async function GET() {
     clinical_profile: row.clinical_profile,
   }))
 
-  return NextResponse.json({ clients: clientList })
+  return NextResponse.json({ clients: clientList, data_tab_enabled: user.data_tab_enabled })
 }

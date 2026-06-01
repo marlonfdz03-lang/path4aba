@@ -9,6 +9,7 @@ const BASE = 'https://path4aba.app';
 
 // ── State ──────────────────────────────────
 let userRole = null;     // 'rbt' | 'bcba'
+let dataTabEnabled = false;
 let clients = [];
 let selectedClientId = null;
 let selectedProfile = null;  // client's clinical_profile
@@ -163,6 +164,7 @@ async function init() {
     if (json.clients?.length) {
       userRole = 'bcba';
       clients = json.clients;
+      dataTabEnabled = json.data_tab_enabled === true;
       setupMainScreen();
       showScreen('main');
       return;
@@ -176,6 +178,7 @@ async function init() {
     if (json.clients?.length) {
       userRole = 'rbt';
       clients = json.clients;
+      dataTabEnabled = json.data_tab_enabled === true;
       setupMainScreen();
       showScreen('main');
       return;
@@ -1387,6 +1390,8 @@ document.getElementById('saveWeekDataBtn')?.addEventListener('click', async () =
 
 // ── Set week start date default on tab open ─
 document.getElementById('tabData').addEventListener('click', () => {
+  applyDataTabGate();
+  if (!dataTabEnabled) return;
   if (!document.getElementById('weekStartDate').value) {
     const today = new Date();
     const dow   = today.getDay();
@@ -1399,6 +1404,19 @@ document.getElementById('tabData').addEventListener('click', () => {
   }
   if (dataMode === 'single' && selectedClientId) loadSingleDayData();
 });
+
+function applyDataTabGate() {
+  const lockedScreen = document.getElementById('dataLockedScreen');
+  const content = document.getElementById('dataTabContent');
+  if (!lockedScreen) return;
+  if (dataTabEnabled) {
+    lockedScreen.style.display = 'none';
+    if (content) content.style.display = '';
+  } else {
+    lockedScreen.style.display = 'flex';
+    if (content) content.style.display = 'none';
+  }
+}
 
 // ─────────────────────────────────────────────
 //  OFFICE PUZZLE — EXTRACT CHARTS

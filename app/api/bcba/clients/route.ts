@@ -47,5 +47,5 @@ export async function GET() {
     }
   })
 
-  return NextResponse.json({ clients })
+  return NextResponse.json({ clients, data_tab_enabled: user.data_tab_enabled })
 }

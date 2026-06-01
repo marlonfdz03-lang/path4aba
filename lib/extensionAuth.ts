@@ -7,6 +7,7 @@ export interface ExtensionUser {
   id: string
   role: string
   email: string
+  data_tab_enabled: boolean
 }
 
 function hashToken(raw: string): string {
@@ -24,13 +25,13 @@ export async function getExtensionAuth(): Promise<ExtensionUser | null> {
       try {
         const record = await prisma.extension_tokens.findUnique({
           where: { token_hash: hash },
-          include: { user: { select: { id: true, role: true, email: true } } },
+          include: { user: { select: { id: true, role: true, email: true, data_tab_enabled: true } } },
         })
         if (record?.user) {
           prisma.extension_tokens
             .update({ where: { id: record.id }, data: { last_used_at: new Date() } })
             .catch(() => {})
-          return { id: record.user.id, role: record.user.role || 'rbt', email: record.user.email }
+          return { id: record.user.id, role: record.user.role || 'rbt', email: record.user.email, data_tab_enabled: record.user.data_tab_enabled ?? false }
         }
         // Token hash not found in DB — token was revoked or never existed.
         return null
@@ -47,10 +48,15 @@ export async function getExtensionAuth(): Promise<ExtensionUser | null> {
   // 2. Fall back to NextAuth session cookie (web app users, no Bearer header)
   const session = await auth()
   if (!session?.user) return null
+  const sessionUserId = (session.user as any).id as string
+  const sessionUserRow = sessionUserId
+    ? await prisma.users.findUnique({ where: { id: sessionUserId }, select: { data_tab_enabled: true } }).catch(() => null)
+    : null
   return {
-    id: (session.user as any).id as string,
+    id: sessionUserId,
     role: ((session.user as any).role as string) || 'rbt',
     email: session.user.email || '',
+    data_tab_enabled: sessionUserRow?.data_tab_enabled ?? false,
   }
 }
 
