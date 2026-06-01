@@ -290,11 +290,12 @@ async function loadClientProfile(clientId) {
   renderBehaviors();
   renderSkills();
   renderPresent();
-  renderAutofillSheetsInputs();
   checkCorrectionsBanner();
-  const weekStart = document.getElementById('weekStartDate')?.value;
-  if (dataMode === 'week' && weekStart) {
-    autoLoadProjectedValues(weekStart);
+  if (dataMode === 'single') {
+    loadSingleDayData();
+  } else {
+    const weekStart = document.getElementById('weekStartDate')?.value;
+    if (weekStart) loadWeekData(weekStart);
   }
 }
 
@@ -524,7 +525,10 @@ document.getElementById('dataModeGroup').addEventListener('click', (e) => {
   document.getElementById('singleDaySection').style.display = dataMode === 'single' ? '' : 'none';
   document.getElementById('fullWeekSection').style.display = dataMode === 'week' ? '' : 'none';
   if (dataMode === 'single' && selectedClientId) {
-    renderAutofillSheetsInputs();
+    loadSingleDayData();
+  } else if (dataMode === 'week' && selectedClientId) {
+    const weekStart = document.getElementById('weekStartDate')?.value;
+    if (weekStart) loadWeekData(weekStart);
   }
 });
 
@@ -919,129 +923,62 @@ document.getElementById('openSettingsBtn').addEventListener('click', () => {
 // ─────────────────────────────────────────────
 
 // ── State ──────────────────────────────────
-let dataLocation = null;
-let skillRows = [];        // replacement skill rows
-let maladaptiveRows = [];  // { behavior, weeklyAvg, dailyValues, status }
+let projectedItems  = [];   // [{ name, type, projectedValue, dailyValue, unit }]
+let workedDayDates  = [];   // ['YYYY-MM-DD', …] dates RBT worked this week
+let absentDayReasons = {};  // { 'YYYY-MM-DD': 'vacation'|'medical'|'other' }
+let currentWeekForData = null;
 
-// Projected-values autofill state (OP datasheet)
-let autofillProjectedItems = [];   // [{ name, type, projectedValue, unit }]
-let autofillSelections = {};       // name → { met: boolean, actualValue: number|null }
-
-// ── Helpers ────────────────────────────────
-function generateAltSequence(correct, incorrect) {
-  const total = correct + incorrect;
-  if (total === 0) return [];
-  const seq = Array(total).fill('+');
-  if (incorrect === 0) return seq;
-  if (correct === 0) return Array(total).fill('-');
-  for (let k = 0; k < incorrect; k++) {
-    const pos = Math.floor((k + 1) * total / incorrect) - 1;
-    if (pos >= 0 && pos < total) seq[pos] = '-';
-  }
-  return seq;
-}
-
-function getStatusLabel(status) {
-  return { pending: 'Pending', calculated: 'Calculated', confirmed: 'Confirmed', error: 'Error' }[status] || status;
-}
-
-function showDataMsg(msg, isError = true) {
-  document.querySelectorAll('.data-feedback').forEach(e => e.remove());
-  const el = document.createElement('p');
-  el.className = isError ? 'error-msg data-feedback' : 'data-feedback';
-  el.style.cssText = isError ? '' : 'font-size:12px;color:#16a34a;margin-top:8px;';
-  el.textContent = msg;
-  document.getElementById('tabContent-data').appendChild(el);
-}
-
-// ── Seeded PRNG (mulberry32) ───────────────
-// Referenced by generateVariedSequence; must be defined before it's called.
-function mulberry32(seed) {
-  return function () {
-    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-// ── Week Helper Functions ──────────────────
+// ── Date helpers ────────────────────────────
 function calcWeekEndDate(startStr) {
   if (!startStr) return null;
-  const start = new Date(startStr);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 6);
-  return end.toISOString().split('T')[0];
+  const d = new Date(startStr + 'T00:00:00');
+  d.setDate(d.getDate() + 6);
+  return d.toISOString().split('T')[0];
 }
 
-function getWeekDays(startDate) {
+function getMondayOfDate(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const dow = d.getDay();
+  d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+  return d.toISOString().split('T')[0];
+}
+
+function getWeekDaysFromMonday(mondayStr) {
   const days = [];
-  const start = new Date(startDate);
-  for (let i = 0; i < 5; i++) {
-    const d = new Date(start);
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(mondayStr + 'T00:00:00');
     d.setDate(d.getDate() + i);
     days.push(d.toISOString().split('T')[0]);
   }
   return days;
 }
 
-function generateDailyPercentages(weeklyAvg, numDays = 5) {
-  const dailyPcts = [];
-  const maxDeviation = 15;
-
-  for (let i = 0; i < numDays; i++) {
-    let pct;
-    if (i === numDays - 1) {
-      const sum = dailyPcts.reduce((a, b) => a + b, 0);
-      pct = Math.round((weeklyAvg * numDays - sum));
-      pct = Math.max(0, Math.min(100, pct));
-    } else {
-      const deviation = (Math.random() - 0.5) * (maxDeviation * 2);
-      pct = Math.round(weeklyAvg + deviation);
-      pct = Math.max(0, Math.min(100, pct));
-    }
-    dailyPcts.push(pct);
-  }
-
-  return dailyPcts;
+// ── Status helper ───────────────────────────
+function setStatus(elId, msg, isError) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = msg ? '' : 'none';
+  el.style.background = isError ? '#fef2f2' : '#f0fdf4';
+  el.style.color      = isError ? '#991b1b'  : '#166534';
 }
 
-// Same distribution algorithm applied to frequency counts (integers, not percentages)
-function generateDailyFrequencies(weeklyAvg, numDays = 5) {
-  const daily = [];
-  const maxDev = Math.max(2, Math.round(weeklyAvg * 0.3));
-  for (let i = 0; i < numDays; i++) {
-    if (i === numDays - 1) {
-      const sum = daily.reduce((a, b) => a + b, 0);
-      daily.push(Math.max(0, Math.round(weeklyAvg * numDays - sum)));
-    } else {
-      const dev = Math.round((Math.random() - 0.5) * maxDev * 2);
-      daily.push(Math.max(0, Math.round(weeklyAvg + dev)));
-    }
-  }
-  return daily;
-}
+// ── Month selector init ─────────────────────
+(function initMonthSelector() {
+  const sel = document.getElementById('singleMonth');
+  if (!sel) return;
+  ['January','February','March','April','May','June','July','August','September','October','November','December']
+    .forEach((m, i) => {
+      const opt = document.createElement('option');
+      opt.value = i + 1; opt.textContent = m;
+      sel.appendChild(opt);
+    });
+  sel.value = new Date().getMonth() + 1;
+  const dayEl = document.getElementById('singleDay');
+  if (dayEl && !dayEl.value) dayEl.value = new Date().getDate();
+})();
 
-function generateVariedSequence(correct, incorrect, seed = null) {
-  const positions = [];
-
-  for (let i = 0; i < correct; i++) {
-    positions.push('+');
-  }
-  for (let i = 0; i < incorrect; i++) {
-    positions.push('-');
-  }
-
-  let rng = seed ? mulberry32(seed) : Math.random;
-  for (let i = positions.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [positions[i], positions[j]] = [positions[j], positions[i]];
-  }
-
-  return positions;
-}
-
-// ── Pending corrections banner ─────────────
+// ── Pending corrections banner ──────────────
 async function checkCorrectionsBanner() {
   const banner = document.getElementById('correctionsBanner');
   if (!banner || !selectedClientId) { if (banner) banner.style.display = 'none'; return; }
@@ -1056,649 +993,411 @@ async function checkCorrectionsBanner() {
     } else {
       banner.style.display = 'none';
     }
-  } catch {
-    banner.style.display = 'none';
-  }
+  } catch { banner.style.display = 'none'; }
 }
 
 document.getElementById('correctionsBanner').addEventListener('click', () => {
-  if (selectedClientId) {
-    chrome.tabs.create({ url: `https://path4aba.app/clients/${selectedClientId}?tab=data` });
-  }
+  if (selectedClientId) chrome.tabs.create({ url: `https://path4aba.app/clients/${selectedClientId}?tab=data` });
 });
 
-// ── Auto-load projected values for Full Week mode ──
-async function autoLoadProjectedValues(weekStart) {
-  if (!selectedClientId || !selectedProfile) return;
+document.getElementById('autofillCorrectedBtn')?.addEventListener('click', () => {
+  if (selectedClientId) chrome.tabs.create({ url: `https://path4aba.app/clients/${selectedClientId}?tab=data` });
+});
 
-  document.querySelectorAll('.data-feedback').forEach(e => e.remove());
-
-  // Build behavior + skill lists from profile
-  const rawBehaviors = [
-    ...(selectedProfile.maladaptiveBehaviors || []),
-    ...(selectedProfile.activePrograms?.maladaptive || []),
-  ];
-  const behaviors = [...new Set(
-    rawBehaviors.map(b => (typeof b === 'string' ? b : b?.name || '')).filter(Boolean)
-  )];
-
-  const rawSkills = [
-    ...(selectedProfile.replacementBehaviors || []),
-    ...(selectedProfile.skillAcquisition || []),
-    ...(selectedProfile.activePrograms?.replacementSkills || []),
-  ];
-  const skills = [...new Set(
-    rawSkills.map(s => (typeof s === 'string' ? s : s?.name || '')).filter(Boolean)
-  )];
-
-  if (!behaviors.length && !skills.length) {
-    showDataMsg('No behaviors or skills in client profile. Add targets in Path4ABA first.');
-    return;
-  }
-
-  showDataMsg('Loading projected values…', false);
-
-  // Fetch projected values for this week
-  let projMap = {};
+// ── Fetch projected values ───────────────────
+async function loadProjectedValues(weekStart) {
+  if (!selectedClientId) return null;
   try {
     const res = await api(`/api/projected-values?clientId=${selectedClientId}&week=${weekStart}`);
-    if (res.ok) {
-      const data = await res.json().catch(() => ({}));
-      (data.items || []).forEach(item => {
-        projMap[item.name.toLowerCase().trim()] = item;
-      });
-    }
-  } catch { /* leave projMap empty — RBT will enter manually */ }
-
-  const defaultTrials = parseInt(document.getElementById('defaultTrials').value) || 10;
-
-  // Populate maladaptive rows
-  if (behaviors.length) {
-    maladaptiveRows = behaviors.map(behavior => {
-      const proj = projMap[behavior.toLowerCase().trim()];
-      return {
-        behavior,
-        weeklyFreq: proj ? String(proj.projectedValue) : '',
-        dailyValues: [],
-        status: 'pending',
-      };
-    });
-    renderMaladaptiveCards();
-    document.getElementById('maladaptiveCards').style.display = '';
-  }
-
-  // Populate skill rows
-  if (skills.length) {
-    skillRows = skills.map(skill => {
-      const proj = projMap[skill.toLowerCase().trim()];
-      return {
-        skill,
-        defaultTrials,
-        trialsOverride: null,
-        weeklyAvg: proj ? String(proj.projectedValue) : '',
-        dailyPercentages: [],
-        dailyCorrect: [],
-        dailyIncorrect: [],
-        sequences: [],
-        status: 'pending',
-      };
-    });
-    renderSkillCards();
-    document.getElementById('skillCards').style.display = '';
-  }
-
-  document.getElementById('dataActions').style.display = '';
-  document.getElementById('confirmSection').style.display = '';
-  document.getElementById('autofillBtn').disabled = true;
-  document.getElementById('reviewSection').style.display = 'none';
-
-  const loaded = Object.keys(projMap).length;
-  document.querySelectorAll('.data-feedback').forEach(e => e.remove());
-  showDataMsg(
-    loaded > 0
-      ? `Projected values loaded for ${loaded} target${loaded !== 1 ? 's' : ''}. Adjust any values then click Calculate Data.`
-      : 'No chart history yet — enter values manually then click Calculate Data.',
-    false
-  );
+    if (!res.ok) return null;
+    return (await res.json().catch(() => ({}))).items || [];
+  } catch { return null; }
 }
 
-// ── Week Start Date listener ───────────────
-document.getElementById('weekStartDate').addEventListener('change', (e) => {
-  const weekStart = e.target.value;
-  const weekEnd = calcWeekEndDate(weekStart);
-  if (weekEnd) {
-    document.getElementById('weekEndDate').value = weekEnd;
-  }
-  document.getElementById('reviewSection').style.display = 'none';
-  if (weekStart && selectedClientId && selectedProfile) {
-    autoLoadProjectedValues(weekStart);
-  }
-});
+// ══════════════════════════════════════════════
+//  SINGLE DAY MODE
+// ══════════════════════════════════════════════
 
-// ── Extract Maladaptives ───────────────────
-document.getElementById('extractMaladaptivesBtn').addEventListener('click', () => {
-  document.querySelectorAll('.data-feedback').forEach(e => e.remove());
-  if (!selectedClientId || !selectedProfile) { showDataMsg('Select a client first.'); return; }
-  const weekStart = document.getElementById('weekStartDate').value;
-  if (!weekStart) { showDataMsg('Select a week start date first.'); return; }
-  autoLoadProjectedValues(weekStart);
-});
+async function loadSingleDayData() {
+  if (!selectedClientId) return;
+  const month = parseInt(document.getElementById('singleMonth')?.value);
+  const day   = parseInt(document.getElementById('singleDay')?.value);
+  if (!month || !day || day < 1 || day > 31) return;
 
-function renderMaladaptiveCards() {
-  const container = document.getElementById('maladaptiveCards');
-  container.innerHTML = '';
-  if (!maladaptiveRows.length) return;
+  const year      = new Date().getFullYear();
+  const dateStr   = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  const weekStart = getMondayOfDate(dateStr);
 
-  const sectionLabel = document.createElement('p');
-  sectionLabel.style.cssText = 'font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;';
-  sectionLabel.textContent = 'Maladaptive Behaviors';
-  container.appendChild(sectionLabel);
-
-  maladaptiveRows.forEach((row, idx) => {
-    const card = document.createElement('div');
-    card.className = `skill-card ${row.status}`;
-    card.style.borderLeftColor = '#f59e0b';
-    card.id = `maladCard-${idx}`;
-    card.innerHTML = `
-      <div class="skill-card-header">
-        <span class="skill-name" title="${row.behavior}">${row.behavior}</span>
-        <span class="skill-status-badge ${row.status}" style="background:#fef3c7;color:#92400e;">${getStatusLabel(row.status)}</span>
-      </div>
-      <div class="skill-inputs">
-        <div class="skill-input-group">
-          <label>Weekly Total Frequency</label>
-          <input type="number" min="0" max="999" class="input small" placeholder="0"
-                 value="${row.weeklyFreq}" data-idx="${idx}" data-type="malad" data-field="weeklyFreq">
-        </div>
-        <div class="skill-input-group">
-          <label>Unit</label>
-          <select class="input small" data-idx="${idx}" data-type="malad" data-field="unit" style="padding:5px 6px;">
-            <option value="count">Count</option>
-            <option value="rate">Rate/hr</option>
-          </select>
-        </div>
-      </div>
-      ${row.dailyValues.length ? `
-        <div class="skill-results">
-          ${row.dailyValues.map((v, i) => `<span style="font-size:10px;color:#6b7280;">${['M','T','W','Th','F'][i]}:<b>${v}</b></span>`).join(' ')}
-          <span class="result-pct">Avg: ${Math.round(row.dailyValues.reduce((a,b)=>a+b,0)/row.dailyValues.length)}</span>
-        </div>` : ''}
-    `;
-    container.appendChild(card);
-  });
-
-  container.querySelectorAll('input[data-type="malad"], select[data-type="malad"]').forEach(input => {
-    input.addEventListener('input', e => {
-      const idx = parseInt(e.target.dataset.idx);
-      const field = e.target.dataset.field;
-      maladaptiveRows[idx][field] = e.target.value;
-      maladaptiveRows[idx].dailyValues = [];
-      maladaptiveRows[idx].status = 'pending';
-    });
-  });
-}
-
-// ── Extract replacements (week-based) ──────
-document.getElementById('extractBtn').addEventListener('click', () => {
-  document.querySelectorAll('.data-feedback').forEach(e => e.remove());
-  if (!selectedClientId || !selectedProfile) { showDataMsg('Select a client first.'); return; }
-  const weekStart = document.getElementById('weekStartDate').value;
-  if (!weekStart) { showDataMsg('Select a week start date first.'); return; }
-  autoLoadProjectedValues(weekStart);
-});
-
-// ── Render skill cards (week-based) ────────
-function renderSkillCards() {
-  const container = document.getElementById('skillCards');
-  container.innerHTML = '';
-
-  if (!skillRows.length) return;
-
-  skillRows.forEach((row, idx) => {
-    const card = document.createElement('div');
-    card.className = `skill-card ${row.status}`;
-    card.id = `skillCard-${idx}`;
-
-    const trials = row.trialsOverride || row.defaultTrials;
-
-    card.innerHTML = `
-      <div class="skill-card-header">
-        <span class="skill-name" title="${row.skill}">${row.skill}</span>
-        <span class="skill-status-badge ${row.status}">${getStatusLabel(row.status)}</span>
-      </div>
-      <div class="skill-inputs">
-        <div class="skill-input-group">
-          <label>Weekly Avg %</label>
-          <input type="number" min="0" max="100" class="input small" placeholder="0"
-                 value="${row.weeklyAvg}" data-idx="${idx}" data-field="weeklyAvg">
-        </div>
-        <div class="skill-input-group">
-          <label>Trials (override)</label>
-          <input type="number" min="1" max="999" class="input small" placeholder="${row.defaultTrials}"
-                 value="${row.trialsOverride || ''}" data-idx="${idx}" data-field="trialsOverride">
-        </div>
-      </div>
-      <div class="skill-info">
-        <span style="color:#6b7280;font-size:11px;">Using ${trials} trials</span>
-      </div>
-    `;
-    container.appendChild(card);
-  });
-
-  // Input listeners
-  container.querySelectorAll('input[data-idx]').forEach(input => {
-    input.addEventListener('input', e => {
-      const idx = parseInt(e.target.dataset.idx);
-      const field = e.target.dataset.field;
-      const val = e.target.value;
-      
-      if (field === 'weeklyAvg') {
-        skillRows[idx].weeklyAvg = val;
-      } else if (field === 'trialsOverride') {
-        skillRows[idx].trialsOverride = val ? parseInt(val) : null;
-      }
-      
-      skillRows[idx].dailyPercentages = [];
-      skillRows[idx].dailyCorrect = [];
-      skillRows[idx].dailyIncorrect = [];
-      skillRows[idx].sequences = [];
-      skillRows[idx].status = 'pending';
-      
-      const card = document.getElementById(`skillCard-${idx}`);
-      if (card) {
-        card.className = 'skill-card pending';
-        card.querySelector('.skill-status-badge').className = 'skill-status-badge pending';
-        card.querySelector('.skill-status-badge').textContent = 'Pending';
-      }
-      
-      document.getElementById('reviewSection').style.display = 'none';
-    });
-  });
-}
-
-// ── Calculate Data (generates daily percentages & correct/incorrect) ─
-document.getElementById('calculateBtn').addEventListener('click', () => {
-  document.querySelectorAll('.data-feedback').forEach(e => e.remove());
-  let hasErrors = false;
-
-  skillRows.forEach((row, idx) => {
-    if (!row.weeklyAvg) return;
-
-    const pct = parseFloat(row.weeklyAvg);
-    if (isNaN(pct) || pct < 0 || pct > 100) {
-      skillRows[idx].status = 'error';
-      hasErrors = true;
-      return;
-    }
-
-    const trials = row.trialsOverride || row.defaultTrials;
-
-    // Generate daily percentages with variation
-    const dailyPcts = generateDailyPercentages(pct, 5);
-    
-    // Calculate correct/incorrect for each day
-    const dailyCorrect = [];
-    const dailyIncorrect = [];
-    
-    dailyPcts.forEach(dailyPct => {
-      const correct = Math.round((dailyPct / 100) * trials);
-      const incorrect = trials - correct;
-      dailyCorrect.push(correct);
-      dailyIncorrect.push(incorrect);
-    });
-
-    skillRows[idx].dailyPercentages = dailyPcts;
-    skillRows[idx].dailyCorrect = dailyCorrect;
-    skillRows[idx].dailyIncorrect = dailyIncorrect;
-    skillRows[idx].status = 'calculated';
-  });
-
-  // Calculate maladaptive daily values
-  maladaptiveRows.forEach((row, idx) => {
-    if (!row.weeklyFreq) return;
-    const avg = parseFloat(row.weeklyFreq);
-    if (isNaN(avg) || avg < 0) { maladaptiveRows[idx].status = 'error'; hasErrors = true; return; }
-    // Generate daily frequency values that average to weeklyFreq
-    const daily = generateDailyFrequencies(avg, 5);
-    maladaptiveRows[idx].dailyValues = daily;
-    maladaptiveRows[idx].status = 'calculated';
-  });
-
-  renderSkillCards();
-  renderMaladaptiveCards();
-  renderReviewScreen();
-  document.getElementById('reviewSection').style.display = '';
-
-  if (hasErrors) {
-    showDataMsg('Some rows have invalid values.');
-  } else {
-    showDataMsg('Data calculated. Review above and click "Generate Sequence" next.', false);
-  }
-});
-
-// ── Generate Sequence ──────────────────────
-document.getElementById('genSeqBtn').addEventListener('click', () => {
-  document.querySelectorAll('.data-feedback').forEach(e => e.remove());
-
-  const uncalculated = skillRows.filter(r => r.weeklyAvg && r.dailyPercentages.length === 0);
-  if (uncalculated.length) {
-    showDataMsg('Click "Calculate Data" first to generate daily percentages.');
+  if (weekStart === currentWeekForData && projectedItems.length) {
+    document.getElementById('singleDataSection').style.display = '';
     return;
   }
 
-  skillRows.forEach((row, idx) => {
-    if (row.dailyCorrect.length > 0) {
-      // Generate sequence for each day
-      const sequences = [];
-      row.dailyCorrect.forEach((correct, dayIdx) => {
-        const incorrect = row.dailyIncorrect[dayIdx];
-        const seed = `${row.skill}-${document.getElementById('weekStartDate').value}-${dayIdx}`.split('').reduce((a, b) => {
-          a = ((a << 5) - a) + b.charCodeAt(0);
-          return a & a;
-        }, 0);
-        const sequence = generateVariedSequence(correct, incorrect, seed);
-        sequences.push(sequence);
-      });
-      skillRows[idx].sequences = sequences;
-      skillRows[idx].status = 'confirmed';
-    }
-  });
+  setStatus('singleStatus', 'Loading from Path4ABA charts…', false);
+  document.getElementById('singleDataSection').style.display = 'none';
 
-  renderSkillCards();
-  renderReviewScreen();
-  
-  if (skillRows.some(r => r.status === 'confirmed')) {
-    showDataMsg('Sequences generated. Ready to save and autofill.', false);
-  }
+  const items = await loadProjectedValues(weekStart);
+  if (!items) { setStatus('singleStatus', 'Could not load. Check your connection.', true); return; }
+  if (!items.length) { setStatus('singleStatus', 'No chart data yet. Extract charts from Office Puzzle first.', false); return; }
+
+  projectedItems = items;
+  currentWeekForData = weekStart;
+  setStatus('singleStatus', `Source: week of ${weekStart}`, false);
+  document.getElementById('singleDataSection').style.display = '';
+  document.getElementById('singleMaladSection').style.display = 'none';
+  document.getElementById('singleReplSection').style.display  = 'none';
+}
+
+document.getElementById('singleMonth')?.addEventListener('change', loadSingleDayData);
+document.getElementById('singleDay')?.addEventListener('input', () => {
+  clearTimeout(window._sdTimer);
+  window._sdTimer = setTimeout(loadSingleDayData, 600);
 });
 
-// ── Render Review Screen ───────────────────
-function renderReviewScreen() {
-  const container = document.getElementById('reviewCards');
-  container.innerHTML = '';
-
-  if (!skillRows.some(r => r.status === 'calculated' || r.status === 'confirmed')) {
-    return;
-  }
-
-  const weekStart = document.getElementById('weekStartDate').value;
-  const weekDays = getWeekDays(weekStart);
-  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-
-  skillRows.filter(r => r.dailyPercentages.length > 0).forEach(row => {
-    const card = document.createElement('div');
-    card.className = 'review-card';
-    card.style.cssText = `
-      background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:10px;
-    `;
-
-    const trials = row.trialsOverride || row.defaultTrials;
-    const dailyPcts = row.dailyPercentages;
-    const weeklyAvg = dailyPcts.reduce((a, b) => a + b, 0) / dailyPcts.length;
-
-    let daysHtml = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:8px;">';
-    dayNames.forEach((dayName, idx) => {
-      const pct = dailyPcts[idx];
-      daysHtml += `
-        <div style="text-align:center;font-size:11px;">
-          <div style="font-weight:600;color:#111827;">${pct}%</div>
-          <div style="color:#6b7280;">${dayName.slice(0, 3)}</div>
-        </div>
-      `;
-    });
-    daysHtml += '</div>';
-
-    card.innerHTML = `
-      <div style="font-weight:600;color:#111827;margin-bottom:6px;">${row.skill}</div>
-      ${daysHtml}
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:#6b7280;">
-        <span>Weekly Avg: <b>${Math.round(weeklyAvg)}%</b></span>
-        <span>Trials: <b>${trials}</b></span>
-      </div>
-      <details style="margin-top:6px;cursor:pointer;">
-        <summary style="font-size:10px;color:#0d6e6e;font-weight:600;">View sequences</summary>
-        <div id="seq-${row.skill}" style="margin-top:4px;"></div>
-      </details>
-    `;
-    container.appendChild(card);
-
-    // Add sequence details
-    const seqDiv = card.querySelector(`#seq-${row.skill}`);
-    if (row.sequences && row.sequences.length > 0) {
-      row.sequences.forEach((seq, dayIdx) => {
-        const seqSpan = document.createElement('div');
-        seqSpan.style.cssText = 'font-size:10px;color:#6b7280;margin-bottom:3px;font-family:monospace;';
-        seqSpan.textContent = `${dayNames[dayIdx]}: ${seq.join(' ')}`;
-        seqDiv.appendChild(seqSpan);
-      });
-    }
+function renderSingleMaladList() {
+  const list = document.getElementById('singleMaladList');
+  if (!list) return;
+  list.innerHTML = '';
+  const day   = parseInt(document.getElementById('singleDay').value);
+  const items = projectedItems.filter(i => i.type === 'maladaptive');
+  if (!items.length) { list.innerHTML = '<p style="font-size:11px;color:#6b7280;margin:4px 0;">No maladaptive behaviors found.</p>'; return; }
+  items.forEach(item => {
+    const val = item.dailyValue ?? Math.round((item.projectedValue || 0) / 5);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f3f4f6;gap:6px;';
+    row.innerHTML = `
+      <span style="font-size:11px;color:#111827;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+      <span style="font-size:11px;color:#92400e;font-weight:600;white-space:nowrap;">${val} occ · day ${day}</span>`;
+    list.appendChild(row);
   });
 }
 
-// ── Confirmation checkbox enables autofill ─
-document.getElementById('confirmCheck').addEventListener('change', e => {
-  document.getElementById('autofillBtn').disabled = !e.target.checked;
+function renderSingleReplList() {
+  const list = document.getElementById('singleReplList');
+  if (!list) return;
+  list.innerHTML = '';
+  const day   = parseInt(document.getElementById('singleDay').value);
+  const items = projectedItems.filter(i => i.type === 'replacement');
+  if (!items.length) { list.innerHTML = '<p style="font-size:11px;color:#6b7280;margin:4px 0;">No replacement skills found.</p>'; return; }
+  items.forEach(item => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f3f4f6;gap:6px;';
+    row.innerHTML = `
+      <span style="font-size:11px;color:#111827;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+      <span style="font-size:11px;color:#065f46;font-weight:600;white-space:nowrap;">${item.projectedValue}% · day ${day}</span>`;
+    list.appendChild(row);
+  });
+}
+
+document.getElementById('showSingleMaladBtn')?.addEventListener('click', () => {
+  const sec = document.getElementById('singleMaladSection');
+  const open = sec.style.display === 'none';
+  sec.style.display = open ? '' : 'none';
+  if (open) renderSingleMaladList();
+});
+document.getElementById('showSingleReplBtn')?.addEventListener('click', () => {
+  const sec = document.getElementById('singleReplSection');
+  const open = sec.style.display === 'none';
+  sec.style.display = open ? '' : 'none';
+  if (open) renderSingleReplList();
 });
 
-// ── Save to Path4ABA ───────────────────────
-document.getElementById('saveDataBtn').addEventListener('click', async () => {
-  await saveReplacementData(false);
-});
+async function runSingleAutofill(type) {
+  const day      = parseInt(document.getElementById('singleDay').value);
+  const statusId = type === 'maladaptive' ? 'singleMaladStatus' : 'singleReplStatus';
+  const btnId    = type === 'maladaptive' ? 'autofillSingleMaladBtn' : 'autofillSingleReplBtn';
+  if (!day || !projectedItems.length) { setStatus(statusId, 'No data loaded.', true); return; }
+  const items = projectedItems.filter(i => i.type === type);
+  if (!items.length) { setStatus(statusId, `No ${type} data.`, true); return; }
 
-// ── Autofill Data ──────────────────────────
-document.getElementById('autofillBtn').addEventListener('click', async () => {
-  const saved = await saveReplacementData(true);
-  if (!saved) return;
+  const tasks = items.map(item => ({
+    name: item.name, dayNumber: day, type,
+    value: type === 'maladaptive' ? (item.dailyValue ?? Math.round((item.projectedValue || 0) / 5)) : item.projectedValue,
+  }));
 
-  // Inject autofill script into active tab
+  const btn = document.getElementById(btnId);
+  btn.disabled = true; btn.textContent = 'Filling…';
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) { showDataMsg('Could not access the active tab.'); return; }
+    if (!tab?.id) { setStatus(statusId, 'Could not access the active tab.', true); return; }
+    const result = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: officePuzzleDatasheetAutofiller, args: [tasks], world: 'MAIN' });
+    const log  = result?.[0]?.result || [];
+    const ok   = log.filter(l => l.startsWith('✓'));
+    const errs = log.filter(l => l.startsWith('❌'));
+    setStatus(statusId, (log[0] || 'No result.').replace(/^[✓❌]\s*/, ''), errs.length > 0 && ok.length === 0);
+    if (ok.length > 0 && document.getElementById('singleConfirmCheck')?.checked) await saveSingleData(false);
+  } catch (err) { setStatus(statusId, 'Error: ' + err.message, true); }
+  finally { btn.disabled = false; btn.textContent = type === 'maladaptive' ? 'Autofill Maladaptives' : 'Autofill Replacements'; }
+}
 
-    const weekStart = document.getElementById('weekStartDate').value;
-    const weekDays = getWeekDays(weekStart);
-    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+document.getElementById('autofillSingleMaladBtn')?.addEventListener('click', () => runSingleAutofill('maladaptive'));
+document.getElementById('autofillSingleReplBtn')?.addEventListener('click',  () => runSingleAutofill('replacement'));
 
-    // Prepare autofill data
-    const autofillData = [];
-    skillRows.filter(r => r.sequences && r.sequences.length > 0).forEach(row => {
-      const trials = row.trialsOverride || row.defaultTrials;
-      row.sequences.forEach((seq, dayIdx) => {
-        const correct = row.dailyCorrect[dayIdx];
-        const incorrect = row.dailyIncorrect[dayIdx];
-        autofillData.push({
-          skill: row.skill,
-          day: dayNames[dayIdx],
-          date: weekDays[dayIdx],
-          trials,
-          percentage: row.dailyPercentages[dayIdx],
-          correct,
-          incorrect,
-          sequence: seq,
-        });
-      });
+async function saveSingleData(userInitiated) {
+  if (!selectedClientId || !projectedItems.length) return false;
+  const month = parseInt(document.getElementById('singleMonth').value);
+  const day   = parseInt(document.getElementById('singleDay').value);
+  if (!month || !day) return false;
+  const year      = new Date().getFullYear();
+  const dateStr   = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  const weekStart = getMondayOfDate(dateStr);
+  const weekEnd   = calcWeekEndDate(weekStart);
+
+  const replRecs  = projectedItems.filter(i => i.type === 'replacement').map(item => ({
+    clientId: selectedClientId, replacementSkill: item.name, weekStart, weekEnd, sessionDate: dateStr,
+    dailyPercentage: item.projectedValue, trials: 12, userConfirmed: true, autofillCompleted: true, platformSource: 'extension',
+  }));
+  const maladRecs = projectedItems.filter(i => i.type === 'maladaptive').map(item => ({
+    clientId: selectedClientId, behaviorName: item.name, weekStart, weekEnd, sessionDate: dateStr,
+    frequency: item.dailyValue ?? Math.round((item.projectedValue || 0) / 5), userConfirmed: true,
+  }));
+
+  try {
+    const saves = [];
+    if (replRecs.length)  saves.push(api('/api/replacement-data',  { method: 'POST', body: JSON.stringify(replRecs)  }));
+    if (maladRecs.length) saves.push(api('/api/maladaptive-data', { method: 'POST', body: JSON.stringify(maladRecs) }));
+    await Promise.all(saves);
+    if (userInitiated) setStatus('singleStatus', 'Done ✓ Saved to Path4ABA.', false);
+    return true;
+  } catch { if (userInitiated) setStatus('singleStatus', 'Save failed. Check your connection.', true); return false; }
+}
+
+document.getElementById('saveSingleDataBtn')?.addEventListener('click', async () => {
+  if (!document.getElementById('singleConfirmCheck')?.checked) { setStatus('singleStatus', 'Check the confirmation box first.', true); return; }
+  const btn = document.getElementById('saveSingleDataBtn');
+  btn.disabled = true;
+  await saveSingleData(true);
+  btn.disabled = false;
+});
+
+// ══════════════════════════════════════════════
+//  FULL WEEK MODE
+// ══════════════════════════════════════════════
+
+const DAY_NAMES_SHORT = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+function renderWeekDays(mondayStr) {
+  const dayDates  = getWeekDaysFromMonday(mondayStr);
+  const container = document.getElementById('weekDaysList');
+  container.innerHTML = '';
+  workedDayDates  = [];
+  absentDayReasons = {};
+
+  dayDates.forEach((dateStr, i) => {
+    const d      = new Date(dateStr + 'T00:00:00');
+    const lbl    = `${DAY_NAMES_SHORT[i]} ${d.getMonth()+1}/${d.getDate()}`;
+    const worked = i < 5; // Mon–Fri default checked, Sat–Sun unchecked
+    if (worked) workedDayDates.push(dateStr);
+    else absentDayReasons[dateStr] = 'other';
+
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;';
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.id = `wd-${dateStr}`; cb.checked = worked;
+
+    const label = document.createElement('label');
+    label.htmlFor = `wd-${dateStr}`;
+    label.style.cssText = `font-size:11px;flex:1;cursor:pointer;color:${worked ? '#374151' : '#dc2626'};${!worked ? 'text-decoration:line-through;' : ''}`;
+    label.textContent = lbl;
+
+    const reasonSel = document.createElement('select');
+    reasonSel.style.cssText = `font-size:10px;padding:2px 4px;border:1px solid #d1d5db;border-radius:4px;color:#374151;display:${worked ? 'none' : ''};`;
+    ['Vacation','Medical','Other'].forEach(r => {
+      const opt = document.createElement('option'); opt.value = r.toLowerCase(); opt.textContent = r; reasonSel.appendChild(opt);
+    });
+    reasonSel.addEventListener('change', () => { absentDayReasons[dateStr] = reasonSel.value; });
+
+    cb.addEventListener('change', () => {
+      if (cb.checked) {
+        workedDayDates.push(dateStr); workedDayDates.sort();
+        label.style.color = '#374151'; label.style.textDecoration = ''; reasonSel.style.display = 'none';
+        delete absentDayReasons[dateStr];
+      } else {
+        workedDayDates = workedDayDates.filter(d => d !== dateStr);
+        label.style.color = '#dc2626'; label.style.textDecoration = 'line-through'; reasonSel.style.display = '';
+        absentDayReasons[dateStr] = reasonSel.value;
+      }
+      if (document.getElementById('weekMaladSection').style.display !== 'none') renderWeekMaladList();
+      if (document.getElementById('weekReplSection').style.display  !== 'none') renderWeekReplList();
     });
 
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: injectAutofill,
-      args: [autofillData],
-    });
-    showDataMsg('Autofill injected. Review the values on the page before submitting.', false);
-  } catch (err) {
-    showDataMsg('Autofill injection failed: ' + err.message);
+    row.appendChild(cb); row.appendChild(label); row.appendChild(reasonSel);
+    container.appendChild(row);
+  });
+
+  document.getElementById('weekDaysSection').style.display = '';
+}
+
+async function loadWeekData(weekStart) {
+  if (!selectedClientId || !weekStart) return;
+  if (weekStart === currentWeekForData && projectedItems.length) {
+    document.getElementById('weekDataSection').style.display = ''; return;
+  }
+  setStatus('weekStatus', 'Loading from Path4ABA charts…', false);
+  document.getElementById('weekDataSection').style.display = 'none';
+
+  const items = await loadProjectedValues(weekStart);
+  if (!items) { setStatus('weekStatus', 'Could not load. Check your connection.', true); return; }
+  if (!items.length) { setStatus('weekStatus', 'No chart data yet. Extract charts from Office Puzzle first.', false); return; }
+
+  projectedItems = items;
+  currentWeekForData = weekStart;
+  setStatus('weekStatus', `Source: week of ${weekStart} · ${items.length} target${items.length !== 1 ? 's' : ''}`, false);
+  document.getElementById('weekDataSection').style.display = '';
+  document.getElementById('weekMaladSection').style.display = 'none';
+  document.getElementById('weekReplSection').style.display  = 'none';
+}
+
+function renderWeekMaladList() {
+  const list = document.getElementById('weekMaladList');
+  if (!list) return;
+  list.innerHTML = '';
+  const items      = projectedItems.filter(i => i.type === 'maladaptive');
+  const workedCount = workedDayDates.length || 1;
+  if (!items.length) { list.innerHTML = '<p style="font-size:11px;color:#6b7280;margin:4px 0;">No maladaptive behaviors found.</p>'; return; }
+  items.forEach(item => {
+    const perDay = Math.round(item.projectedValue / workedCount);
+    const total  = perDay * workedCount;
+    const row = document.createElement('div');
+    row.style.cssText = 'padding:4px 0;border-bottom:1px solid #f3f4f6;';
+    row.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+        <span style="font-size:11px;color:#111827;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+        <span style="font-size:11px;color:#92400e;font-weight:600;white-space:nowrap;">${total} total · ${perDay}/day</span>
+      </div>
+      <div style="font-size:10px;color:#9ca3af;margin-top:1px;">${workedDayDates.length} worked day${workedDayDates.length !== 1 ? 's' : ''}</div>`;
+    list.appendChild(row);
+  });
+}
+
+function renderWeekReplList() {
+  const list = document.getElementById('weekReplList');
+  if (!list) return;
+  list.innerHTML = '';
+  const items = projectedItems.filter(i => i.type === 'replacement');
+  if (!items.length) { list.innerHTML = '<p style="font-size:11px;color:#6b7280;margin:4px 0;">No replacement skills found.</p>'; return; }
+  items.forEach(item => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f3f4f6;gap:6px;';
+    row.innerHTML = `
+      <span style="font-size:11px;color:#111827;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+      <span style="font-size:11px;color:#065f46;font-weight:600;white-space:nowrap;">${item.projectedValue}% avg</span>`;
+    list.appendChild(row);
+  });
+}
+
+document.getElementById('showWeekMaladBtn')?.addEventListener('click', () => {
+  const sec = document.getElementById('weekMaladSection');
+  const open = sec.style.display === 'none';
+  sec.style.display = open ? '' : 'none';
+  if (open) renderWeekMaladList();
+});
+document.getElementById('showWeekReplBtn')?.addEventListener('click', () => {
+  const sec = document.getElementById('weekReplSection');
+  const open = sec.style.display === 'none';
+  sec.style.display = open ? '' : 'none';
+  if (open) renderWeekReplList();
+});
+
+document.getElementById('weekStartDate').addEventListener('change', (e) => {
+  const weekStart = e.target.value;
+  document.getElementById('weekMaladSection').style.display = 'none';
+  document.getElementById('weekReplSection').style.display  = 'none';
+  if (weekStart) {
+    renderWeekDays(weekStart);
+    if (selectedClientId) loadWeekData(weekStart);
+  } else {
+    document.getElementById('weekDaysSection').style.display = 'none';
+    document.getElementById('weekDataSection').style.display = 'none';
   }
 });
 
-// Injected into the target page — must be self-contained (no closure refs)
-function injectAutofill(autofillData) {
-  const overlay = document.createElement('div');
-  overlay.id = '__p4a_overlay__';
-  overlay.style.cssText = `
-    position:fixed;bottom:20px;right:20px;z-index:999999;
-    background:#fff;border:2px solid #0d6e6e;border-radius:12px;
-    padding:14px 16px;max-width:360px;font-family:system-ui,sans-serif;
-    font-size:12px;box-shadow:0 8px 32px rgba(0,0,0,0.18);max-height:70vh;overflow-y:auto;
-  `;
-  const title = document.createElement('div');
-  title.style.cssText = 'font-weight:700;color:#0d6e6e;margin-bottom:10px;font-size:13px;';
-  title.textContent = 'Path4ABA · Weekly Data Autofill';
-  overlay.appendChild(title);
+async function runWeekAutofill(type) {
+  const statusId = type === 'maladaptive' ? 'weekMaladStatus' : 'weekReplStatus';
+  const btnId    = type === 'maladaptive' ? 'autofillWeekMaladBtn' : 'autofillWeekReplBtn';
+  if (!projectedItems.length) { setStatus(statusId, 'No data loaded.', true); return; }
+  if (!workedDayDates.length) { setStatus(statusId, 'No worked days selected.', true); return; }
+  const items = projectedItems.filter(i => i.type === type);
+  if (!items.length) { setStatus(statusId, `No ${type} data found.`, true); return; }
 
-  autofillData.forEach(row => {
-    const card = document.createElement('div');
-    card.style.cssText = 'margin-bottom:8px;padding:8px;background:#f9fafb;border-radius:7px;';
-    const seq = row.sequence.join(' ');
-    card.innerHTML = `
-      <div style="font-weight:600;color:#111827;margin-bottom:2px;font-size:11px;">${row.skill}</div>
-      <div style="font-size:10px;color:#6b7280;margin-bottom:4px;">${row.day} (${row.date})</div>
-      <div style="display:flex;gap:10px;font-size:11px;color:#374151;margin-bottom:4px;">
-        <span>Trials: <b>${row.trials}</b></span>
-        <span style="color:#16a34a;">+${row.correct}</span>
-        <span style="color:#dc2626;">−${row.incorrect}</span>
-        <span>${row.percentage}%</span>
-      </div>
-      <div style="font-size:10px;color:#6b7280;word-break:break-all;font-family:monospace;">${seq}</div>
-    `;
-    overlay.appendChild(card);
+  const workedCount = workedDayDates.length;
+  const tasks = [];
+  workedDayDates.forEach(dateStr => {
+    const dayNum = new Date(dateStr + 'T00:00:00').getDate();
+    items.forEach(item => {
+      tasks.push({ name: item.name, dayNumber: dayNum, type,
+        value: type === 'maladaptive' ? Math.round(item.projectedValue / workedCount) : item.projectedValue });
+    });
   });
 
-  const closeBtn = document.createElement('button');
-  closeBtn.style.cssText = 'margin-top:6px;width:100%;padding:6px;background:#0d6e6e;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;';
-  closeBtn.textContent = 'Close';
-  closeBtn.addEventListener('click', () => overlay.remove());
-  overlay.appendChild(closeBtn);
-
-  document.getElementById('__p4a_overlay__')?.remove();
-  document.body.appendChild(overlay);
+  const btn = document.getElementById(btnId);
+  btn.disabled = true; btn.textContent = 'Filling…';
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) { setStatus(statusId, 'Could not access the active tab.', true); return; }
+    const result = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: officePuzzleDatasheetAutofiller, args: [tasks], world: 'MAIN' });
+    const log  = result?.[0]?.result || [];
+    const ok   = log.filter(l => l.startsWith('✓'));
+    const errs = log.filter(l => l.startsWith('❌'));
+    setStatus(statusId, (log[0] || 'No result.').replace(/^[✓❌]\s*/, ''), errs.length > 0 && ok.length === 0);
+    if (ok.length > 0 && document.getElementById('weekConfirmCheck')?.checked) await saveWeekData(false);
+  } catch (err) { setStatus(statusId, 'Error: ' + err.message, true); }
+  finally { btn.disabled = false; btn.textContent = type === 'maladaptive' ? 'Autofill Maladaptives' : 'Autofill Replacements'; }
 }
 
-// ── Save helper ────────────────────────────
-async function saveReplacementData(autofillCompleted) {
-  document.querySelectorAll('.data-feedback').forEach(e => e.remove());
+document.getElementById('autofillWeekMaladBtn')?.addEventListener('click', () => runWeekAutofill('maladaptive'));
+document.getElementById('autofillWeekReplBtn')?.addEventListener('click',  () => runWeekAutofill('replacement'));
 
-  if (!selectedClientId) { showDataMsg('No client selected.'); return false; }
-  if (!document.getElementById('confirmCheck').checked) {
-    showDataMsg('Check the confirmation box before saving.');
-    return false;
-  }
+async function saveWeekData(userInitiated) {
+  if (!selectedClientId || !projectedItems.length || !workedDayDates.length) return false;
+  const weekStart   = document.getElementById('weekStartDate').value;
+  const weekEnd     = calcWeekEndDate(weekStart);
+  const workedCount = workedDayDates.length;
+  const replRecs = []; const maladRecs = [];
 
-  const weekStart = document.getElementById('weekStartDate').value;
-  const weekEnd = document.getElementById('weekEndDate').value;
-
-  if (!weekStart || !weekEnd) {
-    showDataMsg('Week dates not properly set.');
-    return false;
-  }
-
-  const weekDays = getWeekDays(weekStart);
-
-  const records = [];
-  skillRows.forEach(row => {
-    if (row.dailyPercentages.length === 0) return;
-
-    const trials = row.trialsOverride || row.defaultTrials;
-
-    row.dailyPercentages.forEach((dailyPct, dayIdx) => {
-      records.push({
-        clientId: selectedClientId,
-        replacementSkill: row.skill,
-        weekStart,
-        weekEnd,
-        sessionDate: weekDays[dayIdx],
-        dailyPercentage: dailyPct,
-        trials,
-        correctCount: row.dailyCorrect[dayIdx],
-        incorrectCount: row.dailyIncorrect[dayIdx],
-        sequence: row.sequences[dayIdx] ? row.sequences[dayIdx].join(',') : null,
-        userConfirmed: true,
-        autofillCompleted,
-        platformSource: 'extension',
-      });
+  workedDayDates.forEach(sessionDate => {
+    projectedItems.filter(i => i.type === 'replacement').forEach(item => {
+      replRecs.push({ clientId: selectedClientId, replacementSkill: item.name, weekStart, weekEnd, sessionDate,
+        dailyPercentage: item.projectedValue, trials: 12, userConfirmed: true, autofillCompleted: true, platformSource: 'extension' });
+    });
+    projectedItems.filter(i => i.type === 'maladaptive').forEach(item => {
+      maladRecs.push({ clientId: selectedClientId, behaviorName: item.name, weekStart, weekEnd, sessionDate,
+        frequency: Math.round(item.projectedValue / workedCount), userConfirmed: true });
     });
   });
 
-  // Build maladaptive records
-  const maladRecords = [];
-  maladaptiveRows.forEach(row => {
-    if (!row.dailyValues.length) return;
-    const weekDays = getWeekDays(weekStart);
-    row.dailyValues.forEach((freq, dayIdx) => {
-      maladRecords.push({
-        clientId: selectedClientId,
-        behaviorName: row.behavior,
-        weekStart,
-        weekEnd,
-        sessionDate: weekDays[dayIdx],
-        frequency: freq,
-        dailyValues: row.dailyValues,
-        userConfirmed: true,
-      });
-    });
-  });
-
-  const hasAnything = records.length > 0 || maladRecords.length > 0;
-  if (!hasAnything) {
-    showDataMsg('No calculated data to save. Click "Calculate Data" first.');
-    return false;
-  }
-
-  const saveBtn = document.getElementById('saveDataBtn');
-  saveBtn.disabled = true;
   try {
     const saves = [];
-    if (records.length) {
-      saves.push(api('/api/replacement-data', { method: 'POST', body: JSON.stringify(records) }));
-    }
-    if (maladRecords.length) {
-      saves.push(api('/api/maladaptive-data', { method: 'POST', body: JSON.stringify(maladRecords) }));
-    }
-    const results = await Promise.all(saves);
-    for (const res of results) {
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        showDataMsg(data.error || 'Save failed.');
-        return false;
-      }
-    }
-    const total = records.length + maladRecords.length;
-    showDataMsg(`Saved ${total} record${total !== 1 ? 's' : ''} to Path4ABA.`, false);
+    if (replRecs.length)  saves.push(api('/api/replacement-data',  { method: 'POST', body: JSON.stringify(replRecs)  }));
+    if (maladRecs.length) saves.push(api('/api/maladaptive-data', { method: 'POST', body: JSON.stringify(maladRecs) }));
+    await Promise.all(saves);
+    if (userInitiated) setStatus('weekStatus', 'Done ✓ Saved to Path4ABA.', false);
     return true;
-  } catch {
-    showDataMsg('Network error. Make sure you are logged into Path4ABA.');
-    return false;
-  } finally {
-    saveBtn.disabled = false;
-  }
+  } catch { if (userInitiated) setStatus('weekStatus', 'Save failed. Check your connection.', true); return false; }
 }
 
-// ── Cancel / reset data tab ────────────────
-document.getElementById('cancelDataBtn').addEventListener('click', () => {
-  skillRows = [];
-  maladaptiveRows = [];
-  document.getElementById('skillCards').style.display = 'none';
-  document.getElementById('maladaptiveCards').style.display = 'none';
-  document.getElementById('dataActions').style.display = 'none';
-  document.getElementById('reviewSection').style.display = 'none';
-  document.getElementById('confirmSection').style.display = 'none';
-  document.getElementById('confirmCheck').checked = false;
-  document.getElementById('autofillBtn').disabled = true;
-  document.querySelectorAll('.data-feedback').forEach(e => e.remove());
+document.getElementById('saveWeekDataBtn')?.addEventListener('click', async () => {
+  if (!document.getElementById('weekConfirmCheck')?.checked) { setStatus('weekStatus', 'Check the confirmation box first.', true); return; }
+  const btn = document.getElementById('saveWeekDataBtn');
+  btn.disabled = true;
+  await saveWeekData(true);
+  btn.disabled = false;
 });
 
 // ── Set week start date default on tab open ─
 document.getElementById('tabData').addEventListener('click', () => {
   if (!document.getElementById('weekStartDate').value) {
     const today = new Date();
+    const dow   = today.getDay();
     const monday = new Date(today);
-    monday.setDate(today.getDate() - today.getDay() + 1);
-    document.getElementById('weekStartDate').value = monday.toISOString().split('T')[0];
-    const weekEnd = calcWeekEndDate(monday.toISOString().split('T')[0]);
-    document.getElementById('weekEndDate').value = weekEnd;
+    monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
+    const mondayStr = monday.toISOString().split('T')[0];
+    document.getElementById('weekStartDate').value = mondayStr;
+    renderWeekDays(mondayStr);
+    if (selectedClientId) loadWeekData(mondayStr);
   }
-  if (dataMode === 'single' && selectedClientId) {
-    renderAutofillSheetsInputs();
-  }
+  if (dataMode === 'single' && selectedClientId) loadSingleDayData();
 });
 
 // ─────────────────────────────────────────────
@@ -2262,178 +1961,6 @@ document.getElementById('saveChartsBtn').addEventListener('click', async () => {
 //  OFFICE PUZZLE — AUTOFILL DATASHEET
 // ─────────────────────────────────────────────
 
-async function renderAutofillSheetsInputs() {
-  if (dataMode !== 'single') return;
-
-  if (!selectedClientId) {
-    showAutofillProjectedState('empty');
-    const el = document.getElementById('autofillProjectedEmpty');
-    if (el) el.textContent = "Select a client above to load this week's projected values.";
-    return;
-  }
-
-  showAutofillProjectedState('loading');
-
-  try {
-    const today = new Date();
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-    const weekStr = monday.toISOString().split('T')[0];
-
-    const res = await api(`/api/projected-values?clientId=${selectedClientId}&week=${weekStr}`);
-    const data = res.ok ? await res.json().catch(() => ({})) : {};
-    autofillProjectedItems = data.items || [];
-    autofillSelections = {};
-
-    if (!autofillProjectedItems.length) {
-      showAutofillProjectedState('empty');
-      const el = document.getElementById('autofillProjectedEmpty');
-      if (el) el.textContent = 'No chart data yet. Extract charts from the Office Puzzle charts page first.';
-      return;
-    }
-
-    autofillProjectedItems.forEach(item => {
-      autofillSelections[item.name] = { met: true, actualValue: null };
-    });
-
-    renderProjectedConfirmList();
-    showAutofillProjectedState('confirm');
-
-    const dayInput = document.getElementById('autofillDay');
-    if (dayInput && !dayInput.value) dayInput.value = String(new Date().getDate());
-  } catch {
-    showAutofillProjectedState('empty');
-    const el = document.getElementById('autofillProjectedEmpty');
-    if (el) el.textContent = 'Could not load projected values. Check your connection.';
-  }
-}
-
-function showAutofillProjectedState(state) {
-  document.getElementById('autofillProjectedLoading').style.display = state === 'loading' ? '' : 'none';
-  document.getElementById('autofillProjectedEmpty').style.display   = state === 'empty'   ? '' : 'none';
-  document.getElementById('autofillProjectedConfirm').style.display = state === 'confirm'  ? '' : 'none';
-}
-
-function renderProjectedConfirmList() {
-  const list = document.getElementById('autofillProjectedList');
-  if (!list) return;
-  list.innerHTML = '';
-
-  autofillProjectedItems.forEach(item => {
-    const sel = autofillSelections[item.name] || { met: true, actualValue: null };
-    const displayVal = item.type === 'maladaptive'
-      ? (item.dailyValue ?? Math.round((item.projectedValue || 0) / 5))
-      : item.projectedValue;
-    const valueLabel = item.type === 'replacement'
-      ? `${displayVal}%`
-      : `${displayVal} occ./day`;
-
-    const row = document.createElement('div');
-    row.style.cssText = 'padding:5px 0;border-bottom:1px solid #f3f4f6;';
-
-    const topRow = document.createElement('div');
-    topRow.style.cssText = 'display:flex;align-items:center;gap:6px;';
-    topRow.innerHTML = `
-      <span style="flex:1;font-size:11px;font-weight:600;color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
-      <span style="font-size:10px;color:#6b7280;white-space:nowrap;">${valueLabel}</span>
-      <button class="proj-yes" data-name="${escapeHtml(item.name)}" style="padding:2px 7px;font-size:10px;font-weight:700;border-radius:4px;border:1.5px solid ${sel.met ? '#16a34a' : '#d1d5db'};background:${sel.met ? '#16a34a' : 'white'};color:${sel.met ? 'white' : '#9ca3af'};cursor:pointer;line-height:1.4;">Yes</button>
-      <button class="proj-no" data-name="${escapeHtml(item.name)}" style="padding:2px 7px;font-size:10px;font-weight:700;border-radius:4px;border:1.5px solid ${!sel.met ? '#dc2626' : '#d1d5db'};background:${!sel.met ? '#dc2626' : 'white'};color:${!sel.met ? 'white' : '#9ca3af'};cursor:pointer;line-height:1.4;">No</button>
-    `;
-    row.appendChild(topRow);
-
-    if (!sel.met) {
-      const inputRow = document.createElement('div');
-      inputRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:4px;padding-left:2px;';
-      inputRow.innerHTML = `
-        <label style="font-size:10px;color:#6b7280;white-space:nowrap;">Actual value:</label>
-        <input type="number" min="0" ${item.type === 'replacement' ? 'max="100"' : ''} class="proj-actual" data-name="${escapeHtml(item.name)}" placeholder="${displayVal}" value="${sel.actualValue ?? ''}" style="width:60px;padding:2px 5px;border:1px solid #d1d5db;border-radius:4px;font-size:11px;">
-        <span style="font-size:10px;color:#6b7280;">${item.type === 'replacement' ? '%' : 'occ./day'}</span>
-      `;
-      row.appendChild(inputRow);
-    }
-
-    list.appendChild(row);
-  });
-
-  list.querySelectorAll('.proj-yes').forEach(btn => {
-    btn.addEventListener('click', () => {
-      autofillSelections[btn.dataset.name] = { met: true, actualValue: null };
-      renderProjectedConfirmList();
-    });
-  });
-  list.querySelectorAll('.proj-no').forEach(btn => {
-    btn.addEventListener('click', () => {
-      autofillSelections[btn.dataset.name] = { met: false, actualValue: null };
-      renderProjectedConfirmList();
-    });
-  });
-  list.querySelectorAll('.proj-actual').forEach(input => {
-    input.addEventListener('input', e => {
-      const v = parseFloat(e.target.value);
-      autofillSelections[e.target.dataset.name] = { met: false, actualValue: isNaN(v) ? null : v };
-    });
-  });
-}
-
-function showAutofillSheetStatus(msg, isError) {
-  const el = document.getElementById('autofillSheetStatus');
-  if (!el) return;
-  el.innerHTML = '';
-  el.textContent = msg;
-  el.style.display  = '';
-  el.style.background = isError ? '#fef2f2' : '#f0fdf4';
-  el.style.color      = isError ? '#991b1b'  : '#166534';
-}
-
-document.getElementById('autofillSheetBtn').addEventListener('click', async () => {
-  const day = parseInt(document.getElementById('autofillDay').value);
-  if (!day || day < 1 || day > 31) {
-    showAutofillSheetStatus('Enter the day of month (1–31).', true);
-    return;
-  }
-
-  if (!autofillProjectedItems.length) {
-    showAutofillSheetStatus('No projected values loaded. Select a client first.', true);
-    return;
-  }
-
-  const tasks = autofillProjectedItems.map(item => {
-    const sel = autofillSelections[item.name] || { met: true, actualValue: null };
-    // For Single Day mode, use per-session daily value for maladaptives
-    const baseValue = item.type === 'maladaptive'
-      ? (item.dailyValue ?? Math.round((item.projectedValue || 0) / 5))
-      : item.projectedValue;
-    const value = sel.met ? baseValue : (sel.actualValue ?? baseValue);
-    return { name: item.name, dayNumber: day, value, type: item.type };
-  });
-
-  const btn = document.getElementById('autofillSheetBtn');
-  btn.disabled = true;
-  btn.textContent = 'Filling cells…';
-  document.getElementById('autofillSheetStatus').style.display = 'none';
-
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const result = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: officePuzzleDatasheetAutofiller,
-      args: [tasks],
-      world: 'MAIN',
-    });
-
-    const log  = result?.[0]?.result || [];
-    const ok   = log.filter(l => l.startsWith('✓'));
-    const errs = log.filter(l => l.startsWith('❌'));
-    const msg  = log[0] || 'No result returned from page.';
-    showAutofillSheetStatus(msg.replace(/^[✓❌]\s*/, ''), errs.length > 0);
-  } catch (err) {
-    showAutofillSheetStatus('Error: ' + err.message, true);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Autofill Datasheet';
-  }
-});
-
 // Injected into the Office Puzzle datasheet page — must be fully self-contained.
 // Office Puzzle shows ONE behavior/skill per datasheet page. This function reads
 // the page header to identify which behavior is currently shown, then fills only that one.
@@ -2486,7 +2013,7 @@ function officePuzzleDatasheetAutofiller(tasks) {
     return null;
   }
 
-  // Fuzzy match: does the task name match the detected page name?
+  // Fuzzy match: does task name match detected page name?
   function namesMatch(a, b) {
     const al = a.toLowerCase().trim();
     const bl = b.toLowerCase().trim();
@@ -2503,65 +2030,63 @@ function officePuzzleDatasheetAutofiller(tasks) {
     return ['❌ Could not detect behavior name from this page. Make sure you are on a datasheet page.'];
   }
 
-  const task = tasks.find(t => namesMatch(t.name, pageName));
-  if (!task) {
-    const available = tasks.map(t => t.name).join(', ');
-    return [`❌ "${pageName}" not found in your loaded data. Navigate to a sheet for one of: ${available}`];
+  // Match ALL tasks for this behavior (may be multiple days in full-week mode)
+  const matchingTasks = tasks.filter(t => namesMatch(t.name, pageName));
+  if (!matchingTasks.length) {
+    const names = [...new Set(tasks.map(t => t.name))].join(', ');
+    return [`❌ "${pageName}" not found in your loaded data. Navigate to a sheet for: ${names}`];
   }
 
   // ── Find the datasheet table ──────────────────────────────────────────────
   const table = Array.from(document.querySelectorAll('table')).find(t => t.querySelector('td.value'))
     || document.querySelector('table');
-  if (!table) {
-    return [`❌ "${task.name}" — no datasheet table found on this page`];
+  if (!table) return [`❌ "${matchingTasks[0].name}" — no datasheet table found on this page`];
+
+  const bodyRows   = Array.from(table.querySelectorAll('tbody tr'));
+  const filledDays = [];
+
+  for (const task of matchingTasks) {
+    const colIndex = findDayColumn(table, task.dayNumber);
+    if (colIndex === -1) continue;
+
+    if (task.type === 'replacement') {
+      const totalTrials = 12;
+      const correct = Math.min(totalTrials, Math.max(0, Math.round(task.value / 100 * totalTrials)));
+      const seq = generateSequence(correct, totalTrials);
+      bodyRows.slice(0, totalTrials).forEach((row, i) => {
+        const cell = row.children[colIndex];
+        if (!cell || !cell.classList.contains('value')) return;
+        if (cell.textContent.trim() !== seq[i]) cell.click();
+      });
+    } else {
+      const freq = Math.round(task.value);
+      bodyRows.forEach((row, i) => {
+        const cell = row.children[colIndex];
+        if (!cell || !cell.classList.contains('value')) return;
+        const shouldMark = i < freq;
+        const isMarked   = cell.textContent.trim().toUpperCase() === 'X';
+        if (shouldMark !== isMarked) cell.click();
+      });
+    }
+    filledDays.push(task.dayNumber);
   }
 
-  const colIndex = findDayColumn(table, task.dayNumber);
-  if (colIndex === -1) {
-    return [`❌ "${task.name}" — day ${task.dayNumber} column not found in table header`];
-  }
-
-  const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
-  let clicks = 0;
-
-  if (task.type === 'replacement') {
-    const totalTrials = 12;
-    const correct = Math.min(totalTrials, Math.max(0, Math.round(task.value / 100 * totalTrials)));
-    const seq = generateSequence(correct, totalTrials);
-    bodyRows.slice(0, totalTrials).forEach((row, i) => {
-      const cell = row.children[colIndex];
-      if (!cell || !cell.classList.contains('value')) return;
-      if (cell.textContent.trim() !== seq[i]) { cell.click(); clicks++; }
-    });
-    return [`✓ "${task.name}" filled — navigate to the next behavior sheet to continue`];
-  } else {
-    // maladaptive: mark first N rows with X, clear the rest
-    const freq = Math.round(task.value);
-    bodyRows.forEach((row, i) => {
-      const cell = row.children[colIndex];
-      if (!cell || !cell.classList.contains('value')) return;
-      const shouldMark = i < freq;
-      const isMarked   = cell.textContent.trim().toUpperCase() === 'X';
-      if (shouldMark !== isMarked) { cell.click(); clicks++; }
-    });
-    return [`✓ "${task.name}" filled — navigate to the next behavior sheet to continue`];
-  }
+  if (!filledDays.length) return [`❌ "${matchingTasks[0].name}" — could not match any day columns`];
+  const daysStr = filledDays.length === 1 ? `day ${filledDays[0]}` : `days ${filledDays.join(', ')}`;
+  return [`✓ "${matchingTasks[0].name}" filled (${daysStr}) — navigate to the next behavior sheet to continue`];
 }
 
-// ── Projected values: All Yes / All No ────
-document.getElementById('autofillAllYesBtn').addEventListener('click', () => {
-  autofillProjectedItems.forEach(item => {
-    autofillSelections[item.name] = { met: true, actualValue: null };
-  });
-  renderProjectedConfirmList();
+// ── Open as Window ─────────────────────────
+document.getElementById('openWindowBtn')?.addEventListener('click', () => {
+  const url = chrome.runtime.getURL('popup.html') + '?window=1';
+  chrome.windows.create({ url, type: 'popup', width: 420, height: 700 });
+  window.close();
 });
 
-document.getElementById('autofillAllNoBtn').addEventListener('click', () => {
-  autofillProjectedItems.forEach(item => {
-    autofillSelections[item.name] = { met: false, actualValue: null };
-  });
-  renderProjectedConfirmList();
-});
+if (new URLSearchParams(window.location.search).get('window') === '1') {
+  const wb = document.getElementById('openWindowBtn');
+  if (wb) wb.style.display = 'none';
+}
 
 // ── Boot ───────────────────────────────────
 init();
