@@ -6,7 +6,9 @@
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": [
     "https://path4aba.app/*",
-    "https://*/*"
+    "https://*/*",
+    "*://*.officepuzzle.com/*",
+    "*://fkbac.officepuzzle.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
