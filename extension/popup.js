@@ -16,6 +16,7 @@ let selectedBehaviors = [];  // names
 let selectedSkills = [];     // names
 let selectedLocation = null;
 let activeTab = 'generate';
+let dataMode = 'single';     // 'single' | 'week'
 
 // Auth token (replaces cookie-based auth)
 let extensionToken = null;
@@ -482,6 +483,20 @@ document.getElementById('complianceGroup').addEventListener('click', e => {
   } else if (complianceLevel === 'below_typical') {
     btn.style.background = '#f59e0b';
     btn.style.borderColor = '#f59e0b';
+  }
+});
+
+// ── Data mode toggle (Single Day / Full Week) ─
+document.getElementById('dataModeGroup').addEventListener('click', (e) => {
+  const btn = e.target.closest('.toggle-btn');
+  if (!btn) return;
+  document.querySelectorAll('#dataModeGroup .toggle-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  dataMode = btn.dataset.val;
+  document.getElementById('singleDaySection').style.display = dataMode === 'single' ? '' : 'none';
+  document.getElementById('fullWeekSection').style.display = dataMode === 'week' ? '' : 'none';
+  if (dataMode === 'single' && selectedClientId) {
+    renderAutofillSheetsInputs();
   }
 });
 
@@ -1594,6 +1609,9 @@ document.getElementById('tabData').addEventListener('click', () => {
     const weekEnd = calcWeekEndDate(monday.toISOString().split('T')[0]);
     document.getElementById('weekEndDate').value = weekEnd;
   }
+  if (dataMode === 'single' && selectedClientId) {
+    renderAutofillSheetsInputs();
+  }
 });
 
 // ─────────────────────────────────────────────
@@ -1604,12 +1622,9 @@ async function checkOfficePuzzlePage() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const url = tab?.url || '';
-    const isOPCharts  = url.includes('officepuzzle.com') && url.includes('/data/charts');
-    const isOPSheets  = url.includes('officepuzzle.com') && url.includes('/data/sheets');
+    const isOPCharts = url.includes('officepuzzle.com') && url.includes('/data/charts');
     const chartsEl = document.getElementById('extractChartsSection');
-    const sheetsEl = document.getElementById('autofillSheetsSection');
     if (chartsEl) chartsEl.style.display = isOPCharts ? '' : 'none';
-    if (sheetsEl) sheetsEl.style.display = isOPSheets ? '' : 'none';
   } catch { /* ignore — happens in non-tab contexts */ }
 }
 
@@ -2161,11 +2176,7 @@ document.getElementById('saveChartsBtn').addEventListener('click', async () => {
 // ─────────────────────────────────────────────
 
 async function renderAutofillSheetsInputs() {
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const url = tab?.url || '';
-    if (!url.includes('officepuzzle.com') || !url.includes('/data/sheets')) return;
-  } catch { return; }
+  if (dataMode !== 'single') return;
 
   if (!selectedClientId) {
     showAutofillProjectedState('empty');

@@ -109,39 +109,6 @@
       </div>
     </div>
 
-    <!-- ── Office Puzzle: Autofill Datasheet ── -->
-    <div id="autofillSheetsSection" style="display:none">
-      <div class="op-section">
-        <div class="op-header">
-          <span class="op-badge">Office Puzzle</span>
-          <span class="op-label">Datasheet detected</span>
-        </div>
-
-        <div id="autofillProjectedLoading" style="display:none">
-          <p class="muted-text" style="text-align:center;padding:8px 0;">Loading projected values…</p>
-        </div>
-
-        <div id="autofillProjectedEmpty">
-          <p class="muted-text" style="margin:4px 0 4px">Select a client above to load this week's projected values.</p>
-        </div>
-
-        <div id="autofillProjectedConfirm" style="display:none">
-          <p style="font-size:12px;font-weight:600;color:#111827;margin:4px 0 8px">This week's projected values are ready. Did you meet these goals?</p>
-          <div id="autofillProjectedList"></div>
-          <div style="display:flex;gap:6px;margin-top:8px;">
-            <button id="autofillAllYesBtn" class="btn-outline" style="flex:1;font-size:11px;padding:4px 0;">All Yes</button>
-            <button id="autofillAllNoBtn" class="btn-outline" style="flex:1;font-size:11px;padding:4px 0;">All No</button>
-          </div>
-          <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
-            <label class="field-label" style="margin:0;white-space:nowrap;">Day of month</label>
-            <input type="number" id="autofillDay" class="input" min="1" max="31" placeholder="e.g. 5" style="width:72px;margin:0;">
-          </div>
-          <button id="autofillSheetBtn" class="btn-primary full-width" style="margin-top:8px;">Autofill Datasheet</button>
-        </div>
-
-        <div id="autofillSheetStatus" style="display:none;margin-top:8px;font-size:11px;padding:6px 8px;border-radius:6px;"></div>
-      </div>
-    </div>
 
     <!-- Action tabs — shown after client selected -->
     <div id="actionSection" style="display:none">
@@ -251,68 +218,106 @@
       <!-- ── Data Autofill Tab ── -->
       <div id="tabContent-data" class="tab-content" style="display:none">
 
-        <!-- Warning -->
-        <div class="data-warn">
-          ⚠️ Before autofill: Please confirm that these values match your real session observation.
-          This tool does not replace clinical judgment or accurate data collection.
-        </div>
-
-        <!-- Week Setup Section -->
+        <!-- Mode toggle -->
         <div class="field">
-          <label class="field-label">Week Start Date</label>
-          <input type="date" id="weekStartDate" class="input">
-        </div>
-
-        <div class="field">
-          <label class="field-label">Week End Date</label>
-          <input type="date" id="weekEndDate" class="input" readonly style="background:#f3f4f6;cursor:not-allowed;">
-        </div>
-
-        <div class="field">
-          <label class="field-label">Default Trials</label>
-          <input type="number" id="defaultTrials" class="input" value="10" min="1" max="999">
-        </div>
-
-        <div style="display:flex;gap:8px;margin-bottom:2px;">
-          <button id="extractMaladaptivesBtn" class="btn-outline half-width" style="border-color:#f59e0b;color:#92400e;">Extract Maladaptives</button>
-          <button id="extractBtn" class="btn-outline half-width">Extract Replacements</button>
-        </div>
-
-        <!-- Maladaptive cards -->
-        <div id="maladaptiveCards" style="display:none; margin-top:12px;"></div>
-
-        <!-- Skill cards -->
-        <div id="skillCards" style="display:none; margin-top:12px;"></div>
-
-        <!-- Review section -->
-        <div id="reviewSection" style="display:none; margin-top:12px;">
-          <div class="review-header" style="margin-bottom:8px;">
-            <span class="field-label">Weekly Data Preview</span>
+          <div class="toggle-group" id="dataModeGroup">
+            <button class="toggle-btn active" data-val="single">Single Day</button>
+            <button class="toggle-btn" data-val="week">Full Week</button>
           </div>
-          <div id="reviewCards" style="margin-top:10px;"></div>
         </div>
 
-        <!-- Action buttons -->
-        <div id="dataActions" class="data-actions-row" style="display:none; margin-top:10px;">
-          <button id="calculateBtn" class="btn-outline half-width">Calculate Data</button>
-          <button id="genSeqBtn" class="btn-outline half-width">Generate Sequence</button>
+        <!-- ── Single Day ── -->
+        <div id="singleDaySection">
+
+          <div class="data-warn">
+            ⚠️ Confirm that these values match your real session observation. This tool does not replace clinical judgment.
+          </div>
+
+          <div id="autofillProjectedLoading" style="display:none">
+            <p class="muted-text" style="text-align:center;padding:8px 0;">Loading projected values…</p>
+          </div>
+
+          <div id="autofillProjectedEmpty">
+            <p class="muted-text" style="margin:4px 0 4px">Select a client above to load this week's projected values.</p>
+          </div>
+
+          <div id="autofillProjectedConfirm" style="display:none">
+            <p style="font-size:12px;font-weight:600;color:#111827;margin:4px 0 8px">This week's projected values are ready. Did you meet these goals?</p>
+            <div id="autofillProjectedList"></div>
+            <div style="display:flex;gap:6px;margin-top:8px;">
+              <button id="autofillAllYesBtn" class="btn-outline" style="flex:1;font-size:11px;padding:4px 0;">All Yes</button>
+              <button id="autofillAllNoBtn" class="btn-outline" style="flex:1;font-size:11px;padding:4px 0;">All No</button>
+            </div>
+            <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
+              <label class="field-label" style="margin:0;white-space:nowrap;">Day of month</label>
+              <input type="number" id="autofillDay" class="input" min="1" max="31" placeholder="e.g. 5" style="width:72px;margin:0;">
+            </div>
+            <button id="autofillSheetBtn" class="btn-primary full-width" style="margin-top:8px;">Autofill Datasheet</button>
+          </div>
+
+          <div id="autofillSheetStatus" style="display:none;margin-top:8px;font-size:11px;padding:6px 8px;border-radius:6px;"></div>
+
         </div>
 
-        <!-- Confirm + Save section -->
-        <div id="confirmSection" style="display:none; margin-top:12px;">
-          <div class="confirm-msg">
-            Before autofill: Please confirm that these values match your real session observation.
+        <!-- ── Full Week ── -->
+        <div id="fullWeekSection" style="display:none">
+
+          <div class="data-warn">
+            ⚠️ Before autofill: Please confirm that these values match your real session observation.
             This tool does not replace clinical judgment or accurate data collection.
           </div>
-          <label class="confirm-row">
-            <input type="checkbox" id="confirmCheck">
-            <span>I confirm this data reflects actual session observation.</span>
-          </label>
-          <div class="confirm-btn-row">
-            <button id="saveDataBtn" class="btn-outline">Save to Path4ABA</button>
-            <button id="autofillBtn" class="btn-primary" disabled>Autofill Data</button>
+
+          <div class="field">
+            <label class="field-label">Week Start Date</label>
+            <input type="date" id="weekStartDate" class="input">
           </div>
-          <button id="cancelDataBtn" class="btn-ghost full-width">Cancel</button>
+
+          <div class="field">
+            <label class="field-label">Week End Date</label>
+            <input type="date" id="weekEndDate" class="input" readonly style="background:#f3f4f6;cursor:not-allowed;">
+          </div>
+
+          <div class="field">
+            <label class="field-label">Default Trials</label>
+            <input type="number" id="defaultTrials" class="input" value="10" min="1" max="999">
+          </div>
+
+          <div style="display:flex;gap:8px;margin-bottom:2px;">
+            <button id="extractMaladaptivesBtn" class="btn-outline half-width" style="border-color:#f59e0b;color:#92400e;">Extract Maladaptives</button>
+            <button id="extractBtn" class="btn-outline half-width">Extract Replacements</button>
+          </div>
+
+          <div id="maladaptiveCards" style="display:none; margin-top:12px;"></div>
+          <div id="skillCards" style="display:none; margin-top:12px;"></div>
+
+          <div id="reviewSection" style="display:none; margin-top:12px;">
+            <div class="review-header" style="margin-bottom:8px;">
+              <span class="field-label">Weekly Data Preview</span>
+            </div>
+            <div id="reviewCards" style="margin-top:10px;"></div>
+          </div>
+
+          <div id="dataActions" class="data-actions-row" style="display:none; margin-top:10px;">
+            <button id="calculateBtn" class="btn-outline half-width">Calculate Data</button>
+            <button id="genSeqBtn" class="btn-outline half-width">Generate Sequence</button>
+          </div>
+
+          <div id="confirmSection" style="display:none; margin-top:12px;">
+            <div class="confirm-msg">
+              Before autofill: Please confirm that these values match your real session observation.
+              This tool does not replace clinical judgment or accurate data collection.
+            </div>
+            <label class="confirm-row">
+              <input type="checkbox" id="confirmCheck">
+              <span>I confirm this data reflects actual session observation.</span>
+            </label>
+            <div class="confirm-btn-row">
+              <button id="saveDataBtn" class="btn-outline">Save to Path4ABA</button>
+              <button id="autofillBtn" class="btn-primary" disabled>Autofill Data</button>
+            </div>
+            <button id="cancelDataBtn" class="btn-ghost full-width">Cancel</button>
+          </div>
+
         </div>
 
       </div>
