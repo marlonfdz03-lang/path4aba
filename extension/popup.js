@@ -249,6 +249,10 @@ document.getElementById('clientSelect').addEventListener('change', async (e) => 
   selectedBehaviors = [];
   selectedSkills = [];
   selectedProfile = null;
+  // Bust the projected-values cache so switching clients never shows stale data
+  projectedItems = [];
+  currentWeekForData = null;
+  currentClientForData = null;
   resetSessionConditions();
 
   const actionSection = document.getElementById('actionSection');
@@ -930,6 +934,7 @@ let projectedItems  = [];   // [{ name, type, projectedValue, dailyValue, unit }
 let workedDayDates  = [];   // ['YYYY-MM-DD', …] dates RBT worked this week
 let absentDayReasons = {};  // { 'YYYY-MM-DD': 'vacation'|'medical'|'other' }
 let currentWeekForData = null;
+let currentClientForData = null;
 
 // ── Date helpers ────────────────────────────
 function calcWeekEndDate(startStr) {
@@ -1031,7 +1036,7 @@ async function loadSingleDayData() {
   const dateStr   = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
   const weekStart = getMondayOfDate(dateStr);
 
-  if (weekStart === currentWeekForData && projectedItems.length) {
+  if (weekStart === currentWeekForData && selectedClientId === currentClientForData && projectedItems.length) {
     document.getElementById('singleDataSection').style.display = '';
     return;
   }
@@ -1041,10 +1046,11 @@ async function loadSingleDayData() {
 
   const items = await loadProjectedValues(weekStart);
   if (!items) { setStatus('singleStatus', 'Could not load. Check your connection.', true); return; }
-  if (!items.length) { setStatus('singleStatus', 'No chart data yet. Extract charts from Office Puzzle first.', false); return; }
+  if (!items.length) { setStatus('singleStatus', 'No data found for this client. Extract charts from Office Puzzle first.', false); return; }
 
   projectedItems = items;
   currentWeekForData = weekStart;
+  currentClientForData = selectedClientId;
   setStatus('singleStatus', `Source: week of ${weekStart}`, false);
   document.getElementById('singleDataSection').style.display = '';
   document.getElementById('singleMaladSection').style.display = 'none';
@@ -1234,7 +1240,7 @@ function renderWeekDays(mondayStr) {
 
 async function loadWeekData(weekStart) {
   if (!selectedClientId || !weekStart) return;
-  if (weekStart === currentWeekForData && projectedItems.length) {
+  if (weekStart === currentWeekForData && selectedClientId === currentClientForData && projectedItems.length) {
     document.getElementById('weekDataSection').style.display = ''; return;
   }
   setStatus('weekStatus', 'Loading from Path4ABA charts…', false);
@@ -1242,10 +1248,11 @@ async function loadWeekData(weekStart) {
 
   const items = await loadProjectedValues(weekStart);
   if (!items) { setStatus('weekStatus', 'Could not load. Check your connection.', true); return; }
-  if (!items.length) { setStatus('weekStatus', 'No chart data yet. Extract charts from Office Puzzle first.', false); return; }
+  if (!items.length) { setStatus('weekStatus', 'No data found for this client. Extract charts from Office Puzzle first.', false); return; }
 
   projectedItems = items;
   currentWeekForData = weekStart;
+  currentClientForData = selectedClientId;
   setStatus('weekStatus', `Source: week of ${weekStart} · ${items.length} target${items.length !== 1 ? 's' : ''}`, false);
   document.getElementById('weekDataSection').style.display = '';
   document.getElementById('weekMaladSection').style.display = 'none';
