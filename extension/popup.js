@@ -291,6 +291,11 @@ async function loadClientProfile(clientId) {
   renderSkills();
   renderPresent();
   renderAutofillSheetsInputs();
+  checkCorrectionsBanner();
+  const weekStart = document.getElementById('weekStartDate')?.value;
+  if (dataMode === 'week' && weekStart) {
+    autoLoadProjectedValues(weekStart);
+  }
 }
 
 // ── Behaviors grid ─────────────────────────
@@ -1036,28 +1041,39 @@ function generateVariedSequence(correct, incorrect, seed = null) {
   return positions;
 }
 
-// ── Week Start Date listener ───────────────
-document.getElementById('weekStartDate').addEventListener('change', (e) => {
-  const weekStart = e.target.value;
-  const weekEnd = calcWeekEndDate(weekStart);
-  if (weekEnd) {
-    document.getElementById('weekEndDate').value = weekEnd;
+// ── Pending corrections banner ─────────────
+async function checkCorrectionsBanner() {
+  const banner = document.getElementById('correctionsBanner');
+  if (!banner || !selectedClientId) { if (banner) banner.style.display = 'none'; return; }
+  try {
+    const res = await api(`/api/extension/pending-anomalies?clientId=${selectedClientId}`);
+    if (!res.ok) { banner.style.display = 'none'; return; }
+    const { count } = await res.json().catch(() => ({ count: 0 }));
+    if (count > 0) {
+      const text = document.getElementById('correctionsBannerText');
+      if (text) text.textContent = `⚠ ${count} data correction${count !== 1 ? 's' : ''} pending review — tap to open in Path4ABA`;
+      banner.style.display = '';
+    } else {
+      banner.style.display = 'none';
+    }
+  } catch {
+    banner.style.display = 'none';
   }
-  document.getElementById('reviewSection').style.display = 'none';
+}
+
+document.getElementById('correctionsBanner').addEventListener('click', () => {
+  if (selectedClientId) {
+    chrome.tabs.create({ url: `https://path4aba.app/clients/${selectedClientId}?tab=data` });
+  }
 });
 
-// ── Extract Maladaptives ───────────────────
-document.getElementById('extractMaladaptivesBtn').addEventListener('click', () => {
+// ── Auto-load projected values for Full Week mode ──
+async function autoLoadProjectedValues(weekStart) {
+  if (!selectedClientId || !selectedProfile) return;
+
   document.querySelectorAll('.data-feedback').forEach(e => e.remove());
 
-  if (!selectedClientId || !selectedProfile) {
-    showDataMsg('Select a client first.');
-    return;
-  }
-
-  const weekStart = document.getElementById('weekStartDate').value;
-  if (!weekStart) { showDataMsg('Select a week start date first.'); return; }
-
+  // Build behavior + skill lists from profile
   const rawBehaviors = [
     ...(selectedProfile.maladaptiveBehaviors || []),
     ...(selectedProfile.activePrograms?.maladaptive || []),
@@ -1066,23 +1082,106 @@ document.getElementById('extractMaladaptivesBtn').addEventListener('click', () =
     rawBehaviors.map(b => (typeof b === 'string' ? b : b?.name || '')).filter(Boolean)
   )];
 
-  if (!behaviors.length) {
-    showDataMsg('No maladaptive behaviors found in this client\'s profile.');
+  const rawSkills = [
+    ...(selectedProfile.replacementBehaviors || []),
+    ...(selectedProfile.skillAcquisition || []),
+    ...(selectedProfile.activePrograms?.replacementSkills || []),
+  ];
+  const skills = [...new Set(
+    rawSkills.map(s => (typeof s === 'string' ? s : s?.name || '')).filter(Boolean)
+  )];
+
+  if (!behaviors.length && !skills.length) {
+    showDataMsg('No behaviors or skills in client profile. Add targets in Path4ABA first.');
     return;
   }
 
-  maladaptiveRows = behaviors.map(behavior => ({
-    behavior,
-    weeklyFreq: '',
-    dailyValues: [],
-    status: 'pending',
-  }));
+  showDataMsg('Loading projected values…', false);
 
-  renderMaladaptiveCards();
-  document.getElementById('maladaptiveCards').style.display = '';
+  // Fetch projected values for this week
+  let projMap = {};
+  try {
+    const res = await api(`/api/projected-values?clientId=${selectedClientId}&week=${weekStart}`);
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      (data.items || []).forEach(item => {
+        projMap[item.name.toLowerCase().trim()] = item;
+      });
+    }
+  } catch { /* leave projMap empty — RBT will enter manually */ }
+
+  const defaultTrials = parseInt(document.getElementById('defaultTrials').value) || 10;
+
+  // Populate maladaptive rows
+  if (behaviors.length) {
+    maladaptiveRows = behaviors.map(behavior => {
+      const proj = projMap[behavior.toLowerCase().trim()];
+      return {
+        behavior,
+        weeklyFreq: proj ? String(proj.projectedValue) : '',
+        dailyValues: [],
+        status: 'pending',
+      };
+    });
+    renderMaladaptiveCards();
+    document.getElementById('maladaptiveCards').style.display = '';
+  }
+
+  // Populate skill rows
+  if (skills.length) {
+    skillRows = skills.map(skill => {
+      const proj = projMap[skill.toLowerCase().trim()];
+      return {
+        skill,
+        defaultTrials,
+        trialsOverride: null,
+        weeklyAvg: proj ? String(proj.projectedValue) : '',
+        dailyPercentages: [],
+        dailyCorrect: [],
+        dailyIncorrect: [],
+        sequences: [],
+        status: 'pending',
+      };
+    });
+    renderSkillCards();
+    document.getElementById('skillCards').style.display = '';
+  }
+
   document.getElementById('dataActions').style.display = '';
   document.getElementById('confirmSection').style.display = '';
   document.getElementById('autofillBtn').disabled = true;
+  document.getElementById('reviewSection').style.display = 'none';
+
+  const loaded = Object.keys(projMap).length;
+  document.querySelectorAll('.data-feedback').forEach(e => e.remove());
+  showDataMsg(
+    loaded > 0
+      ? `Projected values loaded for ${loaded} target${loaded !== 1 ? 's' : ''}. Adjust any values then click Calculate Data.`
+      : 'No chart history yet — enter values manually then click Calculate Data.',
+    false
+  );
+}
+
+// ── Week Start Date listener ───────────────
+document.getElementById('weekStartDate').addEventListener('change', (e) => {
+  const weekStart = e.target.value;
+  const weekEnd = calcWeekEndDate(weekStart);
+  if (weekEnd) {
+    document.getElementById('weekEndDate').value = weekEnd;
+  }
+  document.getElementById('reviewSection').style.display = 'none';
+  if (weekStart && selectedClientId && selectedProfile) {
+    autoLoadProjectedValues(weekStart);
+  }
+});
+
+// ── Extract Maladaptives ───────────────────
+document.getElementById('extractMaladaptivesBtn').addEventListener('click', () => {
+  document.querySelectorAll('.data-feedback').forEach(e => e.remove());
+  if (!selectedClientId || !selectedProfile) { showDataMsg('Select a client first.'); return; }
+  const weekStart = document.getElementById('weekStartDate').value;
+  if (!weekStart) { showDataMsg('Select a week start date first.'); return; }
+  autoLoadProjectedValues(weekStart);
 });
 
 function renderMaladaptiveCards() {
@@ -1107,7 +1206,7 @@ function renderMaladaptiveCards() {
       </div>
       <div class="skill-inputs">
         <div class="skill-input-group">
-          <label>Weekly Avg Frequency</label>
+          <label>Weekly Total Frequency</label>
           <input type="number" min="0" max="999" class="input small" placeholder="0"
                  value="${row.weeklyFreq}" data-idx="${idx}" data-type="malad" data-field="weeklyFreq">
         </div>
@@ -1142,51 +1241,10 @@ function renderMaladaptiveCards() {
 // ── Extract replacements (week-based) ──────
 document.getElementById('extractBtn').addEventListener('click', () => {
   document.querySelectorAll('.data-feedback').forEach(e => e.remove());
-
-  if (!selectedClientId || !selectedProfile) {
-    showDataMsg('Select a client first.');
-    return;
-  }
-
+  if (!selectedClientId || !selectedProfile) { showDataMsg('Select a client first.'); return; }
   const weekStart = document.getElementById('weekStartDate').value;
-  if (!weekStart) {
-    showDataMsg('Select a week start date first.');
-    return;
-  }
-
-  const rawSkills = [
-    ...(selectedProfile.replacementBehaviors || []),
-    ...(selectedProfile.skillAcquisition || []),
-    ...(selectedProfile.activePrograms?.replacementSkills || []),
-  ];
-  const skills = [...new Set(
-    rawSkills.map(s => (typeof s === 'string' ? s : s?.name || '')).filter(Boolean)
-  )];
-
-  if (!skills.length) {
-    showDataMsg('No replacement skills found in this client\'s profile.');
-    return;
-  }
-
-  const defaultTrials = parseInt(document.getElementById('defaultTrials').value) || 10;
-
-  skillRows = skills.map(skill => ({
-    skill,
-    defaultTrials,
-    trialsOverride: null,
-    weeklyAvg: '',
-    dailyPercentages: [],
-    dailyCorrect: [],
-    dailyIncorrect: [],
-    sequences: [],
-    status: 'pending',
-  }));
-
-  renderSkillCards();
-  document.getElementById('skillCards').style.display = '';
-  document.getElementById('dataActions').style.display = '';
-  document.getElementById('confirmSection').style.display = '';
-  document.getElementById('autofillBtn').disabled = true;
+  if (!weekStart) { showDataMsg('Select a week start date first.'); return; }
+  autoLoadProjectedValues(weekStart);
 });
 
 // ── Render skill cards (week-based) ────────
@@ -2263,9 +2321,12 @@ function renderProjectedConfirmList() {
 
   autofillProjectedItems.forEach(item => {
     const sel = autofillSelections[item.name] || { met: true, actualValue: null };
+    const displayVal = item.type === 'maladaptive'
+      ? (item.dailyValue ?? Math.round((item.projectedValue || 0) / 5))
+      : item.projectedValue;
     const valueLabel = item.type === 'replacement'
-      ? `${item.projectedValue}%`
-      : `${item.projectedValue} occ.`;
+      ? `${displayVal}%`
+      : `${displayVal} occ./day`;
 
     const row = document.createElement('div');
     row.style.cssText = 'padding:5px 0;border-bottom:1px solid #f3f4f6;';
@@ -2285,8 +2346,8 @@ function renderProjectedConfirmList() {
       inputRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:4px;padding-left:2px;';
       inputRow.innerHTML = `
         <label style="font-size:10px;color:#6b7280;white-space:nowrap;">Actual value:</label>
-        <input type="number" min="0" ${item.type === 'replacement' ? 'max="100"' : ''} class="proj-actual" data-name="${escapeHtml(item.name)}" placeholder="${item.projectedValue}" value="${sel.actualValue ?? ''}" style="width:60px;padding:2px 5px;border:1px solid #d1d5db;border-radius:4px;font-size:11px;">
-        <span style="font-size:10px;color:#6b7280;">${item.unit || 'occ.'}</span>
+        <input type="number" min="0" ${item.type === 'replacement' ? 'max="100"' : ''} class="proj-actual" data-name="${escapeHtml(item.name)}" placeholder="${displayVal}" value="${sel.actualValue ?? ''}" style="width:60px;padding:2px 5px;border:1px solid #d1d5db;border-radius:4px;font-size:11px;">
+        <span style="font-size:10px;color:#6b7280;">${item.type === 'replacement' ? '%' : 'occ./day'}</span>
       `;
       row.appendChild(inputRow);
     }
@@ -2338,7 +2399,11 @@ document.getElementById('autofillSheetBtn').addEventListener('click', async () =
 
   const tasks = autofillProjectedItems.map(item => {
     const sel = autofillSelections[item.name] || { met: true, actualValue: null };
-    const value = sel.met ? item.projectedValue : (sel.actualValue ?? item.projectedValue);
+    // For Single Day mode, use per-session daily value for maladaptives
+    const baseValue = item.type === 'maladaptive'
+      ? (item.dailyValue ?? Math.round((item.projectedValue || 0) / 5))
+      : item.projectedValue;
+    const value = sel.met ? baseValue : (sel.actualValue ?? baseValue);
     return { name: item.name, dayNumber: day, value, type: item.type };
   });
 

@@ -96,7 +96,7 @@ export async function GET(req: Request) {
       if (r.behavior_name) (maladByBehavior[r.behavior_name] = maladByBehavior[r.behavior_name] || []).push(r)
     })
 
-    const items: { name: string; type: string; projectedValue: number; unit: string }[] = []
+    const items: { name: string; type: string; projectedValue: number; dailyValue?: number; unit: string }[] = []
 
     Object.entries(replBySkill).forEach(([name, records], i) => {
       const hist = weeklyAggregate(records, 'observed_percentage', 'avg')
@@ -116,9 +116,11 @@ export async function GET(req: Request) {
       const proj = buildProjection(hist.map(d => d.avg), { baseline: last, goal: 0, totalWeeks: null }, i)
       const weeklyPv = getProjectedValue(hist, proj, week)
       if (weeklyPv != null) {
-        // Return daily value (weekly total / 5 sessions) since datasheet is per-session
+        const weeklyTotal = Math.max(0, Math.round(weeklyPv))
         const dailyPv = Math.max(0, Math.round(weeklyPv / 5))
-        items.push({ name, type: 'maladaptive', projectedValue: dailyPv, unit: '' })
+        // projectedValue = weekly total (for Full Week Data tab)
+        // dailyValue = per-session count (for Single Day OP datasheet autofill)
+        items.push({ name, type: 'maladaptive', projectedValue: weeklyTotal, dailyValue: dailyPv, unit: '' })
       }
     })
 
