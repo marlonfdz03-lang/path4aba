@@ -14,7 +14,8 @@
       <div class="logo-dot"></div>
       <span class="logo-text">Path4ABA</span>
     </div>
-    <div style="display:flex;gap:4px;align-items:center;">
+    <div style="display:flex;gap:6px;align-items:center;">
+      <span id="connectionDot" style="width:8px;height:8px;border-radius:50%;background:transparent;display:inline-block;flex-shrink:0;transition:background 0.3s;" title=""></span>
       <button id="openWindowBtn" class="icon-btn" title="Open as window">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/>
@@ -34,7 +35,7 @@
   <div id="screen-loading" class="screen" style="display:none">
     <div class="center-content">
       <div class="spinner"></div>
-      <p class="muted-text">Connecting…</p>
+      <p id="loadingMsg" class="muted-text">Connecting…</p>
     </div>
   </div>
 
@@ -52,6 +53,7 @@
         style="font-family:monospace;font-size:11px;margin-bottom:8px;"
       ></textarea>
       <button id="activateBtn" class="btn-primary full-width">Activate</button>
+      <button id="retryConnectionBtn" class="btn-outline full-width" style="margin-top:6px;display:none">Retry Connection</button>
       <button id="openSettingsBtn" class="btn-outline full-width" style="margin-top:6px">Open Path4ABA Settings</button>
       <p id="tokenError" class="error-msg" style="display:none;margin-top:8px"></p>
     </div>

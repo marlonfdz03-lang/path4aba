@@ -22,6 +22,12 @@ let dataMode = 'single';     // 'single' | 'week'
 // Auth token (replaces cookie-based auth)
 let extensionToken = null;
 
+// Reconnect state
+let _reconnecting = false;
+let _reconnectAttempts = 0;
+const MAX_RECONNECT = 3;
+const RECONNECT_DELAY_MS = 5000;
+
 // Office Puzzle extraction state
 let extractedCharts = [];
 let extractedClientName = null;
@@ -85,15 +91,19 @@ async function api(path, options = {}) {
         ...(options.headers || {}),
       },
     });
-    // Token rejected — clear in-memory copy only; keep storage so transient
-    // deploy-window 401s don't force re-entry. Storage is only cleared on
-    // explicit logout or when the user activates a new token.
+    // Token rejected — clear in-memory only. Only schedule a reconnect if the
+    // user is on the main screen (active session). Skip during token verification
+    // or init, where the reconnect loop is already managing things.
     if (res.status === 401 && extensionToken) {
-      console.warn('[Path4ABA] api: 401 on', path, '— clearing in-memory token ONLY (storage untouched)');
       extensionToken = null;
-      showScreen('token');
-      const errEl = document.getElementById('tokenError');
-      if (errEl) { errEl.textContent = 'Connection failed. Reopen the extension to retry, or generate a new token if this persists.'; errEl.style.display = ''; }
+      const mainEl = document.getElementById('screen-main');
+      const onMain = mainEl && mainEl.style.display !== 'none';
+      if (onMain) {
+        console.warn('[Path4ABA] api: 401 mid-session on', path, '— scheduling reconnect');
+        scheduleReconnect();
+      } else {
+        console.warn('[Path4ABA] api: 401 on', path, '(not on main screen — skipping reconnect trigger)');
+      }
     }
     return res;
   } catch (err) {
@@ -111,7 +121,6 @@ function showScreen(name) {
 }
 
 function showError(msg) {
-  // Remove any existing error
   document.querySelectorAll('.error-msg').forEach(e => e.remove());
   const el = document.createElement('p');
   el.className = 'error-msg';
@@ -120,23 +129,78 @@ function showError(msg) {
   if (activeContent) activeContent.appendChild(el);
 }
 
-// ── Init ───────────────────────────────────
-async function init() {
-  showScreen('loading');
+// ── Connection status dot ──────────────────
+// 'connected' = green, 'reconnecting' = yellow, 'disconnected' = red
+function setConnectionStatus(status) {
+  const dot = document.getElementById('connectionDot');
+  if (!dot) return;
+  const map = {
+    connected:    { bg: '#22c55e', title: 'Connected' },
+    reconnecting: { bg: '#eab308', title: 'Reconnecting…' },
+    disconnected: { bg: '#ef4444', title: 'Needs activation' },
+  };
+  const s = map[status];
+  if (s) { dot.style.background = s.bg; dot.title = s.title; }
+  else   { dot.style.background = 'transparent'; dot.title = ''; }
+}
 
-  // Load persisted token before making any API call
-  console.log('[Path4ABA] init: reading token from storage…');
+function setLoadingMsg(msg) {
+  const el = document.getElementById('loadingMsg');
+  if (el) el.textContent = msg;
+}
+
+function showRetryButton(show) {
+  const btn = document.getElementById('retryConnectionBtn');
+  if (btn) btn.style.display = show ? '' : 'none';
+}
+
+// ── Init (entry point) ─────────────────────
+// Always resets the reconnect counter and starts fresh.
+async function init() {
+  _reconnectAttempts = 0;
+  _reconnecting = true;
+  setLoadingMsg('Connecting…');
+  showScreen('loading');
+  await attemptConnect();
+}
+
+// ── Reconnect (mid-session 401s) ───────────
+// Schedules a reconnect without resetting the counter. Debounced so
+// parallel 401 responses from the same request pair only fire once.
+function scheduleReconnect() {
+  if (_reconnecting) return;
+  _reconnecting = true;
+  _reconnectAttempts = 0;
+  setConnectionStatus('reconnecting');
+  setLoadingMsg('Reconnecting…');
+  showScreen('loading');
+  attemptConnect().finally(() => { _reconnecting = false; });
+}
+
+// ── Core connection attempt ─────────────────
+async function attemptConnect() {
+  // Always re-read from storage — in-memory token was cleared on any 401
+  // but storage is preserved so transient failures don't lose the token.
   const stored = await chrome.storage.local.get('extensionToken');
   extensionToken = stored.extensionToken || null;
-  console.log('[Path4ABA] init: token from storage =', extensionToken ? extensionToken.slice(0, 12) + '…' : 'null (none stored)');
 
-  // No token → ask user to set one up (don't hit the API)
   if (!extensionToken) {
+    // No stored token — user must activate for the first time
+    setConnectionStatus('disconnected');
+    showRetryButton(false);
+    const errEl = document.getElementById('tokenError');
+    if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
     showScreen('token');
+    _reconnecting = false;
     return;
   }
 
-  // Fire both role checks in parallel with a shared timeout.
+  setConnectionStatus('reconnecting');
+  if (_reconnectAttempts > 0) {
+    setLoadingMsg(`Reconnecting… (${_reconnectAttempts}/${MAX_RECONNECT})`);
+    showScreen('loading');
+  }
+
   const [bcbaResult, rbtResult] = await Promise.allSettled([
     apiWithTimeout('/api/bcba/clients', INIT_TIMEOUT_MS),
     apiWithTimeout('/api/rbt/clients', INIT_TIMEOUT_MS),
@@ -145,19 +209,27 @@ async function init() {
   const bcbaRes = bcbaResult.status === 'fulfilled' ? bcbaResult.value : null;
   const rbtRes  = rbtResult.status  === 'fulfilled' ? rbtResult.value  : null;
 
-  // 401 with a token — clear in-memory only; keep chrome.storage so a transient
-  // deploy-window error doesn't force the user to re-enter their token.
-  // Storage is only cleared on explicit logout or new-token activation.
+  // 401: server reachable but token rejected (transient deploy / restart)
   if (bcbaRes?.status === 401 || rbtRes?.status === 401) {
-    console.warn('[Path4ABA] init: 401 received — clearing in-memory token ONLY (storage untouched, reopen popup after server restarts)');
     extensionToken = null;
-    showScreen('token');
-    const errEl = document.getElementById('tokenError');
-    if (errEl) { errEl.textContent = 'Connection failed. Reopen the extension to retry, or generate a new token in Path4ABA Settings if this persists.'; errEl.style.display = ''; }
-    return;
+    console.warn('[Path4ABA] attemptConnect: 401 — attempt', _reconnectAttempts + 1, 'of', MAX_RECONNECT);
+    return handleConnectFailure('Server returned 401.');
   }
 
-  // BCBA with clients
+  // Network / timeout failure
+  const anyRejected = bcbaResult.status === 'rejected' || rbtResult.status === 'rejected';
+  if (anyRejected) {
+    const err = (bcbaResult.status === 'rejected' ? bcbaResult : rbtResult).reason;
+    const reason = err?.name === 'AbortError' ? 'Request timed out.' : `Network error: ${err?.message || String(err)}`;
+    console.warn('[Path4ABA] attemptConnect: network failure — attempt', _reconnectAttempts + 1, 'of', MAX_RECONNECT, reason);
+    return handleConnectFailure(reason);
+  }
+
+  // ── Success paths ──────────────────────────
+  setConnectionStatus('connected');
+  _reconnecting = false;
+  _reconnectAttempts = 0;
+
   if (bcbaRes?.ok) {
     let json;
     try { json = await bcbaRes.json(); } catch { json = {}; }
@@ -171,7 +243,6 @@ async function init() {
     }
   }
 
-  // RBT with clients
   if (rbtRes?.ok) {
     let json;
     try { json = await rbtRes.json(); } catch { json = {}; }
@@ -185,29 +256,39 @@ async function init() {
     }
   }
 
-  // Both requests timed out or had a network error
-  const anyRejected = bcbaResult.status === 'rejected' || rbtResult.status === 'rejected';
-  if (anyRejected) {
-    const rejectedResult = bcbaResult.status === 'rejected' ? bcbaResult : rbtResult;
-    const err = rejectedResult.reason;
-    const isTimeout = err?.name === 'AbortError';
-    const msg = isTimeout
-      ? `Request timed out after ${INIT_TIMEOUT_MS / 1000}s. Check your network and try again.`
-      : `Connection failed: ${err?.message || String(err)}. Check your network and try again.`;
-    console.error('[Path4ABA] init() network error:', err);
-    showScreen('token');
-    const errEl = document.getElementById('tokenError');
-    if (errEl) { errEl.textContent = msg; errEl.style.display = ''; }
-    return;
-  }
-
-  // Authenticated but no clients assigned to this account
+  // Authenticated but no clients assigned
   if (bcbaRes?.ok || rbtRes?.ok) {
     showScreen('no-clients');
     return;
   }
 
-  // Unexpected state — show token screen as fallback
+  // Unexpected state — treat as a retryable failure
+  handleConnectFailure('Unexpected server response.');
+}
+
+// ── Retry logic ────────────────────────────
+async function handleConnectFailure(reason) {
+  _reconnectAttempts++;
+
+  if (_reconnectAttempts <= MAX_RECONNECT) {
+    const label = `Reconnecting… (${_reconnectAttempts}/${MAX_RECONNECT})`;
+    setLoadingMsg(label);
+    showScreen('loading');
+    console.log(`[Path4ABA] ${label} — ${reason}`);
+    await new Promise(r => setTimeout(r, RECONNECT_DELAY_MS));
+    return attemptConnect();
+  }
+
+  // All retries exhausted — show activation screen with retry button
+  console.error('[Path4ABA] All', MAX_RECONNECT, 'reconnect attempts failed. Showing activation screen.');
+  setConnectionStatus('disconnected');
+  _reconnecting = false;
+  const errEl = document.getElementById('tokenError');
+  if (errEl) {
+    errEl.textContent = `Could not connect after ${MAX_RECONNECT} attempts. Your token is saved — click "Retry Connection" to try again, or generate a new token if the issue persists.`;
+    errEl.style.display = '';
+  }
+  showRetryButton(true);
   showScreen('token');
 }
 
@@ -840,11 +921,24 @@ document.getElementById('openAppBtn')?.addEventListener('click', () => {
 
 document.getElementById('logoutBtn').addEventListener('click', async () => {
   await api('/api/auth/signout', { method: 'POST' }).catch(() => {});
-  // Explicit logout — this is the ONLY place storage should be cleared
+  // Explicit logout — only place where storage is cleared
   console.log('[Path4ABA] logout: explicit user action — removing token from storage + memory');
   extensionToken = null;
+  _reconnecting = false;
+  _reconnectAttempts = 0;
   await chrome.storage.local.remove('extensionToken');
+  setConnectionStatus('disconnected');
+  showRetryButton(false);
+  const errEl = document.getElementById('tokenError');
+  if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
   showScreen('token');
+});
+
+document.getElementById('retryConnectionBtn').addEventListener('click', () => {
+  const errEl = document.getElementById('tokenError');
+  if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+  showRetryButton(false);
+  init();
 });
 
 // ── Token setup screen ─────────────────────
