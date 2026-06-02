@@ -983,11 +983,13 @@ export default function ClientProfilePage() {
                 <div>
                   {behaviors.map((b, i) => {
                     const name = getName(b);
+                    const functions: string[] = typeof b === 'object' ? (b.functions || b.function || []) : [];
+                    const funcLabel = functions.length > 0 ? functions.join(', ') : null;
                     return (
                       <CheckboxRow
                         key={i}
                         name={name}
-                        description={typeof b === "object" ? b.topography : undefined}
+                        description={funcLabel ? `Function: ${funcLabel}` : (typeof b === "object" ? b.topography : undefined)}
                         checked={selectedBehaviors.includes(name)}
                         disabled={false}
                         onToggle={() => toggleBehavior(name)}
@@ -1013,18 +1015,51 @@ export default function ClientProfilePage() {
                 <p className="px-6 py-4 text-[13px]" style={{ color: "var(--text3)" }}>No replacement skills in this profile.</p>
               ) : (
                 <div>
-                  {skills.map((s, i) => {
-                    const name = getName(s);
-                    return (
-                      <CheckboxRow
-                        key={i}
-                        name={name}
-                        checked={selectedSkills.includes(name)}
-                        disabled={false}
-                        onToggle={() => toggleSkill(name)}
-                      />
-                    );
-                  })}
+                  {(() => {
+                    // Get functions of selected behaviors
+                    const selectedFunctions = selectedBehaviors.flatMap(bName => {
+                      const b = behaviors.find((bx: any) => getName(bx) === bName);
+                      return (typeof b === 'object' && b?.functions) ? b.functions : [];
+                    });
+
+                    // Sort skills: functionally equivalent first
+                    const sorted = [...skills].sort((a: any, b: any) => {
+                      const aFunc = typeof a === 'object' ? (a.targetFunction || '') : '';
+                      const bFunc = typeof b === 'object' ? (b.targetFunction || '') : '';
+                      const aMatch = selectedFunctions.includes(aFunc) ? 0 : 1;
+                      const bMatch = selectedFunctions.includes(bFunc) ? 0 : 1;
+                      return aMatch - bMatch;
+                    });
+
+                    // Find where non-matching starts
+                    const firstNonMatch = sorted.findIndex((s: any) => {
+                      const func = typeof s === 'object' ? (s.targetFunction || '') : '';
+                      return !selectedFunctions.includes(func);
+                    });
+
+                    return sorted.map((s: any, i: number) => {
+                      const name = getName(s);
+                      const func = typeof s === 'object' ? (s.targetFunction || '') : '';
+                      const isMatch = selectedFunctions.length > 0 && selectedFunctions.includes(func);
+                      const showDivider = selectedFunctions.length > 0 && i === firstNonMatch && firstNonMatch > 0;
+                      return (
+                        <div key={i}>
+                          {showDivider && (
+                            <div className="px-4 py-2 text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--text3)", background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
+                              Other Skills
+                            </div>
+                          )}
+                          <CheckboxRow
+                            name={name}
+                            description={isMatch ? `✦ Functionally equivalent` : undefined}
+                            checked={selectedSkills.includes(name)}
+                            disabled={false}
+                            onToggle={() => toggleSkill(name)}
+                          />
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               )}
             </div>

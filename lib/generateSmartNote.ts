@@ -315,7 +315,7 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
         model: 'gpt-4o',
         temperature: 0.85,
         seed: Math.floor(Math.random() * 1000000),
-        max_tokens: 1500,
+        max_tokens: 2000,
         stream: true,
         messages: [
           { role: 'system', content: systemContent },

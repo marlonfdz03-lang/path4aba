@@ -27,7 +27,7 @@ SENTENCE STARTER VARIETY:
 - Avoid starting with just "When" more than once per note.
 
 LENGTH REQUIREMENT:
-- The note must be a minimum of 450 words.
+- The note must be a minimum of 450 words. There is no maximum — write as much as the session content requires. Longer notes with more clinical detail are always preferred over shorter ones.
 - Each ABC must be detailed and specific enough to contribute meaningfully to the word count.
 - Expand the HOW of each intervention with more clinical detail.
 - Expand the client response with more observable specifics.
@@ -147,12 +147,23 @@ RBT SCOPE:
 - Do not make clinical decisions, functional analyses, or future recommendations.
 - Stay within what an RBT would observe and implement, not what a BCBA would analyze.
 
-ABC SELECTION — choose 5 based on:
+ABC SELECTION — choose 4-6 based on:
 1. Include at least one ABC where intervention was NOT immediately effective (realistic clinical picture)
-2. Include at least one ABC explicitly showing the replacement behavior displacing the maladaptive behavior — use the structure: "the client [replacement skill] instead of [maladaptive behavior]"
+2. Include at least one ABC explicitly showing the replacement behavior displacing the maladaptive behavior using: 'the client [replacement skill] instead of [maladaptive behavior]'
 3. Include different antecedent types: demand, transition, denied access, attention shift, environmental change
 4. Include different behavior topographies — never repeat the same behavior twice
-5. Match antecedent → function → intervention logically and consistently
+5. Match antecedent → function → intervention → replacement logically:
+   - escape-maintained behavior → FCT (request break), DRA (task engagement), Behavior Momentum, Premack
+   - attention-maintained behavior → FCT (request attention), Planned Ignoring + DRA, NCR
+   - tangible-maintained behavior → FCT (request item), DRA, Premack
+   - automatic → DRI, Environmental Modification, NCR
+6. FUNCTIONAL EQUIVALENCE RULE — CRITICAL:
+   When documenting a replacement skill in an ABC, the replacement MUST be functionally equivalent to the maladaptive behavior in that ABC.
+   CORRECT: escape-maintained aggression → 'the client requested a break appropriately instead of hitting'
+   CORRECT: attention-maintained vocalizations → 'the client requested attention appropriately instead of vocalizing loudly'
+   CORRECT: tangible-maintained tantrum → 'the client requested the item using words instead of dropping to the floor'
+   BANNED: escape-maintained aggression → 'the client practiced answering yes/no questions' (not functionally equivalent)
+   The replacement skill chosen for each ABC must serve the SAME function as the behavior it replaces.
 
 ═══════════════════════════════════════
 CLINICAL ACCURACY RULES — MANDATORY

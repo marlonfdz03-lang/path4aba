@@ -408,7 +408,7 @@ function renderBehaviors() {
   }
   noMsg.style.display = 'none';
 
-  const maxSel = userRole === 'rbt' ? 5 : 99;
+  const maxSel = 99;
   hint.textContent = userRole === 'rbt' ? `(select 5)` : '(optional)';
 
   grid.innerHTML = '';
@@ -466,7 +466,7 @@ function renderSkills() {
   }
   noMsg.style.display = 'none';
 
-  const maxSel = userRole === 'rbt' ? 2 : 99;
+  const maxSel = 99;
   hint.textContent = userRole === 'rbt' ? `(select 2)` : '(optional)';
 
   grid.innerHTML = '';
