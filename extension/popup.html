@@ -5,6 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Path4ABA</title>
   <link rel="stylesheet" href="styles.css">
+  <style>
+.remove-present-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.remove-present-btn:hover {
+  color: #ef4444;
+}
+  </style>
 </head>
 <body>
 
@@ -156,6 +171,7 @@
             <button class="toggle-btn active" data-val="no">No</button>
             <button class="toggle-btn" data-val="yes">Yes</button>
           </div>
+          <textarea id="envDescription" class="input-field" rows="2" placeholder="Describe the environmental change…" style="display:none;margin-top:6px;font-size:12px;"></textarea>
         </div>
 
         <div class="field">
@@ -172,6 +188,7 @@
             <button class="toggle-btn active" data-val="no">No</button>
             <button class="toggle-btn" data-val="yes">Yes</button>
           </div>
+          <textarea id="missedDescription" class="input-field" rows="2" placeholder="Reason (vacation, medical, other)…" style="display:none;margin-top:6px;font-size:12px;"></textarea>
         </div>
 
         <div class="field">

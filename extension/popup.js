@@ -552,6 +552,10 @@ function renderPresent() {
 function resetSessionConditions() {
   selectedPresent = [];
   environmentalChange = false;
+  const envDesc = document.getElementById('envDescription');
+  if (envDesc) { envDesc.style.display = 'none'; envDesc.value = ''; }
+  const missedDesc = document.getElementById('missedDescription');
+  if (missedDesc) { missedDesc.style.display = 'none'; missedDesc.value = ''; }
   medicationChange = false;
   missedSessions = false;
   complianceLevel = 'typical';
@@ -589,9 +593,18 @@ document.getElementById('locationGroup').addEventListener('click', (e) => {
     if (!btn) return;
     document.querySelectorAll(`#${id} .toggle-btn`).forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    if (id === 'envGroup') environmentalChange = btn.dataset.val === 'yes';
-    else if (id === 'medGroup') medicationChange = btn.dataset.val === 'yes';
-    else if (id === 'missedGroup') missedSessions = btn.dataset.val === 'yes';
+    const isYes = btn.dataset.val === 'yes';
+    if (id === 'envGroup') {
+      environmentalChange = isYes;
+      const desc = document.getElementById('envDescription');
+      if (desc) desc.style.display = isYes ? '' : 'none';
+    } else if (id === 'medGroup') {
+      medicationChange = isYes;
+    } else if (id === 'missedGroup') {
+      missedSessions = isYes;
+      const desc = document.getElementById('missedDescription');
+      if (desc) desc.style.display = isYes ? '' : 'none';
+    }
   });
 });
 
@@ -761,8 +774,13 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
         : '',
     ].filter(Boolean).join(' '),
     complianceLevel: complianceLevel !== 'typical' ? complianceLevel : undefined,
-    environmentalChangeDescription: environmentalChange ? 'Environmental changes noted this session.' : undefined,
-    missedHoursData: missedSessions ? { totalHours: 1, reason: 'Reported by caregiver' } : undefined,
+    environmentalChangeDescription: environmentalChange
+      ? (document.getElementById('envDescription')?.value?.trim() || 'Environmental changes noted this session.')
+      : undefined,
+    missedHoursData: missedSessions ? {
+      totalHours: 1,
+      reason: document.getElementById('missedDescription')?.value?.trim() || 'Reported by caregiver'
+    } : undefined,
     clientProfile: {
       diagnosis: selectedProfile?.diagnosis || [],
       setting: selectedLocation,

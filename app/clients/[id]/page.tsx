@@ -319,7 +319,6 @@ export default function ClientProfilePage() {
   function toggleBehavior(name: string) {
     setSelectedBehaviors((prev) => {
       if (prev.includes(name)) return prev.filter((n) => n !== name);
-      if (prev.length >= 5) return prev;
       return [...prev, name];
     });
   }
@@ -327,7 +326,6 @@ export default function ClientProfilePage() {
   function toggleSkill(name: string) {
     setSelectedSkills((prev) => {
       if (prev.includes(name)) return prev.filter((n) => n !== name);
-      if (prev.length >= 2) return prev;
       return [...prev, name];
     });
   }
@@ -845,8 +843,24 @@ export default function ClientProfilePage() {
                 <div>
                   <label className="block text-[12px] font-semibold mb-1.5" style={{ color: "var(--text3)" }}>WHO WAS PRESENT</label>
                   <div className="flex flex-wrap gap-2 mb-2">
-                    {[...FIXED_PRESENT, ...savedPresent].map((name) => (
+                    {FIXED_PRESENT.map((name) => (
                       <Pill key={name} label={name} selected={selectedPresent.includes(name)} onClick={() => togglePresent(name)} />
+                    ))}
+                    {savedPresent.map((name) => (
+                      <div key={name} className="relative inline-flex items-center">
+                        <Pill label={name} selected={selectedPresent.includes(name)} onClick={() => togglePresent(name)} />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSavedPresent(prev => prev.filter(n => n !== name));
+                            setSelectedPresent(prev => prev.filter(n => n !== name));
+                          }}
+                          className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-gray-400 hover:bg-red-500 text-white flex items-center justify-center text-[10px] leading-none"
+                          title="Remove"
+                        >
+                          ×
+                        </button>
+                      </div>
                     ))}
                     <button
                       onClick={handleOtherClick}
