@@ -18,13 +18,19 @@ WHAT YOU MUST FIX
 
 1. STRUCTURE:
 - Rewrite as ONE continuous paragraph
-- Must contain EXACTLY 5 ABCs
+- Must contain between 4 and 6 ABCs — vary the number, do not always write exactly 5
 - If original has more than 5 behaviors, select the 5 most clinically significant
 - If original has fewer than 5, expand existing ABCs with more clinical detail
 - OPENING SENTENCE: NEVER open with "The client displayed several behaviors" or any generic opening.
   Open directly with session context:
   CORRECT: "During today's [time] [setting]-based ABA session, services were provided at [location] with [caregiver role] present throughout the visit."
   Then go directly into the first ABC.
+
+OPENING — VARY THE STRUCTURE each note. Rotate between:
+Style A: 'During today's [time] [setting]-based ABA session, services were provided at [location] with [caregiver] present.'
+Style B: '[Caregiver] was present throughout today's [setting]-based session at [location]. Data collection targeted maladaptive behaviors and replacement skill programs per the current treatment plan.'
+Style C: 'ABA services were rendered today at [location] in a [setting]-based session. [Caregiver] was present. The session targeted active behavior-reduction and skill-acquisition goals.'
+Pick a DIFFERENT style than the original note used.
 
 2. LANGUAGE FIXES:
 - Remove ALL mentalistic language: wanted, felt, tried to, was angry, was motivated, understood, refused because, chose to, enjoyed, liked, was frustrated
@@ -138,6 +144,12 @@ Never prefix observable behavior with a category label ("engaged in X behavior b
 - At least one ABC must show replacement behavior displacing maladaptive behavior
 - Gold standard: "the client [replacement skill] instead of [maladaptive behavior]"
 
+FUNCTIONAL EQUIVALENCE — REQUIRED:
+When showing a replacement behavior displacing a maladaptive behavior, the replacement must serve the SAME function as the behavior.
+CORRECT: escape-maintained aggression → 'the client requested a break instead of hitting'
+CORRECT: attention-maintained vocalizations → 'the client requested attention appropriately instead of vocalizing loudly'
+BANNED: pairing a replacement with a behavior of a different function
+
 9. CLOSING SENTENCE:
 - Must include: specific reinforcers used, replacement programs addressed by name, prompt level connected to session events
 - INCORRECT: "The client required prompting during portions of the session"
@@ -148,14 +160,14 @@ Never prefix observable behavior with a category label ("engaged in X behavior b
   List the SKILL NAMES, not the intervention names.
 
 10. LENGTH:
-- Minimum 400 words
+- Minimum 450 words. No maximum — longer notes with more clinical detail are always preferred.
 - Expand clinical detail to reach this — never pad with repetitive language
 
 ═══════════════════════════════════════
 QUALITY CHECK BEFORE OUTPUTTING
 ═══════════════════════════════════════
 ☐ All original clinical facts preserved
-☐ Exactly 5 ABCs
+☐ Between 4 and 6 ABCs
 ☐ One continuous paragraph
 ☐ No mentalistic language
 ☐ No vague behavior labels
@@ -173,6 +185,9 @@ QUALITY CHECK BEFORE OUTPUTTING
 ☐ Elopement topography includes direction and destination
 ☐ Client names, caregiver names, and facility names preserved from original note; RBT name replaced with "the RBT"; "the client" restored to actual name if session input provides one
 ☐ Closing lists skill names for replacement programs, not intervention names
+☐ ABCs vary between 4 and 6 — not always exactly 5
+☐ Opening uses a different style than the most common pattern
+☐ Replacement behaviors shown are functionally equivalent to the behaviors they replace
 
 ═══════════════════════════════════════
 FINAL HUMANIZATION RULES — ADVANCED REFINEMENT
@@ -180,7 +195,7 @@ FINAL HUMANIZATION RULES — ADVANCED REFINEMENT
 
 14. REDUCE EXPLICIT INTERVENTION LABELING
 Real RBTs do not formally label every intervention.
-When refining, apply this distribution across the 5 ABCs:
+When refining, apply this distribution across the ABCs:
 - 2 ABCs: keep full formal intervention name with description
 - 2 ABCs: convert to natural shorthand or description without formal label
 - 1 ABC: summarize without naming the intervention at all
