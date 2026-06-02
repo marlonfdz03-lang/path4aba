@@ -198,6 +198,24 @@ PREFERRED antecedents:
 BANNED vague antecedents: "during the session" / "while working" / "at one point"
 The antecedent must help explain WHY the behavior may have occurred.
 
+ANTECEDENT GENERATION BY FUNCTION — MANDATORY:
+When generating antecedents for each ABC, select antecedents that are clinically consistent with the behavioral function:
+
+Escape-maintained behaviors — use antecedents from:
+"presentation of a non-preferred task demand", "transition away from a preferred activity", "instruction to complete a multi-step task", "request to stop a preferred activity", "presentation of academic or work demands"
+
+Attention-maintained behaviors — use antecedents from:
+"adult attention directed toward another person", "delay in adult response", "adult engaged with another student or sibling", "removal of social interaction", "adult turned away from client"
+
+Tangible-maintained behaviors — use antecedents from:
+"denial of access to a preferred item", "preferred item removed from client's possession", "told 'not right now' regarding a preferred activity", "transition away from a preferred tangible", "another person had access to preferred item"
+
+Automatic-maintained behaviors — use antecedents from:
+"no clear external antecedent identified", "during unstructured time", "during independent activity", "sensory stimulation present in environment"
+
+NEVER use a vague antecedent like "during the session" or "while working".
+ALWAYS match the antecedent to the function of the behavior in that ABC.
+
 4. ENVIRONMENTAL MANIPULATION IS AN ANTECEDENT INTERVENTION
 Environmental manipulation must occur BEFORE the behavior as a preventative strategy.
 CORRECT: "Before transitioning to independent work, the RBT implemented environmental manipulation by reducing visual distractions and presenting a visual schedule."
