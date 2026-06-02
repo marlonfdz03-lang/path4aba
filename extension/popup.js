@@ -1307,7 +1307,8 @@ async function runSingleAutofill(type) {
   const statusId = type === 'maladaptive' ? 'singleMaladStatus' : 'singleReplStatus';
   const btnId    = type === 'maladaptive' ? 'autofillSingleMaladBtn' : 'autofillSingleReplBtn';
   if (!day || !projectedItems.length) { setStatus(statusId, 'No data loaded.', true); return; }
-  const items = projectedItems.filter(i => i.type === type);
+  const adjustedItems = applySessionQualityAdjustment(projectedItems);
+  const items = adjustedItems.filter(i => i.type === type);
   if (!items.length) { setStatus(statusId, `No ${type} data.`, true); return; }
 
   const tasks = items.map(item => ({
@@ -1514,12 +1515,53 @@ document.getElementById('weekStartDate').addEventListener('change', (e) => {
   }
 });
 
+function applySessionQualityAdjustment(items) {
+  if (complianceLevel === 'typical' && !missedSessions) return items;
+  return items.map(item => {
+    let adjusted = { ...item };
+    if (item.type === 'maladaptive') {
+      if (missedSessions) {
+        // Missed session: maladaptives increase 3-6 units
+        const increase = Math.floor(Math.random() * 4) + 3;
+        adjusted.projectedValue = item.projectedValue + increase;
+        adjusted.dailyValue = item.dailyValue ? item.dailyValue + Math.round(increase / 5) : undefined;
+      } else if (complianceLevel === 'poor') {
+        // Poor session: maladaptives increase 1-3 units
+        const increase = Math.floor(Math.random() * 3) + 1;
+        adjusted.projectedValue = item.projectedValue + increase;
+        adjusted.dailyValue = item.dailyValue ? item.dailyValue + Math.round(increase / 5) : undefined;
+      } else if (complianceLevel === 'below_typical') {
+        // Below typical: maladaptives increase 1-2 units
+        const increase = Math.floor(Math.random() * 2) + 1;
+        adjusted.projectedValue = item.projectedValue + increase;
+        adjusted.dailyValue = item.dailyValue ? item.dailyValue + Math.round(increase / 5) : undefined;
+      }
+    } else if (item.type === 'replacement') {
+      if (missedSessions) {
+        // Missed session: replacements decrease 4-7%
+        const decrease = Math.floor(Math.random() * 4) + 4;
+        adjusted.projectedValue = Math.max(0, item.projectedValue - decrease);
+      } else if (complianceLevel === 'poor') {
+        // Poor session: replacements decrease 2-4%
+        const decrease = Math.floor(Math.random() * 3) + 2;
+        adjusted.projectedValue = Math.max(0, item.projectedValue - decrease);
+      } else if (complianceLevel === 'below_typical') {
+        // Below typical: replacements decrease 1-2%
+        const decrease = Math.floor(Math.random() * 2) + 1;
+        adjusted.projectedValue = Math.max(0, item.projectedValue - decrease);
+      }
+    }
+    return adjusted;
+  });
+}
+
 async function runWeekAutofill(type) {
   const statusId = type === 'maladaptive' ? 'weekMaladStatus' : 'weekReplStatus';
   const btnId    = type === 'maladaptive' ? 'autofillWeekMaladBtn' : 'autofillWeekReplBtn';
   if (!projectedItems.length) { setStatus(statusId, 'No data loaded.', true); return; }
   if (!workedDayDates.length) { setStatus(statusId, 'No worked days selected.', true); return; }
-  const items = projectedItems.filter(i => i.type === type);
+  const adjustedItems = applySessionQualityAdjustment(projectedItems);
+  const items = adjustedItems.filter(i => i.type === type);
   if (!items.length) { setStatus(statusId, `No ${type} data found.`, true); return; }
 
   const workedCount = workedDayDates.length;
@@ -1556,13 +1598,14 @@ async function saveWeekData(userInitiated) {
   const weekEnd     = calcWeekEndDate(weekStart);
   const workedCount = workedDayDates.length;
   const replRecs = []; const maladRecs = [];
+  const qualityAdjusted = applySessionQualityAdjustment(projectedItems);
 
   workedDayDates.forEach(sessionDate => {
-    projectedItems.filter(i => i.type === 'replacement').forEach(item => {
+    qualityAdjusted.filter(i => i.type === 'replacement').forEach(item => {
       replRecs.push({ clientId: selectedClientId, replacementSkill: item.name, weekStart, weekEnd, sessionDate,
         dailyPercentage: item.projectedValue, trials: 12, userConfirmed: true, autofillCompleted: true, platformSource: 'extension' });
     });
-    projectedItems.filter(i => i.type === 'maladaptive').forEach(item => {
+    qualityAdjusted.filter(i => i.type === 'maladaptive').forEach(item => {
       maladRecs.push({ clientId: selectedClientId, behaviorName: item.name, weekStart, weekEnd, sessionDate,
         frequency: Math.round(item.projectedValue / workedCount), userConfirmed: true });
     });
