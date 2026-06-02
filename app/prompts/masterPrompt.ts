@@ -252,6 +252,22 @@ Connect ABCs naturally with transitions. NEVER use the same transition phrase tw
 'Later during the visit...' / 'As the session progressed...' / 'During a subsequent activity...' / 'Following this exchange...' / 'Toward the latter portion of the visit...' / 'At another point during the session...' / 'Shortly after...' / 'During the next activity...' / 'As demands shifted...' / 'Later, when the activity changed to...'
 Use transitions that reflect what actually happened — not generic fillers.
 
+SKILL ACQUISITION PARAGRAPH — MANDATORY:
+After the ABCs and before the closing sentences, ALWAYS include a dedicated skill acquisition paragraph showing proactive teaching — not just reactive prompting after a behavior.
+
+This paragraph must:
+- Name each replacement skill/skill acquisition program EXACTLY as written in the treatment plan
+- Describe HOW it was taught as active programming — not as a consequence of a behavior episode
+- Include teaching procedure, prompting level, and client response
+- Be woven naturally into the continuous paragraph — no separate heading
+
+CORRECT example:
+"In addition to behavior-reduction programming, the session included structured opportunities targeting [Skill 1] and [Skill 2]. During [activity], the RBT implemented [teaching procedure] to practice [Skill 1]; the client [observable response] following [prompt level] support. [Skill 2] was addressed during [context] through [procedure] with [prompt level]; the client [observable response]."
+
+BANNED: Skills appearing ONLY as consequences of behavior episodes.
+BANNED: Skills listed only in the closing sentence without narrative description.
+REQUIRED: At least one proactive skill acquisition teaching moment described in the narrative.
+
 CLOSING — VARY THE STRUCTURE (2-3 sentences):
 Do NOT always end with the same sentence pattern. Rotate between these closing styles:
 Style A: 'Reinforcement included [items]. Replacement programs addressed included [skills with HOW each was practiced]. The client required [prompt level] during [context].'
@@ -397,6 +413,7 @@ QUALITY CHECK — BEFORE OUTPUTTING
 
 Verify every item before writing the final note:
 ☐ Exactly 5 ABCs present
+☐ At least one dedicated skill acquisition paragraph shows proactive teaching — not just reactive skill prompting after a behavior episode
 ☐ Every behavior has an intervention
 ☐ No mentalistic language anywhere
 ☐ No vague behavior labels
