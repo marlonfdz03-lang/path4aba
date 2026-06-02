@@ -1184,7 +1184,7 @@ export default function ClientProfilePage() {
         )}
 
         {/* ── Data Tab ── */}
-        {activeTab === "data" && <DataTab client={client} />}
+        {activeTab === "data" && <DataTab client={client} complianceLevel={complianceLevel} missedHours={missedHoursToggle && missedHoursCount ? parseFloat(missedHoursCount) : 0} />}
 
       </div>
 

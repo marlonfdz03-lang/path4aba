@@ -1516,40 +1516,54 @@ document.getElementById('weekStartDate').addEventListener('change', (e) => {
 });
 
 function applySessionQualityAdjustment(items) {
-  if (complianceLevel === 'typical' && !missedSessions) return items;
+  if (complianceLevel === 'typical' && !missedSessions && !environmentalChange) return items;
   return items.map(item => {
     let adjusted = { ...item };
     if (item.type === 'maladaptive') {
+      let increase = 0;
       if (missedSessions) {
-        // Missed session: maladaptives increase 3-6 units
-        const increase = Math.floor(Math.random() * 4) + 3;
-        adjusted.projectedValue = item.projectedValue + increase;
-        adjusted.dailyValue = item.dailyValue ? item.dailyValue + Math.round(increase / 5) : undefined;
+        // Missed sessions: move 6-7
+        increase = Math.floor(Math.random() * 2) + 6;
+      } else if (environmentalChange && complianceLevel === 'poor') {
+        // Poor compliance + environmental change: move 5-6
+        increase = Math.floor(Math.random() * 2) + 5;
       } else if (complianceLevel === 'poor') {
-        // Poor session: maladaptives increase 1-3 units
-        const increase = Math.floor(Math.random() * 3) + 1;
-        adjusted.projectedValue = item.projectedValue + increase;
-        adjusted.dailyValue = item.dailyValue ? item.dailyValue + Math.round(increase / 5) : undefined;
+        // Poor compliance: move 5-6
+        increase = Math.floor(Math.random() * 2) + 5;
       } else if (complianceLevel === 'below_typical') {
-        // Below typical: maladaptives increase 1-2 units
-        const increase = Math.floor(Math.random() * 2) + 1;
-        adjusted.projectedValue = item.projectedValue + increase;
-        adjusted.dailyValue = item.dailyValue ? item.dailyValue + Math.round(increase / 5) : undefined;
+        // Below typical: move 4-5
+        increase = Math.floor(Math.random() * 2) + 4;
+      } else if (complianceLevel === 'typical') {
+        // Typical session: normal variance 1-4
+        increase = Math.floor(Math.random() * 4) + 1;
+        // Can go up or down in typical sessions
+        increase = Math.random() > 0.5 ? increase : -increase;
       }
+      adjusted.projectedValue = Math.max(0, item.projectedValue + increase);
+      adjusted.dailyValue = adjusted.dailyValue
+        ? Math.max(0, item.dailyValue + Math.round(increase / 5))
+        : undefined;
     } else if (item.type === 'replacement') {
+      let change = 0;
       if (missedSessions) {
-        // Missed session: replacements decrease 4-7%
-        const decrease = Math.floor(Math.random() * 4) + 4;
-        adjusted.projectedValue = Math.max(0, item.projectedValue - decrease);
+        // Missed sessions: drop 6-7%
+        change = -(Math.floor(Math.random() * 2) + 6);
+      } else if (environmentalChange && complianceLevel === 'poor') {
+        // Poor compliance + environmental change: drop 5-6%
+        change = -(Math.floor(Math.random() * 2) + 5);
       } else if (complianceLevel === 'poor') {
-        // Poor session: replacements decrease 2-4%
-        const decrease = Math.floor(Math.random() * 3) + 2;
-        adjusted.projectedValue = Math.max(0, item.projectedValue - decrease);
+        // Poor compliance: drop 5-6%
+        change = -(Math.floor(Math.random() * 2) + 5);
       } else if (complianceLevel === 'below_typical') {
-        // Below typical: replacements decrease 1-2%
-        const decrease = Math.floor(Math.random() * 2) + 1;
-        adjusted.projectedValue = Math.max(0, item.projectedValue - decrease);
+        // Below typical: drop 4-5%
+        change = -(Math.floor(Math.random() * 2) + 4);
+      } else if (complianceLevel === 'typical') {
+        // Typical session: normal variance 1-4%
+        change = Math.floor(Math.random() * 4) + 1;
+        // Can go up or down in typical sessions
+        change = Math.random() > 0.5 ? change : -change;
       }
+      adjusted.projectedValue = Math.min(100, Math.max(0, item.projectedValue + change));
     }
     return adjusted;
   });

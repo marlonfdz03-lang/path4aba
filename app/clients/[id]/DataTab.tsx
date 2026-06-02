@@ -816,7 +816,24 @@ function TargetCard({
 
 // ── Main DataTab ────────────────────────────────────────────────────────────
 
-export function DataTab({ client }: { client: any }) {
+export function DataTab({ client, complianceLevel = "typical", missedHours = 0 }: { client: any; complianceLevel?: "typical" | "below_typical" | "poor"; missedHours?: number }) {
+  function applyQualityAdjustment(value: number, type: "maladaptive" | "replacement"): number {
+    const isMissed = missedHours > 0;
+    const hasEnvChange = complianceLevel === "poor";
+    if (type === "maladaptive") {
+      if (isMissed) return value + Math.floor(Math.random() * 2) + 6;
+      if (hasEnvChange) return value + Math.floor(Math.random() * 2) + 5;
+      if (complianceLevel === "below_typical") return value + Math.floor(Math.random() * 2) + 4;
+      const v = Math.floor(Math.random() * 4) + 1;
+      return Math.max(0, value + (Math.random() > 0.5 ? v : -v));
+    } else {
+      if (isMissed) return Math.max(0, Math.min(100, value - (Math.floor(Math.random() * 2) + 6)));
+      if (hasEnvChange) return Math.max(0, Math.min(100, value - (Math.floor(Math.random() * 2) + 5)));
+      if (complianceLevel === "below_typical") return Math.max(0, Math.min(100, value - (Math.floor(Math.random() * 2) + 4)));
+      const v = Math.floor(Math.random() * 4) + 1;
+      return Math.max(0, Math.min(100, value + (Math.random() > 0.5 ? v : -v)));
+    }
+  }
   const [section, setSection] = useState<Section>("maladaptive");
   const [replacementData, setReplacementData] = useState<any[]>([]);
   const [maladaptiveData, setMaladaptiveData] = useState<any[]>([]);
