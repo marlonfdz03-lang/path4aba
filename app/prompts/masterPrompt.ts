@@ -47,6 +47,13 @@ LANGUAGE:
 - NEVER overstate RBT role. BANNED: "therapist identified the function", "was hypothesized to be maintained by", "clinical assessment indicated", "based on functional analysis".
 - NEVER include future planning. BANNED: "in upcoming sessions", "we will work on", "the next goal", "going forward", "this will help".
 
+UNITS OF MEASUREMENT — BANNED IN NOTES:
+NEVER include numerical frequency counts, percentages, duration numbers, or trial counts in the note.
+The data collection system captures these numbers separately.
+BANNED: "the behavior occurred 4 times", "the client achieved 80% accuracy", "across 12 trials", "for 3 minutes", "frequency of 6"
+CORRECT: "the behavior occurred multiple times during the session", "the client demonstrated emerging accuracy", "across multiple opportunities", "briefly", "on several occasions"
+Exception: prompt counts are allowed as they describe RBT action, not data: "following two verbal prompts", "after three repetitions" — these are fine.
+
 ACTIVITIES FORMAT:
 - All activities MUST use parentheses: preferred activity as (ACTIVITY NAME), non-preferred as (ACTIVITY NAME).
 - Example: "During transition from (Lego building) to (worksheet completion)..."
@@ -208,9 +215,19 @@ NOTE STRUCTURE
 ═══════════════════════════════════════
 
 OPENING (1-2 sentences):
-"During today's [TIME RANGE] [SETTING]-based ABA session, services were provided at [LOCATION] with [CAREGIVER] present throughout the visit. Data were collected on targeted maladaptive behaviors and replacement skill programs in accordance with the current treatment plan."
+"During today's [TIME RANGE] [SETTING]-based ABA session, services were provided at [LOCATION] with [CAREGIVER NAME AND RELATIONSHIP] present throughout the visit. Data were collected on targeted maladaptive behaviors and replacement skill programs in accordance with the current treatment plan."
 
+Where [LOCATION] = use sessionInfo.location value directly — if it is a street address or facility name, use it. NEVER replace with generic 'the school' or 'the home'.
+Where [CAREGIVER NAME AND RELATIONSHIP] = use sessionInfo.caregiverName or sessionInfo.caregiver — use their actual name and role: 'Maria Lopez (mother)', 'Ms. Tracy (teacher)'. NEVER say just 'caregiver' or 'teacher' if a name was provided.
+Where [TIME RANGE] = use sessionInfo.timeRange if provided, otherwise omit.
 Where [SETTING] comes from sessionInfo.location: use "home" if location is "home", "school" if location is "school", "clinic" if location is "clinic". NEVER hardcode "home-based" regardless of default.
+
+BEHAVIOR MOMENTUM HIGH-PROBABILITY REQUESTS — MANDATORY VARIETY:
+Never use the same high-probability requests across notes. Rotate from these pools:
+Motor pool: clapping hands, stomping feet, standing up, sitting down, touching head, waving, turning around, jumping once, giving a thumbs up, pushing in chair
+Object pool: handing over a pencil, picking up a crayon, placing a block in a bin, stacking two blocks, putting a cap on a marker, handing over a card
+Verbal pool: saying their own name, repeating a simple word, answering 'how old are you', identifying a color on a card
+Each note must use a DIFFERENT combination of 2-3 requests from different pools. Never repeat 'handing over a pencil and clapping hands' — that combination is banned.
 
 BODY (exactly 5 ABCs in one flowing paragraph):
 Each ABC: "When [antecedent], the client [exact topography]; the RBT implemented [intervention] by [specific how]; the client [observable response]."

@@ -514,6 +514,7 @@ function renderPresent() {
     const item = document.createElement('div');
     item.className = 'check-item';
     item.dataset.name = name;
+    const isCustom = !(name === 'Caregiver' || name === 'Teacher');
     item.innerHTML = `
       <div class="check-box">
         <svg width="10" height="10" viewBox="0 0 12 12" fill="white">
@@ -521,6 +522,7 @@ function renderPresent() {
         </svg>
       </div>
       <span>${name}</span>
+      ${isCustom ? `<button class="remove-present-btn" data-name="${name}" title="Remove">×</button>` : ''}
     `;
     item.addEventListener('click', () => {
       if (item.classList.contains('checked')) {
@@ -533,6 +535,16 @@ function renderPresent() {
       updateGenerateBtn();
     });
     grid.appendChild(item);
+    if (isCustom) {
+      item.querySelector('.remove-present-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (selectedProfile?.caregivers) {
+          selectedProfile.caregivers = selectedProfile.caregivers.filter(c => c !== name);
+        }
+        selectedPresent = selectedPresent.filter(n => n !== name);
+        renderPresent();
+      });
+    }
   });
 }
 
@@ -742,7 +754,12 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     reinforcersUsed: (selectedProfile?.reinforcers || []).slice(0, 3).map(item => ({
       type: 'non-edible', item, deliveredWhen: 'contingent on task engagement'
     })),
-    clinicalEvents: medicationChange ? 'Medication consumed today.' : '',
+    clinicalEvents: [
+      medicationChange ? 'Medication consumed today.' : '',
+      document.getElementById('nextApptDate')?.value
+        ? `Next scheduled appointment: ${document.getElementById('nextApptDate').value}.`
+        : '',
+    ].filter(Boolean).join(' '),
     complianceLevel: complianceLevel !== 'typical' ? complianceLevel : undefined,
     environmentalChangeDescription: environmentalChange ? 'Environmental changes noted this session.' : undefined,
     missedHoursData: missedSessions ? { totalHours: 1, reason: 'Reported by caregiver' } : undefined,
@@ -883,10 +900,50 @@ document.getElementById('copyBtn').addEventListener('click', () => {
   });
 });
 
+function resetAfterSave() {
+  // Reset behaviors
+  selectedBehaviors = [];
+  document.querySelectorAll('#behaviorsGrid .check-item').forEach(el => {
+    el.classList.remove('checked', 'disabled');
+  });
+  // Reset skills
+  selectedSkills = [];
+  document.querySelectorAll('#skillsGrid .check-item').forEach(el => {
+    el.classList.remove('checked', 'disabled');
+  });
+  // Reset present
+  selectedPresent = [];
+  document.querySelectorAll('#presentGrid .check-item').forEach(el => {
+    el.classList.remove('checked');
+  });
+  // Reset session conditions
+  resetSessionConditions();
+  // Reset next appointment date
+  const nextApptEl = document.getElementById('nextApptDate');
+  if (nextApptEl) nextApptEl.value = '';
+  // Update generate button state
+  updateGenerateBtn();
+}
+
 // ── Save button ────────────────────────────
+let lastSavedNoteText = null;
+let lastSavedClientId = null;
+
 document.getElementById('saveBtn').addEventListener('click', async () => {
   const text = document.getElementById('outputNote').value;
   if (!text || !selectedClientId) return;
+
+  // Block duplicate save: same note + same client
+  if (text === lastSavedNoteText && selectedClientId === lastSavedClientId) {
+    const btn = document.getElementById('saveBtn');
+    btn.textContent = 'Already saved';
+    btn.style.background = '#f59e0b';
+    setTimeout(() => {
+      btn.textContent = 'Save';
+      btn.style.background = '';
+    }, 2000);
+    return;
+  }
 
   const btn = document.getElementById('saveBtn');
   btn.disabled = true;
@@ -913,6 +970,10 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
       return;
     }
 
+    // Track saved note to block duplicates
+    lastSavedNoteText = text;
+    lastSavedClientId = selectedClientId;
+
     // Local backup
     chrome.storage.local.set({
       [`path4aba_ext_note_${selectedClientId}_${Date.now()}`]: {
@@ -920,13 +981,23 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
       },
     });
 
-    btn.textContent = '✓ Saved to profile';
-    btn.classList.add('saved');
+    // Green feedback
+    btn.textContent = '✓ Saved';
+    btn.style.background = '#16a34a';
+    btn.style.color = '#fff';
+    btn.style.borderColor = '#16a34a';
+
+    // Reset form selections after save
+    resetAfterSave();
+
     setTimeout(() => {
       btn.textContent = 'Save';
-      btn.classList.remove('saved');
+      btn.style.background = '';
+      btn.style.color = '';
+      btn.style.borderColor = '';
       btn.disabled = false;
-    }, 2000);
+    }, 2500);
+
   } catch {
     const warn = document.createElement('p');
     warn.className = 'error-msg save-error';
