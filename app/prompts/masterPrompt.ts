@@ -17,7 +17,7 @@ If you are about to write "chose", "decided", or "selected" — STOP. Describe t
 
 STRUCTURE:
 - Write ONE CONTINUOUS PARAGRAPH only. No line breaks, no bullet points, no headers, no numbering.
-- Include EXACTLY 5 ABCs. Not 4, not 6. Exactly 5.
+- Include between 4 and 6 ABCs per note. Vary the number — do not always write exactly 5. Sometimes 4, sometimes 5, sometimes 6.
 - Each ABC follows this exact pattern: When [antecedent], the client [exact observable topography]; the RBT implemented [intervention name] by [specific description of how]; the client [observable response only].
 
 SENTENCE STARTER VARIETY:
@@ -214,13 +214,18 @@ Describe only observable behavior — what the body did.
 NOTE STRUCTURE
 ═══════════════════════════════════════
 
-OPENING (1-2 sentences):
-"During today's [TIME RANGE] [SETTING]-based ABA session, services were provided at [LOCATION] with [CAREGIVER NAME AND RELATIONSHIP] present throughout the visit. Data were collected on targeted maladaptive behaviors and replacement skill programs in accordance with the current treatment plan."
+OPENING — VARY THE STRUCTURE:
+Do NOT always use the same opening sentence pattern. Rotate between these opening styles:
+Style A: 'During today's [time] [setting]-based ABA session, services were provided at [location] with [caregiver] present.'
+Style B: '[Caregiver] was present throughout today's [time] [setting]-based session at [location]. Data collection targeted maladaptive behaviors and replacement skill programs per the current treatment plan.'
+Style C: 'ABA services were rendered today from [time] at [location] in a [setting]-based session. [Caregiver] was present. The session targeted active behavior-reduction and skill-acquisition goals.'
+Style D: 'Today's [setting]-based session was held at [location] from [time]. [Caregiver] remained present throughout. The RBT implemented procedures targeting behavior reduction and replacement skill development.'
+Pick a DIFFERENT style each time — never use Style A twice in a row.
 
-Where [LOCATION] = use sessionInfo.location value directly — if it is a street address or facility name, use it. NEVER replace with generic 'the school' or 'the home'.
-Where [CAREGIVER NAME AND RELATIONSHIP] = use sessionInfo.caregiverName or sessionInfo.caregiver — use their actual name and role: 'Maria Lopez (mother)', 'Ms. Tracy (teacher)'. NEVER say just 'caregiver' or 'teacher' if a name was provided.
-Where [TIME RANGE] = use sessionInfo.timeRange if provided, otherwise omit.
-Where [SETTING] comes from sessionInfo.location: use "home" if location is "home", "school" if location is "school", "clinic" if location is "clinic". NEVER hardcode "home-based" regardless of default.
+Where [location] = use sessionInfo.location value directly — if it is a street address or facility name, use it. NEVER replace with generic 'the school' or 'the home'.
+Where [caregiver] = use sessionInfo.caregiverName or sessionInfo.caregiver — use their actual name and role: 'Maria Lopez (mother)', 'Ms. Tracy (teacher)'. NEVER say just 'caregiver' or 'teacher' if a name was provided.
+Where [time] = use sessionInfo.timeRange if provided, otherwise omit.
+Where [setting] comes from sessionInfo.location: use "home" if location is "home", "school" if location is "school", "clinic" if location is "clinic". NEVER hardcode "home-based" regardless of default.
 
 BEHAVIOR MOMENTUM HIGH-PROBABILITY REQUESTS — MANDATORY VARIETY:
 Never use the same high-probability requests across notes. Rotate from these pools:
@@ -232,10 +237,23 @@ Each note must use a DIFFERENT combination of 2-3 requests from different pools.
 BODY (exactly 5 ABCs in one flowing paragraph):
 Each ABC: "When [antecedent], the client [exact topography]; the RBT implemented [intervention] by [specific how]; the client [observable response]."
 
-Connect ABCs naturally with transitions: "Later in the session...", "Subsequently...", "During a later activity...", "Following this...", "Toward the end of the session..."
+Connect ABCs naturally with transitions. NEVER use the same transition phrase twice in one note. Pool to rotate from:
+'Later during the visit...' / 'As the session progressed...' / 'During a subsequent activity...' / 'Following this exchange...' / 'Toward the latter portion of the visit...' / 'At another point during the session...' / 'Shortly after...' / 'During the next activity...' / 'As demands shifted...' / 'Later, when the activity changed to...'
+Use transitions that reflect what actually happened — not generic fillers.
 
-CLOSING (2-3 sentences):
-"Reinforcement used during the session included [specific reinforcers by type]. Replacement programs addressed during this visit included [list programs by name]. The client required [prompt level and type] during [specific context from session]. Relevant behavioral events and treatment responses were documented in accordance with the treatment plan."
+CLOSING — VARY THE STRUCTURE (2-3 sentences):
+Do NOT always end with the same sentence pattern. Rotate between these closing styles:
+Style A: 'Reinforcement included [items]. Replacement programs addressed included [skills with HOW each was practiced]. The client required [prompt level] during [context].'
+Style B: '[Prompt level] prompting was required across [context]. Reinforcers delivered during the session included [items]. Goals addressed included [skills with HOW each was practiced].'
+Style C: 'The session addressed [skills with HOW each was practiced] as active replacement programs. The client responded to [prompt level] prompting. Reinforcement was delivered in the form of [items] contingent on task engagement and appropriate responding.'
+Style D: 'Data were collected on [behaviors] and [skills]. The client required [prompt level] support during [context]. Reinforcement included [items]. Replacement programs practiced during this visit included [skills with HOW each was practiced].'
+Pick a DIFFERENT style each note.
+
+REPLACEMENT SKILLS DETAIL — MANDATORY:
+Every replacement skill listed in the closing must include the exact name from the treatment plan PLUS how it was practiced. NEVER list as bare names.
+BANNED: 'Replacement programs addressed included requesting help appropriately and transitioning between activities.'
+CORRECT: 'Replacement programs addressed included requesting help appropriately, practiced through FCT with verbal prompting across multiple demand presentations, and transitioning between activities, targeted using a visual schedule and behavior-specific praise contingent on successful transitions.'
+Each skill needs: exact name + teaching procedure or prompting level + context.
 
 CLOSING RULES:
 - In the reinforcement sentence, never list "behavior-specific praise" AND "verbal praise" together — they are the same thing. Use ONE social reinforcement descriptor, then add the tangible separately: "behavior-specific praise and access to (specific item)".
@@ -378,6 +396,7 @@ Verify every item before writing the final note:
 ☐ No future planning language
 ☐ Written as one continuous paragraph
 ☐ Replacement skills are functionally incompatible with behaviors
+☐ Closing describes HOW each replacement skill was addressed — not just the name
 ☐ No two ABCs use the same behavior topography
 ☐ No topography is a copied operational definition
 ☐ Client's full name used throughout (never "the client"); caregiver names include relationship in parentheses; RBT referred to as "the RBT"
