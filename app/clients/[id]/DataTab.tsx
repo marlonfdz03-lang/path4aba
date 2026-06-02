@@ -622,6 +622,7 @@ function TargetCard({
   nameIndex,
   clientId,
   onDataConfirmed,
+  adjustValue,
 }: {
   name: string;
   records: any[];
@@ -629,6 +630,7 @@ function TargetCard({
   nameIndex: number;
   clientId: string;
   onDataConfirmed: () => void;
+  adjustValue?: (v: number) => number;
 }) {
   const valueKey = isRising ? "observed_percentage" : "frequency";
   const unit = isRising ? "%" : "";
@@ -658,12 +660,13 @@ function TargetCard({
 
   const projValues = useMemo(() => {
     if (histData.length === 0) return [];
-    return buildProjection(
+    const raw = buildProjection(
       histData.map((d) => d.avg),
       { baseline: histData[histData.length - 1].avg, goal, totalWeeks: null },
       nameIndex,
     );
-  }, [histData, goal, nameIndex]);
+    return adjustValue ? raw.map((v: number) => adjustValue(v)) : raw;
+  }, [histData, goal, nameIndex, adjustValue]);
 
   const yMax = useMemo(() => {
     if (isRising) return 100;
@@ -976,6 +979,7 @@ export function DataTab({ client, complianceLevel = "typical", missedHours = 0 }
                   nameIndex={i}
                   clientId={client.id}
                   onDataConfirmed={loadData}
+                  adjustValue={(v) => applyQualityAdjustment(v, "maladaptive")}
                 />
               ))}
         </div>
@@ -994,6 +998,7 @@ export function DataTab({ client, complianceLevel = "typical", missedHours = 0 }
                   nameIndex={i}
                   clientId={client.id}
                   onDataConfirmed={loadData}
+                  adjustValue={(v) => applyQualityAdjustment(v, "replacement")}
                 />
               ))}
         </div>
