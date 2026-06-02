@@ -196,16 +196,17 @@ function mapToLegacyFormat(extracted: ExtractedAssessment) {
         topographies: [cleanText(b.topography)].filter(
           t => t && !hasBlockedTerm(t)
         ),
+        functions: Array.isArray(b.function) ? b.function : b.function ? [b.function] : [],
       })),
     interventions: extracted.approvedInterventions
       .filter(i => !hasBlockedTerm(i))
       .map(i => ({ name: cleanText(i), status: "active" })),
     skillAcquisition: extracted.replacementSkills
       .filter(s => s.status?.toLowerCase() === "mastered" && !hasBlockedTerm(s.name))
-      .map(s => ({ name: cleanText(s.name), status: "active" })),
+      .map(s => ({ name: cleanText(s.name), status: "active", targetFunction: s.targetFunction || "" })),
     replacementBehaviors: extracted.replacementSkills
       .filter(s => s.status?.toLowerCase() !== "mastered" && !hasBlockedTerm(s.name))
-      .map(s => ({ name: cleanText(s.name), status: "active" })),
+      .map(s => ({ name: cleanText(s.name), status: "active", targetFunction: s.targetFunction || "" })),
     reinforcers: [
       extracted.reinforcers.tangibles,
       extracted.reinforcers.activities,
