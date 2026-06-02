@@ -208,6 +208,8 @@ export default function ClientProfilePage() {
   const [perfectedNote, setPerfectedNote] = useState("");
   const [perfectSimilarityWarning, setPerfectSimilarityWarning] = useState(false);
   const [refinedNoteSaved, setRefinedNoteSaved] = useState(false);
+  const [nextApptDate, setNextApptDate] = useState("");
+  const [lastSavedNote, setLastSavedNote] = useState("");
 
   async function loadNotesFromSupabase(clientId: string) {
     try {
@@ -343,10 +345,27 @@ export default function ClientProfilePage() {
     const body = {
       clientId: client.id,
       sessionInfo: { date, location, caregiver: presentPerson },
-      behaviorsObserved: selectedBehaviors.map((name) => ({ name, topography: "", frequency: 1, antecedentContext: "", function: "" })),
+      behaviorsObserved: selectedBehaviors.map((name) => {
+        const profileBehavior = (client.clinicalProfile?.maladaptiveBehaviors || [])
+          .find((b: any) => (typeof b === "string" ? b : b?.name) === name);
+        const topographies = profileBehavior?.topographies || [];
+        const functions = profileBehavior?.functions || [];
+        return {
+          name,
+          topography: topographies[Math.floor(Math.random() * Math.max(topographies.length, 1))] || "",
+          frequency: 1,
+          antecedentContext: "",
+          function: functions[0] || "",
+        };
+      }),
       replacementSkillsAddressed: selectedSkills.map((name) => ({ name, promptLevel: "", clientResponse: "", successful: true })),
-      activitiesUsed: [],
-      reinforcersUsed: [],
+      activitiesUsed: (location === "school"
+        ? (client.clinicalProfile?.schoolActivities || [])
+        : (client.clinicalProfile?.homeActivities || [])
+      ).slice(0, 4).map((name: string) => ({ name, preferred: true })),
+      reinforcersUsed: (client.clinicalProfile?.reinforcers || []).slice(0, 3).map((item: string) => ({
+        type: "non-edible", item, deliveredWhen: "contingent on task engagement",
+      })),
       clientProfile: {
         diagnosis: client.diagnosis || [],
         setting: location,
@@ -366,7 +385,10 @@ export default function ClientProfilePage() {
           ],
         },
       },
-      clinicalEvents: medicationConsumed ? "Medication consumed today." : "",
+      clinicalEvents: [
+        medicationConsumed ? "Medication consumed today." : "",
+        nextApptDate ? `Next scheduled appointment: ${nextApptDate}.` : "",
+      ].filter(Boolean).join(" "),
       complianceLevel: complianceLevel !== "typical" ? complianceLevel : undefined,
       environmentalChangeDescription: environmentalChange && environmentalChangeDesc ? environmentalChangeDesc : undefined,
       missedHoursData: missedHoursToggle && missedHoursCount
@@ -418,6 +440,7 @@ export default function ClientProfilePage() {
 
   async function handleSaveNote() {
     if (!generatedNote.trim()) { alert("Generate a note before saving."); return; }
+    if (generatedNote === lastSavedNote) { alert("This note has already been saved."); return; }
     const today = new Date();
     const backupNote = { id: crypto.randomUUID(), clientId: client.id, date: date || today.toLocaleDateString(), note: generatedNote };
     saveNote(backupNote);
@@ -428,6 +451,18 @@ export default function ClientProfilePage() {
     });
     if (res.ok) {
       await loadNotesFromSupabase(client.id);
+      setLastSavedNote(generatedNote);
+      setSelectedBehaviors([]);
+      setSelectedSkills([]);
+      setSelectedPresent([]);
+      setComplianceLevel("typical");
+      setMedicationConsumed(false);
+      setEnvironmentalChange(false);
+      setEnvironmentalChangeDesc("");
+      setMissedHoursToggle(false);
+      setMissedHoursCount("");
+      setMissedHoursReason("");
+      setNextApptDate("");
     } else {
       setDailyNotes(prev => [backupNote, ...prev]);
     }
@@ -493,6 +528,8 @@ export default function ClientProfilePage() {
 
   async function handleSaveRefinedNote() {
     if (!perfectedNote.trim()) return;
+    if (perfectedNote === lastSavedNote) { alert("This note has already been saved."); return; }
+    setLastSavedNote(perfectedNote);
     const today = new Date();
     const noteObject = {
       id: crypto.randomUUID(),
@@ -993,6 +1030,18 @@ export default function ClientProfilePage() {
 
             {/* Generate button + output */}
             <div className="bg-white rounded-[10px] border p-6" style={{ borderColor: "var(--border)" }}>
+              <div className="mt-4 mb-4">
+                <p className="text-[11px] uppercase tracking-widest font-semibold mb-2" style={{ color: "var(--text3)" }}>
+                  Next Appointment Date
+                </p>
+                <input
+                  type="date"
+                  value={nextApptDate}
+                  onChange={e => setNextApptDate(e.target.value)}
+                  className="w-full border rounded-xl px-4 py-2 text-[13px]"
+                  style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                />
+              </div>
               <button
                 onClick={handleGenerateNote}
                 disabled={!canGenerate || generating}
