@@ -199,22 +199,25 @@ BANNED vague antecedents: "during the session" / "while working" / "at one point
 The antecedent must help explain WHY the behavior may have occurred.
 
 ANTECEDENT GENERATION BY FUNCTION — MANDATORY:
-When generating antecedents for each ABC, select antecedents that are clinically consistent with the behavioral function:
+When generating antecedents for each ABC, select antecedents that are clinically consistent with the behavioral function. NEVER repeat the same antecedent twice in one note.
 
-Escape-maintained behaviors — use antecedents from:
-"presentation of a non-preferred task demand", "transition away from a preferred activity", "instruction to complete a multi-step task", "request to stop a preferred activity", "presentation of academic or work demands"
+Escape-maintained behaviors — rotate from:
+"presentation of a non-preferred task demand", "transition away from a preferred activity", "instruction to complete a multi-step task", "request to stop a preferred activity", "presentation of academic or work demands", "direction to clean up materials", "transition from a preferred activity to a non-preferred one", "presented with a difficult or lengthy task", "told to wait before accessing a preferred activity", "interruption of an ongoing preferred activity", "demand to sit and complete structured work", "request to follow a multi-step routine"
 
-Attention-maintained behaviors — use antecedents from:
-"adult attention directed toward another person", "delay in adult response", "adult engaged with another student or sibling", "removal of social interaction", "adult turned away from client"
+Attention-maintained behaviors — rotate from:
+"adult attention directed toward another person", "delay in adult response", "adult engaged with another student or sibling", "removal of social interaction", "adult turned away from client", "adult on phone or speaking with another adult", "peer received praise or attention from staff", "adult providing instruction to another student", "brief absence of adult interaction during independent work", "adult attending to a different task in the room"
 
-Tangible-maintained behaviors — use antecedents from:
-"denial of access to a preferred item", "preferred item removed from client's possession", "told 'not right now' regarding a preferred activity", "transition away from a preferred tangible", "another person had access to preferred item"
+Tangible-maintained behaviors — rotate from:
+"denial of access to a preferred item", "preferred item removed from client's possession", "told 'not right now' regarding a preferred activity", "transition away from a preferred tangible", "another person had access to preferred item", "preferred item placed out of reach", "access to preferred activity ended by staff", "told item was unavailable", "preferred food or toy withheld pending task completion", "item taken away following non-compliance with a rule"
 
-Automatic-maintained behaviors — use antecedents from:
-"no clear external antecedent identified", "during unstructured time", "during independent activity", "sensory stimulation present in environment"
+Automatic-maintained behaviors — rotate from:
+"no clear external antecedent identified", "during unstructured time", "during independent activity", "sensory stimulation present in environment", "during transitions between activities", "during low-stimulation periods", "during quiet independent work", "following a period of physical activity", "during seated instruction with limited movement", "during prolonged waiting periods"
 
-NEVER use a vague antecedent like "during the session" or "while working".
-ALWAYS match the antecedent to the function of the behavior in that ABC.
+RULES:
+- NEVER use a vague antecedent like "during the session" or "while working"
+- ALWAYS match the antecedent to the function of the behavior in that ABC
+- NEVER repeat the same antecedent twice in one note
+- Pick from DIFFERENT items in the pool for each ABC
 
 4. ENVIRONMENTAL MANIPULATION IS AN ANTECEDENT INTERVENTION
 Environmental manipulation must occur BEFORE the behavior as a preventative strategy.
