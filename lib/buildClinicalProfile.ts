@@ -1,6 +1,7 @@
 export interface ProgramItem {
   name: string;
   status?: string;
+  targetFunction?: string;
 }
 
 export interface MaladaptiveBehavior {
@@ -86,7 +87,7 @@ function dedupeStrings(items: string[] = []) {
   return [...new Set(items.filter(Boolean).map(i => i.trim()))];
 }
 
-function dedupePrograms(items: ProgramItem[] = []) {
+function dedupePrograms(items: any[] = []): ProgramItem[] {
   const seen = new Set<string>();
   return items.filter(item => {
     if (!item?.name) return false;
@@ -94,7 +95,11 @@ function dedupePrograms(items: ProgramItem[] = []) {
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
-  });
+  }).map(item => ({
+    name: item.name,
+    status: item.status,
+    targetFunction: item.targetFunction || item.target_function || item.function || '',
+  }));
 }
 
 function dedupeMaladaptives(items: any[] = []): MaladaptiveBehavior[] {
@@ -113,10 +118,12 @@ function dedupeMaladaptives(items: any[] = []): MaladaptiveBehavior[] {
       : item.topography
         ? [item.topography]
         : [],
-    functions: Array.isArray(item.function)
-      ? item.function
-      : item.function
-        ? [item.function]
-        : [],
+    functions: Array.isArray(item.functions)
+      ? item.functions
+      : Array.isArray(item.function)
+        ? item.function
+        : item.function
+          ? [item.function]
+          : [],
   }));
 }
