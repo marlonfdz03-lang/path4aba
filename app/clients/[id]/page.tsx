@@ -334,7 +334,8 @@ export default function ClientProfilePage() {
 
   const canGenerate =
     date.trim() !== "" && location !== "" && selectedPresent.length > 0 &&
-    selectedBehaviors.length === 5 && selectedSkills.length === 2;
+    selectedBehaviors.length >= 1 && selectedSkills.length >= 1 &&
+    date && location && selectedPresent.length > 0;
 
   async function handleGenerateNote() {
     if (!canGenerate) return;
@@ -800,9 +801,9 @@ export default function ClientProfilePage() {
               <div className="flex items-center gap-2">
                 <span
                   className="text-[12px] font-semibold px-3 py-1.5 rounded-full"
-                  style={{ background: selectedBehaviors.length === 5 && selectedSkills.length === 2 ? "#E6F9F5" : "var(--bg)", color: selectedBehaviors.length === 5 && selectedSkills.length === 2 ? "#0D8A6A" : "var(--text3)" }}
+                  style={{ background: canGenerate ? "#E6F9F5" : "var(--bg)", color: canGenerate ? "#0D8A6A" : "var(--text3)" }}
                 >
-                  {selectedBehaviors.length}/5 behaviors · {selectedSkills.length}/2 skills
+                  {selectedBehaviors.length} behavior{selectedBehaviors.length !== 1 ? 's' : ''} · {selectedSkills.length} skill{selectedSkills.length !== 1 ? 's' : ''}
                 </span>
               </div>
             </div>
@@ -968,12 +969,12 @@ export default function ClientProfilePage() {
             {/* Section 3: Behaviors */}
             <div className="bg-white rounded-[10px] border overflow-hidden" style={{ borderColor: "var(--border)" }}>
               <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border)" }}>
-                <SectionHeader title="Maladaptive Behaviors (select up to 5)" />
+                <SectionHeader title="Maladaptive Behaviors" />
                 <span
                   className="text-[12px] font-semibold px-2.5 py-1 rounded-full flex-shrink-0 -mt-5"
-                  style={{ background: selectedBehaviors.length === 5 ? "var(--teal-light)" : "var(--bg)", color: selectedBehaviors.length === 5 ? "var(--teal)" : "var(--text3)" }}
+                  style={{ background: selectedBehaviors.length > 0 ? "var(--teal-light)" : "var(--bg)", color: selectedBehaviors.length > 0 ? "var(--teal)" : "var(--text3)" }}
                 >
-                  {selectedBehaviors.length} of 5
+                  {selectedBehaviors.length} selected
                 </span>
               </div>
               {behaviors.length === 0 ? (
@@ -988,7 +989,7 @@ export default function ClientProfilePage() {
                         name={name}
                         description={typeof b === "object" ? b.topography : undefined}
                         checked={selectedBehaviors.includes(name)}
-                        disabled={!selectedBehaviors.includes(name) && selectedBehaviors.length >= 5}
+                        disabled={false}
                         onToggle={() => toggleBehavior(name)}
                       />
                     );
@@ -1000,12 +1001,12 @@ export default function ClientProfilePage() {
             {/* Section 4: Skills */}
             <div className="bg-white rounded-[10px] border overflow-hidden" style={{ borderColor: "var(--border)" }}>
               <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border)" }}>
-                <SectionHeader title="Replacement Skills (select up to 2)" />
+                <SectionHeader title="Replacement Skills" />
                 <span
                   className="text-[12px] font-semibold px-2.5 py-1 rounded-full flex-shrink-0 -mt-5"
-                  style={{ background: selectedSkills.length === 2 ? "var(--teal-light)" : "var(--bg)", color: selectedSkills.length === 2 ? "var(--teal)" : "var(--text3)" }}
+                  style={{ background: selectedSkills.length > 0 ? "var(--teal-light)" : "var(--bg)", color: selectedSkills.length > 0 ? "var(--teal)" : "var(--text3)" }}
                 >
-                  {selectedSkills.length} of 2
+                  {selectedSkills.length} selected
                 </span>
               </div>
               {skills.length === 0 ? (
@@ -1019,7 +1020,7 @@ export default function ClientProfilePage() {
                         key={i}
                         name={name}
                         checked={selectedSkills.includes(name)}
-                        disabled={!selectedSkills.includes(name) && selectedSkills.length >= 2}
+                        disabled={false}
                         onToggle={() => toggleSkill(name)}
                       />
                     );
