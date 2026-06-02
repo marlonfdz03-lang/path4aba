@@ -115,6 +115,13 @@ Do not modify behavior names, intervention names, or skill names in any way. Ext
 ━━━ OTHER RULES ━━━
 For prohibitedInterventions, always include: ["Punishment", "ResponseCost", "Restraint", "StandaloneExtinction", "TimeOut", "Overcorrection", "Aversive"] plus any others mentioned as contraindicated in the document.
 For functions, use only these values: ["attention", "escape", "tangible", "automatic"].
+IMPORTANT: If the function is not explicitly stated in the document, INFER it from the behavioral description:
+- If the behavior occurs when demands are presented, tasks are requested, or activities are interrupted → "escape"
+- If the behavior occurs when attention is removed, adult is busy, or to get adult/peer reaction → "attention"
+- If the behavior occurs when a preferred item is denied or removed → "tangible"
+- If the behavior occurs without clear social antecedent, during alone time, or appears self-stimulatory → "automatic"
+Always provide at least one function value. Never return an empty array for function.
+Apply the same inference logic to targetFunction for replacement skills — match it to the function of the behavior the skill is designed to replace.
 For measurableUnit use: "frequency", "duration", or "rate".
 For setting use: "home", "school", "clinic", or "community".
 For preferredActivities: extract all activities listed as preferred or high-preference in reinforcement assessment or preference assessment sections.
