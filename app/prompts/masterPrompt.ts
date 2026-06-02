@@ -202,22 +202,51 @@ ANTECEDENT GENERATION BY FUNCTION — MANDATORY:
 When generating antecedents for each ABC, select antecedents that are clinically consistent with the behavioral function. NEVER repeat the same antecedent twice in one note.
 
 Escape-maintained behaviors — rotate from:
-"presentation of a non-preferred task demand", "transition away from a preferred activity", "instruction to complete a multi-step task", "request to stop a preferred activity", "presentation of academic or work demands", "direction to clean up materials", "transition from a preferred activity to a non-preferred one", "presented with a difficult or lengthy task", "told to wait before accessing a preferred activity", "interruption of an ongoing preferred activity", "demand to sit and complete structured work", "request to follow a multi-step routine"
+"presentation of a non-preferred task demand", "transition away from a preferred activity", "instruction to complete a multi-step task", "request to stop a preferred activity", "presentation of academic or work demands", "direction to clean up materials", "transition from a preferred activity to a non-preferred one", "presented with a difficult or lengthy task", "told to wait before accessing a preferred activity", "interruption of an ongoing preferred activity", "demand to sit and complete structured work", "request to follow a multi-step routine", "instruction to put away a preferred item before task completion", "presented with a non-preferred subject or activity", "told the activity was ending soon", "direction to move to a less preferred area of the room", "request to complete a task independently without assistance", "presented with an unexpected change to the routine", "asked to wait while peers continued a preferred activity", "given corrective feedback during a task", "presented with a task following a period of free play"
 
 Attention-maintained behaviors — rotate from:
-"adult attention directed toward another person", "delay in adult response", "adult engaged with another student or sibling", "removal of social interaction", "adult turned away from client", "adult on phone or speaking with another adult", "peer received praise or attention from staff", "adult providing instruction to another student", "brief absence of adult interaction during independent work", "adult attending to a different task in the room"
+"adult attention directed toward another person", "delay in adult response", "adult engaged with another student or sibling", "removal of social interaction", "adult turned away from client", "adult on phone or speaking with another adult", "peer received praise or attention from staff", "adult providing instruction to another student", "brief absence of adult interaction during independent work", "adult attending to a different task in the room", "adult praised another peer in the client's presence", "staff member left the immediate area briefly", "adult gave instructions to the group without individual acknowledgment", "adult engaged in paperwork or documentation", "peer monopolized adult attention during group activity", "adult redirected attention to classroom management", "brief transition period with reduced staff interaction", "adult provided attention to a peer who was upset", "group activity where individual attention was limited", "adult gave verbal praise to another child nearby"
 
 Tangible-maintained behaviors — rotate from:
-"denial of access to a preferred item", "preferred item removed from client's possession", "told 'not right now' regarding a preferred activity", "transition away from a preferred tangible", "another person had access to preferred item", "preferred item placed out of reach", "access to preferred activity ended by staff", "told item was unavailable", "preferred food or toy withheld pending task completion", "item taken away following non-compliance with a rule"
+"denial of access to a preferred item", "preferred item removed from client's possession", "told 'not right now' regarding a preferred activity", "transition away from a preferred tangible", "another person had access to preferred item", "preferred item placed out of reach", "access to preferred activity ended by staff", "told item was unavailable", "preferred food or toy withheld pending task completion", "item taken away following non-compliance with a rule", "preferred item given to another peer", "told the tablet or device time had ended", "access to a specific toy restricted during structured time", "preferred activity placed on a schedule for later", "item removed as part of a transition routine", "told to finish work before accessing the preferred item", "preferred item visible but inaccessible", "another student using the preferred toy or material", "preferred activity scheduled for later in the session", "told the preferred activity was saved for after the session", "access to a tangible reinforcer delayed by staff instruction"
 
 Automatic-maintained behaviors — rotate from:
-"no clear external antecedent identified", "during unstructured time", "during independent activity", "sensory stimulation present in environment", "during transitions between activities", "during low-stimulation periods", "during quiet independent work", "following a period of physical activity", "during seated instruction with limited movement", "during prolonged waiting periods"
+"no clear external antecedent identified", "during unstructured time", "during independent activity", "sensory stimulation present in environment", "during transitions between activities", "during low-stimulation periods", "during quiet independent work", "during prolonged waiting periods", "during a monotonous or repetitive task", "during periods of minimal environmental stimulation", "following an abrupt change in lighting or noise level", "during a long seated activity without movement breaks", "in the presence of specific textures or sensory materials", "during transitions involving unfamiliar sensory environments", "when exposed to loud or unexpected sounds in the environment", "during activities requiring sustained fine motor engagement", "during extended participation in seated activities", "no observable environmental antecedent identified prior to the behavior", "during a period of minimal adult-directed structure"
 
 RULES:
 - NEVER use a vague antecedent like "during the session" or "while working"
 - ALWAYS match the antecedent to the function of the behavior in that ABC
 - NEVER repeat the same antecedent twice in one note
 - Pick from DIFFERENT items in the pool for each ABC
+
+FREQUENCY WEIGHTING:
+High-frequency antecedents — use most often as they mirror real session patterns:
+- Escape: "presentation of a non-preferred task demand", "transition away from a preferred activity", "direction to clean up materials"
+- Attention: "adult attention directed toward another person", "delay in adult response", "adult engaged with another student or sibling"
+- Tangible: "denial of access to a preferred item", "preferred item removed from client's possession", "access to preferred activity ended by staff"
+- Automatic: "during unstructured time", "during independent activity", "during low-stimulation periods"
+
+Low-frequency antecedents — use occasionally for variety, not in every note:
+- Escape: "transition to a new staff member or unfamiliar adult", "presented with an unexpected change to the routine"
+- Tangible: "preferred item visible but inaccessible", "another student using the preferred toy or material"
+- Automatic: "when exposed to loud or unexpected sounds in the environment", "during transitions involving unfamiliar sensory environments"
+
+ANTECEDENT CREATIVITY RULE:
+The pools above are clinical reference examples — not a closed list.
+You are encouraged to generate NEW antecedents that are:
+- Clinically consistent with the behavioral function
+- Observable and objective (no mentalistic language)
+- Specific to the activity context described in that ABC
+- Different from antecedents used in recent notes
+
+For example, if the session involves a (art activity) and the behavior is escape-maintained, a contextually generated antecedent like "presented with a request to complete a coloring worksheet during art time" is preferred over a generic pool item.
+
+PRIORITY ORDER for antecedent selection:
+1. Generate a contextually specific antecedent based on the activity in that ABC
+2. If no specific context is available, use a high-frequency pool item
+3. Use low-frequency pool items occasionally for variety
+
+This ensures that after months of note generation, antecedents remain varied, specific, and clinically authentic.
 
 4. ENVIRONMENTAL MANIPULATION IS AN ANTECEDENT INTERVENTION
 Environmental manipulation must occur BEFORE the behavior as a preventative strategy.
