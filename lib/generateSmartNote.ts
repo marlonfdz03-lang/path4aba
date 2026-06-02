@@ -313,7 +313,8 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     if (onChunk) {
       const stream = await openai.chat.completions.create({
         model: 'gpt-4o',
-        temperature: 0.4,
+        temperature: 0.85,
+        seed: Math.floor(Math.random() * 1000000),
         max_tokens: 1500,
         stream: true,
         messages: [
@@ -330,7 +331,8 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     }
     const resp = await openai.chat.completions.create({
       model: 'gpt-4o',
-      temperature: 0.4,
+      temperature: 0.85,
+      seed: Math.floor(Math.random() * 1000000),
       max_tokens: 1500,
       messages: [
         { role: 'system', content: systemContent },
