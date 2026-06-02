@@ -698,6 +698,10 @@ async function checkSuggestionBanner() {
   } catch {}
 }
 
+function getMissedReason() {
+  return 'an unplanned absence reported by caregiver';
+}
+
 // ── Generate note ──────────────────────────
 document.getElementById('generateBtn').addEventListener('click', async () => {
   document.querySelectorAll('.error-msg').forEach(el => el.remove());
@@ -709,35 +713,57 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
 
   const body = {
     clientId: selectedClientId,
-    sessionInfo: { date, location: selectedLocation, caregiver: selectedPresent.join(' and ') },
-    behaviorsObserved: selectedBehaviors.map(name => ({
-      name, topography: '', frequency: 1, antecedentContext: '', function: ''
-    })),
+    sessionInfo: {
+      date,
+      location: selectedLocation,
+      caregiver: selectedPresent.join(' and '),
+      caregiverName: (selectedProfile?.caregivers || []).join(' and ') || selectedPresent.join(' and '),
+    },
+    behaviorsObserved: selectedBehaviors.map(name => {
+      const profileBehavior = (selectedProfile?.maladaptiveBehaviors || [])
+        .find(b => (typeof b === 'string' ? b : b?.name) === name);
+      const topographies = profileBehavior?.topographies || [];
+      const functions = profileBehavior?.functions || [];
+      return {
+        name,
+        topography: topographies[Math.floor(Math.random() * Math.max(topographies.length, 1))] || '',
+        frequency: 1,
+        antecedentContext: '',
+        function: functions[0] || '',
+      };
+    }),
     replacementSkillsAddressed: selectedSkills.map(name => ({
       name, promptLevel: '', clientResponse: '', successful: true
     })),
-    activitiesUsed: [],
-    reinforcersUsed: [],
+    activitiesUsed: (selectedLocation === 'school'
+      ? (selectedProfile?.schoolActivities || [])
+      : (selectedProfile?.homeActivities || [])
+    ).slice(0, 4).map(name => ({ name, preferred: true })),
+    reinforcersUsed: (selectedProfile?.reinforcers || []).slice(0, 3).map(item => ({
+      type: 'non-edible', item, deliveredWhen: 'contingent on task engagement'
+    })),
     clinicalEvents: medicationChange ? 'Medication consumed today.' : '',
     complianceLevel: complianceLevel !== 'typical' ? complianceLevel : undefined,
     environmentalChangeDescription: environmentalChange ? 'Environmental changes noted this session.' : undefined,
     missedHoursData: missedSessions ? { totalHours: 1, reason: 'Reported by caregiver' } : undefined,
     clientProfile: {
-      diagnosis: [],
+      diagnosis: selectedProfile?.diagnosis || [],
       setting: selectedLocation,
       approvedInterventions,
-      prohibitedInterventions: ['Punishment', 'ResponseCost', 'Restraint', 'StandaloneExtinction', 'TimeOut', 'Overcorrection', 'Aversive'],
+      prohibitedInterventions: ['Punishment','ResponseCost','Restraint','StandaloneExtinction','TimeOut','Overcorrection','Aversive'],
       reinforcers: {
-        tangibles: (profile.reinforcers || []).slice(0, 5).join(', '),
-        activities: '',
+        tangibles: (selectedProfile?.reinforcers || []).slice(0, 5).join(', '),
+        activities: (selectedLocation === 'school'
+          ? selectedProfile?.schoolActivities
+          : selectedProfile?.homeActivities || []).slice(0, 3).join(', '),
         social: 'verbal praise, high fives, behavior-specific praise',
-        people: '',
+        people: (selectedProfile?.caregivers || []).join(', '),
       },
       activePrograms: {
-        maladaptive: (profile.maladaptiveBehaviors || []).map(b => typeof b === 'string' ? b : b?.name || ''),
+        maladaptive: (selectedProfile?.maladaptiveBehaviors || []).map(b => typeof b === 'string' ? b : b?.name || ''),
         replacementSkills: [
-          ...(profile.replacementBehaviors || []).map(s => typeof s === 'string' ? s : s?.name || ''),
-          ...(profile.skillAcquisition || []).map(s => typeof s === 'string' ? s : s?.name || ''),
+          ...(selectedProfile?.replacementBehaviors || []).map(s => typeof s === 'string' ? s : s?.name || ''),
+          ...(selectedProfile?.skillAcquisition || []).map(s => typeof s === 'string' ? s : s?.name || ''),
         ],
       },
     },

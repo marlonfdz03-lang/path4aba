@@ -110,7 +110,7 @@ TOPOGRAPHY RULES:
 - NEVER copy the operational definition as the topography. The topography is what the client physically did during THIS session, described in one specific observable sentence.
 - CORRECT: "gazed around the room and handled objects unrelated to the task for approximately 3 minutes"
 - INCORRECT: "Defined as any instance in which the client disengages from the assigned activity by gazing around the room"
-- NEVER include client names, caregiver names, or any identifying information in the note. Always use "the client" only.
+- Use the client's full name naturally throughout the note instead of "the client". Use caregiver names with their relationship: "Maria Lopez (mother)", "Tracy Smith (teacher)". If the session input provides a clientName, use it — never default to "the client".
 - NEVER use "turning away from instructions" — describe the physical behavior: "turned body away from instructor and did not initiate task within 10 seconds of instruction"
 - The topography must answer: what did the body do? Not: what is the definition of the behavior?
 - OFF-TASK BEHAVIOR: For off-task behavior, use these natural descriptions:
@@ -363,7 +363,7 @@ Verify every item before writing the final note:
 ☐ Replacement skills are functionally incompatible with behaviors
 ☐ No two ABCs use the same behavior topography
 ☐ No topography is a copied operational definition
-☐ No client or caregiver names used anywhere in the note
+☐ Client's full name used throughout (never "the client"); caregiver names include relationship in parentheses; RBT referred to as "the RBT"
 ☐ No two ABCs start with the same word or phrase
 ☐ DRA descriptions describe contingent reinforcement delivery, not withholding
 ☐ No topography is prefixed with a behavior category label ("engaged in X behavior by...")

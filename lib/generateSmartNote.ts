@@ -1,6 +1,12 @@
 import OpenAI from 'openai';
 import { MASTER_RBT_NOTE_PROMPT } from '@/app/prompts/masterPrompt';
 import { prisma } from '@/lib/prisma';
+import {
+  filterApprovedInterventions,
+  isValidActivity,
+  isValidSkillForLocation,
+  cleanBehaviorLabel,
+} from '@/lib/clinicalFilters';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -17,6 +23,7 @@ export interface SessionInput {
     timeRange: string;
     location: string;
     caregiver: string;
+    caregiverName?: string;
     rbtName?: string;
   };
   clientId: string;
@@ -154,6 +161,70 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
       reinforcers: raw?.reinforcers || {},
       activePrograms: raw?.activePrograms || {},
       settingDetails: raw?.setting_details || raw?.setting || '',
+    };
+  }
+
+  // Pre-process: filter interventions and clean input using clinical rules
+  if (resolvedProfile.approvedInterventions?.length) {
+    resolvedProfile.approvedInterventions = filterApprovedInterventions(
+      resolvedProfile.approvedInterventions
+    );
+  }
+  if (input.activitiesUsed?.length) {
+    input.activitiesUsed = input.activitiesUsed.filter(a =>
+      isValidActivity(a.name, input.sessionInfo.location)
+    );
+  }
+  if (input.behaviorsObserved?.length) {
+    input.behaviorsObserved = input.behaviorsObserved.map(b => ({
+      ...b,
+      name: cleanBehaviorLabel(b.name),
+    }));
+  }
+  if (resolvedProfile.activePrograms?.replacementSkills?.length) {
+    resolvedProfile.activePrograms.replacementSkills =
+      resolvedProfile.activePrograms.replacementSkills.filter((s: string) =>
+        isValidSkillForLocation(s, input.sessionInfo.location)
+      );
+  }
+
+  // ── Missed session: generate absence note instead of full clinical note ──
+  if (input.missedHoursData && input.missedHoursData.totalHours > 0) {
+    const { totalHours, reason } = input.missedHoursData;
+    const location = input.sessionInfo.location || 'home';
+    const caregiver = input.sessionInfo.caregiverName || input.sessionInfo.caregiver || 'caregiver';
+    const date = input.sessionInfo.date || new Date().toISOString().split('T')[0];
+    const setting = location === 'school' ? 'school-based' : location === 'clinic' ? 'clinic-based' : 'home-based';
+
+    const absenceNote = `Scheduled ${setting} ABA session on ${date} was not held. ${caregiver} reported that the client was unable to attend due to ${reason || 'an unplanned absence'}. A total of ${totalHours} hour${totalHours !== 1 ? 's' : ''} of authorized ABA services were not rendered during this period. Clinical literature and ABA research support that interruptions in consistent service delivery can adversely affect behavioral progress, including increased frequency and intensity of targeted maladaptive behaviors and reduced maintenance of acquired replacement skills. The treating BCBA has been notified of the missed service hours. This note documents the absence in accordance with the current treatment plan and insurance authorization requirements. Makeup hours will be scheduled as clinically indicated and as authorized under the current service plan.`;
+
+    // Save absence note to DB
+    try {
+      await prisma.session_notes.create({
+        data: {
+          client_id: input.clientId,
+          user_id: UUID_RE.test(rbtId ?? '') ? (rbtId as string) : null,
+          note_text: absenceNote,
+          session_date: date,
+          behaviors_addressed: [],
+          skills_addressed: [],
+          interventions_used: [],
+        },
+      });
+    } catch (saveError) {
+      console.warn('[generateSmartNote] absence note save failed:', saveError);
+    }
+
+    if (onChunk) onChunk(absenceNote);
+
+    return {
+      note: absenceNote,
+      clientId: input.clientId,
+      sessionDate: date,
+      behaviorsDocumented: [],
+      replacementSkillsDocumented: [],
+      generatedAt: new Date().toISOString(),
+      similarityWarning: false,
     };
   }
 

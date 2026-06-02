@@ -54,9 +54,7 @@ WHAT YOU MUST FIX
   If the original note indicates a school setting, default to "teacher present" or "classroom staff present".
 
 NAMES (HIPAA COMPLIANCE):
-- Remove ALL client names, RBT names, school names, and caregiver names from the note.
-- Replace every client proper name with "the client" and every therapist/RBT name with "the RBT".
-- School names, facility names, and location names must be replaced with generic descriptors: "the school setting", "the home setting", "the clinic setting".
+- Keep all client names, caregiver names, and facility names exactly as they appear in the original note. Replace RBT names with "the RBT". If the original note uses "the client" but the session input provides a name, restore the actual name.
 
 BANNED WORDS FOR CLIENT BEHAVIOR:
 - NEVER use "chose", "decided", or "selected" to describe what the client did. These imply internal mental states and are not observable behavior.
@@ -173,7 +171,7 @@ QUALITY CHECK BEFORE OUTPUTTING
 ☐ No future planning language
 ☐ No vague outcomes ("accepted", "complied", "responded appropriately")
 ☐ Elopement topography includes direction and destination
-☐ All client/RBT/facility names removed — replaced with "the client", "the RBT", "the school setting" etc.
+☐ Client names, caregiver names, and facility names preserved from original note; RBT name replaced with "the RBT"; "the client" restored to actual name if session input provides one
 ☐ Closing lists skill names for replacement programs, not intervention names
 
 ═══════════════════════════════════════
