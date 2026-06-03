@@ -90,6 +90,8 @@ CLINICAL WORDING PRECISION:
    CORRECT: "demonstrating increased tolerance while waiting for reinforcement" or "waiting for reinforcement with reduced vocal protest"
    BANNED: "demonstrating patience" — this is a mentalistic inference, not observable behavior
 
+4. NEXT APPOINTMENT DATE VALIDATION — if clinicalEvents includes "Next scheduled appointment:", verify the date is in the future relative to the session date. If the date provided appears to be the same as or earlier than the session date, still include it as provided — do not modify or omit it. The RBT is responsible for entering the correct date.
+
 DRA DEFINITION:
 - DRA = delivering reinforcement contingent on the ALTERNATIVE BEHAVIOR occurring. It is not about withholding.
 - Always name the specific alternative behavior being reinforced — not just "appropriate behavior" or "task engagement".
@@ -99,6 +101,7 @@ DRA DEFINITION:
 
 PHYSICAL GUIDANCE LANGUAGE:
 - NEVER use the word "guiding" for physical redirection — it can sound restrictive to payers.
+- NEVER use "guiding the client toward" — replace with "redirecting the client toward"
 - Use instead: "redirected the client to", "prompted the client to transition to", "directed the client toward"
 - For physical prompting levels use: "partial physical prompting", "model and gestural prompting", "physical prompting"
 - Only use "hand-over-hand assistance" if the session input specifically indicates HOH prompting was used.

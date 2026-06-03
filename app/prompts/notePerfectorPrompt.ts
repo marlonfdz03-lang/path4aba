@@ -43,6 +43,7 @@ Pick a DIFFERENT style than the original note used.
   CORRECT — describe what the client physically did:
   "walked to the assigned area" / "picked up materials and placed them in the bin" / "sat down at the table" / "followed the transition routine without incident" / "transitioned to the next activity without further incident"
 - PHYSICAL GUIDANCE LANGUAGE: NEVER use "guiding the client" — sounds restrictive to payers.
+  NEVER use "guiding the client toward" — replace with "redirecting the client toward"
   Replace with: "redirecting the client toward", "prompting the client to engage in", "directing the client to"
   NEVER use "lack of focus" — not observable.
   Replace with: "looked away from instructional materials and did not initiate the task within 10 seconds of the instruction"
