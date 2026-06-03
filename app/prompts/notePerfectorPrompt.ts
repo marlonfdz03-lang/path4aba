@@ -52,6 +52,19 @@ Pick a DIFFERENT style than the original note used.
   Replace with specific measurable descriptions:
   "required two additional verbal prompts before initiating the task" / "remained near the activity area briefly before again approaching the exit" / "task engagement remained limited following the intervention" / "the client briefly approached the materials but did not independently begin the activity"
   Always describe what the client's body did, not a general behavior trend.
+CLINICAL WORDING PRECISION:
+1. PROMPTING HIERARCHY — when multiple prompt levels were used, document as:
+   CORRECT: "the RBT implemented a least-to-most prompting hierarchy"
+   BANNED: listing redirection alone when physical prompting was also used
+
+2. AUTOMATIC FUNCTION ANTECEDENT — never use "no external antecedents appeared":
+   CORRECT: "During independent engagement with [activity], no observable environmental antecedent was identified immediately prior to the behavior."
+   BANNED: "no external antecedents appeared to trigger behavior"
+
+3. DELAY OF REINFORCEMENT OUTCOMES — never use "demonstrating patience":
+   CORRECT: "demonstrating increased tolerance while waiting for reinforcement" or "waiting for reinforcement with reduced vocal protest"
+   BANNED: "demonstrating patience" — this is a mentalistic inference, not observable behavior
+
 - SETTING-APPROPRIATE PERSONNEL: Match the personnel to the setting.
   Home setting → "caregiver", "mother", "father"
   School setting → "teacher", "classroom staff", "school staff"

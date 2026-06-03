@@ -77,6 +77,19 @@ INTERVENTIONS:
 - Replacement skills must be functionally incompatible with the maladaptive behavior — the client cannot perform both simultaneously.
 - NEVER use "Escape Extinction" — it is a prohibited intervention. For escape-maintained behaviors use FCT, DRA, or offering choices instead.
 
+CLINICAL WORDING PRECISION:
+1. PROMPTING HIERARCHY — when multiple prompt levels were used, document as:
+   CORRECT: "the RBT implemented a least-to-most prompting hierarchy"
+   BANNED: listing redirection alone when physical prompting was also used
+
+2. AUTOMATIC FUNCTION ANTECEDENT — never use "no external antecedents appeared":
+   CORRECT: "During independent engagement with [activity], no observable environmental antecedent was identified immediately prior to the behavior."
+   BANNED: "no external antecedents appeared to trigger behavior"
+
+3. DELAY OF REINFORCEMENT OUTCOMES — never use "demonstrating patience":
+   CORRECT: "demonstrating increased tolerance while waiting for reinforcement" or "waiting for reinforcement with reduced vocal protest"
+   BANNED: "demonstrating patience" — this is a mentalistic inference, not observable behavior
+
 DRA DEFINITION:
 - DRA = delivering reinforcement contingent on the ALTERNATIVE BEHAVIOR occurring. It is not about withholding.
 - Always name the specific alternative behavior being reinforced — not just "appropriate behavior" or "task engagement".
