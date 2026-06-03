@@ -163,7 +163,6 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [clientCount, setClientCount] = useState(0);
-  const [pendingReviewCount, setPendingReviewCount] = useState(0);
   const [hasBCBAStudents, setHasBCBAStudents] = useState(false);
   const [hasActiveRBT, setHasActiveRBT] = useState(false);
   const [user, setUser] = useState<{ name: string; profession: string; initials: string } | null>(null);
@@ -176,14 +175,6 @@ export default function Sidebar() {
       const name = session.user.name || session.user.email?.split("@")[0] || "User";
       const initials = name.split(/\s+/).filter(Boolean).map((w: string) => w[0].toUpperCase()).slice(0, 2).join("") || "??";
       setUser({ name, profession: role, initials });
-
-      const isBCBA = ["bcba", "bcaba"].includes(role.toLowerCase());
-      if (isBCBA) {
-        fetch("/api/bcba/pending-count")
-          .then((r) => r.json())
-          .then((d) => setPendingReviewCount(d.count || 0))
-          .catch(() => {});
-      }
 
       fetch("/api/user/subscription")
         .then((r) => r.json())
