@@ -652,17 +652,30 @@ export default function BCBAClientPage() {
               <p className="text-[13px]" style={{ color: "var(--text3)" }}>No session notes from the RBT yet.</p>
             ) : notes.map(note => {
               const isExpanded = expandedNoteId === note.id;
-              const dateLabel = new Date(note.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+              const dateLabel = note.session_date
+                ? new Date(note.session_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                : new Date(note.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+              const reviewed = note.review_status === "reviewed";
+              const behaviors: string[] = Array.isArray(note.behaviors_addressed)
+                ? note.behaviors_addressed.map((b: any) => typeof b === "string" ? b : (b?.name || "")).filter(Boolean)
+                : [];
+              const skills: string[] = Array.isArray(note.skills_addressed)
+                ? note.skills_addressed.map((s: any) => typeof s === "string" ? s : (s?.name || "")).filter(Boolean)
+                : [];
               return (
                 <div key={note.id} className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
                   <div className="flex items-start justify-between gap-4 mb-2">
-                    <div>
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-[13px] font-semibold" style={{ color: "var(--text1)" }}>{dateLabel}</p>
-                      {!isExpanded && (
-                        <p className="text-[12px] mt-1 line-clamp-2" style={{ color: "var(--text3)" }}>
-                          {(note.note_text || "").slice(0, 120)}…
-                        </p>
-                      )}
+                      <span
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                        style={reviewed
+                          ? { background: "#DCFCE7", color: "#15803D" }
+                          : { background: "#FEF3C7", color: "#92400E" }
+                        }
+                      >
+                        {reviewed ? "Reviewed" : "Pending"}
+                      </span>
                     </div>
                     <button
                       onClick={() => setExpandedNoteId(isExpanded ? null : note.id)}
@@ -672,8 +685,23 @@ export default function BCBAClientPage() {
                       {isExpanded ? "Collapse" : "Expand"}
                     </button>
                   </div>
+                  {(behaviors.length > 0 || skills.length > 0) && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {behaviors.map((b, i) => (
+                        <span key={i} className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: "#FEF3E2", color: "#92400E" }}>{b}</span>
+                      ))}
+                      {skills.map((s, i) => (
+                        <span key={i} className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: "#EFF6FF", color: "#1D4ED8" }}>{s}</span>
+                      ))}
+                    </div>
+                  )}
+                  {!isExpanded && (
+                    <p className="text-[12px] line-clamp-2" style={{ color: "var(--text3)" }}>
+                      {(note.note_text || "").slice(0, 120)}…
+                    </p>
+                  )}
                   {isExpanded && (
-                    <p className="text-[13px] leading-7 whitespace-pre-wrap" style={{ color: "var(--text2)" }}>
+                    <p className="text-[13px] leading-7 whitespace-pre-wrap mt-2" style={{ color: "var(--text2)" }}>
                       {note.note_text}
                     </p>
                   )}

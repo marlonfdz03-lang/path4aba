@@ -36,7 +36,21 @@ export async function GET(request: Request) {
 
   const notes = await prisma.session_notes.findMany({
     where: { client_id: { in: targetIds } },
-    select: { id: true, client_id: true, user_id: true, note_text: true, created_at: true },
+    select: {
+      id: true,
+      client_id: true,
+      user_id: true,
+      note_text: true,
+      created_at: true,
+      session_date: true,
+      behaviors_addressed: true,
+      skills_addressed: true,
+      interventions_used: true,
+      activities_used: true,
+      review_status: true,
+      reviewed_at: true,
+      review_comment: true,
+    },
     orderBy: { created_at: 'desc' },
   })
 
