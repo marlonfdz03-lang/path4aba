@@ -339,6 +339,11 @@ CLOSING RULES:
   CORRECT: "The client required occasional verbal prompting during transitions and task demands."
   INCORRECT: "The client required two verbal prompts during portions of the session." — sounds disconnected from the session content.
 
+NEXT APPOINTMENT — MANDATORY IF PROVIDED:
+If clinicalEvents includes "Next scheduled appointment:", ALWAYS end the closing with:
+"The next scheduled session is on [date]." as the very last sentence of the note.
+NEVER omit this if it was provided in the input.
+
 ═══════════════════════════════════════
 WHAT YOU WILL RECEIVE AS INPUT
 ═══════════════════════════════════════
