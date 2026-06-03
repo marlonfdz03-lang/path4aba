@@ -820,8 +820,19 @@ document.getElementById('refineBtn').addEventListener('click', async () => {
       prohibitedInterventions: ['Punishment', 'ResponseCost', 'Restraint', 'StandaloneExtinction', 'TimeOut', 'Overcorrection', 'Aversive'],
       reinforcers: {
         tangibles: (profile.reinforcers || []).slice(0, 5).join(', '),
+        activities: (profile.homeActivities || []).slice(0, 3).join(', '),
         social: 'verbal praise, behavior-specific praise, high fives',
+        people: (profile.caregivers || []).join(', '),
       },
+      activePrograms: {
+        maladaptive: (profile.maladaptiveBehaviors || []).map(b => typeof b === 'string' ? b : b?.name || ''),
+        replacementSkills: [
+          ...(profile.replacementBehaviors || []).map(s => typeof s === 'string' ? s : s?.name || ''),
+          ...(profile.skillAcquisition || []).map(s => typeof s === 'string' ? s : s?.name || ''),
+        ],
+      },
+      diagnosis: profile.diagnosis || [],
+      setting: selectedLocation || '',
     },
   };
   await streamGenerate('/api/refine-note', body, 'POST');

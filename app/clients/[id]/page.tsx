@@ -482,8 +482,19 @@ export default function ClientProfilePage() {
         prohibitedInterventions: ["Punishment", "ResponseCost", "Restraint", "StandaloneExtinction", "TimeOut", "Overcorrection", "Aversive"],
         reinforcers: {
           tangibles: client.clinicalProfile?.reinforcers?.slice(0, 5).join(", ") || "",
+          activities: client.clinicalProfile?.homeActivities?.slice(0, 3).join(", ") || "",
           social: "verbal praise, behavior-specific praise, high fives",
+          people: (client.clinicalProfile?.caregivers || []).join(", "),
         },
+        activePrograms: {
+          maladaptive: (client.clinicalProfile?.maladaptiveBehaviors || []).map((b: any) => typeof b === "string" ? b : b?.name || ""),
+          replacementSkills: [
+            ...(client.clinicalProfile?.replacementBehaviors || []).map((s: any) => typeof s === "string" ? s : s?.name || ""),
+            ...(client.clinicalProfile?.skillAcquisition || []).map((s: any) => typeof s === "string" ? s : s?.name || ""),
+          ],
+        },
+        diagnosis: client.clinicalProfile?.diagnosis || [],
+        setting: client.primary_setting || "",
       },
     };
 
