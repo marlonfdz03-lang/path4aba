@@ -138,9 +138,9 @@ function ClientCard({ client, index }: { client: BCBAClient; index: number }) {
               Connected
             </span>
           </div>
-          {client.diagnosis?.length > 0 && (
-            <p className="text-[12px] mb-2" style={{ color: "var(--text3)" }}>{client.diagnosis.join(", ")}</p>
-          )}
+          <p className="text-[12px] mb-2" style={{ color: "var(--text3)" }}>
+            {client.diagnosis?.length > 0 ? client.diagnosis.join(", ") : "No diagnosis on file"}
+          </p>
           <p className="text-[11px]" style={{ color: "var(--text3)" }}>Connected {connectedDate}</p>
         </div>
       </div>

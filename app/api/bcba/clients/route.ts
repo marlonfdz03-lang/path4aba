@@ -41,7 +41,9 @@ export async function GET() {
     return {
       id: row.client_id,
       client_name: (clientRow?.clinical_profile as any)?.name || clientRow?.internal_code || 'Unknown Client',
-      diagnosis: (clientRow?.clinical_profile as any)?.maladaptiveBehaviors?.map((b: any) => b.name).slice(0, 2) || [],
+      diagnosis: Array.isArray((clientRow?.clinical_profile as any)?.diagnosis)
+        ? (clientRow?.clinical_profile as any).diagnosis
+        : [],
       connected_at: row.connected_at,
       rbt_id: row.rbt_id,
     }
