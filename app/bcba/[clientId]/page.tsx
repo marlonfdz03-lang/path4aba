@@ -234,19 +234,18 @@ export default function BCBAClientPage() {
 
   async function handleSaveProfile() {
     setSaving(true); setSaveError(""); setProfileSaved(false);
-    const cp = client?.clinical_profile || {};
-    const newProfile = {
-      ...cp,
-      maladaptiveBehaviors: editBehaviors,
-      interventions: editInterventions,
-      replacementBehaviors: editSkills,
-      skillAcquisition: [],
-    };
     try {
       const res = await fetch(`/api/bcba/client/${clientId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clinicalProfile: newProfile }),
+        body: JSON.stringify({
+          clinicalProfile: {
+            maladaptiveBehaviors: editBehaviors,
+            interventions: editInterventions,
+            replacementBehaviors: editSkills,
+            skillAcquisition: [],
+          },
+        }),
       });
       const data = await res.json();
       if (!res.ok) { setSaveError(data.error || "Save failed"); return; }

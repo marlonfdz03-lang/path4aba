@@ -73,9 +73,16 @@ export async function PATCH(
     return NextResponse.json({ error: 'Missing clinicalProfile' }, { status: 400 })
   }
 
+  const existing = await prisma.clients.findUnique({
+    where: { id: clientId },
+    select: { clinical_profile: true },
+  })
+  const existingProfile = (existing?.clinical_profile as Record<string, any>) ?? {}
+  const merged = { ...existingProfile, ...clinicalProfile }
+
   const updated = await prisma.clients.update({
     where: { id: clientId },
-    data: { clinical_profile: clinicalProfile },
+    data: { clinical_profile: merged },
     select: { id: true, internal_code: true, clinical_profile: true },
   })
 
