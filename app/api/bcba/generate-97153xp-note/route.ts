@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import type * as Prisma from '@/lib/generated/prisma/internal/prismaNamespace'
 import OpenAI from 'openai'
 import { build97153XPPrompt } from '@/app/prompts/supervision97153xpPrompt'
 
@@ -121,7 +122,9 @@ export async function POST(request: Request) {
               bcba_id: userId,
               session_date: sessionDate,
               note_text: fullNote,
-              rbt_session_context: (rbtSessionContext || undefined) as any,
+              rbt_session_context: rbtSessionContext
+                ? (rbtSessionContext as Prisma.InputJsonValue)
+                : undefined,
             },
             select: { id: true },
           })
