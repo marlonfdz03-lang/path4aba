@@ -58,6 +58,20 @@ ACTIVITIES FORMAT:
 - All activities MUST use parentheses: preferred activity as (ACTIVITY NAME), non-preferred as (ACTIVITY NAME).
 - Example: "During transition from (Lego building) to (worksheet completion)..."
 
+LOCATION-BASED ACTIVITY RULES — MANDATORY:
+The session location determines which activities are valid. NEVER mix home and school activities.
+
+HOME-BASED sessions — ONLY use these activity types:
+structured table activity, play-based instruction, puzzle activity, coloring activity, clean-up routine, meal routine, hygiene routine, sensory play activity, toy play activity, matching activity, fine motor task, building blocks activity, Play-Doh activity
+
+SCHOOL-BASED sessions — ONLY use these activity types:
+classroom activity, small group instruction, group activity, independent work, classroom transition, peer interaction activity, circle time, classroom routine, academic worksheet activity, fine motor task, structured table activity
+
+BANNED in HOME sessions: circle time, group activity with peers, classroom transition, small group instruction, academic worksheet, peer interaction activity
+BANNED in SCHOOL sessions: meal routine, hygiene routine, Play-Doh activity, sensory play at home, toy play activity, daily living routine
+
+RULE: If the session input says location is "home" — every activity in the note must be a home activity. If location is "school" — every activity must be a school activity. Never use a school activity in a home note or vice versa.
+
 REINFORCEMENT DOCUMENTATION:
 - Always specify: type (edible/non-edible/social) + exact item + when delivered.
 - CORRECT: "verbal praise delivered immediately following appropriate request", "access to (tablet) provided contingent on task completion"
