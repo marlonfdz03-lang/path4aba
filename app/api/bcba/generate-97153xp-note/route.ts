@@ -24,10 +24,24 @@ export async function POST(request: Request) {
     clientId?: string
     sessionDate?: string
     location?: string
-    rbtSessionContext?: { empty: boolean; behaviors?: string[]; skills?: string[]; interventions?: string[]; activities?: string[] } | null
-    bcbaActionsPerformed?: string
-    treatmentIntegrityConcerns?: string
-    clientResponseDuringOverlap?: string
+    rbtSessionContext?: Record<string, unknown> | null
+    rbtBehaviorsReported?: string[]
+    rbtInterventionsUsed?: string[]
+    rbtProgramsWorked?: string[]
+    bcbaObservedPrograms?: string[]
+    bcbaObservedBehaviors?: string[]
+    supervisionFocus?: string[]
+    integrityReview?: {
+      prompting: string
+      reinforcement: string
+      behaviorReduction: string
+      dataCollection: string
+    }
+    bcbaActionsPerformed?: string[]
+    feedbackToRbt?: string[]
+    clientResponseDuringOverlap?: string[]
+    recommendations?: string[]
+    narrativeStyle?: string
   }
 
   try {
@@ -36,7 +50,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { clientId, sessionDate, location, rbtSessionContext, bcbaActionsPerformed, treatmentIntegrityConcerns, clientResponseDuringOverlap } = body
+  const {
+    clientId, sessionDate, location, rbtSessionContext,
+    rbtBehaviorsReported, rbtInterventionsUsed, rbtProgramsWorked,
+    bcbaObservedPrograms, bcbaObservedBehaviors, supervisionFocus,
+    integrityReview, bcbaActionsPerformed, feedbackToRbt,
+    clientResponseDuringOverlap, recommendations, narrativeStyle,
+  } = body
 
   if (!clientId || !sessionDate) {
     return NextResponse.json({ error: 'Missing clientId or sessionDate' }, { status: 400 })
@@ -55,9 +75,18 @@ export async function POST(request: Request) {
     sessionDate,
     location: location || '',
     rbtSessionContext: rbtSessionContext ?? null,
-    bcbaActionsPerformed: bcbaActionsPerformed || '',
-    treatmentIntegrityConcerns: treatmentIntegrityConcerns || '',
-    clientResponseDuringOverlap: clientResponseDuringOverlap || '',
+    rbtBehaviorsReported: rbtBehaviorsReported || [],
+    rbtInterventionsUsed: rbtInterventionsUsed || [],
+    rbtProgramsWorked: rbtProgramsWorked || [],
+    bcbaObservedPrograms: bcbaObservedPrograms || [],
+    bcbaObservedBehaviors: bcbaObservedBehaviors || [],
+    supervisionFocus: supervisionFocus || [],
+    integrityReview,
+    bcbaActionsPerformed: bcbaActionsPerformed || [],
+    feedbackToRbt: feedbackToRbt || [],
+    clientResponseDuringOverlap: clientResponseDuringOverlap || [],
+    recommendations: recommendations || [],
+    narrativeStyle: narrativeStyle || 'Insurance-Friendly',
   })
 
   const encoder = new TextEncoder()

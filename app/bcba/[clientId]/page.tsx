@@ -44,6 +44,17 @@ const XP_CLIENT_RESPONSE_OPTIONS = [
   "Other",
 ];
 
+const XP_BEHAVIORS = ["Tantrum","Aggression","Elopement","Noncompliance","Property Destruction","Off Task"];
+const XP_INTERVENTIONS = ["DRA","DRI","DRO","FCT","Redirection","Token Economy","Prompt Fading","Premack Principle"];
+const XP_PROGRAMS = ["Request Break","Following Instructions","Waiting","Accepting No","Transition Skills","Social Skills","Functional Play"];
+const XP_INTEGRITY_OPTIONS = ["Meets Expectations","Needs Improvement","Not Observed"];
+const XP_BCBA_ACTIONS_NEW = ["Observed RBT Implementation","Modeled Procedures","Conducted BST","Provided Verbal Feedback","Reviewed Data","Demonstrated Intervention","Trained RBT on Procedures"];
+const XP_FEEDBACK_TO_RBT = ["Prompting Procedures","Reinforcement Procedures","Data Collection","Skill Acquisition Programs","Behavior Reduction Procedures","Session Structure","Professional Conduct"];
+const XP_CLIENT_RESPONSE_NEW = ["Cooperative","Required Minimal Redirection","Required Moderate Redirection","Engaged with Programs","Demonstrated Progress","Demonstrated Challenging Behaviors"];
+const XP_RECOMMENDATIONS = ["Continue Current Procedures","Additional Monitoring Recommended","Additional Training Recommended","Follow-Up Overlap Recommended","Protocol Modification May Be Needed"];
+const XP_NARRATIVE_STYLES = ["Insurance-Friendly","Clinical","Detailed Clinical","Audit-Ready"];
+const XP_SUPERVISION_FOCUS = ["Prompting Procedures","Reinforcement Procedures","Behavior Reduction Procedures","Data Collection","Skill Acquisition Programs","Professional Conduct"];
+
 
 function SectionHeader({ title }: { title: string }) {
   return (
@@ -141,6 +152,23 @@ export default function BCBAClientPage() {
   const [xpNoteCopied, setXpNoteCopied] = useState(false);
   const [xpSaved, setXpSaved] = useState(false);
   const [xpExpandedNoteId, setXpExpandedNoteId] = useState<string | null>(null);
+
+  // 97153XP new form state
+  const [rbtBehaviorsReported, setRbtBehaviorsReported] = useState<string[]>([]);
+  const [rbtInterventionsUsed, setRbtInterventionsUsed] = useState<string[]>([]);
+  const [rbtProgramsWorked, setRbtProgramsWorked] = useState<string[]>([]);
+  const [bcbaObservedPrograms, setBcbaObservedPrograms] = useState<string[]>([]);
+  const [bcbaObservedBehaviors, setBcbaObservedBehaviors] = useState<string[]>([]);
+  const [supervisionFocus, setSupervisionFocus] = useState<string[]>([]);
+  const [integrityPrompting, setIntegrityPrompting] = useState<string>('');
+  const [integrityReinforcement, setIntegrityReinforcement] = useState<string>('');
+  const [integrityBehaviorReduction, setIntegrityBehaviorReduction] = useState<string>('');
+  const [integrityDataCollection, setIntegrityDataCollection] = useState<string>('');
+  const [bcbaActionsNew, setBcbaActionsNew] = useState<string[]>([]);
+  const [feedbackToRbt, setFeedbackToRbt] = useState<string[]>([]);
+  const [clientResponseNew, setClientResponseNew] = useState<string[]>([]);
+  const [recommendations, setRecommendations] = useState<string[]>([]);
+  const [narrativeStyle, setNarrativeStyle] = useState<string>('Insurance-Friendly');
 
   // Clinical profile editing
   const [editingProfile, setEditingProfile] = useState(false);
@@ -268,6 +296,11 @@ export default function BCBAClientPage() {
       if (!res.ok) { setXpRbtContext({ empty: true }); return; }
       const json = await res.json();
       setXpRbtContext(json);
+      if (!json.empty) {
+        setRbtBehaviorsReported(Array.isArray(json.behaviors) ? json.behaviors : []);
+        setRbtInterventionsUsed(Array.isArray(json.interventions) ? json.interventions : []);
+        setRbtProgramsWorked(Array.isArray(json.skills) ? json.skills : []);
+      }
     } catch {
       setXpRbtContext({ empty: true });
     } finally {
@@ -280,8 +313,6 @@ export default function BCBAClientPage() {
     setXpGenError("");
     setXpGeneratedNote("");
     setXpSaved(false);
-    const bcbaActionsStr = [...xpBcbaActions.filter(a => a !== "Other"), xpBcbaActionsOther.trim()].filter(Boolean).join(", ");
-    const clientResponseStr = xpClientResponse !== "Other" ? xpClientResponse : xpClientResponseOther.trim();
     try {
       const res = await fetch("/api/bcba/generate-97153xp-note", {
         method: "POST",
@@ -291,9 +322,23 @@ export default function BCBAClientPage() {
           sessionDate: xpDate,
           location: xpLocation,
           rbtSessionContext: xpRbtContext,
-          bcbaActionsPerformed: bcbaActionsStr,
-          treatmentIntegrityConcerns: xpIntegrityConcerns,
-          clientResponseDuringOverlap: clientResponseStr,
+          rbtBehaviorsReported,
+          rbtInterventionsUsed,
+          rbtProgramsWorked,
+          bcbaObservedPrograms,
+          bcbaObservedBehaviors,
+          supervisionFocus,
+          integrityReview: {
+            prompting: integrityPrompting,
+            reinforcement: integrityReinforcement,
+            behaviorReduction: integrityBehaviorReduction,
+            dataCollection: integrityDataCollection,
+          },
+          bcbaActionsPerformed: bcbaActionsNew,
+          feedbackToRbt,
+          clientResponseDuringOverlap: clientResponseNew,
+          recommendations,
+          narrativeStyle,
         }),
       });
       if (!res.ok || !res.body) {
@@ -759,18 +804,19 @@ export default function BCBAClientPage() {
 
             {xpSubTab === "generate" && (
               <div className="space-y-5 max-w-[700px]">
-                <div className="bg-white rounded-xl border p-6 space-y-5" style={{ borderColor: "var(--border)" }}>
+                <div className="bg-white rounded-xl border p-6 space-y-8" style={{ borderColor: "var(--border)" }}>
                   <p className="text-[15px] font-semibold" style={{ color: "var(--text1)" }}>New 97153XP Note — BCBA Overlap / Implementation Support</p>
 
+                  {/* SECTION 1 — Session Information */}
                   <div>
-                    <SectionHeader title="Session Information" />
+                    <SectionHeader title="Section 1 — Session Information" />
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Date</label>
                         <input
                           type="date"
                           value={xpDate}
-                          onChange={e => { setXpDate(e.target.value); setXpRbtContext(null); fetchRbtSessionContext(e.target.value); }}
+                          onChange={e => { setXpDate(e.target.value); setXpRbtContext(null); setRbtBehaviorsReported([]); setRbtInterventionsUsed([]); setRbtProgramsWorked([]); fetchRbtSessionContext(e.target.value); }}
                           className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
                           style={{ borderColor: "var(--border)", color: "var(--text1)" }}
                         />
@@ -794,117 +840,285 @@ export default function BCBAClientPage() {
                     </div>
                   </div>
 
+                  {/* SECTION 2 — Shared Information (auto-populated from RBT) */}
                   <div>
-                    <SectionHeader title="RBT Session Context" />
-                    {xpContextLoading && (
-                      <p className="text-[13px]" style={{ color: "var(--text3)" }}>Loading RBT session data…</p>
-                    )}
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="text-[11px] uppercase tracking-widest font-semibold" style={{ color: "var(--text3)" }}>Section 2 — Shared Information</p>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#FEF3C7", color: "#92400E" }}>✦ Auto-filled</span>
+                    </div>
+                    <div className="flex-1 h-px mb-4" style={{ background: "var(--border)" }} />
+                    {xpContextLoading && <p className="text-[12px] mb-3" style={{ color: "var(--text3)" }}>Loading RBT session data…</p>}
                     {!xpContextLoading && xpRbtContext === null && (
-                      <button
-                        onClick={() => fetchRbtSessionContext(xpDate)}
-                        className="px-4 py-2 rounded-lg text-[13px] font-medium border transition-colors hover:border-gray-400"
-                        style={{ borderColor: "var(--border)", color: "var(--text2)" }}
-                      >
-                        Load RBT Session Data for {xpDate}
-                      </button>
+                      <p className="text-[12px] mb-3 px-3 py-2 rounded-lg" style={{ background: "#F9FAFB", color: "var(--text3)", border: "1px dashed var(--border)" }}>
+                        Select a date above to auto-fill from the RBT's session note
+                      </p>
                     )}
                     {!xpContextLoading && xpRbtContext?.empty && (
-                      <p className="text-[13px]" style={{ color: "var(--text3)" }}>No RBT session note found for this date.</p>
+                      <p className="text-[12px] mb-3" style={{ color: "var(--text3)" }}>No RBT session note found for this date — enter manually below.</p>
                     )}
-                    {!xpContextLoading && xpRbtContext && !xpRbtContext.empty && (
-                      <div className="px-4 py-3 rounded-xl border space-y-2" style={{ background: "rgba(27,168,160,0.04)", borderColor: "rgba(27,168,160,0.2)" }}>
-                        {xpRbtContext.behaviors && xpRbtContext.behaviors.length > 0 && (
-                          <p className="text-[12px]" style={{ color: "var(--text2)" }}>
-                            <span className="font-medium" style={{ color: "var(--teal)" }}>Behaviors: </span>{xpRbtContext.behaviors.join(", ")}
-                          </p>
-                        )}
-                        {xpRbtContext.skills && xpRbtContext.skills.length > 0 && (
-                          <p className="text-[12px]" style={{ color: "var(--text2)" }}>
-                            <span className="font-medium" style={{ color: "var(--teal)" }}>Skills: </span>{xpRbtContext.skills.join(", ")}
-                          </p>
-                        )}
-                        {xpRbtContext.interventions && xpRbtContext.interventions.length > 0 && (
-                          <p className="text-[12px]" style={{ color: "var(--text2)" }}>
-                            <span className="font-medium" style={{ color: "var(--teal)" }}>Interventions: </span>{xpRbtContext.interventions.join(", ")}
-                          </p>
-                        )}
-                        {xpRbtContext.activities && xpRbtContext.activities.length > 0 && (
-                          <p className="text-[12px]" style={{ color: "var(--text2)" }}>
-                            <span className="font-medium" style={{ color: "var(--teal)" }}>Activities: </span>{xpRbtContext.activities.join(", ")}
-                          </p>
-                        )}
+
+                    <div className="space-y-5">
+                      <div>
+                        <p className="text-[12px] font-medium mb-2" style={{ color: "var(--text2)" }}>Behaviors Reported by RBT</p>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                          {XP_BEHAVIORS.map(opt => (
+                            <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={rbtBehaviorsReported.includes(opt)}
+                                onChange={() => setRbtBehaviorsReported(prev => prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt])}
+                                className="flex-shrink-0"
+                                style={{ accentColor: "var(--teal)" }}
+                              />
+                              <span className="text-[13px]" style={{ color: "var(--text1)" }}>
+                                {opt}
+                                {rbtBehaviorsReported.includes(opt) && <span className="text-xs text-amber-400 ml-1">✦ Reported by RBT</span>}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
                       </div>
-                    )}
+                      <div>
+                        <p className="text-[12px] font-medium mb-2" style={{ color: "var(--text2)" }}>Interventions Used by RBT</p>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                          {XP_INTERVENTIONS.map(opt => (
+                            <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={rbtInterventionsUsed.includes(opt)}
+                                onChange={() => setRbtInterventionsUsed(prev => prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt])}
+                                className="flex-shrink-0"
+                                style={{ accentColor: "var(--teal)" }}
+                              />
+                              <span className="text-[13px]" style={{ color: "var(--text1)" }}>
+                                {opt}
+                                {rbtInterventionsUsed.includes(opt) && <span className="text-xs text-amber-400 ml-1">✦ Used by RBT</span>}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-medium mb-2" style={{ color: "var(--text2)" }}>Programs Worked on by RBT</p>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                          {XP_PROGRAMS.map(opt => (
+                            <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={rbtProgramsWorked.includes(opt)}
+                                onChange={() => setRbtProgramsWorked(prev => prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt])}
+                                className="flex-shrink-0"
+                                style={{ accentColor: "var(--teal)" }}
+                              />
+                              <span className="text-[13px]" style={{ color: "var(--text1)" }}>
+                                {opt}
+                                {rbtProgramsWorked.includes(opt) && <span className="text-xs text-amber-400 ml-1">✦ Worked on by RBT</span>}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
+                  {/* SECTION 3 — BCBA Observation */}
                   <div>
-                    <SectionHeader title="What BCBA Did During Overlap" />
+                    <SectionHeader title="Section 3 — BCBA Observation" />
+                    <div className="space-y-5">
+                      <div>
+                        <p className="text-[12px] font-medium mb-2" style={{ color: "var(--text2)" }}>Programs Observed</p>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                          {XP_PROGRAMS.map(opt => (
+                            <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={bcbaObservedPrograms.includes(opt)}
+                                onChange={() => setBcbaObservedPrograms(prev => prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt])}
+                                className="flex-shrink-0"
+                                style={{ accentColor: "var(--teal)" }}
+                              />
+                              <span className="text-[13px]" style={{ color: "var(--text1)" }}>
+                                {opt}
+                                {bcbaObservedPrograms.includes(opt) && <span className="text-xs text-teal-400 ml-1">✦ Observed by BCBA</span>}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-medium mb-2" style={{ color: "var(--text2)" }}>Behaviors Observed</p>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                          {XP_BEHAVIORS.map(opt => (
+                            <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={bcbaObservedBehaviors.includes(opt)}
+                                onChange={() => setBcbaObservedBehaviors(prev => prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt])}
+                                className="flex-shrink-0"
+                                style={{ accentColor: "var(--teal)" }}
+                              />
+                              <span className="text-[13px]" style={{ color: "var(--text1)" }}>
+                                {opt}
+                                {bcbaObservedBehaviors.includes(opt) && <span className="text-xs text-teal-400 ml-1">✦ Observed by BCBA</span>}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SECTION 4 — Supervision Focus */}
+                  <div>
+                    <SectionHeader title="Section 4 — Supervision Focus" />
+                    <p className="text-[12px] mb-3" style={{ color: "var(--text3)" }}>What did the BCBA specifically come to observe or address?</p>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                      {XP_BCBA_ACTIONS.map(opt => (
-                        <div key={opt}>
-                          <label className="flex items-start gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={xpBcbaActions.includes(opt)}
-                              onChange={() => setXpBcbaActions(prev => prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt])}
-                              className="mt-0.5 flex-shrink-0"
-                              style={{ accentColor: "var(--teal)" }}
-                            />
-                            <span className="text-[13px]" style={{ color: "var(--text1)" }}>{opt}</span>
-                          </label>
-                          {opt === "Other" && xpBcbaActions.includes("Other") && (
-                            <input
-                              type="text"
-                              value={xpBcbaActionsOther}
-                              onChange={e => setXpBcbaActionsOther(e.target.value)}
-                              placeholder="Specify…"
-                              className="mt-1.5 ml-5 w-[calc(100%-1.25rem)] border rounded-lg px-3 py-1.5 text-[12px] focus:outline-none"
-                              style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-                            />
-                          )}
+                      {XP_SUPERVISION_FOCUS.map(opt => (
+                        <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={supervisionFocus.includes(opt)}
+                            onChange={() => setSupervisionFocus(prev => prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt])}
+                            className="flex-shrink-0"
+                            style={{ accentColor: "var(--teal)" }}
+                          />
+                          <span className="text-[13px]" style={{ color: "var(--text1)" }}>{opt}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* SECTION 5 — Treatment Integrity Review */}
+                  <div>
+                    <SectionHeader title="Section 5 — Treatment Integrity Review" />
+                    <div className="space-y-3">
+                      {[
+                        { label: "Prompting Procedures", value: integrityPrompting, set: setIntegrityPrompting },
+                        { label: "Reinforcement Procedures", value: integrityReinforcement, set: setIntegrityReinforcement },
+                        { label: "Behavior Reduction Procedures", value: integrityBehaviorReduction, set: setIntegrityBehaviorReduction },
+                        { label: "Data Collection", value: integrityDataCollection, set: setIntegrityDataCollection },
+                      ].map(({ label, value, set }) => (
+                        <div key={label} className="flex items-center gap-4">
+                          <span className="text-[13px] w-52 flex-shrink-0" style={{ color: "var(--text1)" }}>{label}</span>
+                          <div className="flex gap-2">
+                            {XP_INTEGRITY_OPTIONS.map(opt => (
+                              <button
+                                key={opt}
+                                type="button"
+                                onClick={() => set(value === opt ? '' : opt)}
+                                className="px-3 py-1.5 rounded-lg border text-[11px] font-medium transition-colors"
+                                style={{
+                                  background: value === opt ? (opt === "Needs Improvement" ? "#FEF3C7" : opt === "Meets Expectations" ? "#DCFCE7" : "var(--teal-light)") : "white",
+                                  borderColor: value === opt ? (opt === "Needs Improvement" ? "#F59E0B" : opt === "Meets Expectations" ? "#16A34A" : "var(--teal)") : "var(--border)",
+                                  color: value === opt ? (opt === "Needs Improvement" ? "#92400E" : opt === "Meets Expectations" ? "#15803D" : "var(--teal)") : "var(--text3)",
+                                }}
+                              >
+                                {opt}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       ))}
                     </div>
                   </div>
 
+                  {/* SECTION 6 — BCBA Actions Performed */}
                   <div>
-                    <SectionHeader title="Treatment Integrity Concerns (Optional)" />
-                    <textarea
-                      value={xpIntegrityConcerns}
-                      onChange={e => setXpIntegrityConcerns(e.target.value)}
-                      placeholder="Describe any treatment integrity concerns observed during the overlap session…"
-                      className="w-full border rounded-xl px-4 py-3 text-[13px] resize-none focus:outline-none"
-                      style={{ borderColor: "var(--border)", color: "var(--text1)", minHeight: 80 }}
-                    />
+                    <SectionHeader title="Section 6 — BCBA Actions Performed" />
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                      {XP_BCBA_ACTIONS_NEW.map(opt => (
+                        <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={bcbaActionsNew.includes(opt)}
+                            onChange={() => setBcbaActionsNew(prev => prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt])}
+                            className="flex-shrink-0"
+                            style={{ accentColor: "var(--teal)" }}
+                          />
+                          <span className="text-[13px]" style={{ color: "var(--text1)" }}>{opt}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
 
+                  {/* SECTION 7 — Feedback Provided to RBT */}
                   <div>
-                    <SectionHeader title="Client Response During Overlap" />
+                    <SectionHeader title="Section 7 — Feedback Provided to RBT" />
                     <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                      {XP_CLIENT_RESPONSE_OPTIONS.map(opt => (
-                        <div key={opt}>
-                          <label className="flex items-start gap-2 cursor-pointer">
-                            <input
-                              type="radio"
-                              name="xpClientResponse"
-                              checked={xpClientResponse === opt}
-                              onChange={() => setXpClientResponse(opt)}
-                              className="mt-0.5 flex-shrink-0"
-                              style={{ accentColor: "var(--teal)" }}
-                            />
-                            <span className="text-[13px]" style={{ color: "var(--text1)" }}>{opt}</span>
-                          </label>
-                          {opt === "Other" && xpClientResponse === "Other" && (
-                            <input
-                              type="text"
-                              value={xpClientResponseOther}
-                              onChange={e => setXpClientResponseOther(e.target.value)}
-                              placeholder="Specify…"
-                              className="mt-1.5 ml-5 w-[calc(100%-1.25rem)] border rounded-lg px-3 py-1.5 text-[12px] focus:outline-none"
-                              style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-                            />
-                          )}
-                        </div>
+                      {XP_FEEDBACK_TO_RBT.map(opt => (
+                        <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={feedbackToRbt.includes(opt)}
+                            onChange={() => setFeedbackToRbt(prev => prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt])}
+                            className="flex-shrink-0"
+                            style={{ accentColor: "var(--teal)" }}
+                          />
+                          <span className="text-[13px]" style={{ color: "var(--text1)" }}>{opt}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* SECTION 8 — Client Response During Overlap */}
+                  <div>
+                    <SectionHeader title="Section 8 — Client Response During Overlap" />
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                      {XP_CLIENT_RESPONSE_NEW.map(opt => (
+                        <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={clientResponseNew.includes(opt)}
+                            onChange={() => setClientResponseNew(prev => prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt])}
+                            className="flex-shrink-0"
+                            style={{ accentColor: "var(--teal)" }}
+                          />
+                          <span className="text-[13px]" style={{ color: "var(--text1)" }}>{opt}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* SECTION 9 — Recommendations */}
+                  <div>
+                    <SectionHeader title="Section 9 — Recommendations" />
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                      {XP_RECOMMENDATIONS.map(opt => (
+                        <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={recommendations.includes(opt)}
+                            onChange={() => setRecommendations(prev => prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt])}
+                            className="flex-shrink-0"
+                            style={{ accentColor: "var(--teal)" }}
+                          />
+                          <span className="text-[13px]" style={{ color: "var(--text1)" }}>
+                            {opt}
+                            {recommendations.includes(opt) && <span className="text-xs text-teal-400 ml-1">✦ Recommended by BCBA</span>}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* SECTION 10 — Notes Generator Settings */}
+                  <div>
+                    <SectionHeader title="Section 10 — Notes Generator Settings" />
+                    <div className="flex flex-wrap gap-2">
+                      {XP_NARRATIVE_STYLES.map(opt => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => setNarrativeStyle(opt)}
+                          className="px-4 py-2 rounded-xl border text-[12px] font-medium transition-colors"
+                          style={{
+                            background: narrativeStyle === opt ? "var(--teal)" : "white",
+                            borderColor: narrativeStyle === opt ? "var(--teal)" : "var(--border)",
+                            color: narrativeStyle === opt ? "white" : "var(--text2)",
+                          }}
+                        >
+                          {opt}
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -917,7 +1131,7 @@ export default function BCBAClientPage() {
 
                   <button
                     onClick={handleGenerate97153XP}
-                    disabled={!xpDate || !xpLocation || xpBcbaActions.length === 0 || !xpClientResponse || xpGenerating}
+                    disabled={!xpDate || !xpLocation || bcbaActionsNew.length === 0 || clientResponseNew.length === 0 || xpGenerating}
                     className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{ background: "var(--teal)" }}
                   >
@@ -926,7 +1140,7 @@ export default function BCBAClientPage() {
                     </svg>
                     {xpGenerating ? "Generating…" : "Generate 97153XP Note"}
                   </button>
-                  {(!xpDate || !xpLocation || xpBcbaActions.length === 0 || !xpClientResponse) && !xpGenerating && (
+                  {(!xpDate || !xpLocation || bcbaActionsNew.length === 0 || clientResponseNew.length === 0) && !xpGenerating && (
                     <p className="text-[12px]" style={{ color: "var(--text3)" }}>
                       Complete: date, location, at least one BCBA action, and client response.
                     </p>
