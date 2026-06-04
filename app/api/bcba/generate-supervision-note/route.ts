@@ -14,27 +14,45 @@ export async function POST(request: Request) {
   let body: {
     clientId?: string
     sessionDate?: string
-    timeRange?: string
     location?: string
-    supervisorName?: string
-    rbtName?: string
-    contactType?: 'individual_supervision' | 'group_supervision' | 'client_observation'
-    supervisionDetails?: {
-      behaviorsObservedDuringVisit: string[]
-      protocolModificationsMade: string
-      feedbackProvidedToRBT: string
-      rbtPerformanceNotes: string
-      clinicalDecisionsMade: string
-      nextSteps: string
+    contactType?: string
+    // Individual / client observation fields
+    reason97155?: string[]
+    dataReviewed?: string[]
+    programsReviewed?: {
+      maladaptive: string[]
+      replacement: string[]
+      skillAcquisition: string[]
+      manual?: string
+    }
+    clinicalFindings?: string[]
+    protocolModifications?: string[]
+    clinicalRationale?: string
+    expectedOutcome?: string
+    clientResponse?: string[]
+    followUpPlan?: string[]
+    // Group supervision fields
+    groupSupervision?: {
+      participantCount: number
+      topicsReviewed: string[]
+      clinicalTrends: string
+      recommendations: string
+      followUpPlan: string[]
     }
   }
   try { body = await request.json() } catch {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { clientId, sessionDate, timeRange, location, supervisorName, rbtName, contactType, supervisionDetails } = body
+  const {
+    clientId, sessionDate, location, contactType,
+    reason97155, dataReviewed, programsReviewed,
+    clinicalFindings, protocolModifications, clinicalRationale,
+    expectedOutcome, clientResponse, followUpPlan,
+    groupSupervision,
+  } = body
 
-  if (!clientId || !sessionDate || !contactType || !supervisionDetails) {
+  if (!clientId || !sessionDate || !contactType) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
@@ -50,14 +68,20 @@ export async function POST(request: Request) {
   const supervisionInput = {
     sessionInfo: {
       date: sessionDate,
-      timeRange: timeRange || '',
       location: location || '',
-      supervisorName: supervisorName || '',
-      rbtName: rbtName || '',
-      contactType,
+      contactType: contactType || 'individual_supervision',
     },
     clientId,
-    supervisionDetails,
+    reason97155: reason97155 || [],
+    dataReviewed: dataReviewed || [],
+    programsReviewed: programsReviewed || { maladaptive: [], replacement: [], skillAcquisition: [] },
+    clinicalFindings: clinicalFindings || [],
+    protocolModifications: protocolModifications || [],
+    clinicalRationale: clinicalRationale || '',
+    expectedOutcome: expectedOutcome || '',
+    clientResponse: clientResponse || [],
+    followUpPlan: followUpPlan || [],
+    groupSupervision,
   }
 
   const encoder = new TextEncoder()

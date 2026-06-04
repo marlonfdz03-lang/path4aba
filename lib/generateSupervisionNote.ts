@@ -12,20 +12,30 @@ const openai = new OpenAI({
 export interface SupervisionNoteInput {
   sessionInfo: {
     date: string
-    timeRange: string
     location: string
-    supervisorName: string
-    rbtName: string
-    contactType: 'individual_supervision' | 'group_supervision' | 'client_observation'
+    contactType: string
   }
   clientId: string
-  supervisionDetails: {
-    behaviorsObservedDuringVisit: string[]
-    protocolModificationsMade: string
-    feedbackProvidedToRBT: string
-    rbtPerformanceNotes: string
-    clinicalDecisionsMade: string
-    nextSteps: string
+  reason97155?: string[]
+  dataReviewed?: string[]
+  programsReviewed?: {
+    maladaptive: string[]
+    replacement: string[]
+    skillAcquisition: string[]
+    manual?: string
+  }
+  clinicalFindings?: string[]
+  protocolModifications?: string[]
+  clinicalRationale?: string
+  expectedOutcome?: string
+  clientResponse?: string[]
+  followUpPlan?: string[]
+  groupSupervision?: {
+    participantCount: number
+    topicsReviewed: string[]
+    clinicalTrends: string
+    recommendations: string
+    followUpPlan: string[]
   }
   clientProfile?: {
     diagnosis: string[]
@@ -58,14 +68,13 @@ function buildContactTypeSection(contactType: string): string {
   if (contactType === 'group_supervision') {
     return (
       `\n\n═══════════════════════════════════════\n` +
-      `CONTACT TYPE CONTEXT: GROUP SUPERVISION\n` +
+      `GROUP SUPERVISION RULES — BINDING CONSTRAINTS\n` +
       `═══════════════════════════════════════\n\n` +
-      `This was a GROUP supervision contact. The note must:\n` +
-      `- State explicitly that this was a group supervision format\n` +
-      `- Note that up to 10 trainees may participate per BACB supervision requirements\n` +
-      `- Document group dynamics where clinically relevant (e.g., peer modeling opportunities, group-delivered feedback)\n` +
-      `- Include at least one observation directed at a specific trainee's performance (refer to as "the RBT" not by name)\n` +
-      `- Do NOT describe this as individual supervision — the group format must be explicit in the note`
+      `- NEVER reference a specific client in this note\n` +
+      `- NEVER include individual client data, behaviors, or programs\n` +
+      `- Document only general clinical topics, trends, and recommendations\n` +
+      `- Must state the number of participants and that this was a group supervision format\n` +
+      `- The note must read as a group-level clinical contact, not individual supervision`
     )
   }
   if (contactType === 'client_observation') {
@@ -73,75 +82,118 @@ function buildContactTypeSection(contactType: string): string {
       `\n\n═══════════════════════════════════════\n` +
       `CONTACT TYPE CONTEXT: CLIENT OBSERVATION\n` +
       `═══════════════════════════════════════\n\n` +
-      `This was a direct CLIENT OBSERVATION contact — the BCBA was physically present and directly observed the RBT working with the client in the natural environment. The note must:\n` +
-      `- State prominently that the BCBA was present in the natural environment and directly observed RBT-client interaction (not via recording or data review)\n` +
-      `- Justify this contact per BACB observation requirements: direct in-vivo observation to assess treatment fidelity and client responsiveness in the natural environment\n` +
-      `- Document real-time or immediately post-session feedback delivered to the RBT based on direct observation\n` +
-      `- Reference at least one specific client behavior observed by the BCBA during the visit and how the RBT responded to it\n` +
-      `- This is the most intensive form of supervisory contact — the clinical depth and specificity must reflect that`
+      `This was a direct CLIENT OBSERVATION contact — the BCBA was physically present and directly observed the session. The note must:\n` +
+      `- State prominently that the BCBA was present and directly observed the session\n` +
+      `- Justify this contact per BACB observation requirements: direct in-vivo observation to assess treatment fidelity\n` +
+      `- Reference at least one specific client behavior observed and how the modified procedure was applied\n` +
+      `- Include the client response to the modified procedure`
     )
   }
-  // individual_supervision is the default — no extra section needed
   return ''
 }
 
 export async function generateSupervisionNote(input: SupervisionNoteInput, onChunk?: (text: string) => void): Promise<GeneratedSupervisionNote> {
-  // Step 1: Resolve client profile
-  let resolvedProfile: NonNullable<SupervisionNoteInput['clientProfile']>
-
-  if (input.clientProfile) {
-    resolvedProfile = input.clientProfile
-  } else {
+  // Resolve client profile for context (not injected into prompt — programs come from frontend checkboxes)
+  if (!input.clientProfile) {
     const client = await prisma.clients.findUnique({ where: { id: input.clientId } })
     if (!client) throw new Error(`Client not found: ${input.clientId}`)
-
     const raw = client.clinical_profile as any
-    resolvedProfile = {
-      diagnosis: (client.diagnosis as unknown as string[]) || [],
+    input.clientProfile = {
+      diagnosis: Array.isArray(raw?.diagnosis) ? raw.diagnosis : [],
       setting: client.primary_setting || '',
-      approvedInterventions: raw?.approvedInterventions || [],
+      approvedInterventions: (raw?.interventions || []).map((i: any) => typeof i === 'string' ? i : i?.name || '').filter(Boolean),
       activePrograms: {
-        maladaptive: raw?.activePrograms?.maladaptive || [],
-        replacementSkills: raw?.activePrograms?.replacementSkills || [],
+        maladaptive: (raw?.maladaptiveBehaviors || []).map((b: any) => typeof b === 'string' ? b : b?.name || '').filter(Boolean),
+        replacementSkills: [
+          ...(raw?.replacementBehaviors || []).map((s: any) => typeof s === 'string' ? s : s?.name || '').filter(Boolean),
+          ...(raw?.skillAcquisition || []).map((s: any) => typeof s === 'string' ? s : s?.name || '').filter(Boolean),
+        ],
       },
     }
   }
 
-  // Step 2: Build structured context (no client name, DOB, or identifying info)
-  const sessionContext = {
-    sessionInfo: input.sessionInfo,
-    clientProfile: resolvedProfile,
-    supervisionDetails: input.supervisionDetails,
-  }
-
-  // Step 3: Fetch note history for similarity check
+  // Fetch note history for similarity check
   const previousNotes = await prisma.supervision_notes.findMany({
     where: { client_id: input.clientId },
     select: { note_text: true },
     orderBy: { created_at: 'desc' },
   })
+  const previousTexts = previousNotes.map(r => r.note_text as string).filter(Boolean)
 
-  const previousTexts = previousNotes
-    .map((r) => r.note_text as string)
-    .filter(Boolean)
-
-  // Step 4: Build system prompt with contact-type dynamic section
+  // Build system prompt
   const contactTypeSection = buildContactTypeSection(input.sessionInfo.contactType)
   const systemPrompt = MASTER_SUPERVISION_PROMPT + contactTypeSection
 
-  const userPrompt =
-    `Generate a clinical BCBA supervision note (97155) using this session data:\n\n` +
-    `${JSON.stringify(sessionContext, null, 2)}\n\n` +
-    `Remember: ONE continuous paragraph, 350–500 words, BCBA supervisor perspective only, ` +
-    `all five mandatory content elements present, explicit protocol modification with clinical rationale, ` +
-    `no client identifying information.`
+  // Build user prompt based on contact type
+  let userPrompt: string
+
+  if (input.sessionInfo.contactType === 'group_supervision' && input.groupSupervision) {
+    userPrompt = `Generate a 97155 Group Supervision note for:
+Date: ${input.sessionInfo.date}
+Location: ${input.sessionInfo.location}
+Contact Type: Group Supervision
+Number of Participants: ${input.groupSupervision.participantCount}
+
+--- TOPICS REVIEWED ---
+${input.groupSupervision.topicsReviewed.join(', ')}
+
+--- GENERAL CLINICAL TRENDS DISCUSSED ---
+${input.groupSupervision.clinicalTrends}
+
+--- GENERAL RECOMMENDATIONS ---
+${input.groupSupervision.recommendations || 'Not specified'}
+
+--- FOLLOW-UP PLAN ---
+${input.groupSupervision.followUpPlan.join(', ') || 'Continue monitoring'}
+
+Write the note now. 300–500 words, one paragraph, third person.
+Do NOT reference any specific client. Document general clinical topics only.
+State explicitly that this was a group supervision contact and include the number of participants.`
+  } else {
+    userPrompt = `Generate a 97155 clinical note for:
+Date: ${input.sessionInfo.date}
+Location: ${input.sessionInfo.location}
+Contact Type: ${input.sessionInfo.contactType}
+
+--- REASON FOR BCBA CLINICAL INVOLVEMENT ---
+${input.reason97155?.join(', ') || 'Not specified'}
+
+--- DATA REVIEWED ---
+${input.dataReviewed?.join(', ') || 'Not specified'}
+
+--- PROGRAMS / BEHAVIORS REVIEWED ---
+Maladaptive behaviors: ${input.programsReviewed?.maladaptive?.join(', ') || 'None selected'}
+Replacement programs: ${input.programsReviewed?.replacement?.join(', ') || 'None selected'}
+Skill acquisition: ${input.programsReviewed?.skillAcquisition?.join(', ') || 'None selected'}
+${input.programsReviewed?.manual ? `Additional: ${input.programsReviewed.manual}` : ''}
+
+--- CLINICAL FINDINGS ---
+${input.clinicalFindings?.join(', ') || 'Not specified'}
+
+--- PROTOCOL MODIFICATION MADE ---
+${input.protocolModifications?.join(', ') || 'Not specified'}
+
+--- CLINICAL RATIONALE ---
+${input.clinicalRationale || 'Not provided'}
+
+--- EXPECTED OUTCOME ---
+${input.expectedOutcome || 'Not provided'}
+
+--- CLIENT RESPONSE ---
+${input.clientResponse?.join(', ') || 'Not observed'}
+
+--- FOLLOW-UP PLAN ---
+${input.followUpPlan?.join(', ') || 'Continue monitoring'}
+
+Write the note now. 300–500 words, one paragraph, third person, objective ABA language. Answer all required questions.`
+  }
 
   async function callOpenAI(sysContent: string): Promise<string> {
     if (onChunk) {
       const stream = await openai.chat.completions.create({
         model: 'gpt-4o',
         temperature: 0.4,
-        max_tokens: 1000,
+        max_tokens: 1200,
         stream: true,
         messages: [
           { role: 'system', content: sysContent },
@@ -158,7 +210,7 @@ export async function generateSupervisionNote(input: SupervisionNoteInput, onChu
     const resp = await openai.chat.completions.create({
       model: 'gpt-4o',
       temperature: 0.4,
-      max_tokens: 1000,
+      max_tokens: 1200,
       messages: [
         { role: 'system', content: sysContent },
         { role: 'user', content: userPrompt },
@@ -169,7 +221,7 @@ export async function generateSupervisionNote(input: SupervisionNoteInput, onChu
 
   let note = await callOpenAI(systemPrompt)
 
-  // Step 5: Similarity check
+  // Similarity check
   let similarityWarning = false
   if (previousTexts.length > 0) {
     const tooSimilar = previousTexts.some(prev => calculateSimilarity(note, prev) > 0.60)
@@ -177,8 +229,8 @@ export async function generateSupervisionNote(input: SupervisionNoteInput, onChu
       if (onChunk) onChunk('\n__REGEN__\n')
       const variationInstruction =
         `\n\nIMPORTANT: This supervision note is too similar to a previous one for this client. ` +
-        `Use completely different sentence starters, vary the clinical observations, feedback examples, ` +
-        `fidelity findings, and protocol modification rationale significantly. ` +
+        `Use completely different sentence starters, vary the clinical findings, rationale, ` +
+        `and modification language significantly. ` +
         `The note must read as a distinctly different supervision contact.`
       note = await callOpenAI(systemPrompt + variationInstruction)
       const stillTooSimilar = previousTexts.some(prev => calculateSimilarity(note, prev) > 0.60)
