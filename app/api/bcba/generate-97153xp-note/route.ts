@@ -121,7 +121,7 @@ export async function POST(request: Request) {
               bcba_id: userId,
               session_date: sessionDate,
               note_text: fullNote,
-              rbt_session_context: rbtSessionContext || undefined,
+              rbt_session_context: (rbtSessionContext || undefined) as any,
             },
             select: { id: true },
           })
