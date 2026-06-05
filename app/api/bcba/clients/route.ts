@@ -36,8 +36,16 @@ export async function GET() {
 
   const clientMap = new Map(clientRows.map(c => [c.id, c]))
 
-  const clients = rows.map(row => {
+  const clients = await Promise.all(rows.map(async row => {
     const clientRow = clientMap.get(row.client_id)
+    const [maladaptiveAnomalies, replacementAnomalies] = await Promise.all([
+      prisma.maladaptive_data.count({
+        where: { client_id: row.client_id, is_anomaly: true, anomaly_reviewed: false },
+      }),
+      prisma.replacement_data.count({
+        where: { client_id: row.client_id, is_anomaly: true, anomaly_reviewed: false },
+      }),
+    ])
     return {
       id: row.client_id,
       client_name: (clientRow?.clinical_profile as any)?.name || clientRow?.internal_code || 'Unknown Client',
@@ -46,8 +54,9 @@ export async function GET() {
         : [],
       connected_at: row.connected_at,
       rbt_id: row.rbt_id,
+      anomalyCount: maladaptiveAnomalies + replacementAnomalies,
     }
-  })
+  }))
 
   return NextResponse.json({ clients, data_tab_enabled: user.data_tab_enabled })
 }

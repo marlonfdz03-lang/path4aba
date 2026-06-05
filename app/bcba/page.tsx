@@ -13,6 +13,7 @@ interface BCBAClient {
   diagnosis: string[];
   connected_at: string;
   rbt_id: string;
+  anomalyCount?: number;
 }
 
 function Topbar({ onConnect }: { onConnect: () => void }) {
@@ -111,7 +112,7 @@ function ClientCard({ client, index }: { client: BCBAClient; index: number }) {
     <Link href={`/bcba/${client.id}`}>
       <div
         className="bg-white flex flex-col transition-all cursor-pointer"
-        style={{ border: "1px solid #E2E8F0", borderRadius: 10, overflow: "hidden" }}
+        style={{ border: "1px solid #E2E8F0", borderRadius: 10, overflow: "hidden", position: "relative" }}
         onMouseEnter={(e) => {
           (e.currentTarget as HTMLElement).style.borderColor = "#24BDB4";
           (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 3px rgba(36,189,180,0.12)";
@@ -122,6 +123,21 @@ function ClientCard({ client, index }: { client: BCBAClient; index: number }) {
         }}
       >
         <div style={{ height: 3, background: "linear-gradient(90deg, #1BA8A0, #4AB5E3)" }} />
+        {(client.anomalyCount ?? 0) > 0 && (
+          <span style={{
+            background: "#EF4444",
+            color: "white",
+            borderRadius: "9999px",
+            fontSize: "11px",
+            fontWeight: 700,
+            padding: "2px 7px",
+            position: "absolute",
+            top: "12px",
+            right: "12px",
+          }}>
+            ⚠ {client.anomalyCount}
+          </span>
+        )}
         <div className="p-5">
           <div className="flex items-start gap-3 mb-3">
             <div
