@@ -222,6 +222,13 @@ function mapToLegacyFormat(extracted: ExtractedAssessment) {
       .map(cleanText),
     homeActivities: [],
     schoolActivities: [],
+    parentTrainingGoals: extracted.parentTrainingGoals ||
+                         (extracted as any).caregiverTrainingGoals ||
+                         (extracted as any).familyTrainingGoals ||
+                         (extracted as any).parentEducationGoals ||
+                         (extracted as any).caregiverObjectives || [],
+    diagnosis: extracted.diagnosis || [],
+    caregivers: extracted.caregivers || [],
   };
 }
 

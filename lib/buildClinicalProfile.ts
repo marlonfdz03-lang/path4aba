@@ -85,6 +85,8 @@ export function buildClinicalProfile(rawData: any): ClinicalProfile {
       rawData.parentTrainingGoals ||
       rawData.caregiverTrainingGoals ||
       rawData.familyTrainingGoals ||
+      rawData.parentEducationGoals ||
+      rawData.caregiverObjectives ||
       []
     ),
   };

@@ -560,10 +560,17 @@ export default function BCBAClientPage() {
 
               /* Read mode */
               <div>
-                <div className="flex justify-end mb-4">
+                <div className="flex items-center justify-end gap-2 mb-4">
                   {profileSaved && (
-                    <span className="mr-3 text-[13px] font-medium" style={{ color: "#16A34A" }}>Saved ✓</span>
+                    <span className="mr-1 text-[13px] font-medium" style={{ color: "#16A34A" }}>Saved ✓</span>
                   )}
+                  <Link
+                    href={`/upload-assessment?clientId=${clientId}`}
+                    className="px-4 py-2 rounded-lg text-[13px] font-semibold border hover:opacity-80 transition-opacity"
+                    style={{ borderColor: "var(--teal)", color: "var(--teal)", background: "white" }}
+                  >
+                    Upload / Update Assessment
+                  </Link>
                   <button
                     onClick={enterEditMode}
                     className="px-4 py-2 rounded-lg text-[13px] font-semibold text-white hover:opacity-90 transition-opacity"

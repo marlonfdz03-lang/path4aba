@@ -41,6 +41,7 @@ export interface ExtractedAssessment {
   caregivers: string[];
   medications: string[];
   setting_details: string;
+  parentTrainingGoals: string[];
 }
 
 function stripIdentifiers(data: ExtractedAssessment): ExtractedAssessment {
@@ -167,7 +168,8 @@ Return this exact JSON structure:
   "nonPreferredActivities": ["all activities listed as non-preferred or avoided"],
   "caregivers": ["names of caregivers, parents, or guardians"],
   "medications": ["list of medications"],
-  "setting_details": "detailed description of home/school environment and routine with client name replaced by 'the client'"
+  "setting_details": "detailed description of home/school environment and routine with client name replaced by 'the client'",
+  "parentTrainingGoals": ["Parent or caregiver training goals listed in the assessment. Look for sections labeled: Parent Training Goals, Caregiver Training Objectives, Family Training Goals, Parent Education Goals, Caregiver Skill Building Goals, Caregiver Objectives, Caregiver Training Goals."]
 }`
       },
       {
