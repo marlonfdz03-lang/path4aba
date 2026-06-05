@@ -14,7 +14,10 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: "Path4ABA",
   description: "Clinical Intelligence for ABA",
-  icons: { icon: "/logo.png" },
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({
