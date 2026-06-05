@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -19,7 +19,7 @@ function SectionHeader({ title, count }: { title: string; count?: number }) {
   );
 }
 
-export default function UploadAssessmentPage() {
+function UploadAssessmentContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -333,5 +333,17 @@ export default function UploadAssessmentPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function UploadAssessmentPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)" }}>
+        <p className="text-[13px]" style={{ color: "var(--text3)" }}>Loading...</p>
+      </div>
+    }>
+      <UploadAssessmentContent />
+    </Suspense>
   );
 }
