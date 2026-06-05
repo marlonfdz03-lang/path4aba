@@ -52,6 +52,13 @@ export const proxy = auth(function proxy(req: NextRequest & { auth: any }) {
   if (!isLoggedIn && !isPublic) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
+
+  if (isLoggedIn && pathname.startsWith('/admin')) {
+    const role = (req.auth as any)?.user?.role
+    if (role !== 'admin') {
+      return NextResponse.redirect(new URL('/clients', req.url))
+    }
+  }
 })
 
 export const config = {
