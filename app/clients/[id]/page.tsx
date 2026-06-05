@@ -666,6 +666,13 @@ export default function ClientProfilePage() {
                 </svg>
                 {generatingCode ? "Generating…" : "Share with BCBA"}
               </button>
+              <Link
+                href={`/clients/${client.id}/progress-report`}
+                className="px-4 py-2 rounded-xl border text-[13px] font-medium"
+                style={{ borderColor: "var(--teal)", color: "var(--teal)" }}
+              >
+                Progress Report
+              </Link>
             </div>
             {shareError && <p className="text-[12px] text-red-500 mt-1">{shareError}</p>}
           </div>
