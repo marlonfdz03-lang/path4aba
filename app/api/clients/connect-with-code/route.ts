@@ -90,7 +90,7 @@ export async function POST(request: Request) {
   const client = clientRow ? {
     id: clientRow.id,
     client_name: (clientRow.clinical_profile as any)?.name || clientRow.internal_code || 'Unknown Client',
-    diagnosis: (clientRow.clinical_profile as any)?.maladaptiveBehaviors?.map((b: any) => b.name).slice(0, 2) || [],
+    diagnosis: (clientRow.clinical_profile as any)?.diagnosis || [],
     connected_at: connectedAt.toISOString(),
     rbt_id: accessCode.rbt_id,
   } : null

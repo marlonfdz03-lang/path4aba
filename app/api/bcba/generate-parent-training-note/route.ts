@@ -14,30 +14,37 @@ export async function POST(request: Request) {
   let body: {
     clientId?: string
     sessionDate?: string
-    timeRange?: string
     location?: string
-    bcbaName?: string
     caregiverName?: string
     caregiverRelation?: string
-    sessionDetails?: {
-      behaviorsObservedDuringSession: string[]
-      proceduresTrainedToday: string[]
-      whatBCBAModeled: string
-      caregiverPracticeDescription: string
-      feedbackProvided: string
-      caregiverOutcome: string
-      generalizationTopicsDiscussed: string
-      nextSessionGoals: string
-      clientPresent?: string
-    }
+    participantsPresent?: string[]
+    clientPresent?: 'yes' | 'no' | 'partial' | ''
+    trainingTopics?: string[]
+    parentTrainingGoals?: string[]
+    manualPTGoal?: string
+    proceduresTrained?: string[]
+    bstComponents?: string[]
+    caregiverPerformance?: string
+    didNotPracticeReason?: string
+    feedbackProvided?: string[]
+    clientResponse?: string[]
+    barriersIdentified?: string[]
+    homeImplementationPlan?: string
+    followUpPlan?: string[]
   }
   try { body = await request.json() } catch {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { clientId, sessionDate, timeRange, location, bcbaName, caregiverName, caregiverRelation, sessionDetails } = body
+  const {
+    clientId, sessionDate, location, caregiverName, caregiverRelation,
+    clientPresent, trainingTopics, parentTrainingGoals, manualPTGoal,
+    proceduresTrained, bstComponents, caregiverPerformance, didNotPracticeReason,
+    feedbackProvided, clientResponse, barriersIdentified,
+    homeImplementationPlan, followUpPlan,
+  } = body
 
-  if (!clientId || !sessionDate || !caregiverName || !sessionDetails) {
+  if (!clientId || !sessionDate || !caregiverName) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
@@ -53,14 +60,24 @@ export async function POST(request: Request) {
   const parentTrainingInput = {
     sessionInfo: {
       date: sessionDate,
-      timeRange: timeRange || '',
       location: location || '',
-      bcbaName: bcbaName || '',
-      caregiverName,
+      caregiverName: caregiverName,
       caregiverRelation: caregiverRelation || '',
     },
     clientId,
-    sessionDetails,
+    clientPresent: clientPresent || '' as 'yes' | 'no' | 'partial' | '',
+    trainingTopics: trainingTopics || [],
+    parentTrainingGoals: parentTrainingGoals || [],
+    manualPTGoal: manualPTGoal || '',
+    proceduresTrained: proceduresTrained || [],
+    bstComponents: bstComponents || [],
+    caregiverPerformance: caregiverPerformance || '',
+    didNotPracticeReason: didNotPracticeReason || '',
+    feedbackProvided: feedbackProvided || [],
+    clientResponse: clientResponse || [],
+    barriersIdentified: barriersIdentified || [],
+    homeImplementationPlan: homeImplementationPlan || '',
+    followUpPlan: followUpPlan || [],
   }
 
   const encoder = new TextEncoder()

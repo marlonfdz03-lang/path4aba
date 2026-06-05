@@ -12,24 +12,25 @@ const openai = new OpenAI({
 export interface ParentTrainingNoteInput {
   sessionInfo: {
     date: string
-    timeRange: string
     location: string
-    bcbaName: string
+    bcbaName?: string
     caregiverName: string
     caregiverRelation: string
   }
   clientId: string
-  sessionDetails: {
-    behaviorsObservedDuringSession: string[]
-    proceduresTrainedToday: string[]
-    whatBCBAModeled: string
-    caregiverPracticeDescription: string
-    feedbackProvided: string
-    caregiverOutcome: string
-    generalizationTopicsDiscussed: string
-    nextSessionGoals: string
-    clientPresent?: string
-  }
+  clientPresent: 'yes' | 'no' | 'partial' | ''
+  trainingTopics?: string[]
+  parentTrainingGoals?: string[]
+  manualPTGoal?: string
+  proceduresTrained?: string[]
+  bstComponents?: string[]
+  caregiverPerformance?: string
+  didNotPracticeReason?: string
+  feedbackProvided?: string[]
+  clientResponse?: string[]
+  barriersIdentified?: string[]
+  homeImplementationPlan?: string
+  followUpPlan?: string[]
   clientProfile?: {
     diagnosis: string[]
     setting: string
@@ -38,7 +39,6 @@ export interface ParentTrainingNoteInput {
       maladaptive: string[]
       replacementSkills: string[]
     }
-    caregiverTrainingGoals: string[]
   }
 }
 
@@ -59,64 +59,81 @@ function calculateSimilarity(text1: string, text2: string): number {
 }
 
 export async function generateParentTrainingNote(input: ParentTrainingNoteInput, onChunk?: (text: string) => void): Promise<GeneratedParentTrainingNote> {
-  // Step 1: Resolve client profile
-  let resolvedProfile: NonNullable<ParentTrainingNoteInput['clientProfile']>
-
-  if (input.clientProfile) {
-    resolvedProfile = input.clientProfile
-  } else {
+  if (!input.clientProfile) {
     const client = await prisma.clients.findUnique({ where: { id: input.clientId } })
     if (!client) throw new Error(`Client not found: ${input.clientId}`)
-
     const raw = client.clinical_profile as any
-    resolvedProfile = {
-      diagnosis: (client.diagnosis as unknown as string[]) || [],
+    input.clientProfile = {
+      diagnosis: raw?.diagnosis || [],
       setting: client.primary_setting || '',
-      approvedInterventions: raw?.approvedInterventions || [],
+      approvedInterventions: (raw?.interventions || []).map((i: any) => typeof i === 'string' ? i : i?.name || '').filter(Boolean),
       activePrograms: {
-        maladaptive: raw?.activePrograms?.maladaptive || [],
-        replacementSkills: raw?.activePrograms?.replacementSkills || [],
+        maladaptive: (raw?.maladaptiveBehaviors || raw?.activePrograms?.maladaptive || []).map((b: any) => typeof b === 'string' ? b : b?.name || '').filter(Boolean),
+        replacementSkills: [
+          ...(raw?.replacementBehaviors || []).map((s: any) => typeof s === 'string' ? s : s?.name || '').filter(Boolean),
+          ...(raw?.skillAcquisition || []).map((s: any) => typeof s === 'string' ? s : s?.name || '').filter(Boolean),
+        ],
       },
-      caregiverTrainingGoals: raw?.caregiverTrainingGoals || [],
     }
   }
 
-  // Step 2: Build structured context (no client name, DOB, or identifying info)
-  // nextSessionGoals is intentionally excluded from the prompt context to
-  // prevent the AI from inserting future-planning language into the note.
-  const { nextSessionGoals: _omitted, ...sessionDetailsForPrompt } = input.sessionDetails
-  const sessionContext = {
-    sessionInfo: input.sessionInfo,
-    clientProfile: resolvedProfile,
-    sessionDetails: sessionDetailsForPrompt,
-  }
-
-  // Step 3: Fetch note history for similarity check
   const previousNotes = await prisma.parent_training_notes.findMany({
     where: { client_id: input.clientId },
     select: { note_text: true },
     orderBy: { created_at: 'desc' },
   })
+  const previousTexts = previousNotes.map(r => r.note_text as string).filter(Boolean)
 
-  const previousTexts = previousNotes
-    .map((r) => r.note_text as string)
-    .filter(Boolean)
+  const allPTGoals = [
+    ...(input.parentTrainingGoals || []),
+    input.manualPTGoal ? `${input.manualPTGoal} (manually added)` : '',
+  ].filter(Boolean).join(', ') || 'Not specified'
 
-  // Step 4: Build prompts
-  const userPrompt =
-    `Generate a clinical BCBA parent/caregiver training note (97156) using this session data:\n\n` +
-    `${JSON.stringify(sessionContext, null, 2)}\n\n` +
-    `Remember: 2–3 paragraphs, 400–500 words total, caregiver must be shown as active throughout, ` +
-    `all eight mandatory content elements must be present, BST sequence explicit ` +
-    `(instruction → modeling → rehearsal → feedback), no client identifying information, ` +
-    `caregiver name must appear in the note.`
+  const userPrompt = `Generate a 97156 Parent Training note for:
+Date: ${input.sessionInfo.date}
+Location: ${input.sessionInfo.location}
+Caregiver: ${input.sessionInfo.caregiverName} (${input.sessionInfo.caregiverRelation})
+Client Present: ${input.clientPresent || 'not specified'}
+
+--- PARENT TRAINING GOALS ADDRESSED ---
+${allPTGoals}
+
+--- TRAINING TOPICS ---
+${input.trainingTopics?.join(', ') || 'Not specified'}
+
+--- PROCEDURES TRAINED ---
+${input.proceduresTrained?.join(', ') || 'Not specified'}
+
+--- BST COMPONENTS USED ---
+${input.bstComponents?.join(', ') || 'Not specified'}
+
+--- CAREGIVER PERFORMANCE ---
+${input.caregiverPerformance || 'Not specified'}
+${input.didNotPracticeReason ? `Reason did not practice: ${input.didNotPracticeReason}` : ''}
+
+--- FEEDBACK PROVIDED TO CAREGIVER ---
+${input.feedbackProvided?.join(', ') || 'Not specified'}
+
+--- CLIENT RESPONSE ---
+${input.clientPresent === 'no' ? 'Client was not present during this session.' : input.clientResponse?.join(', ') || 'Not observed'}
+
+--- BARRIERS IDENTIFIED ---
+${input.barriersIdentified?.join(', ') || 'None identified'}
+
+--- HOME IMPLEMENTATION PLAN ---
+${input.homeImplementationPlan || 'Not provided'}
+
+--- FOLLOW-UP PLAN ---
+${input.followUpPlan?.join(', ') || 'Continue monitoring'}
+
+Write the note now. 300–500 words, one paragraph, third person, objective ABA language. Caregiver must appear as active practitioner. Answer all 9 required questions.`
 
   async function callOpenAI(systemContent: string): Promise<string> {
     if (onChunk) {
       const stream = await openai.chat.completions.create({
         model: 'gpt-4o',
         temperature: 0.4,
-        max_tokens: 1000,
+        max_tokens: 1200,
         stream: true,
         messages: [
           { role: 'system', content: systemContent },
@@ -133,7 +150,7 @@ export async function generateParentTrainingNote(input: ParentTrainingNoteInput,
     const resp = await openai.chat.completions.create({
       model: 'gpt-4o',
       temperature: 0.4,
-      max_tokens: 1000,
+      max_tokens: 1200,
       messages: [
         { role: 'system', content: systemContent },
         { role: 'user', content: userPrompt },
@@ -144,7 +161,6 @@ export async function generateParentTrainingNote(input: ParentTrainingNoteInput,
 
   let note = await callOpenAI(MASTER_PARENT_TRAINING_PROMPT)
 
-  // Step 5: Similarity check
   let similarityWarning = false
   if (previousTexts.length > 0) {
     const tooSimilar = previousTexts.some(prev => calculateSimilarity(note, prev) > 0.60)
@@ -153,7 +169,7 @@ export async function generateParentTrainingNote(input: ParentTrainingNoteInput,
       const variationInstruction =
         `\n\nIMPORTANT: This parent training note is too similar to a previous one for this client. ` +
         `Use completely different sentence starters, vary the caregiver practice descriptions, ` +
-        `feedback examples, and generalization discussion significantly. ` +
+        `feedback examples, and home implementation plan significantly. ` +
         `The note must read as a distinctly different training session.`
       note = await callOpenAI(MASTER_PARENT_TRAINING_PROMPT + variationInstruction)
       const stillTooSimilar = previousTexts.some(prev => calculateSimilarity(note, prev) > 0.60)

@@ -8,90 +8,66 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 
 const CAREGIVER_RELATIONS = [
-  "Mother", "Father", "Grandparent", "Foster Parent", "Legal Guardian", "Stepparent", "Sibling", "Other",
+  "Mother","Father","Grandmother","Grandfather","Aunt","Uncle",
+  "Foster Parent","Legal Guardian","Sibling","Other",
 ];
 
-const PARTICIPANT_OPTIONS = ["BCBA", "Caregiver", "Client", "RBT", "Other"];
-
-const CAREGIVER_GOALS_OPTIONS = [
-  "Improve reinforcement consistency",
-  "Improve prompting implementation",
-  "Increase consistency during home routines",
-  "Improve implementation of behavior reduction strategies",
-  "Improve transition support implementation",
-  "Increase use of replacement behavior strategies",
-  "Improve implementation of communication strategies",
-  "Improve generalization across settings",
-  "Increase caregiver confidence implementing ABA procedures",
-  "Improve consistency with behavior intervention plan",
-  "Increase independent caregiver implementation",
-  "Other",
+const PARTICIPANT_OPTIONS = [
+  "BCBA","Caregiver","Client","Sibling","Other Caregiver","Teacher",
 ];
 
-const TRAINING_FOCUS_OPTIONS = [
-  "Reinforcement strategies",
-  "Prompting procedures",
-  "Behavior reduction strategies",
-  "Communication strategies",
-  "Transition support strategies",
-  "Replacement behavior implementation",
-  "Daily living routines",
-  "Functional communication training",
-  "Error correction procedures",
-  "Behavior intervention plan review",
-  "Generalization strategies",
-  "Other",
+const TRAINING_TOPIC_OPTIONS = [
+  "Reinforcement","Prompting","Functional Communication",
+  "Tantrum Management","Aggression Management","Transitions",
+  "Daily Living Skills","Replacement Behavior Training",
+  "Data Collection","Generalization","Antecedent Strategies",
+  "Consequence Strategies",
+];
+
+const PROCEDURES_TRAINED_OPTIONS = [
+  "DRA","FCT","Prompting Hierarchy","First-Then","Token Economy",
+  "Redirection","Planned Ignoring","Premack Principle",
+  "Differential Reinforcement","Visual Schedule",
+  "Error Correction","Task Analysis",
 ];
 
 const BST_OPTIONS = [
-  "Instruction provided",
-  "Modeling completed",
-  "Caregiver rehearsal completed",
-  "Corrective feedback provided",
-  "Live coaching provided",
-  "Role-play completed",
-  "Performance feedback provided",
+  "Instruction","Modeling","Rehearsal","Feedback",
 ];
 
-const CAREGIVER_PERF_OPTIONS = [
-  "Caregiver implemented procedures independently",
-  "Caregiver required verbal prompting",
-  "Caregiver demonstrated improved consistency",
-  "Caregiver required additional coaching",
-  "Caregiver demonstrated appropriate reinforcement delivery",
-  "Caregiver demonstrated improved prompting consistency",
-  "Generalization difficulties observed",
-  "Environmental distractions impacted implementation",
-  "Caregiver demonstrated increased confidence implementing procedures",
-  "Additional caregiver support recommended",
-  "Other",
+const CAREGIVER_PERFORMANCE_OPTIONS = [
+  "Independent","Minimal Prompting","Moderate Prompting",
+  "Maximum Prompting","Did Not Practice",
 ];
 
-const CLIENT_RESPONSE_OPTIONS = [
-  "Increased appropriate communication observed",
-  "Reduced maladaptive behavior observed",
-  "Improved transition tolerance observed",
-  "Increased engagement observed",
-  "Improved compliance observed",
-  "Increased independent responding observed",
-  "Improved participation observed",
-  "Improved generalization across caregiver interactions observed",
-  "Reduced prompt dependency observed",
-  "Other",
+const FEEDBACK_OPTIONS = [
+  "Reinforcement Timing","Prompt Fading",
+  "Consistency with Instructions","Response Blocking / Safety",
+  "Behavior-Specific Praise","Data Recording",
+  "Follow-Through with Routines","Reducing Repeated Prompts",
+  "Increasing Wait Time",
 ];
 
-const NEXT_STEPS_OPTIONS = [
-  "Continue caregiver coaching",
-  "Continue reinforcement training",
-  "Continue prompting procedure training",
-  "Monitor caregiver implementation consistency",
-  "Continue generalization training",
-  "Continue BST during future sessions",
-  "Reassess caregiver fidelity next session",
-  "Continue collaboration with caregiver",
-  "Review progress toward goals next session",
-  "Continue home implementation support",
-  "Other",
+const CLIENT_RESPONSE_OPTIONS_97156 = [
+  "Increased Engagement","Required Redirection",
+  "Demonstrated Replacement Behavior","Demonstrated Challenging Behavior",
+  "Tolerated Caregiver Implementation","Required Prompting",
+  "No Direct Client Response Observed",
+];
+
+const BARRIERS_OPTIONS = [
+  "Time Constraints","Inconsistent Caregiver Implementation",
+  "Multiple Caregivers","Limited Practice Opportunities",
+  "Client Resistance / Challenging Behavior",
+  "Caregiver Needed Additional Prompting",
+  "Environmental Distractions","No Barriers Identified",
+];
+
+const FOLLOW_UP_OPTIONS_97156 = [
+  "Continue BST","Review Caregiver Implementation",
+  "Monitor Generalization","Review Data Collected by Caregiver",
+  "Provide Additional Modeling","Increase Caregiver Independence",
+  "Continue Current Caregiver Goal",
 ];
 
 function SectionHeader({ title }: { title: string }) {
@@ -109,40 +85,24 @@ function CheckboxGroup({
   options,
   selected,
   onToggle,
-  otherValue,
-  onOtherChange,
 }: {
   options: string[];
   selected: string[];
   onToggle: (val: string) => void;
-  otherValue?: string;
-  onOtherChange?: (val: string) => void;
 }) {
   return (
     <div className="grid grid-cols-2 gap-x-4 gap-y-2">
       {options.map(opt => (
-        <div key={opt}>
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={selected.includes(opt)}
-              onChange={() => onToggle(opt)}
-              className="mt-0.5 flex-shrink-0"
-              style={{ accentColor: "var(--teal)" }}
-            />
-            <span className="text-[13px]" style={{ color: "var(--text1)" }}>{opt}</span>
-          </label>
-          {opt === "Other" && selected.includes("Other") && (
-            <input
-              type="text"
-              value={otherValue ?? ""}
-              onChange={e => onOtherChange?.(e.target.value)}
-              placeholder="Specify…"
-              className="mt-1.5 ml-5 w-[calc(100%-1.25rem)] border rounded-lg px-3 py-1.5 text-[12px] focus:outline-none"
-              style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-            />
-          )}
-        </div>
+        <label key={opt} className="flex items-start gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={selected.includes(opt)}
+            onChange={() => onToggle(opt)}
+            className="mt-0.5 flex-shrink-0"
+            style={{ accentColor: "var(--teal)" }}
+          />
+          <span className="text-[13px]" style={{ color: "var(--text1)" }}>{opt}</span>
+        </label>
       ))}
     </div>
   );
@@ -167,52 +127,48 @@ export default function ParentTrainingNotePage() {
   const { data: session, status } = useSession();
 
   const [client, setClient] = useState<any>(null);
-  const [bcbaName, setBcbaName] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
-  // Section 1 — Session Information
+  // Section 1
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split("T")[0]);
   const [location, setLocation] = useState("");
   const [caregiverName, setCaregiverName] = useState("");
-  const [caregiverRelation, setCaregiverRelation] = useState("Mother");
-
-  // Section 2 — Participants Present
+  const [caregiverRelation, setCaregiverRelation] = useState("");
   const [participantsPresent, setParticipantsPresent] = useState<string[]>([]);
-  const [participantsOther, setParticipantsOther] = useState("");
+  const [clientPresent, setClientPresent] = useState<"yes" | "no" | "partial" | "">("");
 
-  // Section 3 — Was client present?
-  const [clientPresent, setClientPresent] = useState<"yes" | "no" | "partial" | null>(null);
+  // Section 2
+  const [trainingTopics, setTrainingTopics] = useState<string[]>([]);
 
-  // Section 4 — Skill Targets
-  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
-  const [skillsFreeText, setSkillsFreeText] = useState("");
+  // Section 3
+  const [selectedPTGoals, setSelectedPTGoals] = useState<string[]>([]);
+  const [manualPTGoal, setManualPTGoal] = useState("");
 
-  // Section 5 — Caregiver Goals
-  const [caregiverGoals, setCaregiverGoals] = useState<string[]>([]);
-  const [caregiverGoalsOther, setCaregiverGoalsOther] = useState("");
+  // Section 4
+  const [proceduresTrained, setProceduresTrained] = useState<string[]>([]);
 
-  // Section 6 — Training Focus
-  const [trainingFocus, setTrainingFocus] = useState<string[]>([]);
-  const [trainingFocusOther, setTrainingFocusOther] = useState("");
-
-  // Section 7 — BST Components
+  // Section 5
   const [bstComponents, setBstComponents] = useState<string[]>([]);
 
-  // Section 8 — Caregiver Performance
-  const [caregiverPerf, setCaregiverPerf] = useState<string[]>([]);
-  const [caregiverPerfOther, setCaregiverPerfOther] = useState("");
+  // Section 6
+  const [caregiverPerformance, setCaregiverPerformance] = useState("");
+  const [didNotPracticeReason, setDidNotPracticeReason] = useState("");
 
-  // Section 9 — Client Response
+  // Section 7
+  const [feedbackProvided, setFeedbackProvided] = useState<string[]>([]);
+
+  // Section 8
   const [clientResponse, setClientResponse] = useState<string[]>([]);
-  const [clientResponseOther, setClientResponseOther] = useState("");
 
-  // Section 10 — Additional Details
-  const [additionalDetails, setAdditionalDetails] = useState("");
+  // Section 9
+  const [barriersIdentified, setBarriersIdentified] = useState<string[]>([]);
 
-  // Section 11 — Next Steps
-  const [nextStepsSel, setNextStepsSel] = useState<string[]>([]);
-  const [nextStepsOther, setNextStepsOther] = useState("");
+  // Section 10
+  const [homeImplementationPlan, setHomeImplementationPlan] = useState("");
+
+  // Section 11
+  const [followUpPlan, setFollowUpPlan] = useState<string[]>([]);
 
   // Output
   const [generating, setGenerating] = useState(false);
@@ -224,8 +180,6 @@ export default function ParentTrainingNotePage() {
   useEffect(() => {
     if (status === "loading") return;
     if (!session?.user) { router.push("/login"); return; }
-    const name = session.user.name || session.user.email?.split("@")[0] || "";
-    setBcbaName(name);
     loadData();
   }, [clientId, status]);
 
@@ -245,69 +199,35 @@ export default function ParentTrainingNotePage() {
 
   const profile = client?.clinical_profile || {};
 
-  const allSkills: string[] = [
-    ...(profile?.replacementBehaviors || []),
-    ...(profile?.skillAcquisition || []),
-  ].map((s: any) => (typeof s === "string" ? s : s?.name || "")).filter(Boolean);
+  const parentTrainingGoals: string[] = (
+    profile?.parentTrainingGoals ||
+    profile?.caregiverGoals ||
+    profile?.familyTrainingGoals ||
+    []
+  ).map((g: any) => (typeof g === "string" ? g : g?.goal || g?.name || "")).filter(Boolean);
 
   function toggle(setter: React.Dispatch<React.SetStateAction<string[]>>, val: string) {
     setter(prev => prev.includes(val) ? prev.filter(x => x !== val) : [...prev, val]);
   }
+
+  const isDisabled =
+    !sessionDate ||
+    !location ||
+    caregiverName.trim() === "" ||
+    caregiverRelation === "" ||
+    trainingTopics.length === 0 ||
+    bstComponents.length < 2 ||
+    caregiverPerformance === "" ||
+    (caregiverPerformance === "Did Not Practice" && didNotPracticeReason.trim() === "") ||
+    homeImplementationPlan.trim() === "" ||
+    ((clientPresent === "yes" || clientPresent === "partial") && clientResponse.length === 0) ||
+    generating;
 
   async function handleGenerate() {
     setGenerating(true);
     setGenError("");
     setGeneratedNote("");
     setSimilarityWarning(false);
-
-    const skillsArr = selectedSkills.length > 0
-      ? selectedSkills
-      : skillsFreeText.trim() ? [skillsFreeText.trim()] : [];
-
-    const behaviorsObserved = [
-      ...skillsArr,
-      ...clientResponse.filter(r => r !== "Other"),
-      ...(clientResponseOther.trim() ? [clientResponseOther.trim()] : []),
-    ];
-
-    const proceduresTrained = [
-      ...trainingFocus.filter(f => f !== "Other"),
-      ...(trainingFocusOther.trim() ? [trainingFocusOther.trim()] : []),
-      ...bstComponents,
-    ];
-
-    const whatModeled = [
-      ...trainingFocus.filter(f => f !== "Other"),
-      ...bstComponents.filter(b => b === "Instruction provided" || b === "Modeling completed"),
-    ].filter(Boolean).join(", ");
-
-    const caregiverPracticeStr = [
-      ...bstComponents.filter(b => ["Caregiver rehearsal completed", "Role-play completed", "Live coaching provided"].includes(b)),
-      ...caregiverPerf.filter(p => p !== "Other"),
-      ...(caregiverPerfOther.trim() ? [caregiverPerfOther.trim()] : []),
-    ].filter(Boolean).join(", ");
-
-    const feedbackStr = [
-      ...bstComponents.filter(b => b === "Corrective feedback provided" || b === "Performance feedback provided"),
-      ...caregiverGoals.filter(g => g !== "Other"),
-      ...(caregiverGoalsOther.trim() ? [caregiverGoalsOther.trim()] : []),
-    ].filter(Boolean).join(", ");
-
-    const caregiverOutcomeStr = [
-      ...caregiverPerf.filter(p => p !== "Other"),
-      ...(caregiverPerfOther.trim() ? [caregiverPerfOther.trim()] : []),
-      additionalDetails.trim(),
-    ].filter(Boolean).join(". ");
-
-    const generalizationStr = [
-      ...caregiverGoals.filter(g => g !== "Other"),
-      ...(caregiverGoalsOther.trim() ? [caregiverGoalsOther.trim()] : []),
-    ].filter(Boolean).join(", ");
-
-    const nextStepsStr = [
-      ...nextStepsSel.filter(s => s !== "Other"),
-      ...(nextStepsOther.trim() ? [nextStepsOther.trim()] : []),
-    ].filter(Boolean).join(", ");
 
     try {
       const res = await fetch("/api/bcba/generate-parent-training-note", {
@@ -316,22 +236,23 @@ export default function ParentTrainingNotePage() {
         body: JSON.stringify({
           clientId,
           sessionDate,
-          timeRange: "",
           location,
-          bcbaName,
           caregiverName,
           caregiverRelation,
-          sessionDetails: {
-            behaviorsObservedDuringSession: behaviorsObserved,
-            proceduresTrainedToday: proceduresTrained,
-            whatBCBAModeled: whatModeled,
-            caregiverPracticeDescription: caregiverPracticeStr,
-            feedbackProvided: feedbackStr,
-            caregiverOutcome: caregiverOutcomeStr,
-            generalizationTopicsDiscussed: generalizationStr,
-            nextSessionGoals: nextStepsStr,
-            clientPresent: clientPresent ?? "",
-          },
+          participantsPresent,
+          clientPresent,
+          trainingTopics,
+          parentTrainingGoals: selectedPTGoals,
+          manualPTGoal: manualPTGoal.trim(),
+          proceduresTrained,
+          bstComponents,
+          caregiverPerformance,
+          didNotPracticeReason: caregiverPerformance === "Did Not Practice" ? didNotPracticeReason : "",
+          feedbackProvided,
+          clientResponse,
+          barriersIdentified,
+          homeImplementationPlan,
+          followUpPlan,
         }),
       });
       if (!res.ok || !res.body) {
@@ -349,7 +270,11 @@ export default function ParentTrainingNotePage() {
         if (chunk.includes("__META__")) {
           const parts = chunk.split("__META__");
           if (parts[0]) { fullText += parts[0]; setGeneratedNote(fullText); }
-          try { const meta = JSON.parse(parts[1]); if (meta.error) { setGenError(meta.error); return; } setSimilarityWarning(!!meta.similarityWarning); } catch {}
+          try {
+            const meta = JSON.parse(parts[1]);
+            if (meta.error) { setGenError(meta.error); return; }
+            setSimilarityWarning(!!meta.similarityWarning);
+          } catch {}
           break outer;
         }
         if (chunk.includes("__REGEN__")) {
@@ -414,7 +339,9 @@ export default function ParentTrainingNotePage() {
               </div>
 
               <div>
-                <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Location</label>
+                <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>
+                  Location <span style={{ color: "#DC2626" }}>*</span>
+                </label>
                 <select
                   value={location}
                   onChange={e => setLocation(e.target.value)}
@@ -445,173 +372,220 @@ export default function ParentTrainingNotePage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Relation to Client</label>
+                  <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>
+                    Relation to Client <span style={{ color: "#DC2626" }}>*</span>
+                  </label>
                   <select
                     value={caregiverRelation}
                     onChange={e => setCaregiverRelation(e.target.value)}
                     className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
-                    style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                    style={{ borderColor: "var(--border)", color: caregiverRelation ? "var(--text1)" : "var(--text3)" }}
                   >
+                    <option value="">Select relation…</option>
                     {CAREGIVER_RELATIONS.map(r => <option key={r}>{r}</option>)}
                   </select>
                 </div>
               </div>
+
+              <div>
+                <label className="block text-[12px] font-medium mb-2" style={{ color: "var(--text2)" }}>Participants Present</label>
+                <CheckboxGroup
+                  options={PARTICIPANT_OPTIONS}
+                  selected={participantsPresent}
+                  onToggle={val => toggle(setParticipantsPresent, val)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-medium mb-2" style={{ color: "var(--text2)" }}>Client Present During Training?</label>
+                <div className="flex gap-2">
+                  {(["yes", "no", "partial"] as const).map(v => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setClientPresent(v)}
+                      className="flex-1 py-2.5 rounded-xl border text-[12px] font-medium transition-colors"
+                      style={{
+                        background: clientPresent === v ? "var(--teal)" : "white",
+                        borderColor: clientPresent === v ? "var(--teal)" : "var(--border)",
+                        color: clientPresent === v ? "white" : "var(--text2)",
+                      }}
+                    >
+                      {v === "yes" ? "Yes" : v === "no" ? "No" : "Partial"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
             </div>
           </div>
 
-          {/* ── SECTION 2 — Participants Present ── */}
+          {/* ── SECTION 2 — Training Topic ── */}
           <div>
-            <SectionHeader title="Section 2 — Participants Present" />
+            <SectionHeader title="Section 2 — Training Topic" />
+            <p className="text-[12px] mb-3" style={{ color: "var(--text3)" }}>What was the focus of this caregiver training session?</p>
             <CheckboxGroup
-              options={PARTICIPANT_OPTIONS}
-              selected={participantsPresent}
-              onToggle={val => toggle(setParticipantsPresent, val)}
-              otherValue={participantsOther}
-              onOtherChange={setParticipantsOther}
+              options={TRAINING_TOPIC_OPTIONS}
+              selected={trainingTopics}
+              onToggle={val => toggle(setTrainingTopics, val)}
             />
           </div>
 
-          {/* ── SECTION 3 — Was the client present? ── */}
+          {/* ── SECTION 3 — Parent Training Goals Addressed ── */}
           <div>
-            <SectionHeader title="Section 3 — Was the Client Present During Training?" />
-            <div className="flex gap-2">
-              {(["yes", "no", "partial"] as const).map(v => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setClientPresent(v)}
-                  className="flex-1 py-2.5 rounded-xl border text-[12px] font-medium transition-colors"
-                  style={{
-                    background: clientPresent === v ? "var(--teal)" : "white",
-                    borderColor: clientPresent === v ? "var(--teal)" : "var(--border)",
-                    color: clientPresent === v ? "white" : "var(--text2)",
-                  }}
-                >
-                  {v === "yes" ? "Yes" : v === "no" ? "No" : "Partial Session"}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* ── SECTION 4 — Replacement / Skill Targets ── */}
-          <div>
-            <SectionHeader title="Section 4 — Replacement / Skill Acquisition Targets Addressed" />
-            <p className="text-[12px] mb-3" style={{ color: "var(--text3)" }}>Replacement / Skill Targets Addressed (from client profile)</p>
-            {allSkills.length > 0 ? (
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                {allSkills.map(s => (
-                  <label key={s} className="flex items-start gap-2 cursor-pointer">
+            <SectionHeader title="Section 3 — Parent Training Goals Addressed" />
+            <p className="text-[12px] mb-3" style={{ color: "var(--text3)" }}>Goals from the approved treatment plan</p>
+            {parentTrainingGoals.length > 0 ? (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 mb-4">
+                {parentTrainingGoals.map(g => (
+                  <label key={g} className="flex items-start gap-2 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={selectedSkills.includes(s)}
-                      onChange={() => toggle(setSelectedSkills, s)}
+                      checked={selectedPTGoals.includes(g)}
+                      onChange={() => toggle(setSelectedPTGoals, g)}
                       className="mt-0.5 flex-shrink-0"
                       style={{ accentColor: "var(--teal)" }}
                     />
-                    <span className="text-[13px]" style={{ color: "var(--text1)" }}>{s}</span>
+                    <span className="text-[13px]" style={{ color: "var(--text1)" }}>{g}</span>
                   </label>
                 ))}
               </div>
             ) : (
+              <p className="text-[12px] mb-4 px-3 py-2 rounded-lg border" style={{ background: "#F9FAFB", borderColor: "var(--border)", color: "var(--text3)" }}>
+                No parent training goals found in client profile. Update the client profile or assessment extraction.
+              </p>
+            )}
+            <div>
+              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Other / Not in Profile</label>
               <input
                 type="text"
-                value={skillsFreeText}
-                onChange={e => setSkillsFreeText(e.target.value)}
-                placeholder="No skills in profile — describe targets addressed"
+                value={manualPTGoal}
+                onChange={e => setManualPTGoal(e.target.value)}
+                placeholder="Add a goal — must be clinically approved and part of the treatment plan"
                 className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
                 style={{ borderColor: "var(--border)", color: "var(--text1)" }}
               />
+              <p className="mt-1.5 text-[11px] px-1" style={{ color: "#92400E" }}>
+                Only add goals that are clinically approved and documented in the treatment plan.
+              </p>
+            </div>
+          </div>
+
+          {/* ── SECTION 4 — Procedures Trained ── */}
+          <div>
+            <SectionHeader title="Section 4 — Procedures Trained" />
+            <CheckboxGroup
+              options={PROCEDURES_TRAINED_OPTIONS}
+              selected={proceduresTrained}
+              onToggle={val => toggle(setProceduresTrained, val)}
+            />
+          </div>
+
+          {/* ── SECTION 5 — BST Components Used ── */}
+          <div>
+            <SectionHeader title="Section 5 — BST Components Used" />
+            <p className="text-[12px] mb-3" style={{ color: "var(--text3)" }}>Minimum 2 components required for 97156 documentation</p>
+            <CheckboxGroup
+              options={BST_OPTIONS}
+              selected={bstComponents}
+              onToggle={val => toggle(setBstComponents, val)}
+            />
+            {bstComponents.length === 1 && (
+              <p className="mt-2 text-[12px] px-3 py-2 rounded-lg border" style={{ background: "#FFFBEB", borderColor: "#FCD34D", color: "#92400E" }}>
+                At least 2 BST components are required to generate a 97156 note.
+              </p>
             )}
           </div>
 
-          {/* ── SECTION 5 — Caregiver Goals Addressed ── */}
+          {/* ── SECTION 6 — Caregiver Performance ── */}
           <div>
-            <SectionHeader title="Section 5 — Caregiver Goals Addressed" />
-            <CheckboxGroup
-              options={CAREGIVER_GOALS_OPTIONS}
-              selected={caregiverGoals}
-              onToggle={val => toggle(setCaregiverGoals, val)}
-              otherValue={caregiverGoalsOther}
-              onOtherChange={setCaregiverGoalsOther}
-            />
-          </div>
-
-          {/* ── SECTION 6 — Parent Training Focus ── */}
-          <div>
-            <SectionHeader title="Section 6 — Parent Training Focus" />
-            <CheckboxGroup
-              options={TRAINING_FOCUS_OPTIONS}
-              selected={trainingFocus}
-              onToggle={val => toggle(setTrainingFocus, val)}
-              otherValue={trainingFocusOther}
-              onOtherChange={setTrainingFocusOther}
-            />
-          </div>
-
-          {/* ── SECTION 7 — BST Components Completed ── */}
-          <div>
-            <SectionHeader title="Section 7 — BST Components Completed" />
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-              {BST_OPTIONS.map(opt => (
-                <label key={opt} className="flex items-start gap-2 cursor-pointer">
+            <SectionHeader title="Section 6 — Caregiver Performance" />
+            <div className="space-y-2.5">
+              {CAREGIVER_PERFORMANCE_OPTIONS.map(opt => (
+                <label key={opt} className="flex items-center gap-2.5 cursor-pointer">
                   <input
-                    type="checkbox"
-                    checked={bstComponents.includes(opt)}
-                    onChange={() => toggle(setBstComponents, opt)}
-                    className="mt-0.5 flex-shrink-0"
+                    type="radio"
+                    name="caregiverPerformance"
+                    value={opt}
+                    checked={caregiverPerformance === opt}
+                    onChange={() => setCaregiverPerformance(opt)}
+                    className="flex-shrink-0"
                     style={{ accentColor: "var(--teal)" }}
                   />
                   <span className="text-[13px]" style={{ color: "var(--text1)" }}>{opt}</span>
                 </label>
               ))}
             </div>
+            {caregiverPerformance === "Did Not Practice" && (
+              <div className="mt-3">
+                <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>
+                  Explain why caregiver did not practice <span style={{ color: "#DC2626" }}>*</span>
+                </label>
+                <textarea
+                  value={didNotPracticeReason}
+                  onChange={e => setDidNotPracticeReason(e.target.value)}
+                  placeholder="Required — explain reason caregiver did not practice"
+                  className="w-full border rounded-xl px-4 py-3 text-[13px] resize-none focus:outline-none"
+                  style={{ borderColor: "var(--border)", color: "var(--text1)", minHeight: 80 }}
+                />
+              </div>
+            )}
           </div>
 
-          {/* ── SECTION 8 — Caregiver Performance / Observations ── */}
+          {/* ── SECTION 7 — Feedback Provided to Caregiver ── */}
           <div>
-            <SectionHeader title="Section 8 — Caregiver Performance / Observations" />
+            <SectionHeader title="Section 7 — Feedback Provided to Caregiver" />
             <CheckboxGroup
-              options={CAREGIVER_PERF_OPTIONS}
-              selected={caregiverPerf}
-              onToggle={val => toggle(setCaregiverPerf, val)}
-              otherValue={caregiverPerfOther}
-              onOtherChange={setCaregiverPerfOther}
+              options={FEEDBACK_OPTIONS}
+              selected={feedbackProvided}
+              onToggle={val => toggle(setFeedbackProvided, val)}
             />
           </div>
 
-          {/* ── SECTION 9 — Client Response During Parent Training ── */}
+          {/* ── SECTION 8 — Client Response (only if present) ── */}
+          {(clientPresent === "yes" || clientPresent === "partial") && (
+            <div>
+              <SectionHeader title="Section 8 — Client Response During Session (Required)" />
+              <CheckboxGroup
+                options={CLIENT_RESPONSE_OPTIONS_97156}
+                selected={clientResponse}
+                onToggle={val => toggle(setClientResponse, val)}
+              />
+            </div>
+          )}
+
+          {/* ── SECTION 9 — Barriers Identified ── */}
           <div>
-            <SectionHeader title="Section 9 — Client Response During Parent Training" />
+            <SectionHeader title="Section 9 — Barriers Identified" />
             <CheckboxGroup
-              options={CLIENT_RESPONSE_OPTIONS}
-              selected={clientResponse}
-              onToggle={val => toggle(setClientResponse, val)}
-              otherValue={clientResponseOther}
-              onOtherChange={setClientResponseOther}
+              options={BARRIERS_OPTIONS}
+              selected={barriersIdentified}
+              onToggle={val => toggle(setBarriersIdentified, val)}
             />
           </div>
 
-          {/* ── SECTION 10 — Additional Parent Training Details ── */}
+          {/* ── SECTION 10 — Home Implementation Plan ── */}
           <div>
-            <SectionHeader title="Section 10 — Additional Parent Training Details" />
+            <SectionHeader title="Section 10 — Home Implementation Plan" />
+            <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>
+              Home Implementation Plan — Required for Note Generation <span style={{ color: "#DC2626" }}>*</span>
+            </label>
             <textarea
-              value={additionalDetails}
-              onChange={e => setAdditionalDetails(e.target.value)}
-              placeholder="Describe caregiver participation, barriers, implementation challenges, client response, or specific coaching provided."
+              value={homeImplementationPlan}
+              onChange={e => setHomeImplementationPlan(e.target.value)}
+              placeholder="What should the caregiver implement at home before the next caregiver training contact? Be specific."
               className="w-full border rounded-xl px-4 py-3 text-[13px] resize-none focus:outline-none"
-              style={{ borderColor: "var(--border)", color: "var(--text1)", minHeight: 96 }}
+              style={{ borderColor: "var(--border)", color: "var(--text1)", minHeight: 100 }}
             />
           </div>
 
-          {/* ── SECTION 11 — Next Steps ── */}
+          {/* ── SECTION 11 — Follow-Up Plan ── */}
           <div>
-            <SectionHeader title="Section 11 — Next Steps" />
+            <SectionHeader title="Section 11 — Follow-Up Plan" />
             <CheckboxGroup
-              options={NEXT_STEPS_OPTIONS}
-              selected={nextStepsSel}
-              onToggle={val => toggle(setNextStepsSel, val)}
-              otherValue={nextStepsOther}
-              onOtherChange={setNextStepsOther}
+              options={FOLLOW_UP_OPTIONS_97156}
+              selected={followUpPlan}
+              onToggle={val => toggle(setFollowUpPlan, val)}
             />
           </div>
 
@@ -621,10 +595,9 @@ export default function ParentTrainingNotePage() {
             </p>
           )}
 
-          {/* ── SECTION 12 — Generate Note ── */}
           <button
             onClick={handleGenerate}
-            disabled={!sessionDate || generating}
+            disabled={isDisabled}
             className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ background: "var(--teal)" }}
           >

@@ -43,7 +43,14 @@ export async function PATCH(
   const { id } = await params
   const { clinical_profile } = await req.json()
 
-  await prisma.clients.update({ where: { id }, data: { clinical_profile } })
+  const existingRow = await prisma.clients.findUnique({
+    where: { id },
+    select: { clinical_profile: true },
+  })
+  const existingProfile = (existingRow?.clinical_profile as object) ?? {}
+  const merged = { ...existingProfile, ...clinical_profile }
+
+  await prisma.clients.update({ where: { id }, data: { clinical_profile: merged } })
   return NextResponse.json({ ok: true })
 }
 

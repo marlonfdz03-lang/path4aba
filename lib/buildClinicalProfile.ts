@@ -21,6 +21,7 @@ export interface ClinicalProfile {
   schoolActivities: string[];
   caregivers: string[];
   clientName: string;
+  parentTrainingGoals: string[];
 }
 
 export function buildClinicalProfile(rawData: any): ClinicalProfile {
@@ -80,6 +81,12 @@ export function buildClinicalProfile(rawData: any): ClinicalProfile {
     reinforcers: dedupeStrings(reinforcerList),
     homeActivities: dedupeStrings(homeActs),
     schoolActivities: dedupeStrings(schoolActs),
+    parentTrainingGoals: dedupeStrings(
+      rawData.parentTrainingGoals ||
+      rawData.caregiverTrainingGoals ||
+      rawData.familyTrainingGoals ||
+      []
+    ),
   };
 }
 
