@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import PDFParser from "pdf2json";
 import { extractAssessment, ExtractedAssessment } from "@/lib/extractAssessment";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/auth";
 
 export const maxDuration = 60;
 
@@ -341,6 +342,81 @@ export async function POST(req: NextRequest) {
     );
 
     const normalized = mapToLegacyFormat(extracted);
+
+    // ── If clientId provided: merge into existing clinical_profile ─────────
+    const clientId = formData.get("clientId") as string | null;
+    if (clientId) {
+      const session = await auth();
+      if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+      const existing = await prisma.clients.findUnique({
+        where: { id: clientId },
+        select: { clinical_profile: true },
+      });
+      if (!existing) return NextResponse.json({ error: "Client not found" }, { status: 404 });
+
+      const existingProfile = (existing.clinical_profile as any) || {};
+      const existingBehaviors: any[] = existingProfile.maladaptiveBehaviors || [];
+      const existingMastered: string[] = existingProfile.masteredBehaviors || [];
+
+      // Names mastered in the new assessment
+      const masteredNamesLower = new Set(
+        normalized.maladaptiveBehaviors
+          .filter((b: any) => b.status?.toLowerCase() === "mastered")
+          .map((b: any) => b.name.toLowerCase())
+      );
+
+      // Keep existing behaviors unless newly mastered
+      const keptExisting = existingBehaviors.filter(
+        (b: any) => !masteredNamesLower.has(b.name.toLowerCase())
+      );
+
+      // Add new active behaviors not already present
+      const existingNames = new Set(existingBehaviors.map((b: any) => b.name.toLowerCase()));
+      const addedNew = normalized.maladaptiveBehaviors.filter(
+        (b: any) => !existingNames.has(b.name.toLowerCase()) && b.status?.toLowerCase() !== "mastered"
+      );
+
+      // Accumulate mastered behavior names
+      const allMastered = [
+        ...existingMastered,
+        ...Array.from(masteredNamesLower),
+      ].filter((v, i, a) => a.indexOf(v) === i);
+
+      const merged = {
+        ...existingProfile,
+        maladaptiveBehaviors: [...keptExisting, ...addedNew],
+        masteredBehaviors: allMastered,
+        interventions: normalized.interventions.length
+          ? normalized.interventions
+          : (existingProfile.interventions || []),
+        replacementBehaviors: normalized.replacementBehaviors.length
+          ? normalized.replacementBehaviors
+          : (existingProfile.replacementBehaviors || []),
+        skillAcquisition: normalized.skillAcquisition.length
+          ? normalized.skillAcquisition
+          : (existingProfile.skillAcquisition || []),
+        reinforcers: normalized.reinforcers.length
+          ? normalized.reinforcers
+          : (existingProfile.reinforcers || []),
+        parentTrainingGoals: normalized.parentTrainingGoals.length
+          ? normalized.parentTrainingGoals
+          : (existingProfile.parentTrainingGoals || []),
+        diagnosis: normalized.diagnosis.length
+          ? normalized.diagnosis
+          : (existingProfile.diagnosis || []),
+        caregivers: normalized.caregivers.length
+          ? normalized.caregivers
+          : (existingProfile.caregivers || []),
+      };
+
+      await prisma.clients.update({
+        where: { id: clientId },
+        data: { clinical_profile: merged },
+      });
+
+      return NextResponse.json({ ...merged, updated: true });
+    }
 
     return NextResponse.json({ ...normalized });
   } catch (error: any) {

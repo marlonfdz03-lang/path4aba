@@ -201,6 +201,13 @@ export default function ClientProfilePage() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareError, setShareError] = useState("");
   const [codeCopied, setCodeCopied] = useState(false);
+  // Update Assessment state
+  const [showUpdateAssessment, setShowUpdateAssessment] = useState(false);
+  const [updateAssessFile, setUpdateAssessFile] = useState<File | null>(null);
+  const [updateAssessing, setUpdateAssessing] = useState(false);
+  const [updateAssessError, setUpdateAssessError] = useState("");
+  const [updateAssessSuccess, setUpdateAssessSuccess] = useState(false);
+
   // Refine Note state
   const [pastedNote, setPastedNote] = useState("");
   const [perfectingNote, setPerfectingNote] = useState(false);
@@ -572,6 +579,32 @@ export default function ClientProfilePage() {
     setDailyNotes((prev) => prev.filter((note) => note.id !== noteId));
   }
 
+  async function handleUpdateAssessment() {
+    if (!updateAssessFile || !client?.id) return;
+    setUpdateAssessing(true);
+    setUpdateAssessError("");
+    setUpdateAssessSuccess(false);
+    try {
+      const formData = new FormData();
+      formData.append("file", updateAssessFile);
+      formData.append("clientId", client.id);
+      const res = await fetch("/api/extract-assessment", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) {
+        setUpdateAssessError(data?.details || data?.error || "Extraction failed.");
+        return;
+      }
+      setUpdateAssessSuccess(true);
+      // Refresh client profile
+      const updatedClient = { ...client, clinicalProfile: { ...client.clinicalProfile, ...data } };
+      setClient(updatedClient);
+    } catch {
+      setUpdateAssessError("Network error. Please try again.");
+    } finally {
+      setUpdateAssessing(false);
+    }
+  }
+
   async function handleShareWithBCBA() {
     setGeneratingCode(true);
     setShareError("");
@@ -673,6 +706,16 @@ export default function ClientProfilePage() {
               >
                 Progress Report
               </Link>
+              <button
+                onClick={() => { setShowUpdateAssessment(true); setUpdateAssessFile(null); setUpdateAssessError(""); setUpdateAssessSuccess(false); }}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-medium border transition-colors hover:border-gray-400"
+                style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                Update Assessment
+              </button>
             </div>
             {shareError && <p className="text-[12px] text-red-500 mt-1">{shareError}</p>}
           </div>
@@ -1252,6 +1295,74 @@ export default function ClientProfilePage() {
             >
               Close
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Update Assessment modal ── */}
+      {showUpdateAssessment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: "rgba(0,0,0,0.45)" }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" style={{ fontFamily: "var(--font-dm-sans, sans-serif)" }}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[15px] font-semibold" style={{ color: "var(--text1)" }}>Update Assessment</p>
+              <button onClick={() => setShowUpdateAssessment(false)} className="text-[20px] leading-none" style={{ color: "var(--text3)" }}>×</button>
+            </div>
+
+            {updateAssessSuccess ? (
+              <>
+                <p className="text-[13px] mb-4" style={{ color: "#16A34A" }}>
+                  ✓ Assessment updated. New behaviors added, mastered behaviors removed.
+                </p>
+                <button
+                  onClick={() => setShowUpdateAssessment(false)}
+                  className="w-full py-2.5 rounded-xl text-[13px] font-semibold text-white"
+                  style={{ background: "var(--teal)" }}
+                >
+                  Done
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-[13px] mb-4" style={{ color: "var(--text3)" }}>
+                  Upload a new ABA assessment PDF to update this client's clinical profile. New behaviors will be added; mastered behaviors will be removed.
+                </p>
+                <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>
+                  Assessment PDF <span style={{ color: "#DC2626" }}>*</span>
+                </label>
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={e => { setUpdateAssessFile(e.target.files?.[0] || null); setUpdateAssessError(""); }}
+                  className="w-full text-[13px] mb-3"
+                  style={{ color: "var(--text1)" }}
+                />
+                {updateAssessFile && (
+                  <p className="text-[12px] mb-3" style={{ color: "var(--text3)" }}>{updateAssessFile.name}</p>
+                )}
+                {updateAssessError && (
+                  <p className="text-[12px] mb-3 px-3 py-2 rounded-lg border" style={{ background: "#FEF2F2", borderColor: "#FECACA", color: "#DC2626" }}>
+                    {updateAssessError}
+                  </p>
+                )}
+                <div className="flex gap-3 mt-2">
+                  <button
+                    onClick={handleUpdateAssessment}
+                    disabled={!updateAssessFile || updateAssessing}
+                    className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ background: "var(--teal)" }}
+                  >
+                    {updateAssessing ? "Updating…" : "Upload & Update"}
+                  </button>
+                  <button
+                    onClick={() => setShowUpdateAssessment(false)}
+                    className="flex-1 py-2.5 rounded-xl text-[13px] font-medium border"
+                    style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

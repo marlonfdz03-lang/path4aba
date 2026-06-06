@@ -26,6 +26,8 @@ function LoginContent() {
   const initialMode = (searchParams.get("mode") as Mode) || "signin";
   const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [profession, setProfession] = useState("");
@@ -38,6 +40,8 @@ function LoginContent() {
     setError("");
     setSuccess("");
     setPassword("");
+    setFirstName("");
+    setLastName("");
     setConfirmPassword("");
     setProfession("");
   }
@@ -60,7 +64,7 @@ function LoginContent() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, name: email.split("@")[0], role: profession.toLowerCase() || "rbt" }),
+        body: JSON.stringify({ email, password, name: `${firstName.trim()} ${lastName.trim()}`.trim() || email.split("@")[0], role: profession || "rbt" }),
       });
       const data = await res.json();
 
@@ -124,6 +128,32 @@ function LoginContent() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
 
+            {/* First + Last Name — sign up only */}
+            {isSignUp && (
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-[13px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>First Name</label>
+                  <input
+                    type="text" value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    required autoComplete="given-name" placeholder="Jane"
+                    className={INPUT_CLS}
+                    style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-[13px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Last Name</label>
+                  <input
+                    type="text" value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    required autoComplete="family-name" placeholder="Smith"
+                    className={INPUT_CLS}
+                    style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Email */}
             <div>
               <label className="block text-[13px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Email</label>
@@ -140,18 +170,40 @@ function LoginContent() {
             {isSignUp && (
               <div>
                 <label className="block text-[13px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Profession</label>
-                <div className="flex gap-2">
-                  {["BCBA", "BCaBA", "RBT"].map((p) => (
+                <div className="grid grid-cols-3 gap-2 mb-2">
+                  {[
+                    { label: "RBT", value: "rbt" },
+                    { label: "BCBA", value: "bcba" },
+                    { label: "BCaBA", value: "bcaba" },
+                  ].map(({ label, value }) => (
                     <button
-                      key={p} type="button" onClick={() => setProfession(p)}
-                      className="flex-1 py-2.5 rounded-xl border text-sm font-medium transition-colors"
+                      key={value} type="button" onClick={() => setProfession(value)}
+                      className="py-2.5 rounded-xl border text-sm font-medium transition-colors"
                       style={{
-                        background: profession === p ? "var(--teal)" : "white",
-                        borderColor: profession === p ? "var(--teal)" : "var(--border)",
-                        color: profession === p ? "white" : "var(--text2)",
+                        background: profession === value ? "var(--teal)" : "white",
+                        borderColor: profession === value ? "var(--teal)" : "var(--border)",
+                        color: profession === value ? "white" : "var(--text2)",
                       }}
                     >
-                      {p}
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { label: "BCBA Student", value: "bcba_student" },
+                    { label: "BCaBA Student", value: "bcaba_student" },
+                  ].map(({ label, value }) => (
+                    <button
+                      key={value} type="button" onClick={() => setProfession(value)}
+                      className="py-2.5 rounded-xl border text-sm font-medium transition-colors"
+                      style={{
+                        background: profession === value ? "var(--teal)" : "white",
+                        borderColor: profession === value ? "var(--teal)" : "var(--border)",
+                        color: profession === value ? "white" : "var(--text2)",
+                      }}
+                    >
+                      {label}
                     </button>
                   ))}
                 </div>
@@ -219,7 +271,7 @@ function LoginContent() {
             {/* Submit */}
             <button
               type="submit"
-              disabled={loading || (isSignUp && !profession)}
+              disabled={loading || (isSignUp && (!profession || !firstName.trim() || !lastName.trim()))}
               className="w-full py-3 rounded-xl text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: "var(--teal)" }}
             >
