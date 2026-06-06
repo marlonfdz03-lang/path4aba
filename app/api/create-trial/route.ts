@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
-import { getStripe, PRICES } from '@/lib/stripe'
+import { getStripe, PRICES, BCBA_STUDENTS_PRICES } from '@/lib/stripe'
 import { prisma } from '@/lib/prisma'
 import { sendWelcomeEmail } from '@/lib/email'
 
 export async function POST(request: Request) {
-  let body: { userId?: string; plan?: string; promoCode?: string }
+  let body: { userId?: string; plan?: string; interval?: string; promoCode?: string }
   try {
     body = await request.json()
   } catch {
@@ -12,6 +12,7 @@ export async function POST(request: Request) {
   }
 
   const { userId, plan, promoCode } = body
+  const interval = (body.interval === 'year' ? 'year' : 'month') as 'month' | 'year'
 
   console.log('[create-trial] request:', { userId, plan })
 
@@ -26,10 +27,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
-  // Monthly pricing for trial signup — user can switch interval later via billing portal
-  const priceId = PRICES[plan as keyof typeof PRICES]?.['month']
+  // Resolve price ID from plan key and interval
+  let priceId: string | undefined
+
+  if (plan === 'bcba_students_addon') {
+    priceId = BCBA_STUDENTS_PRICES.addon[interval]
+  } else if (plan === 'bcba_students_standalone') {
+    priceId = BCBA_STUDENTS_PRICES.standalone[interval]
+  } else {
+    priceId = PRICES[plan as keyof typeof PRICES]?.[interval]
+  }
+
   if (!priceId) {
-    console.error('[create-trial] Invalid plan:', plan)
+    console.error('[create-trial] Invalid plan or price not configured:', plan, interval)
     return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
   }
 
