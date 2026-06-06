@@ -9,6 +9,7 @@ const PUBLIC_PATHS = ['/login', '/pricing', '/privacy', '/terms', '/reset-passwo
 
 // Authenticated users with no active subscription may still access these paths.
 const SUB_EXEMPT_PATHS = [
+  '/',
   '/login',
   '/pricing',
   '/privacy',
@@ -54,6 +55,12 @@ export default auth(async function middleware(req: NextRequest & { auth: any }) 
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p))
 
   if (isLoggedIn && pathname === '/login') {
+    return NextResponse.redirect(new URL('/clients', req.url))
+  }
+
+  // Authenticated users at root: redirect to /clients.
+  // The /clients subscription gate handles the no-sub case and sends them to /pricing.
+  if (isLoggedIn && pathname === '/') {
     return NextResponse.redirect(new URL('/clients', req.url))
   }
 

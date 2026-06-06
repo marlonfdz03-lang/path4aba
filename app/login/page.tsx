@@ -56,7 +56,7 @@ function LoginContent() {
       const result = await signIn("credentials", { email, password, redirect: false });
       setLoading(false);
       if (result?.error) { setError("Invalid email or password. Please try again."); return; }
-      router.push("/dashboard");
+      router.push("/clients");
 
     } else if (mode === "signup") {
       if (password !== confirmPassword) { setError("Passwords do not match."); setLoading(false); return; }
@@ -80,7 +80,7 @@ function LoginContent() {
 
       await signIn("credentials", { email, password, redirect: false });
       setLoading(false);
-      router.push("/onboarding");
+      router.push("/pricing");
       return;
 
     } else {
