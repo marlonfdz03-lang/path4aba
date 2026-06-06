@@ -80,6 +80,9 @@ export const proxy = auth(async function proxy(req: NextRequest & { auth: any })
       return NextResponse.next()
     }
 
+    // Admins bypass subscription gate on all routes
+    if (role === 'admin') return NextResponse.next()
+
     // ── Subscription gate ─────────────────────────────────────────────────
     const isSubExempt = SUB_EXEMPT_PATHS.some(
       (p) => pathname === p || pathname.startsWith(p + '/')
