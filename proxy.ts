@@ -64,6 +64,16 @@ export const proxy = auth(async function proxy(req: NextRequest & { auth: any })
     return NextResponse.redirect(new URL('/clients', req.url))
   }
 
+  // BCBA Students: redirect /clients (and /) to /bcba-students — they have no client workspace
+  if (isLoggedIn) {
+    const earlyRole: string = (req.auth as any)?.user?.role || ''
+    if (earlyRole === 'bcba_student' || earlyRole === 'bcaba_student') {
+      if (pathname === '/clients' || pathname.startsWith('/clients/')) {
+        return NextResponse.redirect(new URL('/bcba-students', req.url))
+      }
+    }
+  }
+
   if (!isLoggedIn && !isPublic) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
