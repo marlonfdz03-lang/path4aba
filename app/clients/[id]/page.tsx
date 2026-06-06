@@ -217,6 +217,13 @@ export default function ClientProfilePage() {
   const [refinedNoteSaved, setRefinedNoteSaved] = useState(false);
   const [nextApptDate, setNextApptDate] = useState("");
   const [lastSavedNote, setLastSavedNote] = useState("");
+  const [bcbaOverlapContext, setBcbaOverlapContext] = useState<{
+    empty: boolean;
+    behaviors?: string[];
+    skills?: string[];
+    interventions?: string[];
+    noteText?: string;
+  } | null>(null);
 
   async function loadNotesFromSupabase(clientId: string) {
     try {
@@ -569,6 +576,18 @@ export default function ClientProfilePage() {
     setTimeout(() => setRefinedNoteSaved(false), 2000);
   }
 
+  async function fetchBcbaOverlapContext(sessionDate: string) {
+    if (!sessionDate || !client.id) return;
+    try {
+      const res = await fetch(`/api/rbt/bcba-overlap-context?clientId=${client.id}&date=${sessionDate}`);
+      if (!res.ok) { setBcbaOverlapContext(null); return; }
+      const json = await res.json();
+      setBcbaOverlapContext(json.empty ? null : json);
+    } catch {
+      setBcbaOverlapContext(null);
+    }
+  }
+
   async function handleDeleteNote(noteId: string, fromSupabase?: boolean) {
     if (!window.confirm("Are you sure you want to delete this note?")) return;
     if (fromSupabase) {
@@ -874,7 +893,7 @@ export default function ClientProfilePage() {
               <div className="mb-4">
                 <label className="block text-[12px] font-semibold mb-1.5" style={{ color: "var(--text3)" }}>DATE</label>
                 <input
-                  type="date" value={date} onChange={(e) => setDate(e.target.value)}
+                  type="date" value={date} onChange={(e) => { setDate(e.target.value); fetchBcbaOverlapContext(e.target.value); }}
                   className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2"
                   style={{ borderColor: "var(--border)", color: "var(--text1)" }}
                 />
@@ -1052,6 +1071,20 @@ export default function ClientProfilePage() {
                   {selectedBehaviors.length} selected
                 </span>
               </div>
+              {bcbaOverlapContext && !bcbaOverlapContext.empty && (
+                <div className="mx-6 mb-3 px-4 py-3 rounded-xl text-[12px]" style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", color: "#1E40AF" }}>
+                  <p className="font-semibold mb-1">🔷 BCBA observed this session</p>
+                  {bcbaOverlapContext.behaviors && bcbaOverlapContext.behaviors.length > 0 && (
+                    <p>Behaviors observed: <span className="font-medium">{bcbaOverlapContext.behaviors.join(", ")}</span></p>
+                  )}
+                  {bcbaOverlapContext.skills && bcbaOverlapContext.skills.length > 0 && (
+                    <p>Skills observed: <span className="font-medium">{bcbaOverlapContext.skills.join(", ")}</span></p>
+                  )}
+                  {bcbaOverlapContext.interventions && bcbaOverlapContext.interventions.length > 0 && (
+                    <p>Interventions used: <span className="font-medium">{bcbaOverlapContext.interventions.join(", ")}</span></p>
+                  )}
+                </div>
+              )}
               {behaviors.length === 0 ? (
                 <p className="px-6 py-4 text-[13px]" style={{ color: "var(--text3)" }}>No maladaptive behaviors in this profile.</p>
               ) : (
@@ -1060,11 +1093,12 @@ export default function ClientProfilePage() {
                     const name = getName(b);
                     const functions: string[] = typeof b === 'object' ? (b.functions || b.function || []) : [];
                     const funcLabel = functions.length > 0 ? functions.join(', ') : null;
+                    const observedByBcba = bcbaOverlapContext?.behaviors?.includes(name);
                     return (
                       <CheckboxRow
                         key={i}
                         name={name}
-                        description={funcLabel ? `Function: ${funcLabel}` : (typeof b === "object" ? b.topography : undefined)}
+                        description={observedByBcba ? `🔷 Observed by BCBA · Function: ${funcLabel || 'unknown'}` : funcLabel ? `Function: ${funcLabel}` : (typeof b === "object" ? b.topography : undefined)}
                         checked={selectedBehaviors.includes(name)}
                         disabled={false}
                         onToggle={() => toggleBehavior(name)}
