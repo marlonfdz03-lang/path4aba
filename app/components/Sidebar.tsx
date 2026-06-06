@@ -200,7 +200,7 @@ export default function Sidebar() {
   return (
     <nav
       className="fixed left-0 top-0 bottom-0 flex flex-col z-50"
-      style={{ width: 220, background: "var(--navy)" }}
+      style={{ width: 200, background: "var(--navy)" }}
     >
       <Logo />
 
