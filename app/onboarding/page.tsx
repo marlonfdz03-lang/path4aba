@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 
@@ -100,26 +100,11 @@ const BCBA_PLANS: Plan[] = [
 
 const STUDENT_PLANS: Plan[] = [
   {
-    key: "bcba_students_addon",
-    name: "BCBA Students — With RBT Account",
-    subtitle: "Already a Path4ABA RBT member.",
-    monthlyPrice: 14.99,
-    yearlyPrice: 149,
-    features: [
-      "Track concentrated & supervised hours",
-      "BACB compliance calculations",
-      "Monthly M-FVF PDF export",
-      "200+ BACB-compliant note descriptions",
-      "7-day free trial",
-    ],
-  },
-  {
     key: "bcba_students_standalone",
     name: "BCBA Students — Standalone",
-    subtitle: "No existing Path4ABA subscription.",
+    subtitle: "No existing Path4ABA subscription required.",
     monthlyPrice: 19.99,
     yearlyPrice: 199,
-    highlighted: true,
     features: [
       "Track concentrated & supervised hours",
       "BACB compliance calculations",
@@ -248,6 +233,16 @@ export default function OnboardingPage() {
   const [interval, setInterval] = useState<"month" | "year">("month");
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [planError, setPlanError] = useState("");
+  const [hasActiveRBT, setHasActiveRBT] = useState(false);
+
+  useEffect(() => {
+    const userId = (session?.user as any)?.id;
+    if (!userId) return;
+    fetch("/api/user/subscription")
+      .then((r) => r.json())
+      .then((d) => setHasActiveRBT(!!d.hasActiveRBT))
+      .catch(() => {});
+  }, [session]);
 
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [termsWarning, setTermsWarning] = useState(false);
@@ -402,16 +397,40 @@ export default function OnboardingPage() {
 
       {/* Plan cards */}
       <div className="flex flex-col lg:flex-row gap-5 justify-center px-6 pb-6 max-w-4xl mx-auto w-full">
-        {plans.map((plan) => (
-          <PlanCard
-            key={plan.key}
-            plan={plan}
-            interval={interval}
-            loading={loadingPlan === plan.key}
-            disabled={!!loadingPlan || !agreedToTerms}
-            onSelect={() => handleSelectPlan(plan.key)}
-          />
-        ))}
+        {activeSection === "students" && hasActiveRBT ? (
+          <div className="max-w-md w-full mx-auto bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)", boxShadow: "0 4px 24px rgba(13,43,78,0.08)" }}>
+            <div className="h-[3px]" style={{ background: "linear-gradient(90deg, var(--teal), var(--sky))" }} />
+            <div className="p-8 text-center">
+              <div className="w-14 h-14 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: "rgba(27,168,160,0.1)" }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                </svg>
+              </div>
+              <h2 className="text-[20px] font-semibold mb-2" style={{ color: "var(--text1)" }}>Already have an RBT plan?</h2>
+              <p className="text-[14px] mb-6 leading-relaxed" style={{ color: "var(--text3)" }}>
+                Log in — Fieldwork Tracker is included in your sidebar.
+              </p>
+              <button
+                onClick={() => router.push("/login")}
+                className="w-full py-3 rounded-xl text-[14px] font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ background: "var(--teal)" }}
+              >
+                Log in
+              </button>
+            </div>
+          </div>
+        ) : (
+          plans.map((plan) => (
+            <PlanCard
+              key={plan.key}
+              plan={plan}
+              interval={interval}
+              loading={loadingPlan === plan.key}
+              disabled={!!loadingPlan || !agreedToTerms}
+              onSelect={() => handleSelectPlan(plan.key)}
+            />
+          ))
+        )}
       </div>
 
       {/* Add-on — shown only for RBT and BCBA sections */}

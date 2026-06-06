@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import type { PlanKey } from "@/lib/stripe";
@@ -12,6 +12,8 @@ const CHECK = (
     <polyline points="20 6 9 17 4 12" />
   </svg>
 );
+
+type Profession = "rbt" | "bcba" | "student";
 
 type Plan = {
   key: PlanKey;
@@ -185,6 +187,23 @@ export default function PricingPage() {
   const { data: session } = useSession();
   const [interval, setInterval] = useState<"month" | "year">("month");
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const [profession, setProfession] = useState<Profession>("rbt");
+  const [hasActiveRBT, setHasActiveRBT] = useState(false);
+
+  useEffect(() => {
+    const role = (session?.user as any)?.role as string | undefined;
+    if (role === "bcba" || role === "bcaba") setProfession("bcba");
+    else if (role === "bcba_student" || role === "bcaba_student") setProfession("student");
+  }, [session]);
+
+  useEffect(() => {
+    const userId = (session?.user as any)?.id;
+    if (!userId) return;
+    fetch("/api/user/subscription")
+      .then((r) => r.json())
+      .then((d) => setHasActiveRBT(!!d.hasActiveRBT))
+      .catch(() => {});
+  }, [session]);
 
   async function handleStart(planKey: PlanKey) {
     setLoadingPlan(planKey);
@@ -204,8 +223,8 @@ export default function PricingPage() {
     }
   }
 
-  async function handleStartBCBAStudents(type: "addon" | "standalone") {
-    setLoadingPlan(`bcba_students_${type}`);
+  async function handleStartStandalone() {
+    setLoadingPlan("bcba_students_standalone");
     const userId = (session?.user as any)?.id;
     if (!userId) { router.push("/login"); return; }
     try {
@@ -222,11 +241,14 @@ export default function PricingPage() {
     }
   }
 
-  const SectionLabel = ({ label }: { label: string }) => (
-    <p className="text-[11px] uppercase tracking-widest font-semibold mb-4 text-center" style={{ color: "var(--text3)" }}>
-      {label}
-    </p>
-  );
+  const PROFESSIONS: { key: Profession; label: string }[] = [
+    { key: "rbt", label: "RBT" },
+    { key: "bcba", label: "BCBA / BCaBA" },
+    { key: "student", label: "BCBA / BCaBA Student" },
+  ];
+
+  const standalonePrice = interval === "month" ? 19.99 : 199;
+  const standaloneSavings = Math.round(19.99 * 12 - 199);
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)", fontFamily: "var(--font-dm-sans, sans-serif)" }}>
@@ -242,7 +264,7 @@ export default function PricingPage() {
       </div>
 
       {/* Hero */}
-      <div className="text-center py-12 px-6">
+      <div className="text-center py-10 px-6">
         <p className="text-[12px] uppercase tracking-widest font-semibold mb-3" style={{ color: "var(--teal)" }}>Pricing</p>
         <h1 className="text-[32px] font-semibold leading-tight mb-3" style={{ color: "var(--text1)" }}>
           Simple, transparent pricing
@@ -250,6 +272,24 @@ export default function PricingPage() {
         <p className="text-[15px] max-w-sm mx-auto mb-8" style={{ color: "var(--text3)" }}>
           Start free for 7 days — no credit card required. Cancel any time.
         </p>
+
+        {/* Profession selector */}
+        <div className="flex justify-center gap-2 flex-wrap mb-6">
+          {PROFESSIONS.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setProfession(key)}
+              className="px-5 py-2.5 rounded-xl text-[13px] font-semibold border transition-colors"
+              style={{
+                background: profession === key ? "var(--navy)" : "white",
+                borderColor: profession === key ? "var(--navy)" : "var(--border)",
+                color: profession === key ? "white" : "var(--text2)",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
         {/* Interval toggle */}
         <div className="inline-flex items-center p-1 rounded-full border bg-white" style={{ borderColor: "var(--border)" }}>
@@ -275,13 +315,13 @@ export default function PricingPage() {
         </div>
       </div>
 
-      <div className="px-6 pb-8 max-w-5xl mx-auto w-full space-y-12">
+      {/* Plan cards */}
+      <div className="px-6 pb-8 max-w-4xl mx-auto w-full">
 
         {/* RBT Plans */}
-        <div>
-          <SectionLabel label="RBT Plans" />
+        {profession === "rbt" && (
           <div className="flex flex-col md:flex-row gap-5">
-            {RBT_PLANS.map(plan => (
+            {RBT_PLANS.map((plan) => (
               <PlanCard
                 key={plan.key}
                 plan={plan}
@@ -291,13 +331,12 @@ export default function PricingPage() {
               />
             ))}
           </div>
-        </div>
+        )}
 
         {/* BCBA Plans */}
-        <div>
-          <SectionLabel label="BCBA / BCaBA Plans" />
+        {profession === "bcba" && (
           <div className="flex flex-col md:flex-row gap-5">
-            {BCBA_PLANS.map(plan => (
+            {BCBA_PLANS.map((plan) => (
               <PlanCard
                 key={plan.key}
                 plan={plan}
@@ -307,124 +346,108 @@ export default function PricingPage() {
               />
             ))}
           </div>
-        </div>
+        )}
 
         {/* BCBA Students */}
-        <div>
-          <SectionLabel label="BCBA Students — Fieldwork Hour Tracker" />
-          <div className="flex flex-col md:flex-row gap-5">
-            {/* With RBT plan */}
-            <div className="flex-1 bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+        {profession === "student" && (
+          hasActiveRBT ? (
+            <div className="max-w-md mx-auto bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)", boxShadow: "0 4px 24px rgba(13,43,78,0.08)" }}>
               <div className="h-[3px]" style={{ background: "linear-gradient(90deg, var(--teal), var(--sky))" }} />
-              <div className="p-7">
-                <p className="text-[11px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--text3)" }}>With RBT account</p>
-                <p className="text-[15px] font-semibold mb-1" style={{ color: "var(--text1)" }}>BCBA Students</p>
-                <p className="text-[13px] mb-5" style={{ color: "var(--text3)" }}>Already a Path4ABA RBT member.</p>
-                <div className="flex items-end gap-1 mb-1">
-                  <span className="text-[38px] font-semibold leading-none" style={{ color: "var(--text1)" }}>
-                    {interval === "month" ? "$14.99" : "$149"}
-                  </span>
-                  <span className="text-[13px] mb-1.5" style={{ color: "var(--text3)" }}>/{interval === "month" ? "mo" : "yr"}</span>
+              <div className="p-8 text-center">
+                <div className="w-14 h-14 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: "rgba(27,168,160,0.1)" }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                  </svg>
                 </div>
-                {interval === "year" && <p className="text-[12px] font-medium mb-4" style={{ color: "var(--teal)" }}>Save $30.88/year vs monthly</p>}
+                <h2 className="text-[20px] font-semibold mb-2" style={{ color: "var(--text1)" }}>Already have an RBT plan?</h2>
+                <p className="text-[14px] mb-6 leading-relaxed" style={{ color: "var(--text3)" }}>
+                  Log in — Fieldwork Tracker is included in your sidebar.
+                </p>
                 <button
-                  onClick={() => handleStartBCBAStudents("addon")}
-                  disabled={!!loadingPlan}
-                  className="w-full py-3 rounded-xl text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60 mb-3 mt-4"
-                  style={{ background: "var(--navy)" }}
+                  onClick={() => router.push("/login")}
+                  className="w-full py-3 rounded-xl text-[14px] font-semibold text-white transition-opacity hover:opacity-90"
+                  style={{ background: "var(--teal)" }}
                 >
-                  {loadingPlan === "bcba_students_addon" ? "Redirecting…" : "Start Free Trial"}
+                  Log in
                 </button>
-                <p className="text-[11px] text-center" style={{ color: "var(--text3)" }}>7 days free · Card required</p>
-                <div className="h-px my-5" style={{ background: "var(--border)" }} />
-                <ul className="space-y-2">
-                  {["Track fieldwork hours", "BACB compliance calculations", "Monthly M-FVF PDF export", "200+ BACB-compliant notes"].map(f => (
-                    <li key={f} className="flex items-center gap-2.5">
-                      <span style={{ color: "var(--teal)" }}>{CHECK}</span>
-                      <span className="text-[13px]" style={{ color: "var(--text2)" }}>{f}</span>
-                    </li>
-                  ))}
-                </ul>
               </div>
             </div>
-
-            {/* No RBT plan */}
-            <div className="flex-1 bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+          ) : (
+            <div className="max-w-md mx-auto bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)", boxShadow: "0 20px 60px rgba(13,43,78,0.12)" }}>
               <div className="h-[3px]" style={{ background: "linear-gradient(90deg, var(--teal), var(--sky))" }} />
-              <div className="p-7">
-                <p className="text-[11px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--text3)" }}>Standalone</p>
-                <p className="text-[15px] font-semibold mb-1" style={{ color: "var(--text1)" }}>BCBA Students</p>
-                <p className="text-[13px] mb-5" style={{ color: "var(--text3)" }}>No existing Path4ABA subscription.</p>
+              <div className="p-7 flex flex-col">
+                <p className="text-[11px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--text3)" }}>BCBA Students Standalone</p>
+                <p className="text-[13px] mb-5 leading-relaxed" style={{ color: "var(--text3)" }}>Fieldwork Tracker — no existing Path4ABA subscription required.</p>
                 <div className="flex items-end gap-1 mb-1">
-                  <span className="text-[38px] font-semibold leading-none" style={{ color: "var(--text1)" }}>
-                    {interval === "month" ? "$19.99" : "$199"}
-                  </span>
+                  <span className="text-[38px] font-semibold leading-none" style={{ color: "var(--text1)" }}>${standalonePrice}</span>
                   <span className="text-[13px] mb-1.5" style={{ color: "var(--text3)" }}>/{interval === "month" ? "mo" : "yr"}</span>
                 </div>
-                {interval === "year" && <p className="text-[12px] font-medium mb-4" style={{ color: "var(--teal)" }}>Save $40.88/year vs monthly</p>}
+                <div className="mb-5 h-5">
+                  {interval === "year" && (
+                    <p className="text-[12px] font-medium" style={{ color: "var(--teal)" }}>Save ${standaloneSavings}/year vs monthly</p>
+                  )}
+                </div>
                 <button
-                  onClick={() => handleStartBCBAStudents("standalone")}
+                  onClick={handleStartStandalone}
                   disabled={!!loadingPlan}
-                  className="w-full py-3 rounded-xl text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60 mb-3 mt-4"
+                  className="w-full py-3 rounded-xl text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed mb-3"
                   style={{ background: "var(--navy)" }}
                 >
                   {loadingPlan === "bcba_students_standalone" ? "Redirecting…" : "Start Free Trial"}
                 </button>
-                <p className="text-[11px] text-center" style={{ color: "var(--text3)" }}>7 days free · Card required</p>
-                <div className="h-px my-5" style={{ background: "var(--border)" }} />
-                <ul className="space-y-2">
-                  {["Track fieldwork hours", "BACB compliance calculations", "Monthly M-FVF PDF export", "200+ BACB-compliant notes"].map(f => (
-                    <li key={f} className="flex items-center gap-2.5">
-                      <span style={{ color: "var(--teal)" }}>{CHECK}</span>
+                <p className="text-[11px] text-center mb-6" style={{ color: "var(--text3)" }}>7 days free · No credit card required</p>
+                <div className="h-px mb-5" style={{ background: "var(--border)" }} />
+                <ul className="space-y-2.5">
+                  {["Track fieldwork hours", "BACB compliance calculations", "Monthly M-FVF PDF export", "200+ BACB-compliant notes", "7-day free trial"].map((f) => (
+                    <li key={f} className="flex items-start gap-2.5">
+                      <span style={{ color: "var(--teal)", flexShrink: 0, marginTop: 1 }}>{CHECK}</span>
                       <span className="text-[13px]" style={{ color: "var(--text2)" }}>{f}</span>
                     </li>
                   ))}
                 </ul>
               </div>
             </div>
-          </div>
-        </div>
+          )
+        )}
 
-        {/* Add-ons */}
-        <div>
-          <SectionLabel label="Add-ons" />
-          <div className="flex flex-col md:flex-row gap-5">
-            {/* Data Tool */}
-            <div className="flex-1 bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-              <div className="h-[3px]" style={{ background: "linear-gradient(90deg, #8B5CF6, #A78BFA)" }} />
-              <div className="p-6">
-                <p className="text-[11px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--text3)" }}>RBT Add-on</p>
-                <p className="text-[15px] font-semibold mb-1" style={{ color: "var(--text1)" }}>Data Tool</p>
-                <p className="text-[13px] mb-4" style={{ color: "var(--text3)" }}>Track behavior and skill data from your Chrome extension.</p>
-                <div className="flex items-end gap-1">
-                  <span className="text-[32px] font-semibold leading-none" style={{ color: "var(--text1)" }}>
-                    {interval === "month" ? "$5.99" : "$59"}
-                  </span>
-                  <span className="text-[13px] mb-1.5" style={{ color: "var(--text3)" }}>/{interval === "month" ? "mo" : "yr"}</span>
+        {/* Add-ons — only for RBT and BCBA */}
+        {profession !== "student" && (
+          <div className="mt-10">
+            <p className="text-[11px] uppercase tracking-widest font-semibold mb-4 text-center" style={{ color: "var(--text3)" }}>Add-ons</p>
+            <div className="flex flex-col md:flex-row gap-5">
+              <div className="flex-1 bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+                <div className="h-[3px]" style={{ background: "linear-gradient(90deg, #8B5CF6, #A78BFA)" }} />
+                <div className="p-6">
+                  <p className="text-[11px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--text3)" }}>RBT Add-on</p>
+                  <p className="text-[15px] font-semibold mb-1" style={{ color: "var(--text1)" }}>Data Tool</p>
+                  <p className="text-[13px] mb-4" style={{ color: "var(--text3)" }}>Track behavior and skill data from your Chrome extension.</p>
+                  <div className="flex items-end gap-1">
+                    <span className="text-[32px] font-semibold leading-none" style={{ color: "var(--text1)" }}>
+                      {interval === "month" ? "$5.99" : "$59"}
+                    </span>
+                    <span className="text-[13px] mb-1.5" style={{ color: "var(--text3)" }}>/{interval === "month" ? "mo" : "yr"}</span>
+                  </div>
+                  {interval === "year" && <p className="text-[12px] font-medium mt-1" style={{ color: "#8B5CF6" }}>Save $12.88/year</p>}
                 </div>
-                {interval === "year" && <p className="text-[12px] font-medium mt-1" style={{ color: "#8B5CF6" }}>Save $12.88/year</p>}
+              </div>
+              <div className="flex-1 bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+                <div className="h-[3px]" style={{ background: "linear-gradient(90deg, #F59E0B, #FCD34D)" }} />
+                <div className="p-6">
+                  <p className="text-[11px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--text3)" }}>BCBA Add-on</p>
+                  <p className="text-[15px] font-semibold mb-1" style={{ color: "var(--text1)" }}>Assessment Tools</p>
+                  <p className="text-[13px] mb-4" style={{ color: "var(--text3)" }}>PDF assessment parsing and clinical profile generation.</p>
+                  <div className="flex items-end gap-1">
+                    <span className="text-[32px] font-semibold leading-none" style={{ color: "var(--text1)" }}>
+                      {interval === "month" ? "$9.99" : "$99"}
+                    </span>
+                    <span className="text-[13px] mb-1.5" style={{ color: "var(--text3)" }}>/{interval === "month" ? "mo" : "yr"}</span>
+                  </div>
+                  {interval === "year" && <p className="text-[12px] font-medium mt-1" style={{ color: "#D97706" }}>Save $20.88/year</p>}
+                </div>
               </div>
             </div>
-
-            {/* Assessment Tool */}
-            <div className="flex-1 bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-              <div className="h-[3px]" style={{ background: "linear-gradient(90deg, #F59E0B, #FCD34D)" }} />
-              <div className="p-6">
-                <p className="text-[11px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--text3)" }}>BCBA Add-on</p>
-                <p className="text-[15px] font-semibold mb-1" style={{ color: "var(--text1)" }}>Assessment Tools</p>
-                <p className="text-[13px] mb-4" style={{ color: "var(--text3)" }}>PDF assessment parsing and clinical profile generation.</p>
-                <div className="flex items-end gap-1">
-                  <span className="text-[32px] font-semibold leading-none" style={{ color: "var(--text1)" }}>
-                    {interval === "month" ? "$9.99" : "$99"}
-                  </span>
-                  <span className="text-[13px] mb-1.5" style={{ color: "var(--text3)" }}>/{interval === "month" ? "mo" : "yr"}</span>
-                </div>
-                {interval === "year" && <p className="text-[12px] font-medium mt-1" style={{ color: "#D97706" }}>Save $20.88/year</p>}
-              </div>
-            </div>
           </div>
-        </div>
-
+        )}
       </div>
 
       {/* Footer */}
