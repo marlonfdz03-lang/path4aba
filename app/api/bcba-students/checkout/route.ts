@@ -4,8 +4,9 @@ import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
-const SUCCESS_URL = 'https://path4aba-git-main-marlonfdz03-langs-projects.vercel.app/bcba-students?trial=started'
-const CANCEL_URL = 'https://path4aba-git-main-marlonfdz03-langs-projects.vercel.app/bcba-students'
+const ORIGIN = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+const SUCCESS_URL = `${ORIGIN}/bcba-students?trial=started`
+const CANCEL_URL = `${ORIGIN}/pricing`
 
 export async function POST(req: Request) {
   let body: { userId?: string; interval?: 'month' | 'year' }
@@ -27,14 +28,15 @@ export async function POST(req: Request) {
 
   const sub = await prisma.subscriptions.findFirst({
     where: { user_id: userId },
-    select: { status: true, plan: true, stripe_customer_id: true, trial_ends_at: true },
+    select: { status: true, plan: true, stripe_customer_id: true, trial_ends_at: true, current_period_ends_at: true },
   })
 
   const now = new Date()
   const hasActiveRBT =
-    sub?.plan === 'rbt' &&
+    (sub?.plan === 'rbt_1' || sub?.plan === 'rbt_2') &&
     (sub.status === 'active' ||
-      (sub.status === 'trialing' && sub.trial_ends_at && new Date(sub.trial_ends_at) > now))
+      (sub.status === 'trialing' && sub.trial_ends_at && new Date(sub.trial_ends_at) > now) ||
+      (sub.status === 'canceled' && sub.current_period_ends_at && new Date(sub.current_period_ends_at) > now))
 
   const priceSet = hasActiveRBT ? BCBA_STUDENTS_PRICES.addon : BCBA_STUDENTS_PRICES.standalone
   const priceId = priceSet[interval]

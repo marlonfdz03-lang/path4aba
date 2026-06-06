@@ -2,16 +2,12 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ sub: null, isBCBAPro: false, hasBCBAStudents: false, hasActiveRBT: false })
   const userId = (session.user as any).id as string
-
-  if (!UUID_RE.test(userId)) return NextResponse.json({ sub: null, isBCBAPro: false, hasBCBAStudents: false, hasActiveRBT: false })
 
   const sub = await prisma.subscriptions.findFirst({
     where: { user_id: userId },
@@ -41,7 +37,7 @@ export async function GET() {
       new Date(sub.bcba_students_trial_ends_at) > now)
 
   const hasActiveRBT =
-    sub?.plan === 'rbt' &&
+    (sub?.plan === 'rbt_1' || sub?.plan === 'rbt_2') &&
     (sub.status === 'active' ||
       (sub.status === 'trialing' && sub.trial_ends_at != null && new Date(sub.trial_ends_at) > now) ||
       (sub.status === 'canceled' && sub.current_period_ends_at != null && new Date(sub.current_period_ends_at) > now))

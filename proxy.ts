@@ -17,6 +17,7 @@ const SUB_EXEMPT_PATHS = [
   '/reset-password',
   '/onboarding',
   '/admin',
+  '/bcba-students', // layout.tsx handles its own paywall — sub-gate doesn't cover bcba_students_status
 ]
 
 function corsHeaders(origin: string | null): Record<string, string> {
@@ -54,23 +55,18 @@ export const proxy = auth(async function proxy(req: NextRequest & { auth: any })
   const isLoggedIn = !!req.auth
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p))
 
-  if (isLoggedIn && pathname === '/login') {
-    return NextResponse.redirect(new URL('/clients', req.url))
-  }
-
-  // Authenticated users at root: redirect to /clients.
-  // The /clients subscription gate handles the no-sub case and sends them to /pricing.
-  if (isLoggedIn && pathname === '/') {
-    return NextResponse.redirect(new URL('/clients', req.url))
-  }
-
-  // BCBA Students: redirect /clients (and /) to /bcba-students — they have no client workspace
   if (isLoggedIn) {
     const earlyRole: string = (req.auth as any)?.user?.role || ''
-    if (earlyRole === 'bcba_student' || earlyRole === 'bcaba_student') {
-      if (pathname === '/clients' || pathname.startsWith('/clients/')) {
+    const isStudent = earlyRole === 'bcba_student' || earlyRole === 'bcaba_student'
+
+    // Students get their own home — never send them to /clients
+    if (isStudent) {
+      if (pathname === '/login' || pathname === '/' || pathname === '/clients' || pathname.startsWith('/clients/')) {
         return NextResponse.redirect(new URL('/bcba-students', req.url))
       }
+    } else {
+      if (pathname === '/login') return NextResponse.redirect(new URL('/clients', req.url))
+      if (pathname === '/') return NextResponse.redirect(new URL('/clients', req.url))
     }
   }
 
