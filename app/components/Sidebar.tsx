@@ -265,6 +265,20 @@ export default function Sidebar() {
                 <NavItem href="/" label="Dashboard" icon={IconDashboard} active={isActive("/")} />
                 <NavItem href="/clients" label="Clients" icon={IconUsers} active={isActive("/clients")} badge={clientCount} />
                 <NavItem href="/schedule" label="Schedule" icon={IconCalendar} active={isActive("/schedule")} />
+                <a
+                  href="https://chromewebstore.google.com/detail/path4aba/YOUR_EXTENSION_ID"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-[13px] font-medium transition-colors hover:bg-white/10"
+                  style={{ color: "rgba(255,255,255,0.7)" }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M12 9V3M15.18 10.5l5.18-3M15.18 13.5l5.18 3M12 15v6M8.82 13.5L3.64 16.5M8.82 10.5L3.64 7.5"/>
+                  </svg>
+                  Chrome Extension
+                </a>
               </div>
             </div>
             {/* Fieldwork Tracker — only if subscribed to BCBA Students add-on */}
