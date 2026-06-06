@@ -290,26 +290,36 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     };
   }
 
-  // Step 2: Fetch relevant topography variants from knowledge base
-  const topographies = await prisma.topographies.findMany({
-    where: {
-      behavior_id: {
-        in: [
-          '00000000-0000-0000-0000-000000000001',
-          '00000000-0000-0000-0000-000000000002',
-          '00000000-0000-0000-0000-000000000003',
-          '00000000-0000-0000-0000-000000000004',
-          '00000000-0000-0000-0000-000000000005',
-        ],
+  // Steps 2, 3, 5: Run all DB queries in parallel
+  const [topographies, replacementSkills, previousNotes] = await Promise.all([
+    prisma.topographies.findMany({
+      where: {
+        behavior_id: {
+          in: [
+            '00000000-0000-0000-0000-000000000001',
+            '00000000-0000-0000-0000-000000000002',
+            '00000000-0000-0000-0000-000000000003',
+            '00000000-0000-0000-0000-000000000004',
+            '00000000-0000-0000-0000-000000000005',
+          ],
+        },
       },
-    },
-    select: { description: true, vocabulary_variants: true, behavior_id: true },
-  });
+      select: { description: true, vocabulary_variants: true, behavior_id: true },
+    }),
+    prisma.replacement_skills.findMany({
+      select: { skill_description: true, vocabulary_variants: true, function_targeted: true },
+    }),
+    prisma.session_notes.findMany({
+      where: { client_id: input.clientId },
+      select: { note_text: true },
+      orderBy: { created_at: 'desc' },
+      take: 10,
+    }),
+  ]);
 
-  // Step 3: Fetch replacement skill vocabulary
-  const replacementSkills = await prisma.replacement_skills.findMany({
-    select: { skill_description: true, vocabulary_variants: true, function_targeted: true },
-  });
+  const previousTexts = previousNotes
+    .map((r) => r.note_text as string)
+    .filter(Boolean);
 
   // Step 4: Build the structured context for the AI
   const sessionContext = {
@@ -355,17 +365,6 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
       }))
     }
   };
-
-  // Step 5: Fetch full note history for this client to check similarity later
-  const previousNotes = await prisma.session_notes.findMany({
-    where: { client_id: input.clientId },
-    select: { note_text: true },
-    orderBy: { created_at: 'desc' },
-  });
-
-  const previousTexts = previousNotes
-    .map((r) => r.note_text as string)
-    .filter(Boolean);
 
   // Step 6: Generate the note using the master prompt + contextual clinical factors
   const contextualFactors = buildContextualFactors(input);
