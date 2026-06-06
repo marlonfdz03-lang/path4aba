@@ -26,14 +26,19 @@ const VAGUE_PHRASES = ['worked on programs','did session','reviewed stuff','did 
 
 function auditRiskScore(s: Session): { score: number; label: string; color: string; bg: string } {
   let score = 100;
-  if (s.activity_category && isInvalidCategory(s.activity_category)) score -= 40;
+  const categoryInvalid = !!s.activity_category && isInvalidCategory(s.activity_category);
+  if (categoryInvalid) score -= 40;
   else if (s.activity_category && !isValidCategory(s.activity_category)) score -= 40;
   const ref = (s.client_reference ?? '').trim();
   if (!ref) score -= 30;
   const desc = (s.session_note ?? '').trim().toLowerCase();
-  if (desc.length < 30 || VAGUE_PHRASES.some(p => desc.includes(p))) score -= 25;
+  const isVague = desc.length < 30 || VAGUE_PHRASES.some(p => desc.includes(p));
+  if (isVague) score -= 25;
   if (s.total_hours > 8) score -= 15;
+  const hasCriticalIssue = categoryInvalid || !ref;
+  if (!hasCriticalIssue && !isVague) score += 10; // +10 only when no critical issue
   score = Math.max(0, Math.min(100, score));
+  if (categoryInvalid) return { score, label: 'HIGH', color: '#DC2626', bg: '#FEF2F2' };
   if (score >= 80) return { score, label: 'LOW', color: '#16A34A', bg: '#F0FDF4' };
   if (score >= 50) return { score, label: 'MEDIUM', color: '#92400E', bg: '#FFF8E1' };
   return { score, label: 'HIGH', color: '#DC2626', bg: '#FEF2F2' };

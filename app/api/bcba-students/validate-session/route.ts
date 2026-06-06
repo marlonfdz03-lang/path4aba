@@ -83,17 +83,26 @@ export async function POST(req: Request) {
     issues.push(`Session duration (${hours} hrs) exceeds 8 hours — may be flagged in a BACB audit. Verify actual time worked.`)
   }
 
-  // +10: description contains specific clinical terminology
+  // Track whether any critical issue exists (invalid category or missing ref)
+  const hasCriticalIssue =
+    (activityCategory !== '' && (isInvalidCategory(activityCategory) || !isValidCategory(activityCategory))) ||
+    !trimmedRef
+
+  // +10: specific clinical terminology — only when no critical issue exists
   const hasSpecific = SPECIFIC_INDICATORS.some(term =>
     trimmedDesc.includes(term.toLowerCase())
   )
-  if (hasSpecific && !isVague) {
+  if (hasSpecific && !isVague && !hasCriticalIssue) {
     score += 10
   }
 
   score = Math.max(0, Math.min(100, score))
 
-  const riskLevel: RiskLevel = score >= 80 ? 'LOW' : score >= 50 ? 'MEDIUM' : 'HIGH'
+  // Invalid category is always HIGH risk and never valid — override score-based logic
+  const categoryInvalid = activityCategory !== '' && isInvalidCategory(activityCategory)
+  const riskLevel: RiskLevel = categoryInvalid
+    ? 'HIGH'
+    : score >= 80 ? 'LOW' : score >= 50 ? 'MEDIUM' : 'HIGH'
 
   const bacbReasonMap: Record<RiskLevel, string> = {
     LOW:    'This session entry meets BACB documentation standards and is unlikely to be challenged in a fieldwork audit.',
@@ -103,7 +112,7 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     score,
-    valid: score >= 50,
+    valid: !categoryInvalid && score >= 50,
     riskLevel,
     issues,
     bacbReason: bacbReasonMap[riskLevel],
