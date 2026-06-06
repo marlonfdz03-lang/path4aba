@@ -36,6 +36,10 @@ export default function AdminSubscriptionsPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
+  const [cancelTarget, setCancelTarget] = useState<Sub | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+
   useEffect(() => {
     fetch("/api/admin/subscriptions")
       .then(r => r.json())
@@ -59,6 +63,30 @@ export default function AdminSubscriptionsPage() {
         setEditTarget(null);
       }
     } finally { setEditLoading(false); }
+  }
+
+  async function handleCancel() {
+    if (!cancelTarget) return;
+    setCancelLoading(true);
+    setCancelError("");
+    try {
+      const res = await fetch("/api/admin/subscriptions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: cancelTarget.id, status: "canceled" }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setSubs(prev => prev.map(s => s.id === cancelTarget.id ? { ...s, status: "canceled" } : s));
+        setCancelTarget(null);
+      } else {
+        setCancelError(data.error || "Cancellation failed.");
+      }
+    } catch {
+      setCancelError("Network error. Please try again.");
+    } finally {
+      setCancelLoading(false);
+    }
   }
 
   async function handleDelete() {
@@ -135,6 +163,15 @@ export default function AdminSubscriptionsPage() {
                       >
                         Edit
                       </button>
+                      {s.status !== "canceled" && (
+                        <button
+                          onClick={() => { setCancelTarget(s); setCancelError(""); }}
+                          className="text-[12px] font-medium px-2.5 py-1 rounded-lg border transition-colors hover:opacity-80"
+                          style={{ borderColor: "#FCD34D", color: "#D97706" }}
+                        >
+                          Cancel
+                        </button>
+                      )}
                       <button
                         onClick={() => { setDeleteTarget(s); setDeleteError(""); }}
                         className="text-[12px] font-medium px-2.5 py-1 rounded-lg border transition-colors hover:opacity-80"
@@ -194,6 +231,48 @@ export default function AdminSubscriptionsPage() {
                 style={{ borderColor: "var(--border)", color: "var(--text2)" }}
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cancelTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: "rgba(0,0,0,0.4)" }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" style={{ fontFamily: "var(--font-dm-sans, sans-serif)" }}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[15px] font-semibold" style={{ color: "var(--text1)" }}>Cancel Subscription</p>
+              <button onClick={() => setCancelTarget(null)} className="text-[18px]" style={{ color: "var(--text3)" }}>×</button>
+            </div>
+            <p className="text-[13px] mb-2" style={{ color: "var(--text2)" }}>
+              Cancel subscription for <strong>{cancelTarget.user_email}</strong>?
+            </p>
+            <p className="text-[12px] mb-4 px-3 py-2 rounded-lg" style={{ background: "#FFFBEB", color: "#92400E", border: "1px solid #FCD34D" }}>
+              Status will be set to <strong>canceled</strong>. The subscription record is kept.
+              {cancelTarget.current_period_ends_at && (
+                <> Access continues until <strong>{fmt(cancelTarget.current_period_ends_at)}</strong>.</>
+              )}
+            </p>
+            {cancelError && (
+              <p className="text-[12px] mb-4 px-3 py-2 rounded-lg border" style={{ background: "#FEF2F2", borderColor: "#FECACA", color: "#DC2626" }}>
+                {cancelError}
+              </p>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={handleCancel}
+                disabled={cancelLoading}
+                className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50"
+                style={{ background: "#D97706" }}
+              >
+                {cancelLoading ? "Canceling…" : "Confirm Cancel"}
+              </button>
+              <button
+                onClick={() => setCancelTarget(null)}
+                className="flex-1 py-2.5 rounded-xl text-[13px] font-medium border"
+                style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+              >
+                Keep Active
               </button>
             </div>
           </div>

@@ -31,7 +31,8 @@ export async function GET() {
   const isBCBAPro =
     sub?.plan === 'bcba_pro' &&
     (sub.status === 'active' ||
-      (sub.status === 'trialing' && sub.trial_ends_at != null && new Date(sub.trial_ends_at) > now))
+      (sub.status === 'trialing' && sub.trial_ends_at != null && new Date(sub.trial_ends_at) > now) ||
+      (sub.status === 'canceled' && sub.current_period_ends_at != null && new Date(sub.current_period_ends_at) > now))
 
   const hasBCBAStudents =
     sub?.bcba_students_status === 'active' ||
@@ -42,7 +43,8 @@ export async function GET() {
   const hasActiveRBT =
     sub?.plan === 'rbt' &&
     (sub.status === 'active' ||
-      (sub.status === 'trialing' && sub.trial_ends_at != null && new Date(sub.trial_ends_at) > now))
+      (sub.status === 'trialing' && sub.trial_ends_at != null && new Date(sub.trial_ends_at) > now) ||
+      (sub.status === 'canceled' && sub.current_period_ends_at != null && new Date(sub.current_period_ends_at) > now))
 
   return NextResponse.json({
     sub: sub
