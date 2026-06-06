@@ -146,15 +146,24 @@ function buildContextualFactors(input: SessionInput): string {
     const worseningSkills = Object.entries(ctx.skillTrends)
       .filter(([, t]) => t === 'worsening').map(([n]) => n);
 
-    const lines: string[] = [];
+    const lines: string[] = [
+      `CRITICAL RULE FOR TREND CONTEXT: NEVER mention numbers, frequencies, percentages, or counts when reflecting trends in the note. ` +
+      `Trends must be reflected through QUALITATIVE clinical language only.\n` +
+      `BANNED: "the behavior occurred 6 times", "frequency increased by 20%", "3 more episodes than last week"\n` +
+      `CORRECT: "the behavior continued to require active intervention support", "the client demonstrated emerging behavioral control", "the behavior remained an active treatment target"\n`,
+    ];
     if (worseningBehaviors.length > 0) lines.push(
-      `The following behaviors have been trending UPWARD (worsening) in recent weeks: ${worseningBehaviors.join(', ')}. ` +
-      `Reflect this in the note by documenting these behaviors occurring at higher frequency or intensity than baseline. ` +
-      `Include clinical language noting continued need for intervention.`
+      `The following behaviors have been trending UPWARD in recent weeks: ${worseningBehaviors.join(', ')}. ` +
+      `IMPORTANT: Behavior reduction in ABA takes months of consistent intervention. Do NOT dramatize. ` +
+      `Reflect this as a SLIGHT increase — document the behavior occurring with marginally higher frequency compared to recent sessions, or requiring slightly more intervention support than the previous week. ` +
+      `Use language like: "continued to require intervention support", "occurred at a frequency consistent with recent sessions", "remained an active target requiring ongoing implementation". ` +
+      `NEVER say the behavior is significantly worse or out of control — that is clinically inaccurate for a weekly fluctuation.`
     );
     if (improvingBehaviors.length > 0) lines.push(
-      `The following behaviors have been trending DOWNWARD (improving) in recent weeks: ${improvingBehaviors.join(', ')}. ` +
-      `Reflect this by documenting these behaviors at reduced frequency or noting emerging behavioral control with intervention support.`
+      `The following behaviors have been trending DOWNWARD in recent weeks: ${improvingBehaviors.join(', ')}. ` +
+      `IMPORTANT: Reflect this as GRADUAL improvement over time — not sudden mastery. ` +
+      `Use language like: "demonstrated a slight reduction in frequency compared to recent baseline", "continued to respond to intervention with improved compliance", "showed emerging behavioral control with consistent intervention support". ` +
+      `NEVER say the behavior is resolved or mastered unless goalStatus is Mastered.`
     );
     if (improvingSkills.length > 0) lines.push(
       `The following replacement skills have been trending UPWARD (improving): ${improvingSkills.join(', ')}. ` +
@@ -169,11 +178,13 @@ function buildContextualFactors(input: SessionInput): string {
       `Prioritize these interventions when selecting which to document in this note.`
     );
 
-    if (lines.length > 0) {
+    if (lines.length > 1) {
       blocks.push(
         `PROGRESS TREND CONTEXT — WEAVE NATURALLY INTO NOTE:\n` +
         `Based on the client's recent progress report (${ctx.periodLabel}):\n` +
         lines.join('\n') +
+        `\nDATA INTEGRATION NOTE: This trend context is derived from the client's data collection records. ` +
+        `As the data system matures and more weeks of data are collected, these trends will become increasingly precise and the notes will more accurately reflect the client's actual clinical trajectory over time.` +
         `\n\nIMPORTANT: Do not mention "progress report" or "trend analysis" in the note. Weave these clinical observations naturally into the narrative.`
       );
     }
