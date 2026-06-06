@@ -3,6 +3,7 @@ import { auth } from '@/auth'
 import { Pool } from 'pg'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@/lib/generated/prisma/client'
+import { PLAN_LIMITS } from '@/lib/stripe'
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 const adapter = new PrismaPg(pool)
@@ -42,6 +43,40 @@ export async function POST(req: Request) {
   const body = await req.json()
   const { id, clientName, clinicalProfile } = body
   if (!id || !clientName) return NextResponse.json({ error: 'Missing id or clientName' }, { status: 400 })
+
+  // Check if this is a new client (upsert create path) — skip limit check for updates
+  const existingClient = isUuid
+    ? await prisma.clients.findUnique({ where: { id }, select: { id: true } })
+    : null
+
+  if (!existingClient && isUuid) {
+    const sub = await prisma.subscriptions.findFirst({
+      where: { user_id: userId },
+      select: { plan: true, status: true, trial_ends_at: true, current_period_ends_at: true },
+    })
+
+    const now = new Date()
+    const isActive = sub && (
+      sub.status === 'active' ||
+      (sub.status === 'trialing' && sub.trial_ends_at && new Date(sub.trial_ends_at) > now) ||
+      (sub.status === 'canceled' && sub.current_period_ends_at && new Date(sub.current_period_ends_at) > now)
+    )
+
+    const plan = (sub?.plan as string) || 'trial'
+    const limit = PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS] ?? 1
+
+    if (isFinite(limit)) {
+      const clientCount = await prisma.clients.count({
+        where: { OR: [{ rbt_id: userId }, { created_by: userId }] },
+      })
+      if (clientCount >= limit) {
+        return NextResponse.json(
+          { error: 'You have reached your plan limit. Please upgrade to add more clients.', limitReached: true },
+          { status: 409 }
+        )
+      }
+    }
+  }
 
   await prisma.clients.upsert({
     where: { id },
