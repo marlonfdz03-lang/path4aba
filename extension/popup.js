@@ -398,8 +398,8 @@ function renderBehaviors() {
     ...(selectedProfile?.activePrograms?.maladaptive || []),
   ];
   const behaviors = rawBehaviors
-    .map(b => (typeof b === 'string' ? b : b?.name || ''))
-    .filter(Boolean);
+    .map(b => (typeof b === 'string' ? { name: b, functions: [] } : { name: b?.name || '', functions: b?.functions || [] }))
+    .filter(b => b.name);
 
   if (!behaviors.length) {
     grid.innerHTML = '';
@@ -412,32 +412,28 @@ function renderBehaviors() {
   hint.textContent = userRole === 'rbt' ? `(select 5)` : '(optional)';
 
   grid.innerHTML = '';
-  behaviors.forEach(name => {
+  behaviors.forEach(({ name, functions }) => {
     const item = document.createElement('div');
     item.className = 'check-item';
     item.dataset.name = name;
+    const funcLabel = functions.length > 0 ? `<span class="func-badge">Function: ${functions.join(', ')}</span>` : '';
     item.innerHTML = `
       <div class="check-box">
         <svg width="10" height="10" viewBox="0 0 12 12" fill="white">
           <path d="M10 3L5 8.5 2 5.5 1 6.5l4 4 6-7z"/>
         </svg>
       </div>
-      <span>${name}</span>
+      <span>${name}</span>${funcLabel}
     `;
     item.addEventListener('click', () => {
       if (item.classList.contains('checked')) {
         item.classList.remove('checked');
         selectedBehaviors = selectedBehaviors.filter(n => n !== name);
-      } else if (selectedBehaviors.length < maxSel) {
+      } else {
         item.classList.add('checked');
         selectedBehaviors.push(name);
       }
-      // Dim unchecked items when at limit
-      grid.querySelectorAll('.check-item').forEach(el => {
-        if (!el.classList.contains('checked')) {
-          el.classList.toggle('disabled', selectedBehaviors.length >= maxSel);
-        }
-      });
+      renderSkills();
       updateGenerateBtn();
     });
     grid.appendChild(item);
@@ -456,8 +452,8 @@ function renderSkills() {
     ...(selectedProfile?.activePrograms?.replacementSkills || []),
   ];
   const skills = rawSkills
-    .map(s => (typeof s === 'string' ? s : s?.name || ''))
-    .filter(Boolean);
+    .map(s => (typeof s === 'string' ? { name: s, targetFunction: '' } : { name: s?.name || '', targetFunction: s?.targetFunction || '' }))
+    .filter(s => s.name);
 
   if (!skills.length) {
     grid.innerHTML = '';
@@ -470,31 +466,52 @@ function renderSkills() {
   hint.textContent = userRole === 'rbt' ? `(select 2)` : '(optional)';
 
   grid.innerHTML = '';
-  skills.forEach(name => {
+
+  // Get functions of selected behaviors
+  const selectedFunctions = selectedBehaviors.flatMap(bName => {
+    const b = (selectedProfile?.maladaptiveBehaviors || []).find(bx => (typeof bx === 'string' ? bx : bx?.name) === bName);
+    return (typeof b === 'object' && b?.functions) ? b.functions : [];
+  });
+
+  // Sort: functionally equivalent first
+  const sorted = [...skills].sort((a, b) => {
+    const aMatch = selectedFunctions.includes(a.targetFunction) ? 0 : 1;
+    const bMatch = selectedFunctions.includes(b.targetFunction) ? 0 : 1;
+    return aMatch - bMatch;
+  });
+
+  const firstNonMatch = sorted.findIndex(s => !selectedFunctions.includes(s.targetFunction));
+
+  sorted.forEach(({ name, targetFunction }, i) => {
+    const isMatch = selectedFunctions.length > 0 && selectedFunctions.includes(targetFunction);
+
+    if (selectedFunctions.length > 0 && i === firstNonMatch && firstNonMatch > 0) {
+      const divider = document.createElement('div');
+      divider.className = 'skills-divider';
+      divider.textContent = 'Other Skills';
+      grid.appendChild(divider);
+    }
+
     const item = document.createElement('div');
     item.className = 'check-item';
     item.dataset.name = name;
+    const badge = isMatch ? `<span class="func-badge equiv">✦ Functionally equivalent</span>` : '';
     item.innerHTML = `
       <div class="check-box">
         <svg width="10" height="10" viewBox="0 0 12 12" fill="white">
           <path d="M10 3L5 8.5 2 5.5 1 6.5l4 4 6-7z"/>
         </svg>
       </div>
-      <span>${name}</span>
+      <span>${name}</span>${badge}
     `;
     item.addEventListener('click', () => {
       if (item.classList.contains('checked')) {
         item.classList.remove('checked');
         selectedSkills = selectedSkills.filter(n => n !== name);
-      } else if (selectedSkills.length < maxSel) {
+      } else {
         item.classList.add('checked');
         selectedSkills.push(name);
       }
-      grid.querySelectorAll('.check-item').forEach(el => {
-        if (!el.classList.contains('checked')) {
-          el.classList.toggle('disabled', selectedSkills.length >= maxSel);
-        }
-      });
       updateGenerateBtn();
     });
     grid.appendChild(item);
