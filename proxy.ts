@@ -36,7 +36,7 @@ function corsHeaders(origin: string | null): Record<string, string> {
   }
 }
 
-export default auth(async function middleware(req: NextRequest & { auth: any }) {
+export const proxy = auth(async function proxy(req: NextRequest & { auth: any }) {
   const { pathname } = req.nextUrl
   const origin = req.headers.get('origin')
 
