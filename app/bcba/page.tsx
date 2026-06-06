@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { ConnectModal } from "@/app/components/ConnectModal";
 
 interface BCBAClient {
   id: string;
@@ -22,84 +23,32 @@ function Topbar({ onConnect }: { onConnect: () => void }) {
       <div className="flex items-center gap-2 text-[13px]">
         <span className="font-medium" style={{ color: "var(--text1)" }}>My Clients</span>
       </div>
-      <button
-        onClick={onConnect}
-        className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold text-white hover:opacity-90 transition-opacity"
-        style={{ background: "var(--teal)" }}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-        Connect Client
-      </button>
-    </div>
-  );
-}
-
-function ConnectModal({ onClose, onConnected }: { onClose: () => void; onConnected: (client: BCBAClient) => void }) {
-  const [code, setCode] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  async function handleConnect() {
-    if (!code.trim()) return;
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch("/api/clients/connect-with-code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: code.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error || "Failed to connect"); setLoading(false); return; }
-      onConnected(data.client);
-    } catch {
-      setError("Network error. Please try again.");
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: "rgba(0,0,0,0.4)" }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8" style={{ fontFamily: "var(--font-dm-sans, sans-serif)" }}>
-        <h2 className="text-[18px] font-semibold mb-1" style={{ color: "var(--text1)" }}>Connect a Client</h2>
-        <p className="text-[13px] mb-6" style={{ color: "var(--text3)" }}>
-          Ask your RBT to generate a client code from their client profile, then enter it below.
-        </p>
-        <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Client Code</label>
-        <input
-          type="text"
-          value={code}
-          onChange={(e) => { setCode(e.target.value.toUpperCase()); setError(""); }}
-          placeholder="e.g. AB-123456"
-          className="w-full border rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:ring-2 mb-3 uppercase tracking-widest"
-          style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-          onKeyDown={(e) => { if (e.key === "Enter") handleConnect(); }}
-          autoFocus
-        />
-        {error && (
-          <p className="text-[12px] mb-3 px-3 py-2 rounded-lg border" style={{ background: "#FEF2F2", borderColor: "#FECACA", color: "#DC2626" }}>
-            {error}
-          </p>
-        )}
-        <div className="flex gap-3">
-          <button
-            onClick={handleConnect}
-            disabled={loading || !code.trim()}
-            className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50"
-            style={{ background: "var(--teal)" }}
-          >
-            {loading ? "Connecting…" : "Connect"}
-          </button>
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-[13px] font-medium border" style={{ borderColor: "var(--border)", color: "var(--text2)" }}>
-            Cancel
-          </button>
-        </div>
+      <div className="flex items-center gap-2">
+        <Link
+          href="/upload-assessment"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold border hover:opacity-80 transition-opacity"
+          style={{ borderColor: "var(--teal)", color: "var(--teal)", background: "white" }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          Add Client
+        </Link>
+        <button
+          onClick={onConnect}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold text-white hover:opacity-90 transition-opacity"
+          style={{ background: "var(--teal)" }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Connect Client
+        </button>
       </div>
     </div>
   );
 }
+
 
 const AVATAR_COLORS = ["#1BA8A0", "#8B5CF6", "#F59E0B", "#EF4444", "#10B981"];
 

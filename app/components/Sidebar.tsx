@@ -186,7 +186,9 @@ export default function Sidebar() {
     }
   }, [session]);
 
-  const isBCBA = ["bcba", "bcaba"].includes((user?.profession || "").toLowerCase());
+  const role = (user?.profession || "").toLowerCase()
+  const isBCBA = ["bcba", "bcaba"].includes(role)
+  const isStudentOnly = ["bcba_student", "bcaba_student"].includes(role)
 
   if (["/login", "/pricing", "/onboarding", "/privacy", "/terms", "/admin"].some(p => pathname === p || pathname.startsWith(p + "/"))) return null;
 
@@ -206,9 +208,34 @@ export default function Sidebar() {
 
       {/* Nav */}
       <div className="flex-1 overflow-y-auto px-[10px] py-3 space-y-5">
-        {isBCBA ? (
+        {isStudentOnly ? (
+          // ── BCBA Student / BCaBA Student: Fieldwork Tracker only ──────────
+          <div>
+            <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+              Fieldwork
+            </p>
+            <div className="space-y-0.5">
+              {hasBCBAStudents ? (
+                <>
+                  <NavItem href="/bcba-students" label="Dashboard" icon={IconGraduationCap} active={isActive("/bcba-students") && !isActive("/bcba-students/log") && !isActive("/bcba-students/monthly") && !isActive("/bcba-students/settings")} />
+                  <NavItem href="/bcba-students/log" label="Log session" icon={IconFileText} active={isActive("/bcba-students/log")} />
+                  <NavItem href="/bcba-students/monthly" label="Monthly view" icon={IconCalendar} active={isActive("/bcba-students/monthly")} />
+                  <NavItem href="/bcba-students/settings" label="Settings" icon={IconSettings} active={isActive("/bcba-students/settings")} />
+                </>
+              ) : (
+                <Link href="/bcba-students" className="flex items-center gap-[10px] px-[10px] py-[9px] rounded-[6px] text-sm font-medium" style={{ color: "rgba(255,255,255,0.45)" }}>
+                  <IconGraduationCap />
+                  <span className="flex-1">Fieldwork tracker</span>
+                  <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full" style={{ background: "rgba(27,168,160,0.22)", color: "#24BDB4" }}>
+                    <IconLock /> $14.99/mo
+                  </span>
+                </Link>
+              )}
+            </div>
+          </div>
+        ) : isBCBA ? (
+          // ── BCBA / BCaBA: Clients + Schedule only ─────────────────────────
           <>
-            {/* BCBA Workspace */}
             <div>
               <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
                 Workspace
@@ -218,35 +245,6 @@ export default function Sidebar() {
                 <NavItem href="/schedule" label="Schedule" icon={IconCalendar} active={isActive("/schedule")} />
               </div>
             </div>
-            {/* BCBA Students */}
-            <div>
-              <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
-                BCBA Students
-              </p>
-              <div className="space-y-0.5">
-                {hasBCBAStudents ? (
-                  <>
-                    <NavItem href="/bcba-students" label="Dashboard" icon={IconGraduationCap} active={isActive("/bcba-students") && !isActive("/bcba-students/log") && !isActive("/bcba-students/monthly") && !isActive("/bcba-students/settings")} />
-                    <NavItem href="/bcba-students/log" label="Log session" icon={IconFileText} active={isActive("/bcba-students/log")} />
-                    <NavItem href="/bcba-students/monthly" label="Monthly view" icon={IconCalendar} active={isActive("/bcba-students/monthly")} />
-                    <NavItem href="/bcba-students/settings" label="Settings" icon={IconSettings} active={isActive("/bcba-students/settings")} />
-                  </>
-                ) : (
-                  <Link
-                    href="/bcba-students"
-                    className="flex items-center gap-[10px] px-[10px] py-[9px] rounded-[6px] text-sm font-medium"
-                    style={{ color: "rgba(255,255,255,0.45)" }}
-                  >
-                    <IconGraduationCap />
-                    <span className="flex-1">Fieldwork tracker</span>
-                    <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full" style={{ background: "rgba(27,168,160,0.22)", color: "#24BDB4" }}>
-                      <IconLock /> {hasActiveRBT ? "$9.99/mo" : "$14.99/mo"}
-                    </span>
-                  </Link>
-                )}
-              </div>
-            </div>
-            {/* Account */}
             <div>
               <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
                 Account
@@ -257,8 +255,8 @@ export default function Sidebar() {
             </div>
           </>
         ) : (
+          // ── RBT (and all other roles): Clients + Schedule + Fieldwork Tracker ──
           <>
-            {/* RBT Workspace */}
             <div>
               <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
                 Workspace
@@ -269,35 +267,20 @@ export default function Sidebar() {
                 <NavItem href="/schedule" label="Schedule" icon={IconCalendar} active={isActive("/schedule")} />
               </div>
             </div>
-            {/* BCBA Students */}
-            <div>
-              <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
-                BCBA Students
-              </p>
-              <div className="space-y-0.5">
-                {hasBCBAStudents ? (
-                  <>
-                    <NavItem href="/bcba-students" label="Dashboard" icon={IconGraduationCap} active={isActive("/bcba-students") && !isActive("/bcba-students/log") && !isActive("/bcba-students/monthly") && !isActive("/bcba-students/settings")} />
-                    <NavItem href="/bcba-students/log" label="Log session" icon={IconFileText} active={isActive("/bcba-students/log")} />
-                    <NavItem href="/bcba-students/monthly" label="Monthly view" icon={IconCalendar} active={isActive("/bcba-students/monthly")} />
-                    <NavItem href="/bcba-students/settings" label="Settings" icon={IconSettings} active={isActive("/bcba-students/settings")} />
-                  </>
-                ) : (
-                  <Link
-                    href="/bcba-students"
-                    className="flex items-center gap-[10px] px-[10px] py-[9px] rounded-[6px] text-sm font-medium"
-                    style={{ color: "rgba(255,255,255,0.45)" }}
-                  >
-                    <IconGraduationCap />
-                    <span className="flex-1">Fieldwork tracker</span>
-                    <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full" style={{ background: "rgba(27,168,160,0.22)", color: "#24BDB4" }}>
-                      <IconLock /> {hasActiveRBT ? "$9.99/mo" : "$14.99/mo"}
-                    </span>
-                  </Link>
-                )}
+            {/* Fieldwork Tracker — only if subscribed to BCBA Students add-on */}
+            {hasBCBAStudents && (
+              <div>
+                <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                  Fieldwork
+                </p>
+                <div className="space-y-0.5">
+                  <NavItem href="/bcba-students" label="Dashboard" icon={IconGraduationCap} active={isActive("/bcba-students") && !isActive("/bcba-students/log") && !isActive("/bcba-students/monthly") && !isActive("/bcba-students/settings")} />
+                  <NavItem href="/bcba-students/log" label="Log session" icon={IconFileText} active={isActive("/bcba-students/log")} />
+                  <NavItem href="/bcba-students/monthly" label="Monthly view" icon={IconCalendar} active={isActive("/bcba-students/monthly")} />
+                  <NavItem href="/bcba-students/settings" label="Settings" icon={IconSettings} active={isActive("/bcba-students/settings")} />
+                </div>
               </div>
-            </div>
-            {/* Account */}
+            )}
             <div>
               <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
                 Account

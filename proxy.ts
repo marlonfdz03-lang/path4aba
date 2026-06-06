@@ -89,7 +89,7 @@ export default auth(async function middleware(req: NextRequest & { auth: any }) 
         if (subRes.ok) {
           const { hasAccess } = await subRes.json()
           if (!hasAccess) {
-            return NextResponse.redirect(new URL('/onboarding', req.url))
+            return NextResponse.redirect(new URL('/pricing', req.url))
           }
         }
       } catch (err) {

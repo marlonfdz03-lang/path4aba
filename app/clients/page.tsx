@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { deleteClientProfile } from "@/lib/clientStorage";
+import { ConnectModal } from "@/app/components/ConnectModal";
 
 const AVATAR_COLORS = ["#1BA8A0", "#8B5CF6", "#F59E0B", "#EF4444", "#10B981"];
 
@@ -173,6 +174,7 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
+  const [showConnectModal, setShowConnectModal] = useState(false);
 
   async function handleDeleteClient(clientId: string) {
     const confirmDelete = window.confirm(
@@ -228,26 +230,29 @@ export default function ClientsPage() {
               Manage and view all your clients
             </p>
           </div>
-          <a
-            href="/upload-assessment"
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold text-white hover:opacity-90 transition-opacity"
-            style={{ background: "var(--teal)" }}
-          >
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowConnectModal(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold border hover:opacity-80 transition-opacity"
+              style={{ borderColor: "var(--teal)", color: "var(--teal)", background: "white" }}
             >
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            New Client
-          </a>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              Connect Client
+            </button>
+            <a
+              href="/upload-assessment"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold text-white hover:opacity-90 transition-opacity"
+              style={{ background: "var(--teal)" }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              New Client
+            </a>
+          </div>
         </div>
 
         {/* Filter tabs */}
@@ -314,6 +319,16 @@ export default function ClientsPage() {
           </div>
         )}
       </div>
+
+      {showConnectModal && (
+        <ConnectModal
+          onClose={() => setShowConnectModal(false)}
+          onConnected={(client) => {
+            setShowConnectModal(false);
+            if (client?.id) router.push(`/clients/${client.id}`);
+          }}
+        />
+      )}
     </main>
   );
 }
