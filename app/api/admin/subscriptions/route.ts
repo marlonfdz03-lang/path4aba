@@ -34,6 +34,16 @@ export async function GET() {
   return Response.json({ subscriptions: result })
 }
 
+export async function DELETE(req: NextRequest) {
+  if (!await requireAdmin()) return Response.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { id } = await req.json()
+  if (!id) return Response.json({ error: 'Missing id' }, { status: 400 })
+
+  await prisma.subscriptions.delete({ where: { id } })
+  return Response.json({ ok: true })
+}
+
 export async function PATCH(req: NextRequest) {
   if (!await requireAdmin()) return Response.json({ error: 'Forbidden' }, { status: 403 })
 

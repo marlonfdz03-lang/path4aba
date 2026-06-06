@@ -32,6 +32,10 @@ export default function AdminSubscriptionsPage() {
   const [newStatus, setNewStatus] = useState("");
   const [editLoading, setEditLoading] = useState(false);
 
+  const [deleteTarget, setDeleteTarget] = useState<Sub | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
   useEffect(() => {
     fetch("/api/admin/subscriptions")
       .then(r => r.json())
@@ -55,6 +59,30 @@ export default function AdminSubscriptionsPage() {
         setEditTarget(null);
       }
     } finally { setEditLoading(false); }
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    setDeleteError("");
+    try {
+      const res = await fetch("/api/admin/subscriptions", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: deleteTarget.id }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setSubs(prev => prev.filter(s => s.id !== deleteTarget.id));
+        setDeleteTarget(null);
+      } else {
+        setDeleteError(data.error || "Delete failed.");
+      }
+    } catch {
+      setDeleteError("Network error. Please try again.");
+    } finally {
+      setDeleteLoading(false);
+    }
   }
 
   const fmt = (d: string | null) => d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
@@ -99,13 +127,22 @@ export default function AdminSubscriptionsPage() {
                   <td className="px-5 py-3" style={{ color: "var(--text3)" }}>{fmt(s.trial_ends_at)}</td>
                   <td className="px-5 py-3" style={{ color: "var(--text3)" }}>{fmt(s.current_period_ends_at)}</td>
                   <td className="px-5 py-3">
-                    <button
-                      onClick={() => { setEditTarget(s); setNewPlan(s.plan || ""); setNewStatus(s.status || ""); }}
-                      className="text-[12px] font-medium px-2.5 py-1 rounded-lg border transition-colors hover:opacity-80"
-                      style={{ borderColor: "var(--border)", color: "var(--text2)" }}
-                    >
-                      Edit
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => { setEditTarget(s); setNewPlan(s.plan || ""); setNewStatus(s.status || ""); }}
+                        className="text-[12px] font-medium px-2.5 py-1 rounded-lg border transition-colors hover:opacity-80"
+                        style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => { setDeleteTarget(s); setDeleteError(""); }}
+                        className="text-[12px] font-medium px-2.5 py-1 rounded-lg border transition-colors hover:opacity-80"
+                        style={{ borderColor: "#FECACA", color: "#DC2626" }}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -153,6 +190,42 @@ export default function AdminSubscriptionsPage() {
               </button>
               <button
                 onClick={() => setEditTarget(null)}
+                className="flex-1 py-2.5 rounded-xl text-[13px] font-medium border"
+                style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: "rgba(0,0,0,0.4)" }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" style={{ fontFamily: "var(--font-dm-sans, sans-serif)" }}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[15px] font-semibold" style={{ color: "var(--text1)" }}>Delete Subscription</p>
+              <button onClick={() => setDeleteTarget(null)} className="text-[18px]" style={{ color: "var(--text3)" }}>×</button>
+            </div>
+            <p className="text-[13px] mb-4" style={{ color: "var(--text2)" }}>
+              Permanently delete subscription for <strong>{deleteTarget.user_email}</strong>? This cannot be undone.
+            </p>
+            {deleteError && (
+              <p className="text-[12px] mb-4 px-3 py-2 rounded-lg border" style={{ background: "#FEF2F2", borderColor: "#FECACA", color: "#DC2626" }}>
+                {deleteError}
+              </p>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={handleDelete}
+                disabled={deleteLoading}
+                className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50"
+                style={{ background: "#DC2626" }}
+              >
+                {deleteLoading ? "Deleting…" : "Delete"}
+              </button>
+              <button
+                onClick={() => setDeleteTarget(null)}
                 className="flex-1 py-2.5 rounded-xl text-[13px] font-medium border"
                 style={{ borderColor: "var(--border)", color: "var(--text2)" }}
               >
