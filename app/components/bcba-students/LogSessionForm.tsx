@@ -2,6 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { BACB_RULES, type FieldworkType } from "@/lib/bcba-students/calculations";
+import {
+  RESTRICTED_CATEGORIES,
+  UNRESTRICTED_CATEGORIES,
+  CATEGORY_LABELS,
+  deriveActivityType,
+} from "@/lib/bcba-students/activity-categories";
 import NoteSuggestionsPanel from "./NoteSuggestionsPanel";
 
 export interface SavedSession {
@@ -14,6 +20,8 @@ export interface SavedSession {
   supervised_hours: number;
   session_note: string | null;
   supervisor_name: string | null;
+  activity_category: string | null;
+  client_reference: string;
 }
 
 interface Props {
@@ -42,14 +50,19 @@ function fmt12(t: string): string {
   return `${h % 12 || 12}:${m.toString().padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
 }
 
+const RESTRICTED_CONTACT_TYPES = ["client_observation"];
+const UNRESTRICTED_CONTACT_TYPES = ["none", "individual_supervision", "group_supervision"];
+
 export default function LogSessionForm({ fieldworkType, defaultSupervisorName = "", onSaved }: Props) {
   const today = new Date().toISOString().slice(0, 10);
 
   const [date, setDate] = useState(today);
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("10:00");
-  const [activityType, setActivityType] = useState<"unrestricted" | "restricted">("unrestricted");
+  // activityCategory replaces the old binary "unrestricted/restricted" toggle
+  const [activityCategory, setActivityCategory] = useState<string>("");
   const [contactType, setContactType] = useState<"none" | "individual_supervision" | "group_supervision" | "client_observation">("none");
+  const [clientReference, setClientReference] = useState("");
   const [setting, setSetting] = useState("Office");
   const [supervisorName, setSupervisorName] = useState(defaultSupervisorName);
   const [note, setNote] = useState("");
@@ -63,12 +76,15 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
   const [allUnrestrictedHours, setAllUnrestrictedHours] = useState(0);
   const [allRestrictedHours, setAllRestrictedHours] = useState(0);
 
+  // Derive activity_type from selected category (server mirrors this logic)
+  const activityType = activityCategory ? deriveActivityType(activityCategory) : null;
+
   const totalHours = toDecimalHours(startTime, endTime);
   const isSupervised = contactType !== "none";
   const supervisedHours = isSupervised ? totalHours : 0;
   const independentHours = isSupervised ? 0 : totalHours;
 
-  // Ratio tracker: accumulated hours across all months + current session
+  // Ratio tracker
   const sessionUnrestricted = activityType === "unrestricted" ? totalHours : 0;
   const sessionRestricted = activityType === "restricted" ? totalHours : 0;
   const displayUnrestricted = allUnrestrictedHours + sessionUnrestricted;
@@ -76,7 +92,6 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
   const displayTotal = displayUnrestricted + displayRestricted;
   const restrictedPct = displayTotal > 0 ? (displayRestricted / displayTotal) * 100 : 0;
 
-  // Fetch all monthly summaries once for the restricted/unrestricted ratio tracker
   useEffect(() => {
     fetch("/api/bcba-students/monthly")
       .then(r => r.json())
@@ -88,16 +103,15 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
       .catch(() => {});
   }, []);
 
-  // Auto-reset contact type when activity type changes
+  // Auto-set contact type when category changes
   useEffect(() => {
-    if (activityType === "unrestricted") {
-      setContactType(prev => prev === "client_observation" ? "none" : prev);
-    } else {
+    if (activityType === "restricted") {
       setContactType("client_observation");
+    } else if (activityType === "unrestricted") {
+      setContactType(prev => RESTRICTED_CONTACT_TYPES.includes(prev) ? "none" : prev);
     }
   }, [activityType]);
 
-  // Fetch existing sessions for the selected date/month to enforce daily and monthly limits
   useEffect(() => {
     if (!date) return;
     const monthYear = date.slice(0, 7);
@@ -118,7 +132,7 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
   // Real-time warnings
   useEffect(() => {
     const w: string[] = [];
-    if (fieldworkType === "supervised" && activityType === "restricted") {
+    if (activityType === "restricted" && fieldworkType === "supervised") {
       w.push("Adding restricted hours may reduce your cumulative unrestricted % below 60%. Verify your running total.");
     }
     if (totalHours > 0 && monthlyHoursLogged + totalHours > 130) {
@@ -126,9 +140,11 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
       const remaining = Math.max(0, 130 - monthlyHoursLogged);
       w.push(
         `This session would bring your total for ${monthLabel} to ${(monthlyHoursLogged + totalHours).toFixed(2)} hours, ` +
-        `exceeding the BACB maximum of 130 hours per month. ` +
-        `You can log a maximum of ${remaining.toFixed(2)} more hours this month.`
+        `exceeding the BACB maximum of 130 hours per month. You can log a maximum of ${remaining.toFixed(2)} more hours this month.`
       );
+    }
+    if (totalHours > 0 && dailyHoursLogged + totalHours > 8) {
+      w.push(`This session would exceed 8 hours for the day. The BACB may flag sessions exceeding 8 hours.`);
     }
     if (startTime && endTime && totalHours > 0) {
       const newStart = toMins(startTime);
@@ -141,14 +157,25 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
       }
     }
     setWarnings(w);
-  }, [activityType, totalHours, fieldworkType, monthlyHoursLogged, date, startTime, endTime, sessionsOnDate]);
+  }, [activityType, totalHours, fieldworkType, monthlyHoursLogged, dailyHoursLogged, date, startTime, endTime, sessionsOnDate]);
 
   async function handleSave() {
-    // Midnight crossing / same-time check
     const [sh, sm] = startTime.split(":").map(Number);
     const [eh, em] = endTime.split(":").map(Number);
     if (eh * 60 + em <= sh * 60 + sm) {
-      setError("Sessions cannot cross midnight. A session must start and end within the same day (12:00 AM – 11:59 PM).");
+      setError("Sessions cannot cross midnight. A session must start and end within the same day.");
+      return;
+    }
+    if (!activityCategory) {
+      setError("Please select an activity category.");
+      return;
+    }
+    if (!clientReference.trim()) {
+      setError("Client reference is required. Use a de-identified identifier (e.g. 'Client A', 'AJ-2026').");
+      return;
+    }
+    if (note.trim().length < 20) {
+      setError("Session description must be at least 20 characters. Describe specifically what was worked on.");
       return;
     }
 
@@ -160,25 +187,6 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
         setError(`This session overlaps with an existing session on this date (${fmt12(s.start_time)} – ${fmt12(s.end_time)}). Please adjust your times.`);
         return;
       }
-    }
-
-    // Monthly 130-hour BACB limit check
-    if (monthlyHoursLogged + totalHours > 130) {
-      const monthLabel = new Date(date.slice(0, 7) + "-01").toLocaleDateString("en-US", { month: "long", year: "numeric" });
-      const remaining = Math.max(0, 130 - monthlyHoursLogged);
-      setError(
-        `This session would bring your total for ${monthLabel} to ${(monthlyHoursLogged + totalHours).toFixed(2)} hours, ` +
-        `exceeding the BACB maximum of 130 hours per month. ` +
-        `You can log a maximum of ${remaining.toFixed(2)} more hours this month.`
-      );
-      return;
-    }
-
-    // Daily 8-hour limit check
-    if (dailyHoursLogged + totalHours > 8) {
-      const dateLabel = new Date(date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-      setError(`You cannot log more than 8 hours per day. You have ${dailyHoursLogged.toFixed(2)} hrs already logged on ${dateLabel}.`);
-      return;
     }
 
     setSaving(true);
@@ -193,11 +201,13 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
           end_time: endTime,
           independent_hours: independentHours,
           supervised_hours: supervisedHours,
-          activity_type: activityType,
+          activity_category: activityCategory,
+          activity_type: activityType, // also send for backward compat; server re-derives from category
           contact_type: contactType,
+          client_reference: clientReference.trim(),
           setting,
           supervisor_name: supervisorName || null,
-          session_note: note || null,
+          session_note: note.trim() || null,
         }),
       });
       const data = await res.json();
@@ -208,6 +218,9 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
       setSaving(false);
     }
   }
+
+  const noteLen = note.trim().length;
+  const noteOk = noteLen >= 20;
 
   return (
     <div style={{ fontFamily: "var(--font-dm-sans, sans-serif)" }}>
@@ -237,7 +250,6 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
         </div>
       </div>
 
-      {/* Auto hours */}
       {totalHours > 0 && (
         <p className="text-[13px] mb-4 font-medium" style={{ color: "var(--teal)" }}>
           Session duration: {totalHours.toFixed(2)} hrs
@@ -245,15 +257,32 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        {/* Activity type */}
-        <div>
-          <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Activity Type</label>
-          <select value={activityType} onChange={e => setActivityType(e.target.value as any)}
+        {/* Activity category (replaces binary restricted/unrestricted) */}
+        <div className="md:col-span-2">
+          <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Activity Category</label>
+          <select
+            value={activityCategory}
+            onChange={e => setActivityCategory(e.target.value)}
             className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
-            style={{ borderColor: "var(--border)", color: "var(--text1)" }}>
-            <option value="unrestricted">Unrestricted</option>
-            <option value="restricted">Restricted</option>
+            style={{ borderColor: activityCategory ? "var(--border)" : "#FBBF24", color: "var(--text1)" }}
+          >
+            <option value="">— Select BACB activity category —</option>
+            <optgroup label="Restricted (direct client contact)">
+              {RESTRICTED_CATEGORIES.map(cat => (
+                <option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Unrestricted (indirect, client-related)">
+              {UNRESTRICTED_CATEGORIES.map(cat => (
+                <option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
+              ))}
+            </optgroup>
           </select>
+          {activityType && (
+            <p className="text-[11px] mt-1" style={{ color: activityType === "restricted" ? "#DC2626" : "var(--teal)" }}>
+              → Counts as {activityType === "restricted" ? "Restricted" : "Unrestricted"} fieldwork
+            </p>
+          )}
         </div>
 
         {/* Contact type */}
@@ -262,11 +291,32 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
           <select value={contactType} onChange={e => setContactType(e.target.value as any)}
             className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
             style={{ borderColor: "var(--border)", color: "var(--text1)" }}>
-            <option value="none" disabled={activityType === "restricted"} title={activityType === "restricted" ? "Individual/Group Supervision applies to unrestricted hours" : undefined}>None (independent)</option>
-            <option value="individual_supervision" disabled={activityType === "restricted"} title={activityType === "restricted" ? "Individual/Group Supervision applies to unrestricted hours" : undefined}>Individual supervision</option>
-            <option value="group_supervision" disabled={activityType === "restricted"} title={activityType === "restricted" ? "Individual/Group Supervision applies to unrestricted hours" : undefined}>Group supervision</option>
-            <option value="client_observation" disabled={activityType === "unrestricted"} title={activityType === "unrestricted" ? "Client Observation is a restricted activity" : undefined}>Client observation + feedback</option>
+            {activityType === "restricted" ? (
+              <option value="client_observation">Client observation + feedback</option>
+            ) : (
+              <>
+                <option value="none">None (independent)</option>
+                <option value="individual_supervision">Individual supervision</option>
+                <option value="group_supervision">Group supervision</option>
+              </>
+            )}
           </select>
+        </div>
+
+        {/* Client reference — REQUIRED */}
+        <div>
+          <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>
+            Client Reference <span style={{ color: "#DC2626" }}>*</span>
+          </label>
+          <input
+            type="text"
+            value={clientReference}
+            onChange={e => setClientReference(e.target.value)}
+            placeholder='e.g. "Client A", "AJ-2026", "School Case 1"'
+            className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
+            style={{ borderColor: clientReference.trim() ? "var(--border)" : "#FBBF24", color: "var(--text1)" }}
+          />
+          <p className="text-[10px] mt-1" style={{ color: "var(--text3)" }}>HIPAA: use de-identified IDs only — never full legal names.</p>
         </div>
 
         {/* Setting */}
@@ -320,7 +370,12 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
       {/* Note */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-1.5">
-          <label className="block text-[12px] font-medium" style={{ color: "var(--text2)" }}>Session Description</label>
+          <label className="block text-[12px] font-medium" style={{ color: "var(--text2)" }}>
+            Session Description <span style={{ color: "#DC2626" }}>*</span>
+            <span className="ml-2 font-normal" style={{ color: noteOk ? "var(--teal)" : noteLen > 0 ? "#92400E" : "var(--text3)" }}>
+              ({noteLen}/20 min)
+            </span>
+          </label>
           <button onClick={() => setShowPanel(true)} className="text-[12px] font-medium hover:opacity-80" style={{ color: "var(--teal)" }}>
             Suggest a note
           </button>
@@ -328,9 +383,9 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
         <textarea
           value={note}
           onChange={e => setNote(e.target.value)}
-          placeholder="Describe what you worked on during this session…"
+          placeholder="Describe specifically what was worked on — include behavior, program name, or observable outcome…"
           className="w-full border rounded-xl px-4 py-3 text-[13px] focus:outline-none resize-none"
-          style={{ borderColor: "var(--border)", color: "var(--text1)", minHeight: 100 }}
+          style={{ borderColor: noteLen > 0 && !noteOk ? "#FBBF24" : "var(--border)", color: "var(--text1)", minHeight: 100 }}
         />
       </div>
 
@@ -351,7 +406,7 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
 
       {showPanel && (
         <NoteSuggestionsPanel
-          activityType={activityType}
+          activityType={activityType ?? "unrestricted"}
           onSelect={text => { setNote(text); setShowPanel(false); }}
           onClose={() => setShowPanel(false)}
         />

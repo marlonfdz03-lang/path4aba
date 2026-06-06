@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { BACB_RULES, type FieldworkType, type CertificationTrack } from "@/lib/bcba-students/calculations";
+import { isInvalidCategory, isValidCategory } from "@/lib/bcba-students/activity-categories";
 import ComplianceChecklist from "./ComplianceChecklist";
 
 interface Session {
@@ -13,10 +14,29 @@ interface Session {
   independent_hours: number;
   supervised_hours: number;
   activity_type: string;
+  activity_category: string | null;
+  client_reference: string;
   contact_type: string;
   setting: string | null;
   supervisor_name: string | null;
   session_note: string | null;
+}
+
+const VAGUE_PHRASES = ['worked on programs','did session','reviewed stuff','did work','worked with client','session was conducted','worked on goals','completed session'];
+
+function auditRiskScore(s: Session): { score: number; label: string; color: string; bg: string } {
+  let score = 100;
+  if (s.activity_category && isInvalidCategory(s.activity_category)) score -= 40;
+  else if (s.activity_category && !isValidCategory(s.activity_category)) score -= 40;
+  const ref = (s.client_reference ?? '').trim();
+  if (!ref) score -= 30;
+  const desc = (s.session_note ?? '').trim().toLowerCase();
+  if (desc.length < 30 || VAGUE_PHRASES.some(p => desc.includes(p))) score -= 25;
+  if (s.total_hours > 8) score -= 15;
+  score = Math.max(0, Math.min(100, score));
+  if (score >= 80) return { score, label: 'LOW', color: '#16A34A', bg: '#F0FDF4' };
+  if (score >= 50) return { score, label: 'MEDIUM', color: '#92400E', bg: '#FFF8E1' };
+  return { score, label: 'HIGH', color: '#DC2626', bg: '#FEF2F2' };
 }
 
 interface Summary {
@@ -762,6 +782,20 @@ export default function MonthDrawer({ monthYear, summary: initialSummary, fieldw
                           <div className="text-right">
                             <p className="text-[13px] font-semibold" style={{ color: "var(--text1)" }}>{s.total_hours.toFixed(2)} hrs</p>
                             <p className="text-[11px] capitalize" style={{ color: "var(--text3)" }}>{s.activity_type}</p>
+                            {/* Audit Risk Score — Priority 4 */}
+                            {(() => {
+                              const r = auditRiskScore(s);
+                              const dot = r.label === 'LOW' ? '🟢' : r.label === 'MEDIUM' ? '🟡' : '🔴';
+                              return (
+                                <span
+                                  title={`Audit Risk Score: ${r.score}/100 — ${r.label}\nThis score does not guarantee BACB approval.`}
+                                  className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-0.5 inline-block"
+                                  style={{ background: r.bg, color: r.color }}
+                                >
+                                  {dot} {r.label}
+                                </span>
+                              );
+                            })()}
                           </div>
                           {/* Three-dot menu */}
                           <div className="relative">

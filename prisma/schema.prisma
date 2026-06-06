@@ -7,31 +7,28 @@ datasource db {
   provider = "postgresql"
 }
 
-// ─── App tables ───────────────────────────────────────────────────────────────
-
 model clients {
-  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  agency_id        String?   @db.Uuid
-  internal_code    String?
-  diagnosis        String?
-  primary_setting  String?
-  clinical_profile Json?
-  active_behaviors Json?
-  created_by       String?   @db.Uuid
-  rbt_id           String?   @db.Uuid
-  created_at       DateTime? @default(now()) @db.Timestamptz(6)
-
-  session_notes             session_notes[]
-  missed_hours              missed_hours[]
-  client_access_codes       client_access_codes[]
+  id                        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  internal_code             String?
+  clinical_profile          Json?
+  created_at                DateTime?                   @default(now()) @db.Timestamptz(6)
+  active_behaviors          Json?
+  agency_id                 String?                     @db.Uuid
+  created_by                String?                     @db.Uuid
+  diagnosis                 String?
+  primary_setting           String?
+  rbt_id                    String?                     @db.Uuid
   bcba_clients              bcba_clients[]
-  supervision_notes         supervision_notes[]
-  parent_training_notes     parent_training_notes[]
-  supervision_notes_97153xp supervision_notes_97153xp[]
-  replacement_data          replacement_data[]
+  client_access_codes       client_access_codes[]
   maladaptive_data          maladaptive_data[]
-  stos                      stos[]
+  missed_hours              missed_hours[]
+  parent_training_notes     parent_training_notes[]
   progress_reports          progress_reports[]
+  replacement_data          replacement_data[]
+  session_notes             session_notes[]
+  stos                      stos[]
+  supervision_notes         supervision_notes[]
+  supervision_notes_97153xp supervision_notes_97153xp[]
 }
 
 model session_notes {
@@ -49,8 +46,7 @@ model session_notes {
   reviewed_at         DateTime? @db.Timestamptz(6)
   review_comment      String?
   created_at          DateTime? @default(now()) @db.Timestamptz(6)
-
-  client clients? @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  client              clients?  @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }
 
 model subscriptions {
@@ -74,8 +70,7 @@ model bcba_clients {
   client_id    String    @db.Uuid
   rbt_id       String?
   connected_at DateTime? @default(now()) @db.Timestamptz(6)
-
-  client clients @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  client       clients   @relation(fields: [client_id], references: [id], onDelete: Cascade)
 
   @@unique([bcba_id, client_id])
 }
@@ -96,6 +91,10 @@ model fieldwork_sessions {
   supervisor_name   String?
   session_note      String?
   created_at        DateTime? @default(now()) @db.Timestamptz(6)
+  activity_category String?
+  is_locked         Boolean   @default(false)
+  updated_at        DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  client_reference  String
 }
 
 model fieldwork_monthly_summaries {
@@ -122,19 +121,19 @@ model fieldwork_monthly_summaries {
 }
 
 model fieldwork_profiles {
-  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id             String    @unique
-  fieldwork_type      String?
-  certification_track String?
-  trainee_bacb_id     String?
-  supervisor_name     String?
-  supervisor_bacb_id  String?
-  supervisor_email    String?
-  start_date          String?
-  state_of_fieldwork  String?
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id              String    @unique
+  fieldwork_type       String?
+  certification_track  String?
+  trainee_bacb_id      String?
+  supervisor_name      String?
+  supervisor_bacb_id   String?
+  onboarding_complete  Boolean   @default(false)
+  created_at           DateTime? @default(now()) @db.Timestamptz(6)
   country_of_fieldwork String?
-  onboarding_complete Boolean   @default(false)
-  created_at          DateTime? @default(now()) @db.Timestamptz(6)
+  start_date           String?
+  state_of_fieldwork   String?
+  supervisor_email     String?
 }
 
 model client_access_codes {
@@ -146,8 +145,7 @@ model client_access_codes {
   used       Boolean   @default(false)
   used_by    String?   @db.Uuid
   created_at DateTime? @default(now()) @db.Timestamptz(6)
-
-  client clients @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  client     clients   @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }
 
 model supervision_notes {
@@ -160,8 +158,7 @@ model supervision_notes {
   note_text        String?
   status           String?   @default("draft")
   created_at       DateTime? @default(now()) @db.Timestamptz(6)
-
-  client clients? @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  client           clients?  @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }
 
 model parent_training_notes {
@@ -174,8 +171,7 @@ model parent_training_notes {
   note_text          String?
   status             String?   @default("draft")
   created_at         DateTime? @default(now()) @db.Timestamptz(6)
-
-  client clients? @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  client             clients?  @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }
 
 model missed_hours {
@@ -187,31 +183,28 @@ model missed_hours {
   hours      Float?
   notes      String?
   created_at DateTime? @default(now()) @db.Timestamptz(6)
-
-  client clients? @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  client     clients?  @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }
 
 model behaviors {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name        String
-  category    String?
-  description String?
-  created_at  DateTime? @default(now()) @db.Timestamptz(6)
-
-  topographies       topographies[]
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String
+  category           String?
+  created_at         DateTime?            @default(now()) @db.Timestamptz(6)
+  description        String?
   replacement_skills replacement_skills[]
+  topographies       topographies[]
 }
 
 model topographies {
-  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  behavior_id          String    @db.Uuid
-  description          String?
-  measurable_unit      String?
-  severity_level       Int?
-  vocabulary_variants  String[]
-  created_at           DateTime? @default(now()) @db.Timestamptz(6)
-
-  behavior behaviors @relation(fields: [behavior_id], references: [id], onDelete: Cascade)
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  behavior_id         String    @db.Uuid
+  description         String?
+  measurable_unit     String?
+  severity_level      Int?
+  created_at          DateTime? @default(now()) @db.Timestamptz(6)
+  vocabulary_variants String[]
+  behavior            behaviors @relation(fields: [behavior_id], references: [id], onDelete: Cascade)
 }
 
 model supervision_notes_97153xp {
@@ -222,80 +215,76 @@ model supervision_notes_97153xp {
   note_text           String?
   rbt_session_context Json?
   created_at          DateTime? @default(now()) @db.Timestamptz(6)
-
-  client clients? @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  client              clients?  @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }
 
 model replacement_skills {
-  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id                  String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   skill_description   String?
   function_targeted   String?
-  behavior_id         String?   @db.Uuid
+  behavior_id         String?    @db.Uuid
+  created_at          DateTime?  @default(now()) @db.Timestamptz(6)
   teaching_procedure  String?
   vocabulary_variants String[]
-  created_at          DateTime? @default(now()) @db.Timestamptz(6)
-
-  behavior behaviors? @relation(fields: [behavior_id], references: [id])
+  behavior            behaviors? @relation(fields: [behavior_id], references: [id])
 }
 
 model replacement_data {
-  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  client_id           String    @db.Uuid
-  session_date        String?
-  week_start          String?
-  week_end            String?
-  location            String?
-  session_time_in     String?
-  session_time_out    String?
-  rbt_name            String?
-  platform_source     String?
-  replacement_skill   String
-  total_trials        Int
-  observed_percentage Float
-  correct_count       Int
-  incorrect_count     Int
-  alternated_sequence String?
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id             String    @db.Uuid
+  session_date          String?
+  location              String?
+  session_time_in       String?
+  session_time_out      String?
+  rbt_name              String?
+  platform_source       String?
+  replacement_skill     String
+  total_trials          Int
+  observed_percentage   Float
+  correct_count         Int
+  incorrect_count       Int
+  alternated_sequence   String?
   user_confirmed        Boolean   @default(false)
   confirmed_at          DateTime? @db.Timestamptz(6)
   autofill_completed    Boolean   @default(false)
+  created_at            DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime? @default(now()) @db.Timestamptz(6)
+  week_start            String?
+  week_end              String?
   projected_value       Float?
   goal_met              String?
   week_confirmed        Boolean   @default(false)
   week_confirmed_at     DateTime? @db.Timestamptz(6)
-  is_anomaly            Boolean   @default(false)
-  anomaly_reviewed      Boolean   @default(false)
   anomaly_justification String?
+  anomaly_reviewed      Boolean   @default(false)
+  is_anomaly            Boolean   @default(false)
   original_value        Float?
-  created_at            DateTime? @default(now()) @db.Timestamptz(6)
-  updated_at            DateTime? @default(now()) @db.Timestamptz(6)
-
-  client clients @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  client                clients   @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }
 
 model maladaptive_data {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  client_id       String    @db.Uuid
-  behavior_name   String
-  week_start      String?
-  week_end        String?
-  session_date    String?
-  frequency       Int?
-  rate            Float?
-  duration        Float?
-  trials          Int?
-  daily_values    Json?
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id             String    @db.Uuid
+  behavior_name         String
+  week_start            String?
+  week_end              String?
+  session_date          String?
+  frequency             Int?
+  rate                  Float?
+  duration              Float?
+  trials                Int?
+  daily_values          Json?
   user_confirmed        Boolean   @default(false)
   confirmed_at          DateTime? @db.Timestamptz(6)
   projected_value       Float?
   goal_met              String?
-  is_anomaly            Boolean   @default(false)
-  anomaly_reviewed      Boolean   @default(false)
-  anomaly_justification String?
-  original_value        Float?
   created_at            DateTime? @default(now()) @db.Timestamptz(6)
   updated_at            DateTime? @default(now()) @db.Timestamptz(6)
-
-  client clients @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  anomaly_justification String?
+  anomaly_reviewed      Boolean   @default(false)
+  is_anomaly            Boolean   @default(false)
+  original_value        Float?
+  client                clients   @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }
 
 model stos {
@@ -311,8 +300,7 @@ model stos {
   status         String    @default("active")
   created_at     DateTime? @default(now()) @db.Timestamptz(6)
   updated_at     DateTime? @default(now()) @db.Timestamptz(6)
-
-  client clients @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  client         clients   @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }
 
 model progress_reports {
@@ -328,8 +316,7 @@ model progress_reports {
   narrative          String?
   continuity_context Json?
   created_at         DateTime? @default(now()) @db.Timestamptz(6)
-
-  client clients @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  client             clients   @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }
 
 model promo_codes {
@@ -342,28 +329,25 @@ model promo_codes {
 }
 
 model bcba_notes {
-  id            Int     @id @default(autoincrement())
   note          String?
   category      String?
   activity_type String?
+  id            Int     @id @default(autoincrement())
 }
 
-// ─── NextAuth tables ──────────────────────────────────────────────────────────
-
 model users {
-  id               String    @id @default(cuid())
-  email            String    @unique
+  id               String             @id @default(cuid())
+  email            String             @unique
   password         String?
   name             String?
-  role             String    @default("rbt")
-  emailVerified    DateTime? @db.Timestamptz(6)
+  role             String             @default("rbt")
+  emailVerified    DateTime?          @db.Timestamptz(6)
   image            String?
-  created_at       DateTime  @default(now()) @db.Timestamptz(6)
-  data_tab_enabled Boolean   @default(false)
-
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  data_tab_enabled Boolean            @default(false)
   accounts         accounts[]
-  sessions         sessions[]
   extension_tokens extension_tokens[]
+  sessions         sessions[]
 }
 
 model extension_tokens {
@@ -372,8 +356,7 @@ model extension_tokens {
   token_hash   String    @unique
   created_at   DateTime  @default(now()) @db.Timestamptz(6)
   last_used_at DateTime? @db.Timestamptz(6)
-
-  user users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user         users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 }
 
 model accounts {
@@ -389,8 +372,7 @@ model accounts {
   scope             String?
   id_token          String?
   session_state     String?
-
-  user users @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              users   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -400,8 +382,7 @@ model sessions {
   sessionToken String   @unique
   userId       String
   expires      DateTime @db.Timestamptz(6)
-
-  user users @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         users    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model verification_tokens {

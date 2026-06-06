@@ -44,6 +44,7 @@ export default function MonthlyPage() {
   const { data: session, status } = useSession();
   const [fieldworkType, setFieldworkType] = useState<FieldworkType>("supervised");
   const [summaries, setSummaries] = useState<Summary[]>([]);
+  const [patternWarnings, setPatternWarnings] = useState<string[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [traineeName, setTraineeName] = useState("");
   const [loading, setLoading] = useState(true);
@@ -63,6 +64,7 @@ export default function MonthlyPage() {
       setFieldworkType(profileData.profile.fieldwork_type || "supervised");
     }
     setSummaries(monthlyData.summaries || []);
+    setPatternWarnings(monthlyData.warnings || []);
     setLoading(false);
   }
 
@@ -112,6 +114,16 @@ export default function MonthlyPage() {
             Log Session
           </Link>
         </div>
+
+        {patternWarnings.length > 0 && (
+          <div className="mb-4 space-y-2">
+            {patternWarnings.map((w, i) => (
+              <div key={i} className="rounded-xl px-4 py-3 border text-[13px]" style={{ background: "#FFF8E1", borderColor: "#FDE68A", color: "#92400E" }}>
+                ⚠ {w}
+              </div>
+            ))}
+          </div>
+        )}
 
         <MonthlyTable
           summaries={summaries}
