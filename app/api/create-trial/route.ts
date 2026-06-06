@@ -59,8 +59,9 @@ export async function POST(request: Request) {
     console.log('[create-trial] Created Stripe customer:', customerId)
   }
 
-  const successUrl = 'https://path4aba-git-main-marlonfdz03-langs-projects.vercel.app/dashboard?trial=started'
-  const cancelUrl = 'https://path4aba-git-main-marlonfdz03-langs-projects.vercel.app/onboarding'
+  const origin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  const successUrl = `${origin}/clients?trial=started`
+  const cancelUrl = `${origin}/pricing`
 
   console.log('[create-trial] Creating checkout with success URL:', successUrl)
 

@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     payment_method_collection: 'always',
     line_items: [{ price: priceId, quantity: 1 }],
     subscription_data: { trial_period_days: 7 },
-    success_url: `${origin}/dashboard?subscription=success`,
+    success_url: `${origin}/clients?subscription=success`,
     cancel_url: `${origin}/pricing`,
     metadata: { userId, plan, promoCode: promoCode || '' },
   }
