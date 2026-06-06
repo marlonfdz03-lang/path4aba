@@ -53,6 +53,13 @@ export interface SessionInput {
   complianceLevel?: 'typical' | 'below_typical' | 'poor';
   environmentalChangeDescription?: string;
   missedHoursData?: { totalHours: number; reason: string };
+  continuityContext?: {
+    periodLabel: string;
+    behaviorTrends: Record<string, 'improving' | 'stable' | 'worsening' | 'insufficient_data'>;
+    skillTrends: Record<string, 'improving' | 'stable' | 'worsening' | 'insufficient_data'>;
+    frequentlyUsedInterventions: string[];
+    summary: string;
+  } | null;
   clientProfile?: {
     diagnosis: string[];
     setting: string;
@@ -126,6 +133,50 @@ function buildContextualFactors(input: SessionInput): string {
       `Do NOT say the client "didn't want to" or "refused" — use observable language only. ` +
       `Example language: "The client demonstrated increased latency to task demands throughout the session, requiring additional gestural and verbal prompting to initiate activities. Response to instructions was below the client's typical baseline, with compliance achieved following 2–3 prompt repetitions across most tasks."`
     );
+  }
+
+  if (input.continuityContext && Object.keys(input.continuityContext.behaviorTrends || {}).length > 0) {
+    const ctx = input.continuityContext;
+    const worseningBehaviors = Object.entries(ctx.behaviorTrends)
+      .filter(([, t]) => t === 'worsening').map(([n]) => n);
+    const improvingBehaviors = Object.entries(ctx.behaviorTrends)
+      .filter(([, t]) => t === 'improving').map(([n]) => n);
+    const improvingSkills = Object.entries(ctx.skillTrends)
+      .filter(([, t]) => t === 'improving').map(([n]) => n);
+    const worseningSkills = Object.entries(ctx.skillTrends)
+      .filter(([, t]) => t === 'worsening').map(([n]) => n);
+
+    const lines: string[] = [];
+    if (worseningBehaviors.length > 0) lines.push(
+      `The following behaviors have been trending UPWARD (worsening) in recent weeks: ${worseningBehaviors.join(', ')}. ` +
+      `Reflect this in the note by documenting these behaviors occurring at higher frequency or intensity than baseline. ` +
+      `Include clinical language noting continued need for intervention.`
+    );
+    if (improvingBehaviors.length > 0) lines.push(
+      `The following behaviors have been trending DOWNWARD (improving) in recent weeks: ${improvingBehaviors.join(', ')}. ` +
+      `Reflect this by documenting these behaviors at reduced frequency or noting emerging behavioral control with intervention support.`
+    );
+    if (improvingSkills.length > 0) lines.push(
+      `The following replacement skills have been trending UPWARD (improving): ${improvingSkills.join(', ')}. ` +
+      `Document these skills showing increased independence, reduced prompting, or higher accuracy compared to baseline.`
+    );
+    if (worseningSkills.length > 0) lines.push(
+      `The following replacement skills have been trending DOWNWARD (declining): ${worseningSkills.join(', ')}. ` +
+      `Document these skills requiring increased prompting or showing reduced accuracy.`
+    );
+    if (ctx.frequentlyUsedInterventions?.length > 0) lines.push(
+      `Frequently used interventions in recent sessions: ${ctx.frequentlyUsedInterventions.join(', ')}. ` +
+      `Prioritize these interventions when selecting which to document in this note.`
+    );
+
+    if (lines.length > 0) {
+      blocks.push(
+        `PROGRESS TREND CONTEXT — WEAVE NATURALLY INTO NOTE:\n` +
+        `Based on the client's recent progress report (${ctx.periodLabel}):\n` +
+        lines.join('\n') +
+        `\n\nIMPORTANT: Do not mention "progress report" or "trend analysis" in the note. Weave these clinical observations naturally into the narrative.`
+      );
+    }
   }
 
   if (blocks.length === 0) return '';

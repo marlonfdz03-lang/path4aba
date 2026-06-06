@@ -83,7 +83,21 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const clientId = searchParams.get('clientId')
+  const latest = searchParams.get('latest') === 'true'
   if (!clientId) return Response.json({ error: 'Missing clientId' }, { status: 400 })
+
+  if (latest) {
+    const report = await prisma.progress_reports.findFirst({
+      where: { client_id: clientId, rbt_id: userId },
+      orderBy: { created_at: 'desc' },
+      select: {
+        id: true, period_label: true, period_start: true, period_end: true,
+        narrative: true, behavior_trends: true, skill_trends: true,
+        goal_progress: true, continuity_context: true, created_at: true,
+      },
+    })
+    return Response.json({ report: report ?? null })
+  }
 
   const reports = await prisma.progress_reports.findMany({
     where: { client_id: clientId, rbt_id: userId },

@@ -224,6 +224,7 @@ export default function ClientProfilePage() {
     interventions?: string[];
     noteText?: string;
   } | null>(null);
+  const [continuityCtx, setContinuityCtx] = useState<any>(null);
 
   async function loadNotesFromSupabase(clientId: string) {
     try {
@@ -280,6 +281,18 @@ export default function ClientProfilePage() {
     }
     load();
   }, [params.id]);
+
+  useEffect(() => {
+    if (!client?.id) return;
+    fetch(`/api/progress-report?clientId=${client.id}&latest=true`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.report?.continuity_context) {
+          setContinuityCtx(data.report.continuity_context);
+        }
+      })
+      .catch(() => {});
+  }, [client?.id]);
 
   if (clientLoading) {
     return (
@@ -407,6 +420,7 @@ export default function ClientProfilePage() {
       missedHoursData: missedHoursToggle && missedHoursCount
         ? { totalHours: parseFloat(missedHoursCount), reason: missedHoursReason }
         : undefined,
+      continuityContext: continuityCtx || undefined,
     };
 
     try {
