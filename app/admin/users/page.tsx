@@ -33,6 +33,7 @@ export default function AdminUsersPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   async function loadUsers(q = search) {
     setLoading(true);
@@ -84,14 +85,21 @@ export default function AdminUsersPage() {
   async function handleDelete() {
     if (!deleteTarget) return;
     setDeleteLoading(true);
+    setDeleteError("");
     try {
-      const res = await fetch(`/api/admin/users?id=${deleteTarget.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/users?id=${encodeURIComponent(deleteTarget.id)}`, { method: "DELETE" });
       const data = await res.json();
       if (data.ok) {
         setUsers(prev => prev.filter(u => u.id !== deleteTarget.id));
         setDeleteTarget(null);
+      } else {
+        setDeleteError(data.error || "Delete failed.");
       }
-    } finally { setDeleteLoading(false); }
+    } catch {
+      setDeleteError("Network error. Please try again.");
+    } finally {
+      setDeleteLoading(false);
+    }
   }
 
   return (
@@ -168,7 +176,7 @@ export default function AdminUsersPage() {
                         Password
                       </button>
                       <button
-                        onClick={() => setDeleteTarget(u)}
+                        onClick={() => { setDeleteTarget(u); setDeleteError(""); }}
                         className="text-[12px] font-medium px-2.5 py-1 rounded-lg border transition-colors hover:opacity-80"
                         style={{ borderColor: "#FECACA", color: "#DC2626" }}
                       >
@@ -227,9 +235,14 @@ export default function AdminUsersPage() {
       {/* Delete Modal */}
       {deleteTarget && (
         <Modal title="Delete User" onClose={() => setDeleteTarget(null)}>
-          <p className="text-[13px] mb-5" style={{ color: "var(--text2)" }}>
+          <p className="text-[13px] mb-4" style={{ color: "var(--text2)" }}>
             Permanently delete <strong>{deleteTarget.email}</strong>? This cannot be undone.
           </p>
+          {deleteError && (
+            <p className="text-[12px] mb-4 px-3 py-2 rounded-lg border" style={{ background: "#FEF2F2", borderColor: "#FECACA", color: "#DC2626" }}>
+              {deleteError}
+            </p>
+          )}
           <ModalActions
             onCancel={() => setDeleteTarget(null)}
             onConfirm={handleDelete}

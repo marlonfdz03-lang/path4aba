@@ -188,7 +188,7 @@ export default function Sidebar() {
 
   const isBCBA = ["bcba", "bcaba"].includes((user?.profession || "").toLowerCase());
 
-  if (["/login", "/pricing", "/onboarding", "/privacy", "/terms"].some(p => pathname === p || pathname.startsWith(p + "/"))) return null;
+  if (["/login", "/pricing", "/onboarding", "/privacy", "/terms", "/admin"].some(p => pathname === p || pathname.startsWith(p + "/"))) return null;
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
