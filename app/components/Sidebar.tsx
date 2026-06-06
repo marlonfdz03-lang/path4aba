@@ -334,6 +334,28 @@ export default function Sidebar() {
           </div>
         )}
 
+        {/* Admin link — only for admin role */}
+        {(session?.user as any)?.role === 'admin' && (
+          <Link
+            href="/admin"
+            className="w-full flex items-center gap-[10px] px-4 py-3 text-sm transition-colors"
+            style={{ color: "rgba(255,255,255,0.5)" }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.9)";
+              (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.06)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.5)";
+              (e.currentTarget as HTMLElement).style.background = "transparent";
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <span>Admin</span>
+          </Link>
+        )}
+
         {/* Logout */}
         <button
           onClick={handleLogout}
