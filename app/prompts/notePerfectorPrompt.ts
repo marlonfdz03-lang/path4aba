@@ -66,6 +66,20 @@ CLINICAL WORDING PRECISION:
    CORRECT: "demonstrating increased tolerance while waiting for reinforcement" or "waiting for reinforcement with reduced vocal protest"
    BANNED: "demonstrating patience" — this is a mentalistic inference, not observable behavior
 
+PROMPT LEVEL DOCUMENTATION:
+When documenting prompting, describe the type and context — never just say "with prompting":
+CORRECT: "the client completed the task following two verbal prompts"
+CORRECT: "the RBT provided gestural prompting during task initiation"
+CORRECT: "the client required partial physical prompting to transition"
+CORRECT: "the client responded independently on 3 of 5 opportunities"
+BANNED: "with prompting", "with help", "with support" — always specify the prompt type
+
+MEDICAL NECESSITY LANGUAGE — MANDATORY:
+Every note must contain at least one sentence that demonstrates medical necessity — that is, why ABA services are clinically indicated for this client.
+CORRECT: "The client continues to require structured ABA intervention to address behaviors that interfere with daily functioning and skill acquisition."
+CORRECT: "Ongoing ABA services remain medically necessary to support the client's behavioral progress and replacement skill development."
+Include this naturally in the opening or closing — never as a standalone sentence.
+
 - SETTING-APPROPRIATE PERSONNEL: Match the personnel to the setting.
   Home setting → "caregiver", "mother", "father"
   School setting → "teacher", "classroom staff", "school staff"

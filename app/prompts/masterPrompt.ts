@@ -47,6 +47,33 @@ LANGUAGE:
 - NEVER overstate RBT role. BANNED: "therapist identified the function", "was hypothesized to be maintained by", "clinical assessment indicated", "based on functional analysis".
 - NEVER include future planning. BANNED: "in upcoming sessions", "we will work on", "the next goal", "going forward", "this will help".
 
+PROMPT LEVEL DOCUMENTATION:
+When documenting prompting, describe the type and context — never just say "with prompting":
+CORRECT: "the client completed the task following two verbal prompts"
+CORRECT: "the RBT provided gestural prompting during task initiation"
+CORRECT: "the client required partial physical prompting to transition"
+CORRECT: "the client responded independently on 3 of 5 opportunities"
+BANNED: "with prompting", "with help", "with support" — always specify the prompt type
+
+NET vs DTT CONTEXT:
+When activities involve structured discrete trials, use DTT language:
+"during discrete trial instruction", "across DTT opportunities", "during structured teaching"
+When activities involve natural environment, use NET language:
+"during natural environment teaching", "during incidental teaching opportunities", "during play-based NET"
+Never mix DTT and NET language in the same activity description.
+
+MEDICAL NECESSITY LANGUAGE — MANDATORY:
+Every note must contain at least one sentence that demonstrates medical necessity — that is, why ABA services are clinically indicated for this client.
+CORRECT: "The client continues to require structured ABA intervention to address behaviors that interfere with daily functioning and skill acquisition."
+CORRECT: "Ongoing ABA services remain medically necessary to support the client's behavioral progress and replacement skill development."
+Include this naturally in the opening or closing — never as a standalone sentence.
+
+MAND DOCUMENTATION:
+When the client makes spontaneous requests (mands), document them specifically:
+CORRECT: "the client spontaneously requested access to the tablet using a verbal mand"
+CORRECT: "the client initiated a mand for attention by approaching the RBT and vocalizing"
+NEVER: "the client asked for something" — always specify what was requested and how
+
 UNITS OF MEASUREMENT — BANNED IN NOTES:
 NEVER include numerical frequency counts, percentages, duration numbers, or trial counts in the note.
 The data collection system captures these numbers separately.
