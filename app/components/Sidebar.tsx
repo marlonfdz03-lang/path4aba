@@ -209,30 +209,40 @@ export default function Sidebar() {
       {/* Nav */}
       <div className="flex-1 overflow-y-auto px-[10px] py-3 space-y-5">
         {isStudentOnly ? (
-          // ── BCBA Student / BCaBA Student: Fieldwork Tracker only ──────────
-          <div>
-            <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
-              Fieldwork
-            </p>
-            <div className="space-y-0.5">
-              {hasBCBAStudents ? (
-                <>
-                  <NavItem href="/bcba-students" label="Dashboard" icon={IconGraduationCap} active={isActive("/bcba-students") && !isActive("/bcba-students/log") && !isActive("/bcba-students/monthly") && !isActive("/bcba-students/settings")} />
-                  <NavItem href="/bcba-students/log" label="Log session" icon={IconFileText} active={isActive("/bcba-students/log")} />
-                  <NavItem href="/bcba-students/monthly" label="Monthly view" icon={IconCalendar} active={isActive("/bcba-students/monthly")} />
-                  <NavItem href="/bcba-students/settings" label="Settings" icon={IconSettings} active={isActive("/bcba-students/settings")} />
-                </>
-              ) : (
-                <Link href="/bcba-students" className="flex items-center gap-[10px] px-[10px] py-[9px] rounded-[6px] text-sm font-medium" style={{ color: "rgba(255,255,255,0.45)" }}>
-                  <IconGraduationCap />
-                  <span className="flex-1">Fieldwork tracker</span>
-                  <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full" style={{ background: "rgba(27,168,160,0.22)", color: "#24BDB4" }}>
-                    <IconLock /> $14.99/mo
-                  </span>
-                </Link>
-              )}
+          // ── BCBA Student / BCaBA Student: Fieldwork Tracker + Account ─────
+          <>
+            <div>
+              <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                Fieldwork
+              </p>
+              <div className="space-y-0.5">
+                {hasBCBAStudents ? (
+                  <>
+                    <NavItem href="/bcba-students" label="Dashboard" icon={IconGraduationCap} active={isActive("/bcba-students") && !isActive("/bcba-students/log") && !isActive("/bcba-students/monthly") && !isActive("/bcba-students/settings")} />
+                    <NavItem href="/bcba-students/log" label="Log session" icon={IconFileText} active={isActive("/bcba-students/log")} />
+                    <NavItem href="/bcba-students/monthly" label="Monthly view" icon={IconCalendar} active={isActive("/bcba-students/monthly")} />
+                    <NavItem href="/bcba-students/settings" label="Settings" icon={IconSettings} active={isActive("/bcba-students/settings")} />
+                  </>
+                ) : (
+                  <Link href="/pricing" className="flex items-center gap-[10px] px-[10px] py-[9px] rounded-[6px] text-sm font-medium" style={{ color: "rgba(255,255,255,0.45)" }}>
+                    <IconGraduationCap />
+                    <span className="flex-1">Fieldwork tracker</span>
+                    <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full" style={{ background: "rgba(27,168,160,0.22)", color: "#24BDB4" }}>
+                      <IconLock /> $19.99/mo
+                    </span>
+                  </Link>
+                )}
+              </div>
             </div>
-          </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-widest font-medium mb-1 px-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                Account
+              </p>
+              <div className="space-y-0.5">
+                <NavItem href="/settings" label="Settings" icon={IconSettings} active={isActive("/settings")} />
+              </div>
+            </div>
+          </>
         ) : isBCBA ? (
           // ── BCBA / BCaBA: Clients + Schedule only ─────────────────────────
           <>
