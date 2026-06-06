@@ -72,7 +72,6 @@ const BCBA_PLANS: Plan[] = [
     clientLimit: "Up to 15 clients",
     features: [
       "Up to 15 client profiles",
-      "Assessment PDF upload & parsing",
       "Clinical profile management",
       "BCBA dashboard",
       "Priority support",
@@ -91,7 +90,7 @@ const BCBA_PLANS: Plan[] = [
     features: [
       "Unlimited client profiles",
       "Everything in Starter",
-      "Reassessment tools",
+      "Protocol reassessment tools",
       "Multi-RBT management",
       "7-day free trial",
     ],
