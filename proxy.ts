@@ -90,9 +90,7 @@ export const proxy = auth(async function proxy(req: NextRequest & { auth: any })
         const host = req.headers.get('host') || ''
         const protocol = host.startsWith('localhost') ? 'http' : 'https'
         const subGateUrl = `${protocol}://${host}/api/auth/sub-gate?userId=${encodeURIComponent(userId)}`
-        const subRes = await fetch(subGateUrl, {
-          headers: { 'x-sub-gate-secret': process.env.SUB_GATE_SECRET || '' },
-        })
+        const subRes = await fetch(subGateUrl)
         if (subRes.ok) {
           const { hasAccess } = await subRes.json()
           if (!hasAccess) {
