@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 function randomCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   const part1 = Array.from({ length: 2 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
@@ -25,8 +23,6 @@ export async function POST(request: Request) {
   if (!clientId) {
     return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
   }
-
-  if (!UUID_RE.test(userId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const code = randomCode()
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)

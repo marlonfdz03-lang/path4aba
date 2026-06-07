@@ -11,7 +11,7 @@ export const maxDuration = 60
 export async function POST(req: NextRequest) {
   const user = await getExtensionAuth()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!['rbt', 'admin'].includes(user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!['rbt', 'bcba', 'bcaba', 'admin'].includes(user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   try {
     const formData = await req.formData()

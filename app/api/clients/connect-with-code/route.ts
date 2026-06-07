@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 export async function POST(request: Request) {
   console.log('[connect-with-code] === START ===')
 
@@ -21,10 +19,6 @@ export async function POST(request: Request) {
   const { code } = body
   console.log('[connect-with-code] raw code received:', JSON.stringify(code))
   if (!code) return NextResponse.json({ error: 'Missing code' }, { status: 400 })
-
-  if (!UUID_RE.test(userId)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
 
   const normalizedCode = code.toUpperCase().trim()
   console.log('[connect-with-code] normalized code:', normalizedCode, '| bcba_id:', userId)
