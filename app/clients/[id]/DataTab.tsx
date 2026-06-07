@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
 import { buildProjection } from "@/lib/projection";
 import {
   CartesianGrid,
@@ -837,6 +838,7 @@ export function DataTab({ client, complianceLevel = "typical", missedHours = 0 }
       return Math.max(0, Math.min(100, value + (Math.random() > 0.5 ? v : -v)));
     }
   }
+  const { data: session } = useSession();
   const [section, setSection] = useState<Section>("maladaptive");
   const [replacementData, setReplacementData] = useState<any[]>([]);
   const [maladaptiveData, setMaladaptiveData] = useState<any[]>([]);
@@ -904,6 +906,37 @@ export function DataTab({ client, complianceLevel = "typical", missedHours = 0 }
     return (
       <div className="py-10 text-center text-[13px]" style={{ color: "var(--text3)" }}>
         Loading data…
+      </div>
+    );
+  }
+
+  const isAdmin =
+    (session?.user as any)?.role === "admin" ||
+    session?.user?.email === "marlonfdz03@gmail.com";
+
+  if (!isAdmin) {
+    return (
+      <div className="flex justify-center py-16 px-6">
+        <div
+          className="bg-white rounded-2xl border px-10 py-12 text-center max-w-sm w-full"
+          style={{ borderColor: "var(--border)", boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}
+        >
+          <div
+            className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-5"
+            style={{ background: "rgba(27,168,160,0.1)" }}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+          </div>
+          <p className="text-[16px] font-semibold mb-2" style={{ color: "var(--text1)" }}>
+            Data tracking coming soon
+          </p>
+          <p className="text-[13px] leading-relaxed" style={{ color: "var(--text3)" }}>
+            This feature will be available in a future update.
+          </p>
+        </div>
       </div>
     );
   }
