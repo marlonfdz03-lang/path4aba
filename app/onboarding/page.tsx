@@ -486,36 +486,8 @@ export default function OnboardingPage() {
         </div>
       )}
 
-      {/* Terms checkbox */}
-      <div className="flex justify-center pb-4 px-6">
-        <div className="w-full max-w-sm">
-          <label className="flex items-start gap-3 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={agreedToTerms}
-              onChange={(e) => { setAgreedToTerms(e.target.checked); setTermsWarning(false); }}
-              className="mt-0.5 w-4 h-4 rounded flex-shrink-0"
-              style={{ accentColor: "var(--teal)" }}
-            />
-            <span className="text-[13px]" style={{ color: "var(--text2)" }}>
-              I agree to the{" "}
-              <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80"
-                style={{ color: "var(--teal)" }}>Privacy Policy</a>
-              {" "}and{" "}
-              <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80"
-                style={{ color: "var(--teal)" }}>Terms of Service</a>
-            </span>
-          </label>
-          {termsWarning && (
-            <p className="text-[12px] mt-2 ml-7" style={{ color: "#DC2626" }}>
-              Please accept the Privacy Policy and Terms of Service to continue.
-            </p>
-          )}
-        </div>
-      </div>
-
       {/* Promo code */}
-      <div className="flex justify-center pb-16 px-6">
+      <div className="flex justify-center pb-4 px-6">
         <div className="w-full max-w-sm">
           <p className="text-[13px] font-medium mb-2 text-center" style={{ color: "var(--text3)" }}>Have a promo code?</p>
           {promoApplied ? (
@@ -550,6 +522,34 @@ export default function OnboardingPage() {
                 <p className="text-[12px] mt-2 text-center" style={{ color: "#DC2626" }}>{promoError}</p>
               )}
             </>
+          )}
+        </div>
+      </div>
+
+      {/* Terms checkbox */}
+      <div className="flex justify-center pb-16 px-6">
+        <div className="w-full max-w-sm">
+          <label className="flex items-start gap-3 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={agreedToTerms}
+              onChange={(e) => { setAgreedToTerms(e.target.checked); setTermsWarning(false); }}
+              className="mt-0.5 w-4 h-4 rounded flex-shrink-0"
+              style={{ accentColor: "var(--teal)" }}
+            />
+            <span className="text-[13px]" style={{ color: "var(--text2)" }}>
+              I agree to the{" "}
+              <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80"
+                style={{ color: "var(--teal)" }}>Terms of Service</a>
+              {" "}and{" "}
+              <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80"
+                style={{ color: "var(--teal)" }}>Privacy Policy</a>
+            </span>
+          </label>
+          {termsWarning && (
+            <p className="text-[12px] mt-2 ml-7" style={{ color: "#DC2626" }}>
+              Please accept the Terms of Service and Privacy Policy to continue.
+            </p>
           )}
         </div>
       </div>
