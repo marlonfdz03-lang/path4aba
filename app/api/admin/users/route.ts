@@ -33,6 +33,11 @@ export async function PATCH(req: NextRequest) {
   if (!['rbt', 'bcba', 'admin'].includes(role)) return Response.json({ error: 'Invalid role' }, { status: 400 })
 
   const user = await prisma.users.update({ where: { id }, data: { role } })
+
+  // Invalidate any database sessions for this user so the new role is picked
+  // up immediately on next login. For JWT sessions this is a no-op but harmless.
+  await prisma.sessions.deleteMany({ where: { userId: id } }).catch(() => {})
+
   return Response.json({ ok: true, user: { id: user.id, email: user.email, role: user.role } })
 }
 

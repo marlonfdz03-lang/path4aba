@@ -43,4 +43,27 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
     }),
   ],
+  callbacks: {
+    ...authConfig.callbacks,
+    // Re-fetch role from DB on every server-side auth() call so admin role
+    // changes take effect immediately without the user needing to re-login.
+    // Note: the middleware reads role from the JWT directly (edge-safe, no DB),
+    // so middleware-gated routes will still see the old role until the JWT
+    // expires or the user signs in again. Server-side checks are always fresh.
+    async session({ session, token }) {
+      if (token?.id) {
+        ;(session.user as any).id = token.id as string
+        try {
+          const dbUser = await prisma.users.findUnique({
+            where: { id: token.id as string },
+            select: { role: true },
+          })
+          ;(session.user as any).role = dbUser?.role ?? (token.role as string)
+        } catch {
+          ;(session.user as any).role = token.role as string
+        }
+      }
+      return session
+    },
+  },
 })
