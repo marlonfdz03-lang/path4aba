@@ -486,73 +486,79 @@ export default function OnboardingPage() {
         </div>
       )}
 
-      {/* Promo code */}
-      <div className="flex justify-center pb-4 px-6">
-        <div className="w-full max-w-sm">
-          <p className="text-[13px] font-medium mb-2 text-center" style={{ color: "var(--text3)" }}>Have a promo code?</p>
-          {promoApplied ? (
-            <div className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-[13px] font-semibold"
-              style={{ background: "#E6F9F5", border: "1px solid #A7F3D0", color: "#065F46" }}>
-              {CHECK_ICON}
-              Code applied! $5 off every month while your subscription is active
-            </div>
-          ) : (
-            <>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={promoInput}
-                  onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromoError(""); }}
-                  placeholder="e.g. PATH5"
-                  className="flex-1 border rounded-xl px-4 py-2.5 text-sm focus:outline-none uppercase tracking-widest"
-                  style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleApplyPromo(); } }}
-                />
-                <button
-                  type="button"
-                  onClick={handleApplyPromo}
-                  disabled={promoLoading || !promoInput.trim()}
-                  className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-                  style={{ background: "var(--navy)" }}
-                >
-                  {promoLoading ? "…" : "Apply"}
-                </button>
-              </div>
-              {promoError && (
-                <p className="text-[12px] mt-2 text-center" style={{ color: "#DC2626" }}>{promoError}</p>
+      {/* Promo code + Terms — shown for all checkout paths: RBT / BCBA / standalone Student.
+          Hidden only for the "already have RBT plan" login-card path (no checkout button there). */}
+      {!(activeSection === "students" && hasActiveRBT) && (
+        <>
+          {/* Promo code */}
+          <div className="flex justify-center pb-4 px-6">
+            <div className="w-full max-w-sm">
+              <p className="text-[13px] font-medium mb-2 text-center" style={{ color: "var(--text3)" }}>Have a promo code?</p>
+              {promoApplied ? (
+                <div className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-[13px] font-semibold"
+                  style={{ background: "#E6F9F5", border: "1px solid #A7F3D0", color: "#065F46" }}>
+                  {CHECK_ICON}
+                  Code applied! $5 off every month while your subscription is active
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={promoInput}
+                      onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromoError(""); }}
+                      placeholder="e.g. PATH5"
+                      className="flex-1 border rounded-xl px-4 py-2.5 text-sm focus:outline-none uppercase tracking-widest"
+                      style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleApplyPromo(); } }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyPromo}
+                      disabled={promoLoading || !promoInput.trim()}
+                      className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                      style={{ background: "var(--navy)" }}
+                    >
+                      {promoLoading ? "…" : "Apply"}
+                    </button>
+                  </div>
+                  {promoError && (
+                    <p className="text-[12px] mt-2 text-center" style={{ color: "#DC2626" }}>{promoError}</p>
+                  )}
+                </>
               )}
-            </>
-          )}
-        </div>
-      </div>
+            </div>
+          </div>
 
-      {/* Terms checkbox */}
-      <div className="flex justify-center pb-16 px-6">
-        <div className="w-full max-w-sm">
-          <label className="flex items-start gap-3 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={agreedToTerms}
-              onChange={(e) => { setAgreedToTerms(e.target.checked); setTermsWarning(false); }}
-              className="mt-0.5 w-4 h-4 rounded flex-shrink-0"
-              style={{ accentColor: "var(--teal)" }}
-            />
-            <span className="text-[13px]" style={{ color: "var(--text2)" }}>
-              I agree to the{" "}
-              <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80"
-                style={{ color: "var(--teal)" }}>Terms of Service</a>
-              {" "}and{" "}
-              <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80"
-                style={{ color: "var(--teal)" }}>Privacy Policy</a>
-            </span>
-          </label>
-          {termsWarning && (
-            <p className="text-[12px] mt-2 ml-7" style={{ color: "#DC2626" }}>
-              Please accept the Terms of Service and Privacy Policy to continue.
-            </p>
-          )}
-        </div>
-      </div>
+          {/* Terms checkbox */}
+          <div className="flex justify-center pb-16 px-6">
+            <div className="w-full max-w-sm">
+              <label className="flex items-start gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={agreedToTerms}
+                  onChange={(e) => { setAgreedToTerms(e.target.checked); setTermsWarning(false); }}
+                  className="mt-0.5 w-4 h-4 rounded flex-shrink-0"
+                  style={{ accentColor: "var(--teal)" }}
+                />
+                <span className="text-[13px]" style={{ color: "var(--text2)" }}>
+                  I agree to the{" "}
+                  <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80"
+                    style={{ color: "var(--teal)" }}>Terms of Service</a>
+                  {" "}and{" "}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80"
+                    style={{ color: "var(--teal)" }}>Privacy Policy</a>
+                </span>
+              </label>
+              {termsWarning && (
+                <p className="text-[12px] mt-2 ml-7" style={{ color: "#DC2626" }}>
+                  Please accept the Terms of Service and Privacy Policy to continue.
+                </p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
