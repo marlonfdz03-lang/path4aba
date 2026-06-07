@@ -276,9 +276,7 @@ export default function Sidebar() {
                 <NavItem href="/clients" label="Clients" icon={IconUsers} active={isActive("/clients")} badge={clientCount} />
                 <NavItem href="/schedule" label="Schedule" icon={IconCalendar} active={isActive("/schedule")} />
                 <a
-                  href="https://chromewebstore.google.com/detail/path4aba/YOUR_EXTENSION_ID"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href="/settings?tab=extension"
                   className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-[13px] font-medium transition-colors hover:bg-white/10"
                   style={{ color: "rgba(255,255,255,0.7)" }}
                 >
