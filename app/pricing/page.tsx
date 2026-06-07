@@ -105,14 +105,18 @@ function PlanCard({
   onStart,
   loading,
   disabled,
+  promoApplied,
 }: {
   plan: Plan;
   interval: "month" | "year";
   onStart: () => void;
   loading: boolean;
   disabled?: boolean;
+  promoApplied?: boolean;
 }) {
   const price = interval === "month" ? plan.monthlyPrice : plan.yearlyPrice;
+  const promoDiscount = interval === "month" ? 5 : 60;
+  const discountedPrice = promoApplied ? parseFloat((price - promoDiscount).toFixed(2)) : null;
   const savings = Math.round(plan.monthlyPrice * 12 - plan.yearlyPrice);
   const hl = !!plan.highlighted;
 
@@ -140,9 +144,14 @@ function PlanCard({
         <p className="text-[13px] mb-5 leading-relaxed" style={{ color: hl ? "rgba(255,255,255,0.6)" : "var(--text3)" }}>
           {plan.subtitle}
         </p>
-        <div className="flex items-end gap-1 mb-1">
+        <div className="flex items-end gap-1.5 mb-1">
+          {discountedPrice !== null && (
+            <span className="text-[22px] font-medium leading-none line-through self-end mb-0.5" style={{ color: hl ? "rgba(255,255,255,0.35)" : "var(--text3)" }}>
+              ${price}
+            </span>
+          )}
           <span className="text-[38px] font-semibold leading-none" style={{ color: hl ? "white" : "var(--text1)" }}>
-            ${price}
+            ${discountedPrice !== null ? discountedPrice : price}
           </span>
           <span className="text-[13px] mb-1.5" style={{ color: hl ? "rgba(255,255,255,0.4)" : "var(--text3)" }}>
             /{interval === "month" ? "mo" : "yr"}
@@ -357,6 +366,7 @@ export default function PricingPage() {
                 onStart={() => handleStart(plan.key)}
                 loading={loadingPlan === plan.key}
                 disabled={!agreedToTerms || !!loadingPlan}
+                promoApplied={promoApplied}
               />
             ))}
           </div>
@@ -373,6 +383,7 @@ export default function PricingPage() {
                 onStart={() => handleStart(plan.key)}
                 loading={loadingPlan === plan.key}
                 disabled={!agreedToTerms || !!loadingPlan}
+                promoApplied={promoApplied}
               />
             ))}
           </div>
@@ -408,8 +419,13 @@ export default function PricingPage() {
               <div className="p-7 flex flex-col">
                 <p className="text-[11px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--text3)" }}>BCBA Students Standalone</p>
                 <p className="text-[13px] mb-5 leading-relaxed" style={{ color: "var(--text3)" }}>Fieldwork Tracker — no existing Path4ABA subscription required.</p>
-                <div className="flex items-end gap-1 mb-1">
-                  <span className="text-[38px] font-semibold leading-none" style={{ color: "var(--text1)" }}>${standalonePrice}</span>
+                <div className="flex items-end gap-1.5 mb-1">
+                  {promoApplied && (
+                    <span className="text-[22px] font-medium leading-none line-through self-end mb-0.5" style={{ color: "var(--text3)" }}>${standalonePrice}</span>
+                  )}
+                  <span className="text-[38px] font-semibold leading-none" style={{ color: "var(--text1)" }}>
+                    ${promoApplied ? parseFloat((standalonePrice - (interval === "month" ? 5 : 60)).toFixed(2)) : standalonePrice}
+                  </span>
                   <span className="text-[13px] mb-1.5" style={{ color: "var(--text3)" }}>/{interval === "month" ? "mo" : "yr"}</span>
                 </div>
                 <div className="mb-5 h-5">

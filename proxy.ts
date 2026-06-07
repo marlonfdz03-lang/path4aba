@@ -17,6 +17,7 @@ const SUB_EXEMPT_PATHS = [
   '/reset-password',
   '/onboarding',
   '/admin',
+  '/settings', // users must reach billing/settings even without a subscription
   '/bcba-students', // layout.tsx handles its own paywall — sub-gate doesn't cover bcba_students_status
 ]
 
@@ -76,7 +77,12 @@ export const proxy = auth(async function proxy(req: NextRequest & { auth: any })
 
   if (isLoggedIn) {
     const role: string = (req.auth as any)?.user?.role || ''
-    const userId: string = (req.auth as any)?.user?.id || ''
+    // NextAuth sometimes stores the user ID in token.sub instead of token.id.
+    // The session callback maps token.id → session.user.id, but token.sub is the
+    // standard JWT subject claim and is always set. Read both and prefer id.
+    const rawUser = (req.auth as any)?.user
+    const userId: string = rawUser?.id || rawUser?.sub || ''
+    console.log('[proxy] pathname:', pathname, 'auth.user.id:', rawUser?.id, 'auth.user.sub:', rawUser?.sub, '→ resolved userId:', userId)
 
     // ── Admin role guard ──────────────────────────────────────────────────
     if (pathname.startsWith('/admin')) {
@@ -120,12 +126,15 @@ export const proxy = auth(async function proxy(req: NextRequest & { auth: any })
         }
 
         let hasAccess = await checkAccess()
+        console.log('[proxy] userId:', userId, 'pathname:', pathname, 'hasAccess result (attempt 1):', hasAccess)
         if (!hasAccess) {
           await new Promise(resolve => setTimeout(resolve, 1500))
           hasAccess = await checkAccess()
+          console.log('[proxy] userId:', userId, 'pathname:', pathname, 'hasAccess result (attempt 2):', hasAccess)
         }
 
         if (!hasAccess) {
+          console.log('[proxy] REDIRECTING to /pricing — userId:', userId, 'pathname:', pathname)
           return NextResponse.redirect(new URL('/pricing', req.url))
         }
       } catch (err) {
