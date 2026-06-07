@@ -21,10 +21,32 @@ export async function POST(request: Request) {
   }
 
   // Verify user exists
-  const user = await prisma.users.findUnique({ where: { id: userId } })
+  const user = await prisma.users.findUnique({ where: { id: userId }, select: { id: true, email: true, name: true, role: true } })
   if (!user) {
     console.error('[create-trial] User not found:', userId)
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
+  }
+
+  // Cross-check plan key against the user's role in the DB
+  const role = user.role || ''
+  const RBT_PLANS      = ['rbt_1', 'rbt_2']
+  const BCBA_PLANS     = ['bcba_starter', 'bcba_pro']
+  const STUDENT_PLANS  = ['bcba_students_standalone', 'bcba_students_addon']
+
+  const isRbt     = ['rbt'].includes(role)
+  const isBcba    = ['bcba', 'bcaba'].includes(role)
+  const isStudent = ['bcba_student', 'bcaba_student'].includes(role)
+  const isAdmin   = role === 'admin'
+
+  const planAllowed =
+    isAdmin ||
+    (isRbt     && RBT_PLANS.includes(plan))     ||
+    (isBcba    && BCBA_PLANS.includes(plan))     ||
+    (isStudent && STUDENT_PLANS.includes(plan))
+
+  if (!planAllowed) {
+    console.error('[create-trial] Plan/role mismatch:', { plan, role, userId })
+    return NextResponse.json({ error: 'This plan is not available for your account type.' }, { status: 403 })
   }
 
   // Resolve price ID from plan key and interval

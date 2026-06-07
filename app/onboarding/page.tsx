@@ -268,9 +268,23 @@ export default function OnboardingPage() {
     else setPromoError(error || "Invalid promo code");
   }
 
+  // Allowed plan keys per section — enforced on frontend and API
+  const ALLOWED_PLANS: Record<Section, string[]> = {
+    rbt:      ['rbt_1', 'rbt_2'],
+    bcba:     ['bcba_starter', 'bcba_pro'],
+    students: ['bcba_students_standalone'],
+  }
+
   async function handleSelectPlan(planKey: string) {
     if (!agreedToTerms) { setTermsWarning(true); return; }
     setTermsWarning(false);
+
+    // Guard: plan must belong to the active section
+    if (!ALLOWED_PLANS[activeSection].includes(planKey)) {
+      setPlanError("This plan is not available for the selected profession. Please select a valid plan.");
+      return;
+    }
+
     setLoadingPlan(planKey);
     setPlanError("");
 
@@ -323,12 +337,25 @@ export default function OnboardingPage() {
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)", fontFamily: "var(--font-dm-sans, sans-serif)" }}>
 
       {/* Header */}
-      <div className="flex items-center justify-center px-8 h-16 bg-white" style={{ borderBottom: "1px solid var(--border)" }}>
-        <span className="text-[18px] font-semibold">
+      <div className="flex items-center px-8 h-16 bg-white" style={{ borderBottom: "1px solid var(--border)" }}>
+        <button
+          onClick={() => router.push("/pricing")}
+          className="flex items-center gap-1.5 text-[13px] font-medium hover:opacity-70 transition-opacity mr-4"
+          style={{ color: "var(--text3)" }}
+          aria-label="Back to pricing"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+          Back
+        </button>
+        <span className="text-[18px] font-semibold flex-1 text-center">
           <span style={{ color: "var(--text1)" }}>Path</span>
           <span style={{ color: "var(--teal)" }}>4</span>
           <span style={{ color: "var(--text1)" }}>ABA</span>
         </span>
+        {/* spacer to keep logo centered */}
+        <div className="w-14" />
       </div>
 
       {/* Hero */}
