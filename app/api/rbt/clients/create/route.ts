@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getExtensionAuth } from '@/lib/extensionAuth'
 import { prisma } from '@/lib/prisma'
-import { buildClinicalProfile } from '@/lib/buildClinicalProfile'
 import { extractAssessment } from '@/lib/extractAssessment'
+import { parsePdf, mapToLegacyFormat, saveKnowledgeBase } from '@/lib/assessmentPipeline'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
   const user = await getExtensionAuth()
@@ -21,29 +23,32 @@ export async function POST(req: NextRequest) {
     const existingClients = await prisma.clients.count({ where: { rbt_id: user.id } })
     const sub = await prisma.subscriptions.findFirst({
       where: { user_id: user.id },
-      select: { plan: true }
+      select: { plan: true },
     })
 
     // Plan keys match lib/stripe.ts PLAN_LIMITS: rbt_1 = 1 client, rbt_2 = 2 clients
-    const planLimits: Record<string, number> = {
-      'rbt_1': 1,
-      'rbt_2': 2,
-    }
+    const planLimits: Record<string, number> = { rbt_1: 1, rbt_2: 2 }
     const limit = planLimits[sub?.plan || ''] ?? 1
     if (existingClients >= limit) {
       return NextResponse.json({
-        error: `Your plan allows ${limit} client${limit === 1 ? '' : 's'}. Upgrade to add more.`
+        error: `Your plan allows ${limit} client${limit === 1 ? '' : 's'}. Upgrade to add more.`,
       }, { status: 409 })
     }
 
-    // Extract assessment from PDF
+    // Parse PDF — same pdf2json pipeline as extract-assessment
     const buffer = Buffer.from(await file.arrayBuffer())
-    const pdfParse = require('pdf-parse')
-    const pdfData = await pdfParse(buffer)
-    const extracted = await extractAssessment(pdfData.text)
-    const clinicalProfile = buildClinicalProfile(extracted)
+    const text = await parsePdf(buffer)
 
-    // Generate internal code from clientCode or random
+    if (!text.trim()) {
+      return NextResponse.json({ error: 'PDF extraction returned empty text.' }, { status: 400 })
+    }
+
+    // Extract + normalize — identical to extract-assessment/route.ts
+    const extracted = await extractAssessment(text.slice(0, 90000))
+    saveKnowledgeBase(extracted).catch(err => console.error('[rbt/clients/create] kb save error:', err))
+    const clinicalProfile = mapToLegacyFormat(extracted)
+
+    // Generate internal code
     const internalCode = extracted.clientCode || `RBT-${Date.now()}`
 
     // Create client
@@ -52,16 +57,18 @@ export async function POST(req: NextRequest) {
         rbt_id: user.id,
         internal_code: internalCode,
         clinical_profile: clinicalProfile as any,
-        diagnosis: Array.isArray(extracted.diagnosis) ? extracted.diagnosis.join(', ') : (extracted.diagnosis || null),
+        diagnosis: Array.isArray(extracted.diagnosis)
+          ? extracted.diagnosis.join(', ')
+          : (extracted.diagnosis || null),
         primary_setting: extracted.setting || 'home',
-      }
+      },
     })
 
     return NextResponse.json({
       success: true,
       clientId: client.id,
       internalCode: client.internal_code,
-      profile: clinicalProfile
+      profile: clinicalProfile,
     })
   } catch (err: any) {
     console.error('[rbt/clients/create]', err)
