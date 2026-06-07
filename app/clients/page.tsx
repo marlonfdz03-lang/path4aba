@@ -176,6 +176,7 @@ export default function ClientsPage() {
   const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
   const [showConnectModal, setShowConnectModal] = useState(false);
   const [showNewClientModal, setShowNewClientModal] = useState(false);
+  const [newClientName, setNewClientName] = useState("");
   const [newClientFile, setNewClientFile] = useState<File | null>(null);
   const [newClientExtracting, setNewClientExtracting] = useState(false);
   const [newClientError, setNewClientError] = useState("");
@@ -224,6 +225,7 @@ export default function ClientsPage() {
     setNewClientSuccess(false);
     try {
       const formData = new FormData();
+      formData.append("name", newClientName);
       formData.append("file", newClientFile);
       const res = await fetch("/api/rbt/clients/create", {
         method: "POST",
@@ -237,6 +239,7 @@ export default function ClientsPage() {
       setNewClientSuccess(true);
       setTimeout(() => {
         setShowNewClientModal(false);
+        setNewClientName("");
         setNewClientFile(null);
         setNewClientSuccess(false);
         window.location.reload();
@@ -371,9 +374,22 @@ export default function ClientsPage() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-[16px] font-semibold" style={{ color: "var(--text1)" }}>New Client</h2>
-              <button onClick={() => { setShowNewClientModal(false); setNewClientFile(null); setNewClientError(""); }} className="text-[20px] leading-none hover:opacity-60" style={{ color: "var(--text3)" }}>×</button>
+              <button onClick={() => { setShowNewClientModal(false); setNewClientName(""); setNewClientFile(null); setNewClientError(""); }} className="text-[20px] leading-none hover:opacity-60" style={{ color: "var(--text3)" }}>×</button>
             </div>
             <p className="text-[13px] mb-4" style={{ color: "var(--text2)" }}>Upload your client's ABA assessment PDF. The system will automatically extract behaviors, skills, interventions, and reinforcers.</p>
+            <div className="mb-4">
+              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>
+                Client Name <span style={{ color: "#DC2626" }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={newClientName}
+                onChange={e => setNewClientName(e.target.value)}
+                placeholder="First and last name (de-identified OK: e.g. J. Smith)"
+                className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
+                style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+              />
+            </div>
             <label className="block w-full border-2 border-dashed rounded-xl p-6 text-center cursor-pointer hover:border-teal-400 transition-colors mb-4" style={{ borderColor: newClientFile ? "var(--teal)" : "var(--border2)" }}>
               <input type="file" accept=".pdf" className="hidden" onChange={e => setNewClientFile(e.target.files?.[0] || null)} />
               {newClientFile ? (
@@ -386,7 +402,7 @@ export default function ClientsPage() {
             {newClientSuccess && <p className="text-[12px] mb-3 px-3 py-2 rounded-lg" style={{ background: "#f0fdf4", color: "#166534" }}>✓ Client created successfully!</p>}
             <button
               onClick={handleCreateClient}
-              disabled={!newClientFile || newClientExtracting}
+              disabled={!newClientFile || !newClientName.trim() || newClientExtracting}
               className="w-full py-2.5 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50 transition-opacity"
               style={{ background: "var(--teal)" }}
             >

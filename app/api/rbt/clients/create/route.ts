@@ -11,13 +11,15 @@ export const maxDuration = 60
 export async function POST(req: NextRequest) {
   const user = await getExtensionAuth()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role !== 'rbt') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!['rbt', 'admin'].includes(user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   try {
     const formData = await req.formData()
     const file = formData.get('file') as File | null
+    const clientName = (formData.get('name') as string | null)?.trim() || ''
 
     if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+    if (!clientName) return NextResponse.json({ error: 'Client name is required.' }, { status: 400 })
 
     // Check client limit based on subscription
     const existingClients = await prisma.clients.count({ where: { rbt_id: user.id } })
@@ -56,7 +58,7 @@ export async function POST(req: NextRequest) {
       data: {
         rbt_id: user.id,
         internal_code: internalCode,
-        clinical_profile: clinicalProfile as any,
+        clinical_profile: { ...(clinicalProfile as any), name: clientName },
         diagnosis: Array.isArray(extracted.diagnosis)
           ? extracted.diagnosis.join(', ')
           : (extracted.diagnosis || null),
