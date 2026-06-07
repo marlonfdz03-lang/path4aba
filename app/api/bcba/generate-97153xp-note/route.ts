@@ -5,7 +5,6 @@ import type * as Prisma from '@/lib/generated/prisma/internal/prismaNamespace'
 import OpenAI from 'openai'
 import { build97153XPPrompt } from '@/app/prompts/supervision97153xpPrompt'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const openai = new OpenAI({
   apiKey: process.env.AZURE_OPENAI_API_KEY || 'azure-openai',
@@ -63,7 +62,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing clientId or sessionDate' }, { status: 400 })
   }
 
-  if (!UUID_RE.test(userId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const connection = await prisma.bcba_clients.findFirst({
     where: { bcba_id: userId, client_id: clientId },

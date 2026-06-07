@@ -9,23 +9,14 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter } as any)
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 export async function GET() {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const userId = (session.user as any).id as string
-  const isUuid = UUID_RE.test(userId)
-
-  const orConditions: any[] = [{ created_by: null }]
-  if (isUuid) {
-    orConditions.push({ rbt_id: userId })
-    orConditions.push({ created_by: userId })
-  }
 
   const clients = await prisma.clients.findMany({
-    where: { OR: orConditions },
+    where: { OR: [{ rbt_id: userId }, { created_by: userId }] },
     select: { id: true, internal_code: true, clinical_profile: true, created_at: true },
     orderBy: { created_at: 'desc' },
   })
@@ -38,18 +29,15 @@ export async function POST(req: Request) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const userId = (session.user as any).id as string
-  const isUuid = UUID_RE.test(userId)
 
   const body = await req.json()
   const { id, clientName, clinicalProfile } = body
   if (!id || !clientName) return NextResponse.json({ error: 'Missing id or clientName' }, { status: 400 })
 
   // Check if this is a new client (upsert create path) — skip limit check for updates
-  const existingClient = isUuid
-    ? await prisma.clients.findUnique({ where: { id }, select: { id: true } })
-    : null
+  const existingClient = await prisma.clients.findUnique({ where: { id }, select: { id: true } })
 
-  if (!existingClient && isUuid) {
+  if (!existingClient) {
     const sub = await prisma.subscriptions.findFirst({
       where: { user_id: userId },
       select: { plan: true, status: true, trial_ends_at: true, current_period_ends_at: true },
@@ -83,8 +71,8 @@ export async function POST(req: Request) {
     create: {
       id,
       internal_code: id,
-      created_by: isUuid ? userId : null,
-      rbt_id: isUuid ? userId : null,
+      created_by: userId,
+      rbt_id: userId,
       clinical_profile: { name: clientName, ...clinicalProfile },
     },
     update: {

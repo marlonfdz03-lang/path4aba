@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +15,6 @@ export async function GET(request: Request) {
   const date = url.searchParams.get('date')
   if (!clientId || !date) return NextResponse.json({ error: 'Missing clientId or date' }, { status: 400 })
 
-  if (!UUID_RE.test(userId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const connection = await prisma.bcba_clients.findFirst({
     where: { bcba_id: userId, client_id: clientId },

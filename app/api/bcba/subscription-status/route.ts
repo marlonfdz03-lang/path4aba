@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +10,6 @@ export async function GET() {
   if (!session?.user) return NextResponse.json({ isBCBAPro: false })
   const userId = (session.user as any).id as string
 
-  if (!UUID_RE.test(userId)) return NextResponse.json({ isBCBAPro: false })
 
   const sub = await prisma.subscriptions.findFirst({
     where: { user_id: userId },

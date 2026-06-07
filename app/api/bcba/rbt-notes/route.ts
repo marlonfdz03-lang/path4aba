@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 export async function GET(request: Request) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -12,11 +10,6 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const clientId = url.searchParams.get('clientId')
   console.log('[rbt-notes] bcba_id:', userId, 'clientId param:', clientId)
-
-  if (!UUID_RE.test(userId)) {
-    console.log('[rbt-notes] non-UUID user — returning empty')
-    return NextResponse.json({ notes: [] })
-  }
 
   const connections = await prisma.bcba_clients.findMany({
     where: { bcba_id: userId },

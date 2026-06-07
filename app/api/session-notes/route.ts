@@ -10,8 +10,6 @@ const prisma = new PrismaClient({ adapter } as any)
 
 export const dynamic = 'force-dynamic'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 export async function GET(req: Request) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -39,7 +37,7 @@ export async function POST(req: Request) {
   await prisma.session_notes.create({
     data: {
       client_id: clientId,
-      user_id: UUID_RE.test(userId) ? userId : null,
+      user_id: userId,
       note_text: noteText,
       session_date: sessionDate || new Date().toISOString().split('T')[0],
     },

@@ -4,7 +4,6 @@ import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function calculateSimilarity(a: string, b: string): number {
   const w1 = new Set(a.toLowerCase().split(/\s+/))
@@ -46,7 +45,7 @@ export async function POST(req: Request) {
   const inserted = await prisma.session_notes.create({
     data: {
       client_id,
-      user_id: UUID_RE.test(userId) ? userId : null,
+      user_id: userId,
       note_text,
       session_date: session_date || new Date().toISOString().split('T')[0],
     },

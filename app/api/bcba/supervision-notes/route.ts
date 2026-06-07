@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +14,6 @@ export async function GET(request: Request) {
   const clientId = url.searchParams.get('clientId')
   if (!clientId) return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
 
-  if (!UUID_RE.test(userId)) return NextResponse.json({ notes: [] })
 
   const connection = await prisma.bcba_clients.findFirst({
     where: { bcba_id: userId, client_id: clientId },

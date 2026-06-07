@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function POST(request: Request) {
   const session = await auth()
@@ -19,7 +18,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing or invalid noteId or status' }, { status: 400 })
   }
 
-  if (!UUID_RE.test(userId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const note = await prisma.session_notes.findFirst({
     where: { id: noteId },

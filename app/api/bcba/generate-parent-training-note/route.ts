@@ -3,7 +3,6 @@ import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { generateParentTrainingNote } from '@/lib/generateParentTrainingNote'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function POST(request: Request) {
   const session = await auth()
@@ -48,7 +47,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  if (!UUID_RE.test(userId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const connection = await prisma.bcba_clients.findFirst({
     where: { bcba_id: userId, client_id: clientId },

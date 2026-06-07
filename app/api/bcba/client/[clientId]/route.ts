@@ -4,7 +4,6 @@ import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function GET(
   _req: Request,
@@ -16,7 +15,6 @@ export async function GET(
   const userId = user.id
   const { clientId } = await params
 
-  if (!UUID_RE.test(userId)) return NextResponse.json({ error: 'Not connected to this client' }, { status: 403 })
 
   const conn = await prisma.bcba_clients.findFirst({
     where: { bcba_id: userId, client_id: clientId },
@@ -54,7 +52,6 @@ export async function PATCH(
   const userId = user.id
   const { clientId } = await params
 
-  if (!UUID_RE.test(userId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const conn = await prisma.bcba_clients.findFirst({
     where: { bcba_id: userId, client_id: clientId },
