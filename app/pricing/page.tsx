@@ -104,11 +104,13 @@ function PlanCard({
   interval,
   onStart,
   loading,
+  disabled,
 }: {
   plan: Plan;
   interval: "month" | "year";
   onStart: () => void;
   loading: boolean;
+  disabled?: boolean;
 }) {
   const price = interval === "month" ? plan.monthlyPrice : plan.yearlyPrice;
   const savings = Math.round(plan.monthlyPrice * 12 - plan.yearlyPrice);
@@ -159,7 +161,7 @@ function PlanCard({
         </span>
         <button
           onClick={onStart}
-          disabled={loading}
+          disabled={loading || !!disabled}
           className="w-full py-3 rounded-xl text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed mb-3"
           style={{ background: hl ? "var(--teal)" : "var(--navy)" }}
         >
@@ -189,6 +191,12 @@ export default function PricingPage() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [profession, setProfession] = useState<Profession>("rbt");
   const [hasActiveRBT, setHasActiveRBT] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [termsWarning, setTermsWarning] = useState(false);
+  const [promoInput, setPromoInput] = useState("");
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoApplied, setPromoApplied] = useState(false);
+  const [promoError, setPromoError] = useState("");
 
   useEffect(() => {
     const role = (session?.user as any)?.role as string | undefined;
@@ -205,7 +213,25 @@ export default function PricingPage() {
       .catch(() => {});
   }, [session]);
 
+  async function handleApplyPromo() {
+    if (!promoInput.trim()) return;
+    setPromoLoading(true);
+    setPromoError("");
+    setPromoApplied(false);
+    const res = await fetch("/api/validate-promo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: promoInput }),
+    });
+    const { valid, error } = await res.json();
+    setPromoLoading(false);
+    if (valid) setPromoApplied(true);
+    else setPromoError(error || "Invalid promo code");
+  }
+
   async function handleStart(planKey: PlanKey) {
+    if (!agreedToTerms) { setTermsWarning(true); return; }
+    setTermsWarning(false);
     setLoadingPlan(planKey);
     const userId = (session?.user as any)?.id;
     if (!userId) { router.push("/login"); return; }
@@ -224,6 +250,8 @@ export default function PricingPage() {
   }
 
   async function handleStartStandalone() {
+    if (!agreedToTerms) { setTermsWarning(true); return; }
+    setTermsWarning(false);
     setLoadingPlan("bcba_students_standalone");
     const userId = (session?.user as any)?.id;
     if (!userId) { router.push("/login"); return; }
@@ -328,6 +356,7 @@ export default function PricingPage() {
                 interval={interval}
                 onStart={() => handleStart(plan.key)}
                 loading={loadingPlan === plan.key}
+                disabled={!agreedToTerms || !!loadingPlan}
               />
             ))}
           </div>
@@ -343,6 +372,7 @@ export default function PricingPage() {
                 interval={interval}
                 onStart={() => handleStart(plan.key)}
                 loading={loadingPlan === plan.key}
+                disabled={!agreedToTerms || !!loadingPlan}
               />
             ))}
           </div>
@@ -389,7 +419,7 @@ export default function PricingPage() {
                 </div>
                 <button
                   onClick={handleStartStandalone}
-                  disabled={!!loadingPlan}
+                  disabled={!!loadingPlan || !agreedToTerms}
                   className="w-full py-3 rounded-xl text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed mb-3"
                   style={{ background: "var(--navy)" }}
                 >
@@ -449,6 +479,79 @@ export default function PricingPage() {
           </div>
         )}
       </div>
+
+      {/* Promo code + Terms — shown for all checkout paths, hidden for the login-only student card */}
+      {!(profession === "student" && hasActiveRBT) && (
+        <>
+          {/* Promo code */}
+          <div className="flex justify-center px-6 pb-4 max-w-sm mx-auto w-full">
+            <div className="w-full">
+              <p className="text-[13px] font-medium mb-2 text-center" style={{ color: "var(--text3)" }}>Have a promo code?</p>
+              {promoApplied ? (
+                <div className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-[13px] font-semibold"
+                  style={{ background: "#E6F9F5", border: "1px solid #A7F3D0", color: "#065F46" }}>
+                  {CHECK}
+                  Code applied! $5 off every month while your subscription is active
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={promoInput}
+                      onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromoError(""); }}
+                      placeholder="e.g. PATH5"
+                      className="flex-1 border rounded-xl px-4 py-2.5 text-sm focus:outline-none uppercase tracking-widest"
+                      style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleApplyPromo(); } }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyPromo}
+                      disabled={promoLoading || !promoInput.trim()}
+                      className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                      style={{ background: "var(--navy)" }}
+                    >
+                      {promoLoading ? "…" : "Apply"}
+                    </button>
+                  </div>
+                  {promoError && (
+                    <p className="text-[12px] mt-2 text-center" style={{ color: "#DC2626" }}>{promoError}</p>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Terms checkbox */}
+          <div className="flex justify-center px-6 pb-10 max-w-sm mx-auto w-full">
+            <div className="w-full">
+              <label className="flex items-start gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={agreedToTerms}
+                  onChange={(e) => { setAgreedToTerms(e.target.checked); setTermsWarning(false); }}
+                  className="mt-0.5 w-4 h-4 rounded flex-shrink-0"
+                  style={{ accentColor: "var(--teal)" }}
+                />
+                <span className="text-[13px]" style={{ color: "var(--text2)" }}>
+                  I agree to the{" "}
+                  <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80"
+                    style={{ color: "var(--teal)" }}>Terms of Service</a>
+                  {" "}and{" "}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80"
+                    style={{ color: "var(--teal)" }}>Privacy Policy</a>
+                </span>
+              </label>
+              {termsWarning && (
+                <p className="text-[12px] mt-2 ml-7" style={{ color: "#DC2626" }}>
+                  Please accept the Terms of Service and Privacy Policy to continue.
+                </p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Footer */}
       <p className="text-center text-[12px] pb-12 pt-4" style={{ color: "var(--text3)" }}>
