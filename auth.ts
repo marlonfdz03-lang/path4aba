@@ -51,11 +51,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     // so middleware-gated routes will still see the old role until the JWT
     // expires or the user signs in again. Server-side checks are always fresh.
     async session({ session, token }) {
-      if (token?.id) {
-        ;(session.user as any).id = token.id as string
+      // token.id is our custom field; token.sub is the standard JWT subject set
+      // automatically by NextAuth. Fall back to token.sub for sessions minted
+      // before the custom jwt callback was in place.
+      const userId = (token.id ?? token.sub) as string | undefined
+      if (userId) {
+        ;(session.user as any).id = userId
         try {
           const dbUser = await prisma.users.findUnique({
-            where: { id: token.id as string },
+            where: { id: userId },
             select: { role: true },
           })
           ;(session.user as any).role = dbUser?.role ?? (token.role as string)

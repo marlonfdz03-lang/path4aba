@@ -13,11 +13,11 @@ model clients {
   clinical_profile          Json?
   created_at                DateTime?                   @default(now()) @db.Timestamptz(6)
   active_behaviors          Json?
-  agency_id                 String?                     @db.Uuid
-  created_by                String?                     @db.Uuid
+  agency_id                 String?
+  created_by                String?
   diagnosis                 String?
   primary_setting           String?
-  rbt_id                    String?                     @db.Uuid
+  rbt_id                    String?
   bcba_clients              bcba_clients[]
   client_access_codes       client_access_codes[]
   maladaptive_data          maladaptive_data[]
@@ -34,7 +34,7 @@ model clients {
 model session_notes {
   id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   client_id           String?   @db.Uuid
-  user_id             String?   @db.Uuid
+  user_id             String?
   note_text           String?
   session_date        String?
   behaviors_addressed String[]
@@ -42,7 +42,7 @@ model session_notes {
   interventions_used  String[]
   activities_used     String[]
   review_status       String?
-  reviewed_by         String?   @db.Uuid
+  reviewed_by         String?
   reviewed_at         DateTime? @db.Timestamptz(6)
   review_comment      String?
   created_at          DateTime? @default(now()) @db.Timestamptz(6)
@@ -139,11 +139,11 @@ model fieldwork_profiles {
 model client_access_codes {
   id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   client_id  String    @db.Uuid
-  rbt_id     String    @db.Uuid
+  rbt_id     String
   code       String    @unique
   expires_at DateTime? @db.Timestamptz(6)
   used       Boolean   @default(false)
-  used_by    String?   @db.Uuid
+  used_by    String?
   created_at DateTime? @default(now()) @db.Timestamptz(6)
   client     clients   @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }
@@ -151,8 +151,8 @@ model client_access_codes {
 model supervision_notes {
   id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   client_id        String?   @db.Uuid
-  bcba_id          String?   @db.Uuid
-  rbt_id           String?   @db.Uuid
+  bcba_id          String?
+  rbt_id           String?
   session_date     String?
   supervision_type String?
   note_text        String?
@@ -164,7 +164,7 @@ model supervision_notes {
 model parent_training_notes {
   id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   client_id          String?   @db.Uuid
-  bcba_id            String?   @db.Uuid
+  bcba_id            String?
   session_date       String?
   caregiver_name     String?
   caregiver_relation String?
@@ -177,7 +177,7 @@ model parent_training_notes {
 model missed_hours {
   id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   client_id  String?   @db.Uuid
-  rbt_id     String?   @db.Uuid
+  rbt_id     String?
   date       String?
   reason     String?
   hours      Float?
@@ -210,7 +210,7 @@ model topographies {
 model supervision_notes_97153xp {
   id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   client_id           String?   @db.Uuid
-  bcba_id             String?   @db.Uuid
+  bcba_id             String?
   session_date        String?
   note_text           String?
   rbt_session_context Json?
