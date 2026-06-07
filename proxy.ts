@@ -89,6 +89,17 @@ export const proxy = auth(async function proxy(req: NextRequest & { auth: any })
     // Admins bypass subscription gate on all routes
     if (role === 'admin') return NextResponse.next()
 
+    // ── Fix 1: post-checkout grace window ────────────────────────────────
+    // Stripe redirects before the webhook fires. If the URL carries a
+    // checkout success signal, let the user through — the webhook will write
+    // the subscription row within seconds and the next request will pass.
+    const sp = req.nextUrl.searchParams
+    const isPostCheckout =
+      sp.get('subscription') === 'success' ||
+      sp.get('trial') === 'started'
+
+    if (isPostCheckout) return NextResponse.next()
+
     // ── Subscription gate ─────────────────────────────────────────────────
     const isSubExempt = SUB_EXEMPT_PATHS.some(
       (p) => pathname === p || pathname.startsWith(p + '/')
@@ -99,12 +110,23 @@ export const proxy = auth(async function proxy(req: NextRequest & { auth: any })
         const host = req.headers.get('host') || ''
         const protocol = host.startsWith('localhost') ? 'http' : 'https'
         const subGateUrl = `${protocol}://${host}/api/auth/sub-gate?userId=${encodeURIComponent(userId)}`
-        const subRes = await fetch(subGateUrl)
-        if (subRes.ok) {
-          const { hasAccess } = await subRes.json()
-          if (!hasAccess) {
-            return NextResponse.redirect(new URL('/pricing', req.url))
-          }
+
+        // Fix 2: retry once after 1500ms if hasAccess is false —
+        // handles the case where the webhook hasn't committed yet.
+        const checkAccess = async (): Promise<boolean> => {
+          const r = await fetch(subGateUrl)
+          if (!r.ok) return true // fail open
+          return !!(await r.json()).hasAccess
+        }
+
+        let hasAccess = await checkAccess()
+        if (!hasAccess) {
+          await new Promise(resolve => setTimeout(resolve, 1500))
+          hasAccess = await checkAccess()
+        }
+
+        if (!hasAccess) {
+          return NextResponse.redirect(new URL('/pricing', req.url))
         }
       } catch (err) {
         console.error('[proxy] sub-gate fetch failed:', err)
