@@ -84,17 +84,18 @@ export async function POST(req: Request) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const userId = (session.user as any).id as string
 
-  let body: { activityType?: string; contactType?: string; setting?: string; category?: string }
+  let body: { activityType?: string; contactType?: string; setting?: string; category?: string; activityCategory?: string }
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   }
 
-  const { activityType = 'unrestricted', contactType = 'none', setting = '', category = '' } = body
+  const { activityType = 'unrestricted', contactType = 'none', setting = '', category = '', activityCategory = '' } = body
 
   const userMessage = [
-    `Generate one BACB-compliant fieldwork session description.`,
+    `Generate one BACB-compliant fieldwork tracking note.`,
+    `BACB Activity Category: ${activityCategory || 'not specified'}`,
     `Activity type: ${ACTIVITY_LABELS[activityType] ?? activityType}`,
     `Contact type: ${CONTACT_LABELS[contactType] ?? contactType}`,
     setting ? `Setting: ${setting}` : null,

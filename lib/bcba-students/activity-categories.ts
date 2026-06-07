@@ -83,3 +83,32 @@ export function isValidCategory(category: string): boolean {
 export function invalidReason(category: string): string {
   return INVALID_CATEGORY_REASONS[category] ?? 'This activity is not eligible for BACB fieldwork hours.'
 }
+
+// Maps each BACB activityCategory to the real bcba_notes.category strings
+// (verified against: SELECT DISTINCT category FROM bcba_notes ORDER BY category)
+// Verified against live DB — SELECT DISTINCT category, activity_type FROM bcba_notes
+// Restricted buckets: 'behavior change procedures' (40), 'functional assessment' (20)
+// Unrestricted buckets: assessment(5), behavior change procedures(86),
+//   data analysis & graphing(44), ethics & professional conduct(49),
+//   experimental design(4), functional assessment(64), general behavior analysis(37),
+//   measurement & data systems(22), staff training & supervision(56), treatment planning(33)
+export const ACTIVITY_CATEGORY_TO_NOTE_CATEGORY: Record<string, string[]> = {
+  // Unrestricted
+  DATA_ANALYSIS:           ['data analysis & graphing', 'measurement & data systems'],
+  PROGRAM_MODIFICATION:    ['behavior change procedures', 'treatment planning'],
+  CAREGIVER_TRAINING:      ['staff training & supervision'],
+  STAFF_TRAINING:          ['staff training & supervision'],
+  RESEARCH_CLIENT_RELATED: ['experimental design', 'general behavior analysis'],
+  REPORT_WRITING:          ['assessment', 'treatment planning'],
+  MEETING_CLIENT_RELATED:  ['treatment planning', 'general behavior analysis'],
+  // Restricted — only map to categories that have restricted notes in the DB
+  DIRECT_OBSERVATION:      ['functional assessment'],     // 20 restricted notes
+  BEHAVIOR_INTERVENTION:   ['behavior change procedures'], // 40 restricted notes
+  SKILL_ACQUISITION:       ['behavior change procedures'], // 40 restricted notes
+  CRISIS_SUPPORT:          ['behavior change procedures'], // 40 restricted notes
+}
+
+// Returns the note categories for a given activityCategory, or [] if no mapping.
+export function noteCategories(activityCategory: string): string[] {
+  return ACTIVITY_CATEGORY_TO_NOTE_CATEGORY[activityCategory] ?? []
+}

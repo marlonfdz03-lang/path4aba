@@ -175,6 +175,11 @@ export default function ClientsPage() {
   const [loaded, setLoaded] = useState(false);
   const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
   const [showConnectModal, setShowConnectModal] = useState(false);
+  const [showNewClientModal, setShowNewClientModal] = useState(false);
+  const [newClientFile, setNewClientFile] = useState<File | null>(null);
+  const [newClientExtracting, setNewClientExtracting] = useState(false);
+  const [newClientError, setNewClientError] = useState("");
+  const [newClientSuccess, setNewClientSuccess] = useState(false);
 
   async function handleDeleteClient(clientId: string) {
     const confirmDelete = window.confirm(
@@ -212,6 +217,37 @@ export default function ClientsPage() {
 
   if (status === "loading") return null;
 
+  async function handleCreateClient() {
+    if (!newClientFile) return;
+    setNewClientExtracting(true);
+    setNewClientError("");
+    setNewClientSuccess(false);
+    try {
+      const formData = new FormData();
+      formData.append("file", newClientFile);
+      const res = await fetch("/api/rbt/clients/create", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setNewClientError(data.error || "Failed to create client.");
+        return;
+      }
+      setNewClientSuccess(true);
+      setTimeout(() => {
+        setShowNewClientModal(false);
+        setNewClientFile(null);
+        setNewClientSuccess(false);
+        window.location.reload();
+      }, 1500);
+    } catch {
+      setNewClientError("Network error. Please try again.");
+    } finally {
+      setNewClientExtracting(false);
+    }
+  }
+
   const filtered = filter === "inactive" ? [] : clients;
 
   return (
@@ -241,17 +277,17 @@ export default function ClientsPage() {
               </svg>
               Connect Client
             </button>
-            <a
-              href="/upload-assessment"
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold text-white hover:opacity-90 transition-opacity"
+            <button
+              onClick={() => setShowNewClientModal(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold text-white hover:opacity-90 transition-opacity cursor-pointer"
               style={{ background: "var(--teal)" }}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19" />
                 <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
               New Client
-            </a>
+            </button>
           </div>
         </div>
 
@@ -328,6 +364,36 @@ export default function ClientsPage() {
             if (client?.id) router.push(`/clients/${client.id}`);
           }}
         />
+      )}
+
+      {showNewClientModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[16px] font-semibold" style={{ color: "var(--text1)" }}>New Client</h2>
+              <button onClick={() => { setShowNewClientModal(false); setNewClientFile(null); setNewClientError(""); }} className="text-[20px] leading-none hover:opacity-60" style={{ color: "var(--text3)" }}>×</button>
+            </div>
+            <p className="text-[13px] mb-4" style={{ color: "var(--text2)" }}>Upload your client's ABA assessment PDF. The system will automatically extract behaviors, skills, interventions, and reinforcers.</p>
+            <label className="block w-full border-2 border-dashed rounded-xl p-6 text-center cursor-pointer hover:border-teal-400 transition-colors mb-4" style={{ borderColor: newClientFile ? "var(--teal)" : "var(--border2)" }}>
+              <input type="file" accept=".pdf" className="hidden" onChange={e => setNewClientFile(e.target.files?.[0] || null)} />
+              {newClientFile ? (
+                <p className="text-[13px] font-medium" style={{ color: "var(--teal)" }}>✓ {newClientFile.name}</p>
+              ) : (
+                <p className="text-[13px]" style={{ color: "var(--text3)" }}>Click to upload PDF assessment</p>
+              )}
+            </label>
+            {newClientError && <p className="text-[12px] mb-3 px-3 py-2 rounded-lg" style={{ background: "#fef2f2", color: "#991b1b" }}>{newClientError}</p>}
+            {newClientSuccess && <p className="text-[12px] mb-3 px-3 py-2 rounded-lg" style={{ background: "#f0fdf4", color: "#166534" }}>✓ Client created successfully!</p>}
+            <button
+              onClick={handleCreateClient}
+              disabled={!newClientFile || newClientExtracting}
+              className="w-full py-2.5 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50 transition-opacity"
+              style={{ background: "var(--teal)" }}
+            >
+              {newClientExtracting ? "Extracting assessment…" : "Create Client"}
+            </button>
+          </div>
+        </div>
       )}
     </main>
   );

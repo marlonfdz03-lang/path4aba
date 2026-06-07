@@ -3,16 +3,16 @@
 import { useEffect, useState } from "react";
 
 const CATEGORIES: { value: string; label: string }[] = [
-  { value: "functional assessment",       label: "Functional Assessment" },
-  { value: "general behavior analysis",   label: "General Behavior Analysis" },
-  { value: "behavior change procedures",  label: "Behavior Change Procedures" },
+  { value: "functional assessment",        label: "Functional Assessment" },
+  { value: "general behavior analysis",    label: "General Behavior Analysis" },
+  { value: "behavior change procedures",   label: "Behavior Change Procedures" },
   { value: "ethics & professional conduct", label: "Ethics & Professional Conduct" },
   { value: "staff training & supervision", label: "Staff Training & Supervision" },
-  { value: "treatment planning",          label: "Treatment Planning" },
-  { value: "measurement & data systems",  label: "Measurement & Data Systems" },
-  { value: "data analysis & graphing",    label: "Data Analysis & Graphing" },
-  { value: "experimental design",         label: "Experimental Design" },
-  { value: "assessment",                  label: "Assessment" },
+  { value: "treatment planning",           label: "Treatment Planning" },
+  { value: "measurement & data systems",   label: "Measurement & Data Systems" },
+  { value: "data analysis & graphing",     label: "Data Analysis & Graphing" },
+  { value: "experimental design",          label: "Experimental Design" },
+  { value: "assessment",                   label: "Assessment" },
 ];
 
 interface Note {
@@ -24,18 +24,29 @@ interface Note {
 
 interface Props {
   activityType: "unrestricted" | "restricted";
+  activityCategory?: string; // BACB enum value e.g. "DATA_ANALYSIS"
+  suggestedCategories?: string[]; // mapped from activityCategory
   onSelect: (text: string) => void;
   onClose: () => void;
 }
 
-export default function NoteSuggestionsPanel({ activityType, onSelect, onClose }: Props) {
-  const [category, setCategory] = useState(CATEGORIES[0].value);
+export default function NoteSuggestionsPanel({ activityType, activityCategory = '', suggestedCategories = [], onSelect, onClose }: Props) {
+  const [category, setCategory] = useState(
+    suggestedCategories.length > 0 ? suggestedCategories[0] : CATEGORIES[0].value
+  );
   const [query, setQuery] = useState("");
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState("");
   const [similarityWarning, setSimilarityWarning] = useState(false);
+
+  // Auto-select the first suggested category when the prop changes
+  useEffect(() => {
+    if (suggestedCategories.length > 0) {
+      setCategory(suggestedCategories[0]);
+    }
+  }, [suggestedCategories.join(",")]);
 
   useEffect(() => {
     setLoading(true);
@@ -54,7 +65,7 @@ export default function NoteSuggestionsPanel({ activityType, onSelect, onClose }
     const res = await fetch("/api/bcba-students/generate-note", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ activityType, contactType: "none", setting: "", category }),
+      body: JSON.stringify({ activityType, contactType: "none", setting: "", category, activityCategory }),
     });
     const data = await res.json();
     setGenerated(data.note || "");
@@ -62,16 +73,23 @@ export default function NoteSuggestionsPanel({ activityType, onSelect, onClose }
     setGenerating(false);
   }
 
+  const isSuggested = (val: string) => suggestedCategories.includes(val);
+
   return (
     <div className="fixed inset-0 z-50 flex" style={{ background: "rgba(0,0,0,0.4)" }}>
-      {/* Backdrop close */}
       <div className="flex-1" onClick={onClose} />
 
-      {/* Panel */}
       <div className="w-full max-w-md bg-white flex flex-col" style={{ fontFamily: "var(--font-dm-sans, sans-serif)" }}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
-          <p className="text-[15px] font-semibold" style={{ color: "var(--text1)" }}>Note Suggestions</p>
+          <div>
+            <p className="text-[15px] font-semibold" style={{ color: "var(--text1)" }}>Note Suggestions</p>
+            {suggestedCategories.length > 0 && (
+              <p className="text-[11px] mt-0.5" style={{ color: "var(--teal)" }}>
+                ✦ Showing categories relevant to your activity
+              </p>
+            )}
+          </div>
           <button onClick={onClose} className="text-[13px] hover:opacity-70" style={{ color: "var(--text3)" }}>Close</button>
         </div>
 
@@ -80,9 +98,30 @@ export default function NoteSuggestionsPanel({ activityType, onSelect, onClose }
           These are suggestions only. All notes must be reviewed and approved by you and your supervisor before use in official documentation.
         </div>
 
-        {/* Category tabs */}
+        {/* Category tabs — suggested categories shown first with highlight */}
         <div className="flex gap-1 overflow-x-auto px-6 py-3 flex-shrink-0" style={{ borderBottom: "1px solid var(--border)" }}>
-          {CATEGORIES.map(c => (
+          {/* Suggested tabs first */}
+          {CATEGORIES.filter(c => isSuggested(c.value)).map(c => (
+            <button
+              key={c.value}
+              onClick={() => setCategory(c.value)}
+              title="Suggested for your activity"
+              className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-colors"
+              style={{
+                background: category === c.value ? "var(--teal)" : "rgba(27,168,160,0.12)",
+                color: category === c.value ? "white" : "var(--teal)",
+                border: "1.5px solid var(--teal)",
+              }}
+            >
+              ✦ {c.label}
+            </button>
+          ))}
+          {/* Divider if there are suggested tabs */}
+          {suggestedCategories.length > 0 && CATEGORIES.some(c => !isSuggested(c.value)) && (
+            <div className="flex-shrink-0 w-px mx-1" style={{ background: "var(--border)", alignSelf: "stretch" }} />
+          )}
+          {/* Remaining tabs */}
+          {CATEGORIES.filter(c => !isSuggested(c.value)).map(c => (
             <button
               key={c.value}
               onClick={() => setCategory(c.value)}
@@ -154,7 +193,7 @@ export default function NoteSuggestionsPanel({ activityType, onSelect, onClose }
             className="w-full py-2.5 rounded-xl text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             style={{ background: "var(--navy)" }}
           >
-            {generating ? "Generating…" : "Generate with AI"}
+            {generating ? "Generating…" : "Generate Tracking Note"}
           </button>
         </div>
       </div>

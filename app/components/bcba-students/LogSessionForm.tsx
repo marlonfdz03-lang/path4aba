@@ -7,6 +7,7 @@ import {
   UNRESTRICTED_CATEGORIES,
   CATEGORY_LABELS,
   deriveActivityType,
+  noteCategories,
 } from "@/lib/bcba-students/activity-categories";
 import NoteSuggestionsPanel from "./NoteSuggestionsPanel";
 
@@ -407,6 +408,8 @@ export default function LogSessionForm({ fieldworkType, defaultSupervisorName = 
       {showPanel && (
         <NoteSuggestionsPanel
           activityType={activityType ?? "unrestricted"}
+          activityCategory={activityCategory}
+          suggestedCategories={activityCategory ? noteCategories(activityCategory) : []}
           onSelect={text => { setNote(text); setShowPanel(false); }}
           onClose={() => setShowPanel(false)}
         />
