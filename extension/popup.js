@@ -25,8 +25,8 @@ let extensionToken = null;
 // Reconnect state
 let _reconnecting = false;
 let _reconnectAttempts = 0;
-const MAX_RECONNECT = 3;
-const RECONNECT_DELAY_MS = 5000;
+const MAX_RECONNECT = 1;
+const RECONNECT_DELAY_MS = 500;
 
 // Office Puzzle extraction state
 let extractedCharts = [];
@@ -59,7 +59,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 // ── API helper ─────────────────────────────
-const INIT_TIMEOUT_MS = 6000;
+const INIT_TIMEOUT_MS = 2000;
 
 function apiWithTimeout(path, ms) {
   const ctrl = new AbortController();
@@ -285,7 +285,7 @@ async function handleConnectFailure(reason) {
   _reconnecting = false;
   const errEl = document.getElementById('tokenError');
   if (errEl) {
-    errEl.textContent = `Could not connect after ${MAX_RECONNECT} attempts. Your token is saved — click "Retry Connection" to try again, or generate a new token if the issue persists.`;
+    errEl.textContent = 'Could not connect to Path4ABA. Make sure you are logged in at path4aba.app, then click Retry.';
     errEl.style.display = '';
   }
   showRetryButton(true);
