@@ -85,8 +85,8 @@ function BrandPanel({ mobile = false }: { mobile?: boolean }) {
       className="relative flex flex-col h-full"
       style={{
         backgroundImage: "url('/login-hero.png')",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
+        backgroundSize: "200%",
+        backgroundPosition: "left center",
       }}
     >
       {/* Dark overlay for readability */}
@@ -216,11 +216,13 @@ function LoginContent() {
 
   return (
     <div
-      className="min-h-screen flex flex-col lg:flex-row"
-      style={{ fontFamily: "var(--font-dm-sans, sans-serif)" }}
+      className="flex flex-col lg:flex-row"
+      style={{ fontFamily: "var(--font-dm-sans, sans-serif)", height: "100vh", overflow: "hidden" }}
     >
       {/* Right panel (form) — first in DOM = top on mobile */}
-      <div className="order-1 lg:order-2 flex-1 flex items-center justify-center bg-white p-8 lg:p-12">
+      <div className="order-1 lg:order-2 bg-white p-8 lg:p-12"
+        style={{ flex: 1, height: "100vh", overflowY: "auto", display: "flex", alignItems: "center", justifyContent: "center" }}
+      >
         <div className="w-full max-w-[400px]">
 
           {/* Heading */}
@@ -467,8 +469,10 @@ function LoginContent() {
       </div>
 
       {/* Left panel (branding) — second in DOM = bottom on mobile */}
-      <div className="order-2 lg:order-1 lg:w-[480px] lg:flex-shrink-0 lg:min-h-screen">
-        <div className="hidden lg:flex lg:flex-col lg:min-h-screen">
+      <div className="order-2 lg:order-1 hidden lg:block"
+        style={{ width: 480, minWidth: 480, height: "100vh", flexShrink: 0 }}
+      >
+        <div className="flex flex-col h-full">
           <BrandPanel />
         </div>
         <div className="lg:hidden">
