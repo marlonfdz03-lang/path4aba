@@ -277,6 +277,8 @@ export default function Sidebar() {
                 <NavItem href="/schedule" label="Schedule" icon={IconCalendar} active={isActive("/schedule")} />
                 <a
                   href="/settings?tab=extension"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-[13px] font-medium transition-colors hover:bg-white/10"
                   style={{ color: "rgba(255,255,255,0.7)" }}
                 >
