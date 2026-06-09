@@ -3,13 +3,160 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { PasswordInput } from "@/app/components/PasswordInput";
 
 export const dynamic = "force-dynamic";
 
 type Mode = "signin" | "signup" | "forgot";
 
-const INPUT_CLS = "w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 transition-colors";
+// ── Icons ────────────────────────────────────────────────────────────────────
+
+function IconEnvelope() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="4" width="20" height="16" rx="2"/>
+      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+    </svg>
+  );
+}
+
+function IconLock() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+    </svg>
+  );
+}
+
+function IconEye({ open }: { open: boolean }) {
+  return open ? (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+    </svg>
+  ) : (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  );
+}
+
+function IconGoogle() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+      <path d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.83z" fill="#FBBC05"/>
+      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.83c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+    </svg>
+  );
+}
+
+// ── Left branding panel ───────────────────────────────────────────────────────
+
+const FEATURES = [
+  {
+    emoji: "⚡",
+    title: "Save Hours Every Week",
+    desc: "Generate session notes, reports and documentation faster.",
+  },
+  {
+    emoji: "📊",
+    title: "Track Progress",
+    desc: "Monitor goals, behaviors and clinical outcomes.",
+  },
+  {
+    emoji: "🧠",
+    title: "Built for ABA",
+    desc: "Designed specifically for behavior analysts and therapists.",
+  },
+];
+
+function BrandPanel({ mobile = false }: { mobile?: boolean }) {
+  return (
+    <div
+      className="flex flex-col h-full"
+      style={{
+        background: "var(--navy)",
+        padding: mobile ? "32px 24px" : "48px 44px",
+      }}
+    >
+      {/* Logo */}
+      <div className="flex items-center gap-3">
+        <div
+          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background: "linear-gradient(135deg, var(--teal), var(--sky))" }}
+        >
+          <img src="/logo.png" alt="" width={22} height={22} style={{ objectFit: "contain" }} />
+        </div>
+        <span className="text-[16px] font-bold text-white tracking-tight">
+          Path<span style={{ color: "var(--teal2)" }}>4</span>ABA
+        </span>
+      </div>
+
+      {mobile ? (
+        <p className="text-[13px] mt-4" style={{ color: "rgba(255,255,255,0.45)" }}>
+          AI-powered tools for RBTs, BCBAs and ABA Students.
+        </p>
+      ) : (
+        <>
+          {/* Headline */}
+          <div className="mt-14 mb-10 flex-shrink-0">
+            <h1 className="text-[38px] font-bold leading-[1.15] mb-4">
+              <span className="text-white">Smarter{" "}</span>
+              <span style={{ color: "var(--teal2)" }}>Documentation.</span>
+              <br />
+              <span className="text-white">Better Outcomes.</span>
+            </h1>
+            <p className="text-[15px]" style={{ color: "rgba(255,255,255,0.55)" }}>
+              AI-powered tools for RBTs, BCBAs and ABA Students.
+            </p>
+          </div>
+
+          {/* Feature rows */}
+          <div className="space-y-6 mb-auto">
+            {FEATURES.map((f) => (
+              <div key={f.title} className="flex items-start gap-4">
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-[18px]"
+                  style={{ background: "rgba(255,255,255,0.08)" }}
+                >
+                  {f.emoji}
+                </div>
+                <div>
+                  <p className="text-[14px] font-semibold text-white mb-0.5">{f.title}</p>
+                  <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.5)" }}>{f.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Coming Soon pills */}
+          <div
+            className="flex items-center gap-2 flex-wrap mt-10 pt-6 flex-shrink-0"
+            style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}
+          >
+            <span className="text-[11px] font-medium uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.3)" }}>
+              Coming Soon
+            </span>
+            {["Chrome Extension", "Progress Reports", "Advanced Analytics"].map((pill) => (
+              <span
+                key={pill}
+                className="text-[11px] font-medium px-2.5 py-1 rounded-full"
+                style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.5)" }}
+              >
+                {pill}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function LoginPage() {
   return (
@@ -24,6 +171,7 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const redirectMessage = searchParams.get("message");
   const initialMode = (searchParams.get("mode") as Mode) || "signin";
+
   const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -34,6 +182,9 @@ function LoginContent() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   function switchMode(next: Mode) {
     setMode(next);
@@ -64,17 +215,19 @@ function LoginContent() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, name: `${firstName.trim()} ${lastName.trim()}`.trim() || email.split("@")[0], role: profession || "rbt" }),
+        body: JSON.stringify({
+          email,
+          password,
+          name: `${firstName.trim()} ${lastName.trim()}`.trim() || email.split("@")[0],
+          role: profession || "rbt",
+        }),
       });
       const data = await res.json();
 
       if (!res.ok) {
         setLoading(false);
-        if (res.status === 409) {
-          setError("__duplicate__");
-        } else {
-          setError(data.error || "Registration failed");
-        }
+        if (res.status === 409) { setError("__duplicate__"); }
+        else { setError(data.error || "Registration failed"); }
         return;
       }
 
@@ -84,9 +237,9 @@ function LoginContent() {
       return;
 
     } else {
-      await fetch('/api/auth/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
       setLoading(false);
@@ -98,57 +251,52 @@ function LoginContent() {
   const isForgot = mode === "forgot";
 
   const headings: Record<Mode, { title: string; subtitle: string }> = {
-    signin: { title: "Welcome back", subtitle: "Sign in to your Path4ABA account" },
-    signup: { title: "Create an account", subtitle: "Join Path4ABA today" },
-    forgot: { title: "Reset your password", subtitle: "Enter your email and we'll send you a reset link" },
+    signin: { title: "Welcome Back", subtitle: "Sign in to your Path4ABA account" },
+    signup: { title: "Create Account", subtitle: "Join Path4ABA today" },
+    forgot: { title: "Reset Password", subtitle: "Enter your email and we'll send a reset link" },
   };
 
-  const submitLabel: Record<Mode, [string, string]> = {
-    signin: ["Signing in…", "Sign in"],
-    signup: ["Creating account…", "Sign Up"],
-    forgot: ["Sending…", "Send Reset Link"],
-  };
+  const INPUT_BASE = "w-full border rounded-xl text-sm focus:outline-none focus:ring-2 transition-colors";
+  const INPUT_STYLE = { borderColor: "var(--border)", color: "var(--text1)" };
 
   return (
-    <div className="min-h-screen flex" style={{ fontFamily: "var(--font-dm-sans, sans-serif)" }}>
+    <div
+      className="min-h-screen flex flex-col lg:flex-row"
+      style={{ fontFamily: "var(--font-dm-sans, sans-serif)" }}
+    >
+      {/* Right panel (form) — first in DOM = top on mobile */}
+      <div className="order-1 lg:order-2 flex-1 flex items-center justify-center bg-white p-8 lg:p-12">
+        <div className="w-full max-w-[400px]">
 
-      {/* ── Left: Form panel ── */}
-      <div className="flex-1 flex items-center justify-center p-10 bg-white">
-        <div className="w-full max-w-[380px]">
-
-          {/* Mobile logo (hidden on desktop when right panel is visible) */}
+          {/* Heading */}
           <div className="mb-8">
-            <h1 className="text-[22px] font-semibold mb-1" style={{ color: "var(--text1)" }}>
+            <h2 className="text-[26px] font-bold mb-1.5" style={{ color: "var(--text1)" }}>
               {headings[mode].title}
-            </h1>
-            <p className="text-[13.5px]" style={{ color: "var(--text3)" }}>
+            </h2>
+            <p className="text-[14px]" style={{ color: "var(--text3)" }}>
               {headings[mode].subtitle}
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
 
-            {/* First + Last Name — sign up only */}
+            {/* First + Last Name — signup only */}
             {isSignUp && (
               <div className="flex gap-3">
                 <div className="flex-1">
                   <label className="block text-[13px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>First Name</label>
                   <input
-                    type="text" value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
+                    type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)}
                     required autoComplete="given-name" placeholder="Jane"
-                    className={INPUT_CLS}
-                    style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                    className={`${INPUT_BASE} px-4 py-3`} style={INPUT_STYLE}
                   />
                 </div>
                 <div className="flex-1">
                   <label className="block text-[13px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Last Name</label>
                   <input
-                    type="text" value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
+                    type="text" value={lastName} onChange={(e) => setLastName(e.target.value)}
                     required autoComplete="family-name" placeholder="Smith"
-                    className={INPUT_CLS}
-                    style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                    className={`${INPUT_BASE} px-4 py-3`} style={INPUT_STYLE}
                   />
                 </div>
               </div>
@@ -157,16 +305,19 @@ function LoginContent() {
             {/* Email */}
             <div>
               <label className="block text-[13px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Email</label>
-              <input
-                type="email" value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required autoComplete="email" placeholder="you@example.com"
-                className={INPUT_CLS}
-                style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-              />
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text3)" }}>
+                  <IconEnvelope />
+                </span>
+                <input
+                  type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                  required autoComplete="email" placeholder="you@example.com"
+                  className={`${INPUT_BASE} pl-10 pr-4 py-3`} style={INPUT_STYLE}
+                />
+              </div>
             </div>
 
-            {/* Profession — sign up only */}
+            {/* Profession — signup only */}
             {isSignUp && (
               <div>
                 <label className="block text-[13px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Profession</label>
@@ -176,15 +327,9 @@ function LoginContent() {
                     { label: "BCBA", value: "bcba" },
                     { label: "BCaBA", value: "bcaba" },
                   ].map(({ label, value }) => (
-                    <button
-                      key={value} type="button" onClick={() => setProfession(value)}
+                    <button key={value} type="button" onClick={() => setProfession(value)}
                       className="py-2.5 rounded-xl border text-sm font-medium transition-colors"
-                      style={{
-                        background: profession === value ? "var(--teal)" : "white",
-                        borderColor: profession === value ? "var(--teal)" : "var(--border)",
-                        color: profession === value ? "white" : "var(--text2)",
-                      }}
-                    >
+                      style={{ background: profession === value ? "var(--teal)" : "white", borderColor: profession === value ? "var(--teal)" : "var(--border)", color: profession === value ? "white" : "var(--text2)" }}>
                       {label}
                     </button>
                   ))}
@@ -194,15 +339,9 @@ function LoginContent() {
                     { label: "BCBA Student", value: "bcba_student" },
                     { label: "BCaBA Student", value: "bcaba_student" },
                   ].map(({ label, value }) => (
-                    <button
-                      key={value} type="button" onClick={() => setProfession(value)}
+                    <button key={value} type="button" onClick={() => setProfession(value)}
                       className="py-2.5 rounded-xl border text-sm font-medium transition-colors"
-                      style={{
-                        background: profession === value ? "var(--teal)" : "white",
-                        borderColor: profession === value ? "var(--teal)" : "var(--border)",
-                        color: profession === value ? "white" : "var(--text2)",
-                      }}
-                    >
+                      style={{ background: profession === value ? "var(--teal)" : "white", borderColor: profession === value ? "var(--teal)" : "var(--border)", color: profession === value ? "white" : "var(--text2)" }}>
                       {label}
                     </button>
                   ))}
@@ -213,33 +352,71 @@ function LoginContent() {
             {/* Password */}
             {!isForgot && (
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[13px] font-medium" style={{ color: "var(--text2)" }}>Password</label>
-                  {!isSignUp && (
-                    <button
-                      type="button" onClick={() => switchMode("forgot")}
-                      className="text-[12px] font-medium hover:underline"
-                      style={{ color: "var(--teal)" }}
-                    >
-                      Forgot password?
-                    </button>
-                  )}
+                <label className="block text-[13px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Password</label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text3)" }}>
+                    <IconLock />
+                  </span>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password} onChange={(e) => setPassword(e.target.value)}
+                    required autoComplete={isSignUp ? "new-password" : "current-password"}
+                    placeholder="••••••••"
+                    className={`${INPUT_BASE} pl-10 pr-10 py-3`} style={INPUT_STYLE}
+                  />
+                  <button
+                    type="button" onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 hover:opacity-70 transition-opacity"
+                    style={{ color: "var(--text3)" }}
+                  >
+                    <IconEye open={showPassword} />
+                  </button>
                 </div>
-                <PasswordInput
-                  value={password} onChange={(e) => setPassword(e.target.value)}
-                  required autoComplete={isSignUp ? "new-password" : "current-password"}
-                />
               </div>
             )}
 
-            {/* Confirm password */}
+            {/* Confirm password — signup only */}
             {isSignUp && (
               <div>
                 <label className="block text-[13px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Confirm Password</label>
-                <PasswordInput
-                  value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
-                  required autoComplete="new-password"
-                />
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text3)" }}>
+                    <IconLock />
+                  </span>
+                  <input
+                    type={showConfirm ? "text" : "password"}
+                    value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                    required autoComplete="new-password"
+                    placeholder="••••••••"
+                    className={`${INPUT_BASE} pl-10 pr-10 py-3`} style={INPUT_STYLE}
+                  />
+                  <button
+                    type="button" onClick={() => setShowConfirm((v) => !v)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 hover:opacity-70 transition-opacity"
+                    style={{ color: "var(--text3)" }}
+                  >
+                    <IconEye open={showConfirm} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Remember me + Forgot password — signin only */}
+            {!isSignUp && !isForgot && (
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 rounded" style={{ accentColor: "var(--teal)" }}
+                  />
+                  <span className="text-[13px]" style={{ color: "var(--text2)" }}>Remember me</span>
+                </label>
+                <button
+                  type="button" onClick={() => switchMode("forgot")}
+                  className="text-[13px] font-medium hover:underline" style={{ color: "var(--teal)" }}
+                >
+                  Forgot password?
+                </button>
               </div>
             )}
 
@@ -275,43 +452,27 @@ function LoginContent() {
               className="w-full py-3 rounded-xl text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: "var(--teal)" }}
             >
-              {loading ? submitLabel[mode][0] : submitLabel[mode][1]}
+              {loading
+                ? (mode === "signin" ? "Signing in…" : mode === "signup" ? "Creating account…" : "Sending…")
+                : (mode === "signin" ? "Continue" : mode === "signup" ? "Create Account" : "Send Reset Link")}
             </button>
 
-            {/* Divider + social (sign in only) */}
+            {/* OR divider + Google — signin only */}
             {!isSignUp && !isForgot && (
               <>
                 <div className="flex items-center gap-3 my-1">
                   <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-                  <span className="text-[12px]" style={{ color: "var(--text3)" }}>or continue with</span>
+                  <span className="text-[12px]" style={{ color: "var(--text3)" }}>or</span>
                   <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
                 </div>
-                <div className="flex gap-3">
-                  {["Google", "Microsoft"].map((provider) => (
-                    <button
-                      key={provider} type="button"
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border text-[13px] font-medium transition-colors hover:bg-gray-50"
-                      style={{ borderColor: "var(--border)", color: "var(--text2)" }}
-                    >
-                      {provider === "Google" ? (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                          <path d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.83z" fill="#FBBC05"/>
-                          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.83c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
-                        </svg>
-                      ) : (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                          <path d="M11.5 2H2v9.5h9.5V2z" fill="#F25022"/>
-                          <path d="M22 2h-9.5v9.5H22V2z" fill="#7FBA00"/>
-                          <path d="M11.5 12.5H2V22h9.5v-9.5z" fill="#00A4EF"/>
-                          <path d="M22 12.5h-9.5V22H22v-9.5z" fill="#FFB900"/>
-                        </svg>
-                      )}
-                      {provider}
-                    </button>
-                  ))}
-                </div>
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl border text-[13px] font-medium transition-colors hover:bg-gray-50"
+                  style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+                >
+                  <IconGoogle />
+                  Continue with Google
+                </button>
               </>
             )}
 
@@ -331,9 +492,9 @@ function LoginContent() {
               ) : (
                 <>
                   Don&apos;t have an account?{" "}
-                  <button type="button" onClick={() => switchMode("signup")} className="font-semibold hover:underline" style={{ color: "var(--teal)" }}>
-                    Sign up
-                  </button>
+                  <a href="/pricing" className="font-semibold hover:underline" style={{ color: "var(--teal)" }}>
+                    Create an Account
+                  </a>
                 </>
               )}
             </p>
@@ -341,7 +502,7 @@ function LoginContent() {
           </form>
 
           {/* Policy links */}
-          <p className="text-center text-[12px] mt-6" style={{ color: "var(--text3)" }}>
+          <p className="text-center text-[12px] mt-8" style={{ color: "var(--text3)" }}>
             <a href="/privacy" className="hover:underline" style={{ color: "var(--text3)" }}>Privacy Policy</a>
             <span className="mx-2">·</span>
             <a href="/terms" className="hover:underline" style={{ color: "var(--text3)" }}>Terms of Service</a>
@@ -350,45 +511,13 @@ function LoginContent() {
         </div>
       </div>
 
-      {/* ── Right: Brand panel ── */}
-      <div
-        className="hidden lg:flex flex-col items-center justify-center flex-1 p-12 relative overflow-hidden"
-        style={{ background: "var(--navy)" }}
-      >
-        {/* Background glow */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{ background: "radial-gradient(ellipse at 60% 40%, rgba(27,168,160,0.18) 0%, transparent 70%)" }}
-        />
-
-        <div className="relative z-10 text-center max-w-sm">
-          {/* Logo */}
-          <div style={{ textAlign: "center", marginBottom: "24px" }}>
-            <span style={{ fontSize: "32px", fontWeight: "700", color: "#ffffff", letterSpacing: "-0.5px" }}>
-              Path<span style={{ color: "#1BA8A0" }}>4</span>ABA
-            </span>
-          </div>
-
-          {/* Tagline */}
-          <h2 className="text-[26px] font-semibold leading-snug mb-4 text-white">
-            Clinical tools.<br />Smarter notes.<br />Better outcomes.
-          </h2>
-          <p className="text-[14px]" style={{ color: "rgba(255,255,255,0.5)" }}>
-            Built for RBTs. Backed by BCBAs.
-          </p>
-
-          {/* Feature pills */}
-          <div className="flex flex-wrap justify-center gap-2 mt-10">
-            {["AI Note Generation", "Clinical Profiles", "Session Tracking", "Audit-Ready"].map((f) => (
-              <span
-                key={f}
-                className="text-[12px] font-medium px-3 py-1.5 rounded-full"
-                style={{ background: "rgba(27,168,160,0.18)", color: "rgba(255,255,255,0.75)", border: "1px solid rgba(27,168,160,0.3)" }}
-              >
-                {f}
-              </span>
-            ))}
-          </div>
+      {/* Left panel (branding) — second in DOM = bottom on mobile */}
+      <div className="order-2 lg:order-1 lg:w-[480px] lg:flex-shrink-0 lg:min-h-screen">
+        <div className="hidden lg:flex lg:flex-col lg:min-h-screen">
+          <BrandPanel />
+        </div>
+        <div className="lg:hidden">
+          <BrandPanel mobile />
         </div>
       </div>
 
