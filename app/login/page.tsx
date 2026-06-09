@@ -55,35 +55,48 @@ function IconGoogle() {
 
 // ── Left branding panel ───────────────────────────────────────────────────────
 
-const FEATURES = [
-  {
-    emoji: "⚡",
-    title: "Save Hours Every Week",
-    desc: "Generate session notes, reports and documentation faster.",
-  },
-  {
-    emoji: "📊",
-    title: "Track Progress",
-    desc: "Monitor goals, behaviors and clinical outcomes.",
-  },
-  {
-    emoji: "🧠",
-    title: "Built for ABA",
-    desc: "Designed specifically for behavior analysts and therapists.",
-  },
-];
-
 function BrandPanel({ mobile = false }: { mobile?: boolean }) {
+  if (mobile) {
+    // Mobile: compact strip with navy background + logo
+    return (
+      <div
+        className="flex items-center gap-3 px-6 py-5"
+        style={{ background: "var(--navy)" }}
+      >
+        <div
+          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+          style={{ background: "linear-gradient(135deg, var(--teal), var(--sky))" }}
+        >
+          <img src="/logo.png" alt="" width={18} height={18} style={{ objectFit: "contain" }} />
+        </div>
+        <span className="text-[15px] font-bold text-white tracking-tight">
+          Path<span style={{ color: "var(--teal2)" }}>4</span>ABA
+        </span>
+        <p className="text-[12px] ml-1" style={{ color: "rgba(255,255,255,0.45)" }}>
+          · AI-powered ABA tools
+        </p>
+      </div>
+    );
+  }
+
+  // Desktop: hero image with dark overlay + logo top-left
   return (
     <div
-      className="flex flex-col h-full"
+      className="relative flex flex-col h-full"
       style={{
-        background: "var(--navy)",
-        padding: mobile ? "32px 24px" : "48px 44px",
+        backgroundImage: "url('/login-hero.jpg')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
       }}
     >
-      {/* Logo */}
-      <div className="flex items-center gap-3">
+      {/* Dark overlay for readability */}
+      <div
+        className="absolute inset-0"
+        style={{ background: "rgba(10, 22, 40, 0.55)" }}
+      />
+
+      {/* Logo — positioned top-left over the overlay */}
+      <div className="relative z-10 flex items-center gap-3 p-8">
         <div
           className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
           style={{ background: "linear-gradient(135deg, var(--teal), var(--sky))" }}
@@ -94,64 +107,6 @@ function BrandPanel({ mobile = false }: { mobile?: boolean }) {
           Path<span style={{ color: "var(--teal2)" }}>4</span>ABA
         </span>
       </div>
-
-      {mobile ? (
-        <p className="text-[13px] mt-4" style={{ color: "rgba(255,255,255,0.45)" }}>
-          AI-powered tools for RBTs, BCBAs and ABA Students.
-        </p>
-      ) : (
-        <>
-          {/* Headline */}
-          <div className="mt-14 mb-10 flex-shrink-0">
-            <h1 className="text-[38px] font-bold leading-[1.15] mb-4">
-              <span className="text-white">Smarter{" "}</span>
-              <span style={{ color: "var(--teal2)" }}>Documentation.</span>
-              <br />
-              <span className="text-white">Better Outcomes.</span>
-            </h1>
-            <p className="text-[15px]" style={{ color: "rgba(255,255,255,0.55)" }}>
-              AI-powered tools for RBTs, BCBAs and ABA Students.
-            </p>
-          </div>
-
-          {/* Feature rows */}
-          <div className="space-y-6 mb-auto">
-            {FEATURES.map((f) => (
-              <div key={f.title} className="flex items-start gap-4">
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-[18px]"
-                  style={{ background: "rgba(255,255,255,0.08)" }}
-                >
-                  {f.emoji}
-                </div>
-                <div>
-                  <p className="text-[14px] font-semibold text-white mb-0.5">{f.title}</p>
-                  <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.5)" }}>{f.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Coming Soon pills */}
-          <div
-            className="flex items-center gap-2 flex-wrap mt-10 pt-6 flex-shrink-0"
-            style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}
-          >
-            <span className="text-[11px] font-medium uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.3)" }}>
-              Coming Soon
-            </span>
-            {["Chrome Extension", "Progress Reports", "Advanced Analytics"].map((pill) => (
-              <span
-                key={pill}
-                className="text-[11px] font-medium px-2.5 py-1 rounded-full"
-                style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.5)" }}
-              >
-                {pill}
-              </span>
-            ))}
-          </div>
-        </>
-      )}
     </div>
   );
 }
