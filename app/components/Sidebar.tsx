@@ -91,6 +91,27 @@ const IconChrome = () => (
   </svg>
 );
 
+const IconFolder = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+  </svg>
+);
+
+const IconBarChart = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="20" x2="18" y2="10"/>
+    <line x1="12" y1="20" x2="12" y2="4"/>
+    <line x1="6" y1="20" x2="6" y2="14"/>
+  </svg>
+);
+
+const IconAward = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="8" r="6"/>
+    <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/>
+  </svg>
+);
+
 // ── Nav item ─────────────────────────────────────────────────────────────────
 
 function NavItem({
@@ -248,21 +269,35 @@ export default function Sidebar() {
               <div className="space-y-0.5">
                 {hasBCBAStudents ? (
                   <>
-                    <NavItem href="/bcba-students" label="Dashboard" icon={IconGraduationCap} active={isActive("/bcba-students") && !isActive("/bcba-students/log") && !isActive("/bcba-students/monthly") && !isActive("/bcba-students/settings")} expanded={expanded} />
-                    <NavItem href="/bcba-students/log" label="Log session" icon={IconFileText} active={isActive("/bcba-students/log")} expanded={expanded} />
-                    <NavItem href="/bcba-students/monthly" label="Monthly view" icon={IconCalendar} active={isActive("/bcba-students/monthly")} expanded={expanded} />
+                    <NavItem href="/bcba-students" label="Dashboard" icon={IconDashboard}
+                      active={isActive("/bcba-students") && !isActive("/bcba-students/log") && !isActive("/bcba-students/monthly") && !isActive("/bcba-students/documents") && !isActive("/bcba-students/reports") && !isActive("/bcba-students/settings")}
+                      expanded={expanded} />
+                    <NavItem href="/bcba-students/log" label="Log Session" icon={IconFileText} active={isActive("/bcba-students/log")} expanded={expanded} />
+                    <NavItem href="/bcba-students/monthly" label="Monthly View" icon={IconCalendar} active={isActive("/bcba-students/monthly")} expanded={expanded} />
+                    <NavItem href="/bcba-students/documents" label="Documents" icon={IconFolder} active={isActive("/bcba-students/documents")} expanded={expanded} />
+                    <NavItem href="/bcba-students/reports" label="Reports" icon={IconBarChart} active={isActive("/bcba-students/reports")} expanded={expanded} />
+                    <a
+                      href="https://www.bacb.com/bcba/fieldwork/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="BACB Requirements"
+                      className="flex items-center rounded-[6px] text-sm font-medium transition-colors"
+                      style={{ gap: expanded ? 10 : 0, padding: "9px 10px", justifyContent: expanded ? "flex-start" : "center", color: "rgba(255,255,255,0.65)" }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.08)"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                    >
+                      <span className="flex-shrink-0"><IconAward /></span>
+                      <span style={{ opacity: expanded ? 1 : 0, maxWidth: expanded ? 160 : 0, overflow: "hidden", whiteSpace: "nowrap", transition: "opacity 0.15s, max-width 0.2s" }}>
+                        BACB Requirements
+                      </span>
+                    </a>
                   </>
                 ) : (
                   <Link
                     href="/pricing"
                     title="Fieldwork Tracker"
                     className="flex items-center rounded-[6px] text-sm font-medium"
-                    style={{
-                      gap: expanded ? 10 : 0,
-                      padding: "9px 10px",
-                      justifyContent: expanded ? "flex-start" : "center",
-                      color: "rgba(255,255,255,0.45)",
-                    }}
+                    style={{ gap: expanded ? 10 : 0, padding: "9px 10px", justifyContent: expanded ? "flex-start" : "center", color: "rgba(255,255,255,0.45)" }}
                   >
                     <span className="flex-shrink-0"><IconGraduationCap /></span>
                     {expanded && (
@@ -284,6 +319,21 @@ export default function Sidebar() {
                 <NavItem href="/help" label="Help" icon={IconHelp} active={isActive("/help")} expanded={expanded} />
               </div>
             </div>
+            {/* Motivational card — only shown when expanded */}
+            {expanded && hasBCBAStudents && (
+              <div
+                className="mx-1 rounded-xl p-3 text-center"
+                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
+              >
+                <p className="text-[16px] mb-1">✨</p>
+                <p className="text-[12px] font-semibold text-white leading-snug mb-1">
+                  You&apos;re building a better future.
+                </p>
+                <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.5)" }}>
+                  Keep going, you&apos;ve got this! 💙
+                </p>
+              </div>
+            )}
           </>
         ) : isBCBA ? (
           // ── BCBA / BCaBA ──────────────────────────────────────────────────
