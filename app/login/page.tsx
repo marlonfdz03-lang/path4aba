@@ -87,6 +87,9 @@ function BrandPanel({ mobile = false }: { mobile?: boolean }) {
         backgroundImage: "url('/login-hero.png')",
         backgroundSize: "200%",
         backgroundPosition: "left center",
+        backgroundRepeat: "no-repeat",
+        backgroundAttachment: "local",
+        overflow: "hidden",
       }}
     >
       {/* Dark overlay for readability */}
@@ -470,7 +473,7 @@ function LoginContent() {
 
       {/* Left panel (branding) — second in DOM = bottom on mobile */}
       <div className="order-2 lg:order-1 hidden lg:block"
-        style={{ width: 480, minWidth: 480, height: "100vh", flexShrink: 0 }}
+        style={{ width: 600, minWidth: 600, height: "100vh", flexShrink: 0 }}
       >
         <div className="flex flex-col h-full">
           <BrandPanel />
