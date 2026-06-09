@@ -679,17 +679,19 @@ function updateGenerateBtn() {
   let canGenerate = !!dateVal && !!selectedLocation && !!selectedClientId && selectedPresent.length > 0;
 
   if (userRole === 'rbt') {
-    canGenerate = canGenerate && selectedBehaviors.length === 5 && selectedSkills.length === 2;
+    // >= so selecting more than the minimum doesn't silently block the button
+    canGenerate = canGenerate && selectedBehaviors.length >= 5 && selectedSkills.length >= 2;
     const hint = document.getElementById('generateHint');
     if (!canGenerate && selectedClientId) {
       const missing = [];
       if (!dateVal) missing.push('date');
       if (!selectedLocation) missing.push('location');
       if (selectedPresent.length === 0) missing.push('who was present');
-      if (selectedBehaviors.length < 5) missing.push(`${5 - selectedBehaviors.length} more behavior(s)`);
-      if (selectedSkills.length < 2) missing.push(`${2 - selectedSkills.length} more skill(s)`);
-      hint.textContent = 'Still needed: ' + missing.join(', ');
-      hint.style.display = '';
+      if (selectedBehaviors.length < 5) missing.push(`${5 - selectedBehaviors.length} more behavior(s) (${selectedBehaviors.length}/5)`);
+      if (selectedSkills.length < 2) missing.push(`${2 - selectedSkills.length} more skill(s) (${selectedSkills.length}/2)`);
+      console.log('[debug] missing fields:', missing);
+      hint.textContent = missing.length ? 'Still needed: ' + missing.join(', ') : '';
+      hint.style.display = missing.length ? '' : 'none';
     } else {
       hint.style.display = 'none';
     }
