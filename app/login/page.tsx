@@ -84,7 +84,7 @@ function BrandPanel({ mobile = false }: { mobile?: boolean }) {
     <div
       className="relative flex flex-col h-full"
       style={{
-        backgroundImage: "url('/login-hero.jpg')",
+        backgroundImage: "url('/login-hero.png')",
         backgroundSize: "cover",
         backgroundPosition: "center",
       }}
