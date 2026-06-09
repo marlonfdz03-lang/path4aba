@@ -2,13 +2,13 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type SettingsTab = "billing" | "extension" | "help";
+type SettingsTab = "billing" | "extension";
 
 type Sub = {
   plan: string;
@@ -17,8 +17,6 @@ type Sub = {
   current_period_ends_at: string | null;
   stripe_customer_id: string | null;
 };
-
-type ChatMessage = { role: "user" | "assistant"; content: string };
 
 // ── Billing helpers ───────────────────────────────────────────────────────────
 
@@ -328,108 +326,6 @@ function ExtensionTab() {
   );
 }
 
-// ── Help tab ──────────────────────────────────────────────────────────────────
-
-function HelpTab() {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: "assistant", content: "Hi! I'm the Path4ABA support assistant. How can I help you today?" },
-  ]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  async function send() {
-    const text = input.trim();
-    if (!text || loading) return;
-
-    const userMsg: ChatMessage = { role: "user", content: text };
-    const updated = [...messages, userMsg];
-    setMessages(updated);
-    setInput("");
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/help", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: updated.map(m => ({ role: m.role, content: m.content })) }),
-      });
-      const data = await res.json();
-      const reply = data.reply || data.error || "Sorry, I couldn't get a response. Please try again.";
-      setMessages(prev => [...prev, { role: "assistant", content: reply }]);
-    } catch {
-      setMessages(prev => [...prev, { role: "assistant", content: "Network error. Please try again." }]);
-    }
-    setLoading(false);
-  }
-
-  return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 220px)", minHeight: 400 }}>
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto space-y-4 pb-4">
-        {messages.map((m, i) => (
-          <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div
-              className="max-w-[80%] px-4 py-3 rounded-2xl text-[13px] leading-relaxed"
-              style={
-                m.role === "user"
-                  ? { background: "var(--teal)", color: "white", borderBottomRightRadius: 4 }
-                  : { background: "var(--navy)", color: "rgba(255,255,255,0.9)", borderBottomLeftRadius: 4 }
-              }
-            >
-              {m.content}
-            </div>
-          </div>
-        ))}
-        {loading && (
-          <div className="flex justify-start">
-            <div className="px-4 py-3 rounded-2xl text-[13px]" style={{ background: "var(--navy)", color: "rgba(255,255,255,0.5)", borderBottomLeftRadius: 4 }}>
-              Typing…
-            </div>
-          </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
-
-      {/* Contact us */}
-      <div className="py-2 text-center">
-        <p className="text-[12px]" style={{ color: "var(--text3)" }}>
-          Still need help?{" "}
-          <a href="mailto:hello@path4abaapp.com" className="font-medium hover:underline" style={{ color: "var(--teal)" }}>
-            Contact us
-          </a>
-        </p>
-      </div>
-
-      {/* Input */}
-      <div className="flex gap-2 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder="Ask a question…"
-          className="flex-1 border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none focus:ring-2 transition-colors"
-          style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-          disabled={loading}
-        />
-        <button
-          onClick={send}
-          disabled={loading || !input.trim()}
-          className="px-4 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-          style={{ background: "var(--teal)" }}
-        >
-          Send
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -438,7 +334,6 @@ export default function SettingsPage() {
   const TABS: { id: SettingsTab; label: string }[] = [
     { id: "billing", label: "Billing" },
     { id: "extension", label: "Extension" },
-    { id: "help", label: "Help" },
   ];
 
   return (
@@ -450,7 +345,7 @@ export default function SettingsPage() {
 
       <div className="px-8 py-8 max-w-2xl">
         <h1 className="text-xl font-semibold mb-1" style={{ color: "var(--text1)" }}>Settings</h1>
-        <p className="text-[13.5px] mb-6" style={{ color: "var(--text3)" }}>Manage your account, billing, and support.</p>
+        <p className="text-[13.5px] mb-6" style={{ color: "var(--text3)" }}>Manage your subscription and extension token.</p>
 
         {/* Tab bar */}
         <div className="flex gap-1 mb-7 p-1 rounded-xl" style={{ background: "var(--border)", width: "fit-content" }}>
@@ -472,7 +367,6 @@ export default function SettingsPage() {
 
         {tab === "billing" && <BillingTab />}
         {tab === "extension" && <ExtensionTab />}
-        {tab === "help" && <HelpTab />}
       </div>
     </div>
   );

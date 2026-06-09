@@ -66,8 +66,8 @@ export const proxy = auth(async function proxy(req: NextRequest & { auth: any })
         return NextResponse.redirect(new URL('/bcba-students', req.url))
       }
     } else {
-      if (pathname === '/login') return NextResponse.redirect(new URL('/clients', req.url))
-      if (pathname === '/') return NextResponse.redirect(new URL('/clients', req.url))
+      if (pathname === '/login') return NextResponse.redirect(new URL('/dashboard', req.url))
+      if (pathname === '/') return NextResponse.redirect(new URL('/dashboard', req.url))
     }
   }
 
@@ -87,7 +87,7 @@ export const proxy = auth(async function proxy(req: NextRequest & { auth: any })
     // ── Admin role guard ──────────────────────────────────────────────────
     if (pathname.startsWith('/admin')) {
       if (role !== 'admin') {
-        return NextResponse.redirect(new URL('/clients', req.url))
+        return NextResponse.redirect(new URL('/dashboard', req.url))
       }
       return NextResponse.next()
     }
