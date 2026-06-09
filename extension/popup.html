@@ -238,6 +238,11 @@
           <p id="noSkills" class="empty-msg" style="display:none">No skills in client profile.</p>
         </div>
 
+        <div class="field" id="nextApptField">
+          <label class="field-label">Next Appointment Date <span class="hint">(optional)</span></label>
+          <input type="date" id="nextApptDate" class="input-field" />
+        </div>
+
         <button id="generateBtn" class="btn-primary full-width" disabled>
           ✦ Generate Note
         </button>
@@ -255,6 +260,10 @@
             placeholder="Paste a note from ABA Matrix, Office Puzzle, or any other tool…"
             rows="7"
           ></textarea>
+        </div>
+        <div class="field">
+          <label class="field-label">Next Appointment Date <span class="hint">(optional)</span></label>
+          <input type="date" id="nextApptDateRefine" class="input-field" />
         </div>
         <button id="refineBtn" class="btn-primary full-width" disabled>
           ✦ Refine Note
@@ -389,11 +398,6 @@
       </div>
 
     </div>
-
-        <div class="field" id="nextApptField">
-          <label class="field-label">Next Appointment Date</label>
-          <input type="date" id="nextApptDate" class="input-field" />
-        </div>
 
     <!-- ── Output ── -->
     <div id="outputSection" style="display:none" class="output-section">

@@ -361,8 +361,11 @@ async function loadClientProfile(clientId) {
   behaviorsGrid.innerHTML = '<p class="muted-text">Loading…</p>';
   skillsGrid.innerHTML = '<p class="muted-text">Loading…</p>';
 
+  const t0 = performance.now();
   try {
-    const res = await api(`/api/bcba/client/${clientId}`);
+    const res = await apiWithTimeout(`/api/bcba/client/${clientId}`, 3000);
+    const elapsed = Math.round(performance.now() - t0);
+    console.log(`[Path4ABA] loadClientProfile: ${elapsed}ms`);
     if (!res.ok) {
       // RBTs don't have access to bcba/client endpoint — use profile from client list
       const fallback = clients.find(c => c.id === clientId);
@@ -371,8 +374,16 @@ async function loadClientProfile(clientId) {
       const json = await res.json();
       selectedProfile = json.client?.clinical_profile || null;
     }
-  } catch {
-    selectedProfile = null;
+  } catch (err) {
+    const elapsed = Math.round(performance.now() - t0);
+    if (err?.name === 'AbortError') {
+      console.warn(`[Path4ABA] loadClientProfile: timed out after ${elapsed}ms — falling back to client list`);
+    } else {
+      console.error(`[Path4ABA] loadClientProfile error after ${elapsed}ms:`, err);
+    }
+    // Fallback to cached client list data on timeout or network error
+    const fallback = clients.find(c => c.id === clientId);
+    selectedProfile = fallback?.clinical_profile || null;
   }
 
   renderBehaviors();
@@ -829,9 +840,11 @@ document.getElementById('refineBtn').addEventListener('click', async () => {
   document.querySelectorAll('.error-msg').forEach(el => el.remove());
   const originalNote = document.getElementById('pasteNote').value.trim();
   const profile = selectedProfile || {};
+  const nextApptRefine = document.getElementById('nextApptDateRefine')?.value || '';
   const body = {
     originalNote,
     clientId: selectedClientId,
+    nextAppointmentDate: nextApptRefine || undefined,
     clientProfile: {
       approvedInterventions: (profile.interventions || []).map(i => typeof i === 'string' ? i : i?.name || ''),
       prohibitedInterventions: ['Punishment', 'ResponseCost', 'Restraint', 'StandaloneExtinction', 'TimeOut', 'Overcorrection', 'Aversive'],
@@ -964,9 +977,11 @@ function resetAfterSave() {
   });
   // Reset session conditions
   resetSessionConditions();
-  // Reset next appointment date
+  // Reset next appointment date fields
   const nextApptEl = document.getElementById('nextApptDate');
   if (nextApptEl) nextApptEl.value = '';
+  const nextApptRefineEl = document.getElementById('nextApptDateRefine');
+  if (nextApptRefineEl) nextApptRefineEl.value = '';
   // Update generate button state
   updateGenerateBtn();
 }
