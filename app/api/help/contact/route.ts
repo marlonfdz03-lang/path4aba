@@ -4,9 +4,8 @@ import { Resend } from 'resend'
 
 export const dynamic = 'force-dynamic'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 export async function POST(req: Request) {
+  const resend = new Resend(process.env.RESEND_API_KEY)
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
