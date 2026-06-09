@@ -82,24 +82,17 @@ function BrandPanel({ mobile = false }: { mobile?: boolean }) {
   // Desktop: hero image with dark overlay + logo top-left
   return (
     <div
-      className="relative flex flex-col h-full"
+      className="flex flex-col h-full"
       style={{
         backgroundImage: "url('/login-hero.png')",
-        backgroundSize: "200%",
-        backgroundPosition: "left center",
+        backgroundSize: "cover",
+        backgroundPosition: "center center",
         backgroundRepeat: "no-repeat",
-        backgroundAttachment: "local",
         overflow: "hidden",
       }}
     >
-      {/* Dark overlay for readability */}
-      <div
-        className="absolute inset-0"
-        style={{ background: "rgba(10, 22, 40, 0.55)" }}
-      />
-
-      {/* Logo — positioned top-left over the overlay */}
-      <div className="relative z-10 flex items-center gap-3 p-8">
+      {/* Logo — top-left over the image */}
+      <div className="flex items-center gap-3 p-8">
         <div
           className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
           style={{ background: "linear-gradient(135deg, var(--teal), var(--sky))" }}
@@ -220,7 +213,7 @@ function LoginContent() {
   return (
     <div
       className="flex flex-col lg:flex-row"
-      style={{ fontFamily: "var(--font-dm-sans, sans-serif)", height: "100vh", overflow: "hidden" }}
+      style={{ fontFamily: "var(--font-dm-sans, sans-serif)", height: "100vh", overflow: "hidden", alignItems: "stretch" }}
     >
       {/* Right panel (form) — first in DOM = top on mobile */}
       <div className="order-1 lg:order-2 bg-white p-8 lg:p-12"
