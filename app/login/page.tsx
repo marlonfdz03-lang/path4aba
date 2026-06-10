@@ -495,9 +495,9 @@ function LoginContent() {
                   </>
                 ) : (
                   <>Don&apos;t have an account?{" "}
-                    <a href="/pricing" className="font-semibold hover:underline" style={{ color: "#0F62FE" }}>
+                    <button type="button" onClick={() => switchMode("signup")} className="font-semibold hover:underline" style={{ color: "#0F62FE" }}>
                       Create an Account
-                    </a>
+                    </button>
                   </>
                 )}
               </p>
