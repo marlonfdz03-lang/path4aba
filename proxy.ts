@@ -166,5 +166,5 @@ export const proxy = auth(async function proxy(req: NextRequest & { auth: any })
 })
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon\\.ico|icon\\.png|apple-icon\\.png|logo\\.png).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon\\.ico|icon\\.png|apple-icon\\.png|logo\\.png|login-hero\\.png|sitemap\\.xml|robots\\.txt|google.*\\.html).*)'],
 }
