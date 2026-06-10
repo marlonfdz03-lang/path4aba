@@ -442,7 +442,7 @@ export default function Sidebar() {
                   <NavItem href="/bcba-students" label="Fieldwork Tracker" icon={IconGraduationCap} active={isActive("/bcba-students")} expanded={expanded} />
                 ) : (
                   <button
-                    onClick={handleFieldworkUpgrade}
+                    onClick={() => router.push("/pricing?tab=students&plan=addon")}
                     title="Fieldwork Tracker"
                     className="flex items-center rounded-[6px] text-sm font-medium w-full"
                     style={{

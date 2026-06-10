@@ -3,7 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import type { PlanKey } from "@/lib/stripe";
 
@@ -196,9 +196,11 @@ function PlanCard({
 export default function PricingPage() {
   const router = useRouter();
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
+  const addonOnly = searchParams.get("tab") === "students" && searchParams.get("plan") === "addon";
   const [interval, setInterval] = useState<"month" | "year">("month");
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
-  const [profession, setProfession] = useState<Profession>("rbt");
+  const [profession, setProfession] = useState<Profession>(addonOnly ? "student" : "rbt");
   const [hasActiveRBT, setHasActiveRBT] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [termsWarning, setTermsWarning] = useState(false);
@@ -208,10 +210,11 @@ export default function PricingPage() {
   const [promoError, setPromoError] = useState("");
 
   useEffect(() => {
+    if (addonOnly) return;
     const role = (session?.user as any)?.role as string | undefined;
     if (role === "bcba" || role === "bcaba") setProfession("bcba");
     else if (role === "bcba_student" || role === "bcaba_student") setProfession("student");
-  }, [session]);
+  }, [session, addonOnly]);
 
   useEffect(() => {
     const userId = (session?.user as any)?.id;
@@ -391,7 +394,22 @@ export default function PricingPage() {
 
         {/* BCBA Students */}
         {profession === "student" && (
-          <div className="flex flex-col md:flex-row gap-5">
+          <>
+            {addonOnly && (
+              <div className="mb-6 text-center">
+                <a
+                  href="/pricing"
+                  className="inline-flex items-center gap-1 text-[13px] font-medium hover:underline mb-4"
+                  style={{ color: "var(--teal)" }}
+                >
+                  ← See all plans
+                </a>
+                <p className="text-[15px] font-semibold mt-2" style={{ color: "var(--text1)" }}>
+                  Add Fieldwork Tracking to your RBT plan for $14.99/mo
+                </p>
+              </div>
+            )}
+          <div className={addonOnly ? "max-w-sm mx-auto" : "flex flex-col md:flex-row gap-5"}>
 
             {/* Plan 1: Add-on for RBT */}
             <div className="flex-1 bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
@@ -432,8 +450,8 @@ export default function PricingPage() {
               </div>
             </div>
 
-            {/* Plan 2: Standalone */}
-            <div className="flex-1 bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)", boxShadow: "0 20px 60px rgba(13,43,78,0.12)" }}>
+            {/* Plan 2: Standalone — hidden when coming from the sidebar addon link */}
+            {!addonOnly && <div className="flex-1 bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)", boxShadow: "0 20px 60px rgba(13,43,78,0.12)" }}>
               <div className="h-[3px]" style={{ background: "linear-gradient(90deg, var(--teal), var(--sky))" }} />
               <div className="p-7 flex flex-col">
                 <p className="text-[11px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--text3)" }}>BCBA Students Standalone</p>
@@ -471,9 +489,10 @@ export default function PricingPage() {
                   ))}
                 </ul>
               </div>
-            </div>
+            </div>}
 
           </div>
+          </>
         )}
 
         {/* Add-ons — only for RBT and BCBA */}
