@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { getClientProfiles } from "@/lib/clientStorage";
@@ -174,6 +174,7 @@ function NavItem({
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { data: session } = useSession();
   const [expanded, setExpanded] = useState(false);
   const [clientCount, setClientCount] = useState(0);
@@ -209,6 +210,22 @@ export default function Sidebar() {
 
   async function handleLogout() {
     await signOut({ callbackUrl: "/login" });
+  }
+
+  async function handleFieldworkUpgrade() {
+    const userId = (session?.user as any)?.id;
+    if (!userId) { router.push("/login"); return; }
+    try {
+      const res = await fetch("/api/create-trial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, plan: "bcba_students_addon", interval: "month" }),
+      });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+    } catch {
+      router.push("/pricing");
+    }
   }
 
   const sectionHeader = (label: string) =>
@@ -388,27 +405,30 @@ export default function Sidebar() {
                 {hasBCBAStudents ? (
                   <NavItem href="/bcba-students" label="Fieldwork Tracker" icon={IconGraduationCap} active={isActive("/bcba-students")} expanded={expanded} />
                 ) : (
-                  <Link
-                    href="/pricing"
+                  <button
+                    onClick={handleFieldworkUpgrade}
                     title="Fieldwork Tracker"
-                    className="flex items-center rounded-[6px] text-sm font-medium"
+                    className="flex items-center rounded-[6px] text-sm font-medium w-full"
                     style={{
                       gap: expanded ? 10 : 0,
                       padding: "9px 10px",
                       justifyContent: expanded ? "flex-start" : "center",
                       color: "rgba(255,255,255,0.45)",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
                     }}
                   >
                     <span className="flex-shrink-0"><IconGraduationCap /></span>
                     {expanded && (
                       <>
-                        <span className="flex-1 whitespace-nowrap overflow-hidden">Fieldwork Tracker</span>
+                        <span className="flex-1 whitespace-nowrap overflow-hidden text-left">Fieldwork Tracker</span>
                         <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: "rgba(37,99,235,0.22)", color: "var(--teal2)" }}>
                           <IconLock /> Add-on
                         </span>
                       </>
                     )}
-                  </Link>
+                  </button>
                 )}
 
                 {/* Chrome Extension */}

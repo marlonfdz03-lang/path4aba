@@ -40,8 +40,9 @@ export async function POST(request: Request) {
 
   const planAllowed =
     isAdmin ||
-    (isRbt     && RBT_PLANS.includes(plan))     ||
-    (isBcba    && BCBA_PLANS.includes(plan))     ||
+    (isRbt     && RBT_PLANS.includes(plan))             ||
+    (isRbt     && plan === 'bcba_students_addon')        ||
+    (isBcba    && BCBA_PLANS.includes(plan))             ||
     (isStudent && STUDENT_PLANS.includes(plan))
 
   if (!planAllowed) {
