@@ -135,11 +135,11 @@ function BrandPanel({ mobile = false }: { mobile?: boolean }) {
         </div>
 
         {/* Floating cards */}
-        <div style={{ position: "relative", marginTop: 40, height: 380 }}>
+        <div style={{ position: "relative", marginTop: 32, height: 420 }}>
 
-            {/* Card 3 — Chrome Extension (back) */}
+            {/* Card 3 — Chrome Extension, bottom-center */}
             <div style={{
-              position: "absolute", top: 80, left: 16, right: 30, zIndex: 1,
+              position: "absolute", bottom: 0, left: 20, width: 220, zIndex: 1,
               animation: "float3 5s ease-in-out infinite",
               background: "rgba(7,26,82,0.9)", borderRadius: 16, padding: 20,
               border: "1px solid rgba(255,255,255,0.15)",
@@ -161,9 +161,9 @@ function BrandPanel({ mobile = false }: { mobile?: boolean }) {
               </div>
             </div>
 
-            {/* Card 2 — Fieldwork Progress (middle) */}
+            {/* Card 2 — Fieldwork Progress, center-right */}
             <div style={{
-              position: "absolute", top: 40, left: 30, right: 10, zIndex: 2,
+              position: "absolute", top: 60, right: 0, width: 240, zIndex: 2,
               animation: "float2 4.5s ease-in-out infinite",
               background: "rgba(255,255,255,0.92)", borderRadius: 16, padding: 20,
               borderTop: "3px solid #3FA9F5",
@@ -183,9 +183,9 @@ function BrandPanel({ mobile = false }: { mobile?: boolean }) {
               </div>
             </div>
 
-            {/* Card 1 — Recent Activity (front) */}
+            {/* Card 1 — Recent Activity, top-left */}
             <div style={{
-              position: "absolute", top: 0, left: 24, right: 24, zIndex: 3,
+              position: "absolute", top: 0, left: 0, width: 260, zIndex: 3,
               animation: "float1 4s ease-in-out infinite",
               background: "rgba(255,255,255,0.95)", borderRadius: 16, padding: 20,
               borderTop: "3px solid #0F62FE",
