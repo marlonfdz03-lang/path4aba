@@ -274,7 +274,7 @@ export default function BCBAStudentsDashboard() {
       <div className="flex items-center justify-between px-8 h-16 bg-white" style={{ borderBottom: "1px solid var(--border)" }}>
         <div>
           <h1 className="text-[16px] font-semibold" style={{ color: "var(--text1)" }}>
-            {getGreeting()}, {userName}!
+            Welcome back, {userName}! 👋
           </h1>
           <p className="text-[12px]" style={{ color: "var(--text3)" }}>
             Track your fieldwork, stay on top of your hours, and achieve your goals.
@@ -312,7 +312,7 @@ export default function BCBAStudentsDashboard() {
         </div>
       </div>
 
-      <div className="px-8 py-7 max-w-6xl">
+      <div className="px-8 py-7 w-full">
 
         {/* ── Stat cards ── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -365,9 +365,13 @@ export default function BCBAStudentsDashboard() {
                 </div>
               ))}
             </div>
-            <p className="text-center text-[11px] mt-3 font-medium" style={{ color: "var(--teal)" }}>
-              ✨ Every hour counts!
-            </p>
+            <div style={{ background: "#EFF6FF", borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "flex-start", gap: 10, marginTop: 12 }}>
+              <span style={{ fontSize: 18 }}>✨</span>
+              <div>
+                <div style={{ fontWeight: 600, color: "#1E3A8A", fontSize: 13 }}>Every hour counts!</div>
+                <div style={{ color: "#3B82F6", fontSize: 12, marginTop: 3 }}>You&apos;re one step closer to making a bigger impact.</div>
+              </div>
+            </div>
           </div>
 
           {/* Hours Breakdown donut */}
@@ -407,44 +411,43 @@ export default function BCBAStudentsDashboard() {
           <div className="bg-white rounded-xl p-5" style={{ border: "1px solid var(--border)" }}>
             <p className="text-[14px] font-semibold mb-1" style={{ color: "var(--text1)" }}>Milestones</p>
             <p className="text-[12px] mb-4" style={{ color: "var(--text3)" }}>Your journey to {GOAL}h</p>
-            <div className="space-y-3">
-              {MILESTONES.map((m) => {
+            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              {MILESTONES.map((m, i) => {
                 const reached = milestoneReached[m];
                 const remaining = m - allTotal;
                 return (
-                  <div key={m} className="flex items-center gap-3">
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-bold"
-                      style={{
+                  <div key={m} style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                    {/* Dot + connector */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+                      <div style={{
+                        width: 28, height: 28, borderRadius: "50%",
                         background: reached ? "var(--teal)" : "var(--teal-light)",
+                        border: reached ? "none" : "2px solid var(--border2)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
                         color: reached ? "white" : "var(--teal)",
-                      }}
-                    >
-                      {reached ? (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="20 6 9 17 4 12"/>
-                        </svg>
-                      ) : (
-                        <span>{m >= 1000 ? `${m / 1000}k` : m}</span>
+                        fontSize: 10, fontWeight: 700,
+                      }}>
+                        {reached ? (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12"/>
+                          </svg>
+                        ) : (
+                          <span>{m >= 1000 ? `${m / 1000}k` : m}</span>
+                        )}
+                      </div>
+                      {i < MILESTONES.length - 1 && (
+                        <div style={{ width: 2, height: 32, background: reached ? "var(--teal)" : "var(--border)", marginTop: 2 }} />
                       )}
                     </div>
-                    <div className="flex-1 min-w-0">
+                    {/* Label */}
+                    <div style={{ paddingTop: 4, paddingBottom: i < MILESTONES.length - 1 ? 0 : 0, minWidth: 0 }}>
                       <p className="text-[13px] font-semibold" style={{ color: reached ? "var(--text1)" : "var(--text3)" }}>
                         {m.toLocaleString()} hours
                       </p>
-                      <p className="text-[11px]" style={{ color: "var(--text3)" }}>
-                        {reached
-                          ? `Reached ${fmtDate(reached)}`
-                          : remaining > 0
-                          ? `${fmtHours(remaining)} to go`
-                          : "Almost there!"}
+                      <p className="text-[11px]" style={{ color: "var(--text3)", marginBottom: i < MILESTONES.length - 1 ? 6 : 0 }}>
+                        {reached ? `Reached ${fmtDate(reached)}` : remaining > 0 ? `${fmtHours(remaining)} to go` : "Almost there!"}
                       </p>
                     </div>
-                    {reached && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "rgba(37,99,235,0.08)", color: "var(--teal)" }}>
-                        ✓ Done
-                      </span>
-                    )}
                   </div>
                 );
               })}

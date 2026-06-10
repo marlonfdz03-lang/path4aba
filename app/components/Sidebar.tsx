@@ -73,6 +73,12 @@ const IconChevronUp = () => (
   </svg>
 );
 
+const IconChevronDown = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="6 9 12 15 18 9"/>
+  </svg>
+);
+
 const IconHelp = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10"/>
@@ -179,7 +185,12 @@ export default function Sidebar() {
   const [expanded, setExpanded] = useState(false);
   const [clientCount, setClientCount] = useState(0);
   const [hasBCBAStudents, setHasBCBAStudents] = useState(false);
+  const [fieldworkOpen, setFieldworkOpen] = useState(false);
   const [user, setUser] = useState<{ name: string; profession: string; initials: string } | null>(null);
+
+  useEffect(() => {
+    if (pathname.startsWith("/bcba-students")) setFieldworkOpen(true);
+  }, [pathname]);
 
   useEffect(() => {
     setClientCount(getClientProfiles().length);
@@ -430,30 +441,95 @@ export default function Sidebar() {
         ) : (
           // ── RBT (and all other roles) ─────────────────────────────────────
           <>
+            {/* WORKSPACE */}
             <div>
               {sectionHeader("Workspace")}
               <div className="space-y-0.5">
                 <NavItem href="/dashboard" label="Dashboard" icon={IconDashboard} active={isActive("/dashboard")} expanded={expanded} />
                 <NavItem href="/clients" label="Clients" icon={IconUsers} active={isActive("/clients")} badge={clientCount} expanded={expanded} />
                 <NavItem href="/schedule" label="Schedule" icon={IconCalendar} active={isActive("/schedule")} expanded={expanded} />
+                <a
+                  href="/settings?tab=extension"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Chrome Extension"
+                  className="flex items-center rounded-[6px] text-sm font-medium transition-colors"
+                  style={{ gap: expanded ? 10 : 0, padding: "9px 10px", justifyContent: expanded ? "flex-start" : "center", color: "rgba(255,255,255,0.65)" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.08)"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                >
+                  <span className="flex-shrink-0"><IconChrome /></span>
+                  <span style={{ opacity: expanded ? 1 : 0, maxWidth: expanded ? 160 : 0, overflow: "hidden", whiteSpace: "nowrap", transition: "opacity 0.15s, max-width 0.2s" }}>
+                    Chrome Extension
+                  </span>
+                </a>
+              </div>
+            </div>
 
-                {/* Fieldwork Tracker */}
+            {/* TOOLS — Fieldwork Tracker accordion */}
+            <div>
+              {sectionHeader("Tools")}
+              <div className="space-y-0.5">
                 {hasBCBAStudents ? (
-                  <NavItem href="/bcba-students" label="Fieldwork Tracker" icon={IconGraduationCap} active={isActive("/bcba-students")} expanded={expanded} />
+                  <>
+                    {/* Accordion header */}
+                    <button
+                      onClick={() => setFieldworkOpen((o) => !o)}
+                      title="Fieldwork Tracker"
+                      className="flex items-center rounded-[6px] text-sm font-medium w-full transition-colors"
+                      style={{
+                        gap: expanded ? 10 : 0,
+                        padding: "9px 10px",
+                        justifyContent: expanded ? "flex-start" : "center",
+                        color: isActive("/bcba-students") ? "white" : "rgba(255,255,255,0.65)",
+                        background: isActive("/bcba-students") ? "rgba(37,99,235,0.22)" : "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                      }}
+                      onMouseEnter={(e) => { if (!isActive("/bcba-students")) (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.08)"; }}
+                      onMouseLeave={(e) => { if (!isActive("/bcba-students")) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                    >
+                      <span className="flex-shrink-0"><IconGraduationCap /></span>
+                      <span style={{ opacity: expanded ? 1 : 0, maxWidth: expanded ? 160 : 0, overflow: "hidden", whiteSpace: "nowrap", transition: "opacity 0.15s, max-width 0.2s", flex: expanded ? "1" : undefined, textAlign: "left" }}>
+                        Fieldwork Tracker
+                      </span>
+                      {expanded && (
+                        <span style={{ flexShrink: 0, transition: "transform 0.2s", transform: fieldworkOpen ? "rotate(0deg)" : "rotate(-90deg)" }}>
+                          <IconChevronDown />
+                        </span>
+                      )}
+                    </button>
+                    {/* Accordion subitems */}
+                    {fieldworkOpen && expanded && (
+                      <div className="space-y-0.5 pl-4">
+                        <NavItem href="/bcba-students" label="Dashboard" icon={IconDashboard}
+                          active={pathname === "/bcba-students"} expanded={expanded} />
+                        <NavItem href="/bcba-students/log" label="Log Session" icon={IconFileText} active={isActive("/bcba-students/log")} expanded={expanded} />
+                        <NavItem href="/bcba-students/monthly" label="Monthly View" icon={IconCalendar} active={isActive("/bcba-students/monthly")} expanded={expanded} />
+                        <NavItem href="/bcba-students/documents" label="Documents" icon={IconFolder} active={isActive("/bcba-students/documents")} expanded={expanded} />
+                        <NavItem href="/bcba-students/reports" label="Reports" icon={IconBarChart} active={isActive("/bcba-students/reports")} expanded={expanded} />
+                        <a
+                          href="https://www.bacb.com/bcba/fieldwork/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="BACB Requirements"
+                          className="flex items-center rounded-[6px] text-sm font-medium transition-colors"
+                          style={{ gap: 10, padding: "9px 10px", color: "rgba(255,255,255,0.65)" }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.08)"; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                        >
+                          <span className="flex-shrink-0"><IconAward /></span>
+                          <span style={{ whiteSpace: "nowrap", overflow: "hidden" }}>BACB Requirements</span>
+                        </a>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <button
                     onClick={() => router.push("/pricing?tab=students&plan=addon")}
                     title="Fieldwork Tracker"
                     className="flex items-center rounded-[6px] text-sm font-medium w-full"
-                    style={{
-                      gap: expanded ? 10 : 0,
-                      padding: "9px 10px",
-                      justifyContent: expanded ? "flex-start" : "center",
-                      color: "rgba(255,255,255,0.45)",
-                      background: "transparent",
-                      border: "none",
-                      cursor: "pointer",
-                    }}
+                    style={{ gap: expanded ? 10 : 0, padding: "9px 10px", justifyContent: expanded ? "flex-start" : "center", color: "rgba(255,255,255,0.45)", background: "transparent", border: "none", cursor: "pointer" }}
                   >
                     <span className="flex-shrink-0"><IconGraduationCap /></span>
                     {expanded && (
@@ -466,30 +542,10 @@ export default function Sidebar() {
                     )}
                   </button>
                 )}
-
-                {/* Chrome Extension */}
-                <a
-                  href="/settings?tab=extension"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="Chrome Extension"
-                  className="flex items-center rounded-[6px] text-sm font-medium transition-colors"
-                  style={{
-                    gap: expanded ? 10 : 0,
-                    padding: "9px 10px",
-                    justifyContent: expanded ? "flex-start" : "center",
-                    color: "rgba(255,255,255,0.65)",
-                  }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.08)"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                >
-                  <span className="flex-shrink-0"><IconChrome /></span>
-                  <span style={{ opacity: expanded ? 1 : 0, maxWidth: expanded ? 160 : 0, overflow: "hidden", whiteSpace: "nowrap", transition: "opacity 0.15s, max-width 0.2s" }}>
-                    Chrome Extension
-                  </span>
-                </a>
               </div>
             </div>
+
+            {/* ACCOUNT */}
             <div>
               {sectionHeader("Account")}
               <div className="space-y-0.5">
@@ -503,9 +559,11 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-        {/* User card */}
+        {/* User card — click to open profile settings */}
         {user && (
           <div
+            role="button"
+            onClick={() => router.push("/settings?tab=profile")}
             className="flex items-center cursor-pointer transition-colors px-[10px] py-3"
             style={{
               color: "white",

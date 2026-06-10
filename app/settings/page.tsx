@@ -3,12 +3,13 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { useSession } from "next-auth/react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type SettingsTab = "billing" | "extension";
+type SettingsTab = "profile" | "billing" | "extension";
 
 type Sub = {
   plan: string;
@@ -17,6 +18,101 @@ type Sub = {
   current_period_ends_at: string | null;
   stripe_customer_id: string | null;
 };
+
+// ── Profile tab ───────────────────────────────────────────────────────────────
+
+function ProfileTab() {
+  const { data: session, status } = useSession();
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (session?.user) {
+      const parts = (session.user.name || "").split(" ");
+      setFirstName(parts[0] || "");
+      setLastName(parts.slice(1).join(" ") || "");
+      setEmail(session.user.email || "");
+    }
+  }, [session]);
+
+  async function handleSave() {
+    setSaving(true);
+    setSaved(false);
+    setError("");
+    try {
+      const res = await fetch("/api/user/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: `${firstName} ${lastName}`.trim(), email }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Failed to save");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e: any) {
+      setError(e.message || "Something went wrong");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (status === "loading") return <div className="text-sm" style={{ color: "var(--text3)" }}>Loading…</div>;
+
+  return (
+    <div className="bg-white rounded-xl p-6" style={{ border: "1px solid var(--border)" }}>
+      <div className="h-[3px] -mx-6 -mt-6 mb-6 rounded-t-xl" style={{ background: "linear-gradient(90deg, var(--teal), var(--sky))" }} />
+      <p className="text-[14px] font-semibold mb-1" style={{ color: "var(--text1)" }}>Profile</p>
+      <p className="text-[13px] mb-6" style={{ color: "var(--text3)" }}>Update your name and email address.</p>
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>First name</label>
+            <input
+              type="text"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none focus:ring-2"
+              style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+            />
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Last name</label>
+            <input
+              type="text"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none focus:ring-2"
+              style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+            />
+          </div>
+        </div>
+        <div>
+          <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none focus:ring-2"
+            style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+          />
+        </div>
+        {error && <p className="text-[12px] px-3 py-2 rounded-lg" style={{ background: "#fef2f2", color: "#991b1b" }}>{error}</p>}
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white disabled:opacity-60 transition-opacity hover:opacity-90"
+          style={{ background: saved ? "#16a34a" : "var(--teal)" }}
+        >
+          {saving ? "Saving…" : saved ? "Saved ✓" : "Save Changes"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ── Billing helpers ───────────────────────────────────────────────────────────
 
@@ -328,26 +424,27 @@ function ExtensionTab() {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function SettingsPage() {
-  const [tab, setTab] = useState<SettingsTab>("billing");
+function SettingsContent() {
+  const searchParams = useSearchParams();
+  const initialTab = (searchParams.get("tab") as SettingsTab) || "billing";
+  const [tab, setTab] = useState<SettingsTab>(initialTab);
 
   const TABS: { id: SettingsTab; label: string }[] = [
+    { id: "profile", label: "Profile" },
     { id: "billing", label: "Billing" },
     { id: "extension", label: "Extension" },
   ];
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      {/* Topbar */}
       <div className="flex items-center px-8 h-14 bg-white" style={{ borderBottom: "1px solid var(--border)" }}>
         <p className="text-sm font-medium" style={{ color: "var(--text3)" }}>Settings</p>
       </div>
 
       <div className="px-8 py-8 max-w-2xl">
         <h1 className="text-xl font-semibold mb-1" style={{ color: "var(--text1)" }}>Settings</h1>
-        <p className="text-[13.5px] mb-6" style={{ color: "var(--text3)" }}>Manage your subscription and extension token.</p>
+        <p className="text-[13.5px] mb-6" style={{ color: "var(--text3)" }}>Manage your profile, subscription, and extension token.</p>
 
-        {/* Tab bar */}
         <div className="flex gap-1 mb-7 p-1 rounded-xl" style={{ background: "var(--border)", width: "fit-content" }}>
           {TABS.map(t => (
             <button
@@ -365,9 +462,18 @@ export default function SettingsPage() {
           ))}
         </div>
 
+        {tab === "profile" && <ProfileTab />}
         {tab === "billing" && <BillingTab />}
         {tab === "extension" && <ExtensionTab />}
       </div>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div />}>
+      <SettingsContent />
+    </Suspense>
   );
 }
