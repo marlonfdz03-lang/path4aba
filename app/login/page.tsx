@@ -11,9 +11,6 @@ type Mode = "signin" | "signup" | "forgot";
 // ── CSS animations ────────────────────────────────────────────────────────────
 
 const KEYFRAMES = `
-@keyframes float1 { 0%,100%{transform:translateY(0) rotate(-4deg)} 50%{transform:translateY(-8px) rotate(-4deg)} }
-@keyframes float2 { 0%,100%{transform:translateY(0) rotate(3deg)}  50%{transform:translateY(-6px) rotate(3deg)}  }
-@keyframes float3 { 0%,100%{transform:translateY(0) rotate(-2deg)} 50%{transform:translateY(-10px) rotate(-2deg)} }
 .btn-gradient {
   background: linear-gradient(135deg, #0F62FE, #1B5BE8);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
@@ -134,99 +131,26 @@ function BrandPanel({ mobile = false }: { mobile?: boolean }) {
           </p>
         </div>
 
-        {/* Floating cards */}
-        <div style={{ position: "relative", marginTop: 32, height: 420 }}>
+        {/* Stat chips */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 32 }}>
 
-            {/* Card 3 — Chrome Extension, bottom-center */}
-            <div style={{
-              position: "absolute", bottom: 0, left: 20, width: 220, zIndex: 1,
-              animation: "float3 5s ease-in-out infinite",
-              background: "rgba(7,26,82,0.9)", borderRadius: 16, padding: 20,
-              border: "1px solid rgba(255,255,255,0.15)",
-              boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
-            }}>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-[13px] font-bold text-white">Path4ABA Extension</p>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                  style={{ background: "rgba(63,169,245,0.2)", color: "#60A5FA" }}>Chrome</span>
-              </div>
-              <div className="flex items-center gap-2 mb-2">
-                <button className="text-[12px] font-semibold px-3 py-1.5 rounded-lg text-white"
-                  style={{ background: "#0F62FE" }}>Generate Note</button>
-                <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>AI analyzing session…</span>
-              </div>
-              <div className="flex items-center gap-1.5 mt-2">
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#10B981", display: "inline-block" }} />
-                <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.6)" }}>Note generated in 2.3s</span>
-              </div>
-            </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.1)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 12, padding: "12px 16px", width: "fit-content" }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#22C55E", flexShrink: 0 }} />
+            <span style={{ color: "white", fontSize: 13, fontWeight: 500 }}>Session note generated · J. Martinez</span>
+            <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 11 }}>2m ago</span>
+          </div>
 
-            {/* Card 2 — Fieldwork Progress, center-right */}
-            <div style={{
-              position: "absolute", top: 60, right: 0, width: 240, zIndex: 2,
-              animation: "float2 4.5s ease-in-out infinite",
-              background: "rgba(255,255,255,0.92)", borderRadius: 16, padding: 20,
-              borderTop: "3px solid #3FA9F5",
-              boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
-            }}>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-[12px] font-bold" style={{ color: "#071A52" }}>Fieldwork Progress</p>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                  style={{ background: "#DCFCE7", color: "#16A34A" }}>On Track</span>
-              </div>
-              <div className="flex justify-between items-baseline mb-1.5">
-                <span className="text-[11px]" style={{ color: "#94A3B8" }}>872 / 2000 hrs</span>
-                <span className="text-[12px] font-bold" style={{ color: "#0F62FE" }}>43.6%</span>
-              </div>
-              <div style={{ height: 6, background: "#EFF6FF", borderRadius: 99 }}>
-                <div style={{ width: "43.6%", height: "100%", background: "linear-gradient(90deg, #0F62FE, #3FA9F5)", borderRadius: 99 }} />
-              </div>
-            </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.1)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 12, padding: "12px 16px", width: "fit-content", marginLeft: 24 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#3B82F6", flexShrink: 0 }} />
+            <span style={{ color: "white", fontSize: 13, fontWeight: 500 }}>872 / 2,000 fieldwork hours</span>
+            <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 11 }}>43.6%</span>
+          </div>
 
-            {/* Card 1 — Recent Activity, top-left */}
-            <div style={{
-              position: "absolute", top: 0, left: 0, width: 260, zIndex: 3,
-              animation: "float1 4s ease-in-out infinite",
-              background: "rgba(255,255,255,0.95)", borderRadius: 16, padding: 20,
-              borderTop: "3px solid #0F62FE",
-              boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-            }}>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-[12px] font-bold" style={{ color: "#071A52" }}>Recent Activity</p>
-                <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                  style={{ background: "#DCFCE7", color: "#16A34A" }}>
-                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#16A34A", display: "inline-block" }} />
-                  Live
-                </span>
-              </div>
-              <div className="space-y-2 mb-3">
-                {[
-                  { label: "Session note generated", name: "J. Martinez", time: "2m ago", color: "#0F62FE" },
-                  { label: "Fieldwork hours logged", name: "A. Chen", time: "14m ago", color: "#3FA9F5" },
-                  { label: "Progress report ready", name: "M. Torres", time: "1h ago", color: "#10B981" },
-                ].map((item) => (
-                  <div key={item.name} className="flex items-center gap-2.5">
-                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: item.color, flexShrink: 0, display: "inline-block" }} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-semibold truncate" style={{ color: "#0F172A" }}>{item.label}</p>
-                      <p className="text-[10px]" style={{ color: "#94A3B8" }}>{item.name} · {item.time}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="flex items-center gap-0 pt-2.5" style={{ borderTop: "1px solid #F1F5F9" }}>
-                {[
-                  { n: "12", label: "Sessions" },
-                  { n: "4", label: "Clients" },
-                  { n: "98%", label: "Compliance" },
-                ].map((s, i) => (
-                  <div key={s.label} className="flex-1 text-center" style={{ borderLeft: i > 0 ? "1px solid #F1F5F9" : undefined }}>
-                    <p className="text-[13px] font-bold" style={{ color: "#071A52" }}>{s.n}</p>
-                    <p className="text-[9px] uppercase tracking-wide" style={{ color: "#94A3B8" }}>{s.label}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.1)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 12, padding: "12px 16px", width: "fit-content", marginLeft: 12 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#A78BFA", flexShrink: 0 }} />
+            <span style={{ color: "white", fontSize: 13, fontWeight: 500 }}>Progress report ready · M. Torres</span>
+            <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 11 }}>1h ago</span>
+          </div>
 
         </div>
 
