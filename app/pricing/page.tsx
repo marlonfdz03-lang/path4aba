@@ -391,30 +391,49 @@ export default function PricingPage() {
 
         {/* BCBA Students */}
         {profession === "student" && (
-          hasActiveRBT ? (
-            <div className="max-w-md mx-auto bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)", boxShadow: "0 4px 24px rgba(13,43,78,0.08)" }}>
+          <div className="flex flex-col md:flex-row gap-5">
+
+            {/* Plan 1: Add-on for RBT */}
+            <div className="flex-1 bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
               <div className="h-[3px]" style={{ background: "linear-gradient(90deg, var(--teal), var(--sky))" }} />
-              <div className="p-8 text-center">
-                <div className="w-14 h-14 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: "rgba(27,168,160,0.1)" }}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>
-                  </svg>
+              <div className="p-7 flex flex-col">
+                <p className="text-[11px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--text3)" }}>Add-on for RBT</p>
+                <p className="text-[13px] mb-5 leading-relaxed" style={{ color: "var(--text3)" }}>Fieldwork Tracker — requires an active RBT plan on Path4ABA.</p>
+                <div className="flex items-end gap-1.5 mb-1">
+                  <span className="text-[38px] font-semibold leading-none" style={{ color: "var(--text1)" }}>
+                    ${interval === "month" ? "14.99" : "149"}
+                  </span>
+                  <span className="text-[13px] mb-1.5" style={{ color: "var(--text3)" }}>/{interval === "month" ? "mo" : "yr"}</span>
                 </div>
-                <h2 className="text-[20px] font-semibold mb-2" style={{ color: "var(--text1)" }}>Already have an RBT plan?</h2>
-                <p className="text-[14px] mb-6 leading-relaxed" style={{ color: "var(--text3)" }}>
-                  Log in — Fieldwork Tracker is included in your sidebar.
-                </p>
+                <div className="mb-5 h-5">
+                  {interval === "year" && (
+                    <p className="text-[12px] font-medium" style={{ color: "var(--teal)" }}>Save $31/year vs monthly</p>
+                  )}
+                </div>
                 <button
                   onClick={() => router.push("/login")}
-                  className="w-full py-3 rounded-xl text-[14px] font-semibold text-white transition-opacity hover:opacity-90"
-                  style={{ background: "var(--teal)" }}
+                  className="w-full py-3 rounded-xl text-[14px] font-semibold transition-opacity hover:opacity-90 mb-2"
+                  style={{ background: "transparent", border: "1.5px solid #0F62FE", color: "#0F62FE" }}
                 >
-                  Log in
+                  Log In to Add
                 </button>
+                <p className="text-[11px] text-center mb-6" style={{ color: "var(--text3)" }}>
+                  Available in your RBT dashboard after login
+                </p>
+                <div className="h-px mb-5" style={{ background: "var(--border)" }} />
+                <ul className="space-y-2.5 flex-1">
+                  {["Track fieldwork hours", "BACB compliance calculations", "Monthly M-FVF PDF export", "200+ BCBA-compliant notes"].map((f) => (
+                    <li key={f} className="flex items-start gap-2.5">
+                      <span style={{ color: "var(--teal)", flexShrink: 0, marginTop: 1 }}>{CHECK}</span>
+                      <span className="text-[13px]" style={{ color: "var(--text2)" }}>{f}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
-          ) : (
-            <div className="max-w-md mx-auto bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)", boxShadow: "0 20px 60px rgba(13,43,78,0.12)" }}>
+
+            {/* Plan 2: Standalone */}
+            <div className="flex-1 bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)", boxShadow: "0 20px 60px rgba(13,43,78,0.12)" }}>
               <div className="h-[3px]" style={{ background: "linear-gradient(90deg, var(--teal), var(--sky))" }} />
               <div className="p-7 flex flex-col">
                 <p className="text-[11px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--text3)" }}>BCBA Students Standalone</p>
@@ -443,8 +462,8 @@ export default function PricingPage() {
                 </button>
                 <p className="text-[11px] text-center mb-6" style={{ color: "var(--text3)" }}>7 days free · No credit card required</p>
                 <div className="h-px mb-5" style={{ background: "var(--border)" }} />
-                <ul className="space-y-2.5">
-                  {["Track fieldwork hours", "BACB compliance calculations", "Monthly M-FVF PDF export", "200+ BACB-compliant notes", "7-day free trial"].map((f) => (
+                <ul className="space-y-2.5 flex-1">
+                  {["Track fieldwork hours", "BACB compliance calculations", "Monthly M-FVF PDF export", "200+ BCBA-compliant notes", "7-day free trial"].map((f) => (
                     <li key={f} className="flex items-start gap-2.5">
                       <span style={{ color: "var(--teal)", flexShrink: 0, marginTop: 1 }}>{CHECK}</span>
                       <span className="text-[13px]" style={{ color: "var(--text2)" }}>{f}</span>
@@ -453,7 +472,8 @@ export default function PricingPage() {
                 </ul>
               </div>
             </div>
-          )
+
+          </div>
         )}
 
         {/* Add-ons — only for RBT and BCBA */}
@@ -496,10 +516,9 @@ export default function PricingPage() {
         )}
       </div>
 
-      {/* Promo code + Terms — shown for all checkout paths, hidden for the login-only student card */}
-      {!(profession === "student" && hasActiveRBT) && (
-        <>
-          {/* Promo code */}
+      {/* Promo code + Terms */}
+      <>
+        {/* Promo code */}
           <div className="flex justify-center px-6 pb-4 max-w-sm mx-auto w-full">
             <div className="w-full">
               <p className="text-[13px] font-medium mb-2 text-center" style={{ color: "var(--text3)" }}>Have a promo code?</p>
@@ -566,8 +585,7 @@ export default function PricingPage() {
               )}
             </div>
           </div>
-        </>
-      )}
+      </>
 
       {/* Footer */}
       <p className="text-center text-[12px] pb-12 pt-4" style={{ color: "var(--text3)" }}>
