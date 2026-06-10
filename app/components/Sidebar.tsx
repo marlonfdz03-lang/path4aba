@@ -286,7 +286,7 @@ export default function Sidebar() {
               {sectionHeader("Workspace")}
               <div className="space-y-0.5">
                 <NavItem href="/dashboard" label="Dashboard" icon={IconDashboard} active={isActive("/dashboard")} expanded={expanded} />
-                <NavItem href="/bcba" label="Clients" icon={IconUsers} active={isActive("/bcba")} expanded={expanded} />
+                <NavItem href="/clients" label="Clients" icon={IconUsers} active={isActive("/clients")} expanded={expanded} />
                 <NavItem href="/schedule" label="Schedule" icon={IconCalendar} active={isActive("/schedule")} expanded={expanded} />
                 <NavItem href="/bcba-students" label="Fieldwork Tracker" icon={IconGraduationCap} active={isActive("/bcba-students")} expanded={expanded} />
                 <a
