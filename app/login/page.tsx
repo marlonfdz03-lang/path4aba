@@ -196,7 +196,12 @@ export default function LoginPage() {
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectMessage = searchParams.get("message");
+  const rawMessage = searchParams.get("message");
+  const MESSAGE_MAP: Record<string, string> = {
+    'email-updated': 'Your email has been updated. Please sign in with your new email.',
+    'invalid-token': 'That verification link is invalid or has already been used.',
+  };
+  const redirectMessage = rawMessage ? (MESSAGE_MAP[rawMessage] || rawMessage) : null;
   const initialMode = (searchParams.get("mode") as Mode) || "signin";
 
   const [mode, setMode] = useState<Mode>(initialMode);

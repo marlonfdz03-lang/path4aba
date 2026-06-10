@@ -29,6 +29,7 @@ function ProfileTab() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
 
   useEffect(() => {
     if (session?.user) {
@@ -43,6 +44,7 @@ function ProfileTab() {
     setSaving(true);
     setSaved(false);
     setError("");
+    setPendingEmail(null);
     try {
       const res = await fetch("/api/user/profile", {
         method: "PATCH",
@@ -51,8 +53,12 @@ function ProfileTab() {
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "Failed to save");
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      if (d.pending) {
+        setPendingEmail(email);
+      } else {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      }
     } catch (e: any) {
       setError(e.message || "Something went wrong");
     } finally {
@@ -101,6 +107,11 @@ function ProfileTab() {
           />
         </div>
         {error && <p className="text-[12px] px-3 py-2 rounded-lg" style={{ background: "#fef2f2", color: "#991b1b" }}>{error}</p>}
+        {pendingEmail && (
+          <p className="text-[12px] px-3 py-2 rounded-lg" style={{ background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" }}>
+            A verification email has been sent to <strong>{pendingEmail}</strong>. Click the link to confirm your new email address.
+          </p>
+        )}
         <button
           onClick={handleSave}
           disabled={saving}
