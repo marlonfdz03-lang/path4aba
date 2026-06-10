@@ -49,25 +49,25 @@ export async function GET() {
   }> = []
 
   if (clientIds.length > 0) {
-    // Count notes this week
-    notesThisWeek = await prisma.session_notes.count({
-      where: {
-        client_id: { in: clientIds },
-        created_at: { gte: monday },
-      },
-    })
-
-    // Last 5 session notes with client info
-    const recent = await prisma.session_notes.findMany({
-      where: { client_id: { in: clientIds } },
-      orderBy: { created_at: 'desc' },
-      take: 5,
-      select: {
-        created_at: true,
-        session_date: true,
-        client: { select: { internal_code: true, clinical_profile: true } },
-      },
-    })
+    const [count, recent] = await Promise.all([
+      prisma.session_notes.count({
+        where: {
+          client_id: { in: clientIds },
+          created_at: { gte: monday },
+        },
+      }),
+      prisma.session_notes.findMany({
+        where: { client_id: { in: clientIds } },
+        orderBy: { created_at: 'desc' },
+        take: 5,
+        select: {
+          created_at: true,
+          session_date: true,
+          client: { select: { internal_code: true, clinical_profile: true } },
+        },
+      }),
+    ])
+    notesThisWeek = count
 
     recentActivity = recent.map((n) => ({
       type: 'note' as const,

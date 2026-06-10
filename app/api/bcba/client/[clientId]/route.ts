@@ -16,18 +16,18 @@ export async function GET(
   const { clientId } = await params
 
 
-  const conn = await prisma.bcba_clients.findFirst({
-    where: { bcba_id: userId, client_id: clientId },
-    select: { rbt_id: true, connected_at: true },
-  })
+  const [conn, clientRow] = await Promise.all([
+    prisma.bcba_clients.findFirst({
+      where: { bcba_id: userId, client_id: clientId },
+      select: { rbt_id: true, connected_at: true },
+    }),
+    prisma.clients.findUnique({
+      where: { id: clientId },
+      select: { id: true, internal_code: true, clinical_profile: true },
+    }),
+  ])
 
   if (!conn) return NextResponse.json({ error: 'Not connected to this client' }, { status: 403 })
-
-  const clientRow = await prisma.clients.findUnique({
-    where: { id: clientId },
-    select: { id: true, internal_code: true, clinical_profile: true },
-  })
-
   if (!clientRow) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
 
   return NextResponse.json({

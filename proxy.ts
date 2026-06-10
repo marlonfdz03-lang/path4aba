@@ -21,6 +21,9 @@ const SUB_EXEMPT_PATHS = [
   '/bcba-students', // layout.tsx handles its own paywall — sub-gate doesn't cover bcba_students_status
 ]
 
+// 30-second TTL cache for sub-gate results — avoids a DB round-trip on every page load.
+const subCache = new Map<string, { result: boolean; exp: number }>()
+
 function corsHeaders(origin: string | null): Record<string, string> {
   const allowed =
     origin &&
@@ -113,24 +116,33 @@ export const proxy = auth(async function proxy(req: NextRequest & { auth: any })
 
     if (!isSubExempt && userId) {
       try {
-        const host = req.headers.get('host') || ''
-        const protocol = host.startsWith('localhost') ? 'http' : 'https'
-        const subGateUrl = `${protocol}://${host}/api/auth/sub-gate?userId=${encodeURIComponent(userId)}`
+        const now = Date.now()
+        const cached = subCache.get(userId)
+        let hasAccess: boolean
 
-        // Fix 2: retry once after 1500ms if hasAccess is false —
-        // handles the case where the webhook hasn't committed yet.
-        const checkAccess = async (): Promise<boolean> => {
-          const r = await fetch(subGateUrl)
-          if (!r.ok) return true // fail open
-          return !!(await r.json()).hasAccess
-        }
+        if (cached && cached.exp > now) {
+          hasAccess = cached.result
+        } else {
+          const host = req.headers.get('host') || ''
+          const protocol = host.startsWith('localhost') ? 'http' : 'https'
+          const subGateUrl = `${protocol}://${host}/api/auth/sub-gate?userId=${encodeURIComponent(userId)}`
 
-        let hasAccess = await checkAccess()
-        console.log('[proxy] userId:', userId, 'pathname:', pathname, 'hasAccess result (attempt 1):', hasAccess)
-        if (!hasAccess) {
-          await new Promise(resolve => setTimeout(resolve, 1500))
+          // Retry once after 1500ms — handles Stripe webhook not yet committed.
+          const checkAccess = async (): Promise<boolean> => {
+            const r = await fetch(subGateUrl)
+            if (!r.ok) return true // fail open
+            return !!(await r.json()).hasAccess
+          }
+
           hasAccess = await checkAccess()
-          console.log('[proxy] userId:', userId, 'pathname:', pathname, 'hasAccess result (attempt 2):', hasAccess)
+          console.log('[proxy] userId:', userId, 'pathname:', pathname, 'hasAccess result (attempt 1):', hasAccess)
+          if (!hasAccess) {
+            await new Promise(resolve => setTimeout(resolve, 1500))
+            hasAccess = await checkAccess()
+            console.log('[proxy] userId:', userId, 'pathname:', pathname, 'hasAccess result (attempt 2):', hasAccess)
+          }
+
+          subCache.set(userId, { result: hasAccess, exp: now + 30_000 })
         }
 
         if (!hasAccess) {
