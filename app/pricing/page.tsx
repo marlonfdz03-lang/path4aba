@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import type { PlanKey } from "@/lib/stripe";
@@ -193,7 +193,7 @@ function PlanCard({
   );
 }
 
-export default function PricingPage() {
+function PricingContent() {
   const router = useRouter();
   const { data: session } = useSession();
   const searchParams = useSearchParams();
@@ -614,5 +614,13 @@ export default function PricingPage() {
         </a>
       </p>
     </div>
+  );
+}
+
+export default function PricingPage() {
+  return (
+    <Suspense fallback={<div />}>
+      <PricingContent />
+    </Suspense>
   );
 }
