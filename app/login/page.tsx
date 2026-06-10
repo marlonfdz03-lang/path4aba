@@ -131,25 +131,31 @@ function BrandPanel({ mobile = false }: { mobile?: boolean }) {
           </p>
         </div>
 
-        {/* Stat chips */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 32 }}>
+        {/* Role cards */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 40 }}>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.1)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 12, padding: "12px 16px", width: "fit-content" }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#22C55E", flexShrink: 0 }} />
-            <span style={{ color: "white", fontSize: 13, fontWeight: 500 }}>Session note generated · J. Martinez</span>
-            <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 11 }}>2m ago</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, padding: "14px 18px" }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(59,130,246,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>🧑‍⚕️</div>
+            <div>
+              <div style={{ color: "white", fontSize: 13, fontWeight: 600 }}>For RBTs</div>
+              <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, marginTop: 2 }}>AI session notes, client profiles & data tracking</div>
+            </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.1)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 12, padding: "12px 16px", width: "fit-content", marginLeft: 24 }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#3B82F6", flexShrink: 0 }} />
-            <span style={{ color: "white", fontSize: 13, fontWeight: 500 }}>872 / 2,000 fieldwork hours</span>
-            <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 11 }}>43.6%</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, padding: "14px 18px" }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(96,165,250,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>👩‍💼</div>
+            <div>
+              <div style={{ color: "white", fontSize: 13, fontWeight: 600 }}>For BCBAs</div>
+              <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, marginTop: 2 }}>Supervision notes, progress reports & client management</div>
+            </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.1)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 12, padding: "12px 16px", width: "fit-content", marginLeft: 12 }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#A78BFA", flexShrink: 0 }} />
-            <span style={{ color: "white", fontSize: 13, fontWeight: 500 }}>Progress report ready · M. Torres</span>
-            <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 11 }}>1h ago</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, padding: "14px 18px" }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(167,139,250,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>🎓</div>
+            <div>
+              <div style={{ color: "white", fontSize: 13, fontWeight: 600 }}>For ABA Students</div>
+              <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, marginTop: 2 }}>Fieldwork tracker, hour logs & BACB compliance</div>
+            </div>
           </div>
 
         </div>
