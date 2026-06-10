@@ -83,17 +83,44 @@ export function checkMonthEligibility(
   mvfSigned: boolean,
   certificationTrack: CertificationTrack = 'BCBA'
 ): { eligible: boolean; reason?: string } {
-  const rules = BACB_RULES[certificationTrack][fieldworkType]
+  const rules  = BACB_RULES[certificationTrack][fieldworkType]
+  const shared = BACB_RULES.shared
 
-  if (summary.client_observations < BACB_RULES.shared.clientObservationsPerMonth) {
-    return { eligible: false, reason: 'No client observation recorded this month' }
-  }
   if (summary.total_hours < rules.minHoursPerMonth) {
     return { eligible: false, reason: `Total hours (${summary.total_hours.toFixed(2)}) below minimum ${rules.minHoursPerMonth}` }
   }
+
+  if (summary.supervision_pct < rules.supervisionPctMin) {
+    return { eligible: false, reason: `Supervision (${summary.supervision_pct.toFixed(1)}%) below required ${rules.supervisionPctMin}%` }
+  }
+
+  const supContacts = summary.individual_contacts + summary.group_contacts
+  if (supContacts > 0 && summary.individual_contacts / supContacts < shared.individualSupervisionMin / 100) {
+    return {
+      eligible: false,
+      reason: `Individual supervision (${((summary.individual_contacts / supContacts) * 100).toFixed(0)}%) below required 50%`,
+    }
+  }
+
+  if (summary.total_hours > 0 && summary.unrestricted_hours / summary.total_hours < shared.unrestrictedPctMin / 100) {
+    return {
+      eligible: false,
+      reason: `Unrestricted hours (${((summary.unrestricted_hours / summary.total_hours) * 100).toFixed(0)}%) below required ${shared.unrestrictedPctMin}%`,
+    }
+  }
+
+  if (summary.supervisor_contacts < rules.contactsPerMonth) {
+    return { eligible: false, reason: `Supervision contacts (${summary.supervisor_contacts}) below required ${rules.contactsPerMonth}` }
+  }
+
+  if (summary.client_observations < shared.clientObservationsPerMonth) {
+    return { eligible: false, reason: 'No client observation recorded this month' }
+  }
+
   if (!mvfSigned) {
     return { eligible: false, reason: 'M-FVF not signed' }
   }
+
   return { eligible: true }
 }
 
