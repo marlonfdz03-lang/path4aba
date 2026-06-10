@@ -15,6 +15,21 @@ export default function BCBAStudentsOnboarding() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const step2Options = certTrack === "BCaBA"
+    ? [
+        { value: "concentrated" as const, label: "Concentrated Supervised Fieldwork", desc: "1,000 hours · ≥10% supervision/month" },
+        { value: "supervised"   as const, label: "Supervised Fieldwork",              desc: "1,300 hours · ≥5% supervision/month"  },
+      ]
+    : [
+        { value: "concentrated" as const, label: "Concentrated Supervised Fieldwork", desc: "1,500 hours · ≥10% supervision/month" },
+        { value: "supervised"   as const, label: "Supervised Fieldwork",              desc: "2,000 hours · ≥5% supervision/month"  },
+      ];
+
+  function handleTrackChange(track: "BCBA" | "BCaBA") {
+    setCertTrack(track);
+    setFieldworkType(""); // reset when track changes
+  }
+
   async function handleFinish() {
     if (!certTrack || !fieldworkType) return;
     setSaving(true);
@@ -26,7 +41,7 @@ export default function BCBAStudentsOnboarding() {
     });
     const data = await res.json();
     if (!res.ok) { setError(data.error || "Something went wrong"); setSaving(false); return; }
-    router.push("/bcba-students");
+    router.push("/bcba-students/profile");
   }
 
   return (
@@ -66,7 +81,7 @@ export default function BCBAStudentsOnboarding() {
                       name="certTrack"
                       value={track}
                       checked={certTrack === track}
-                      onChange={() => setCertTrack(track)}
+                      onChange={() => handleTrackChange(track)}
                       className="accent-teal-500"
                     />
                     <span className="text-[14px] font-medium" style={{ color: "var(--text1)" }}>{track}</span>
@@ -90,46 +105,29 @@ export default function BCBAStudentsOnboarding() {
               <h2 className="text-[20px] font-semibold mb-2" style={{ color: "var(--text1)" }}>Which type of fieldwork?</h2>
               <p className="text-[13px] mb-6" style={{ color: "var(--text3)" }}>Choose the fieldwork category your supervisor approved.</p>
               <div className="space-y-3 mb-6">
-                <label
-                  className="flex items-start gap-3 p-4 rounded-xl cursor-pointer border transition-colors"
-                  style={{
-                    borderColor: fieldworkType === "concentrated" ? "var(--teal)" : "var(--border)",
-                    background: fieldworkType === "concentrated" ? "rgba(27,168,160,0.05)" : "white",
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="fieldworkType"
-                    value="concentrated"
-                    checked={fieldworkType === "concentrated"}
-                    onChange={() => setFieldworkType("concentrated")}
-                    className="accent-teal-500 mt-0.5 flex-shrink-0"
-                  />
-                  <div>
-                    <p className="text-[14px] font-medium" style={{ color: "var(--text1)" }}>Concentrated Supervised Fieldwork</p>
-                    <p className="text-[12px] mt-0.5" style={{ color: "var(--text3)" }}>1,500 hours · ≥10% supervision/month</p>
-                  </div>
-                </label>
-                <label
-                  className="flex items-start gap-3 p-4 rounded-xl cursor-pointer border transition-colors"
-                  style={{
-                    borderColor: fieldworkType === "supervised" ? "var(--teal)" : "var(--border)",
-                    background: fieldworkType === "supervised" ? "rgba(27,168,160,0.05)" : "white",
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="fieldworkType"
-                    value="supervised"
-                    checked={fieldworkType === "supervised"}
-                    onChange={() => setFieldworkType("supervised")}
-                    className="accent-teal-500 mt-0.5 flex-shrink-0"
-                  />
-                  <div>
-                    <p className="text-[14px] font-medium" style={{ color: "var(--text1)" }}>Supervised Fieldwork</p>
-                    <p className="text-[12px] mt-0.5" style={{ color: "var(--text3)" }}>2,000 hours · ≥5% supervision/month</p>
-                  </div>
-                </label>
+                {step2Options.map(opt => (
+                  <label
+                    key={opt.value}
+                    className="flex items-start gap-3 p-4 rounded-xl cursor-pointer border transition-colors"
+                    style={{
+                      borderColor: fieldworkType === opt.value ? "var(--teal)" : "var(--border)",
+                      background: fieldworkType === opt.value ? "rgba(27,168,160,0.05)" : "white",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="fieldworkType"
+                      value={opt.value}
+                      checked={fieldworkType === opt.value}
+                      onChange={() => setFieldworkType(opt.value)}
+                      className="accent-teal-500 mt-0.5 flex-shrink-0"
+                    />
+                    <div>
+                      <p className="text-[14px] font-medium" style={{ color: "var(--text1)" }}>{opt.label}</p>
+                      <p className="text-[12px] mt-0.5" style={{ color: "var(--text3)" }}>{opt.desc}</p>
+                    </div>
+                  </label>
+                ))}
               </div>
 
               {error && (

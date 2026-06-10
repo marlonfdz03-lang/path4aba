@@ -314,6 +314,15 @@ export default function BCBAStudentsDashboard() {
 
       <div className="px-8 py-7 w-full">
 
+        {/* ── Profile completion banner ── */}
+        {!profile?.supervisor_name && (
+          <div style={{ background: "#FEF3C7", border: "1px solid #F59E0B", borderRadius: 12, padding: "12px 20px", marginBottom: 24, display: "flex", alignItems: "center", gap: 12 }}>
+            <span>⚠️</span>
+            <span style={{ fontSize: 14, color: "#92400E" }}>Complete your trainee profile before generating monthly forms.</span>
+            <a href="/bcba-students/profile" style={{ marginLeft: "auto", color: "#D97706", fontWeight: 600, fontSize: 13 }}>Complete Profile →</a>
+          </div>
+        )}
+
         {/* ── Stat cards ── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <StatCard

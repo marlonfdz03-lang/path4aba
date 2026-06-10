@@ -118,6 +118,13 @@ const IconAward = () => (
   </svg>
 );
 
+const IconProfile = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+    <circle cx="12" cy="7" r="4"/>
+  </svg>
+);
+
 // ── Nav item ─────────────────────────────────────────────────────────────────
 
 function NavItem({
@@ -305,21 +312,8 @@ export default function Sidebar() {
                     <NavItem href="/bcba-students/monthly" label="Monthly View" icon={IconCalendar} active={isActive("/bcba-students/monthly")} expanded={expanded} />
                     <NavItem href="/bcba-students/documents" label="Documents" icon={IconFolder} active={isActive("/bcba-students/documents")} expanded={expanded} />
                     <NavItem href="/bcba-students/reports" label="Reports" icon={IconBarChart} active={isActive("/bcba-students/reports")} expanded={expanded} />
-                    <a
-                      href="https://www.bacb.com/bcba/fieldwork/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="BACB Requirements"
-                      className="flex items-center rounded-[6px] text-sm font-medium transition-colors"
-                      style={{ gap: expanded ? 10 : 0, padding: "9px 10px", justifyContent: expanded ? "flex-start" : "center", color: "rgba(255,255,255,0.65)" }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.08)"; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                    >
-                      <span className="flex-shrink-0"><IconAward /></span>
-                      <span style={{ opacity: expanded ? 1 : 0, maxWidth: expanded ? 160 : 0, overflow: "hidden", whiteSpace: "nowrap", transition: "opacity 0.15s, max-width 0.2s" }}>
-                        BACB Requirements
-                      </span>
-                    </a>
+                    <NavItem href="/bcba-students/bacb" label="BACB Requirements" icon={IconAward} active={isActive("/bcba-students/bacb")} expanded={expanded} />
+                    <NavItem href="/bcba-students/profile" label="Profile" icon={IconProfile} active={isActive("/bcba-students/profile")} expanded={expanded} />
                   </>
                 ) : (
                   <Link
@@ -473,19 +467,8 @@ export default function Sidebar() {
                         <NavItem href="/bcba-students/monthly" label="Monthly View" icon={IconCalendar} active={isActive("/bcba-students/monthly")} expanded={expanded} />
                         <NavItem href="/bcba-students/documents" label="Documents" icon={IconFolder} active={isActive("/bcba-students/documents")} expanded={expanded} />
                         <NavItem href="/bcba-students/reports" label="Reports" icon={IconBarChart} active={isActive("/bcba-students/reports")} expanded={expanded} />
-                        <a
-                          href="https://www.bacb.com/bcba/fieldwork/"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title="BACB Requirements"
-                          className="flex items-center rounded-[6px] text-sm font-medium transition-colors"
-                          style={{ gap: 10, padding: "9px 10px", color: "rgba(255,255,255,0.65)" }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.08)"; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                        >
-                          <span className="flex-shrink-0"><IconAward /></span>
-                          <span style={{ whiteSpace: "nowrap", overflow: "hidden" }}>BACB Requirements</span>
-                        </a>
+                        <NavItem href="/bcba-students/bacb" label="BACB Requirements" icon={IconAward} active={isActive("/bcba-students/bacb")} expanded={expanded} />
+                        <NavItem href="/bcba-students/profile" label="Profile" icon={IconProfile} active={isActive("/bcba-students/profile")} expanded={expanded} />
                       </div>
                     )}
                   </>
