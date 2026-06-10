@@ -65,13 +65,16 @@ export async function GET() {
       select: {
         created_at: true,
         session_date: true,
-        client: { select: { internal_code: true } },
+        client: { select: { internal_code: true, clinical_profile: true } },
       },
     })
 
     recentActivity = recent.map((n) => ({
       type: 'note' as const,
-      clientName: n.client?.internal_code || 'Unknown Client',
+      clientName:
+        (n.client?.clinical_profile as any)?.name ||
+        n.client?.internal_code ||
+        null,
       date: n.created_at ? n.created_at.toISOString() : new Date().toISOString(),
       sessionDate: n.session_date ?? null,
     }))

@@ -10,7 +10,7 @@ type StatsData = {
   notesThisWeek: number;
   recentActivity: Array<{
     type: "note";
-    clientName: string;
+    clientName: string | null;
     date: string;
     sessionDate: string | null;
   }>;
@@ -19,7 +19,7 @@ type StatsData = {
 // ── Icons ────────────────────────────────────────────────────────────────────
 
 const IconUsers = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
     <circle cx="9" cy="7" r="4"/>
     <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
@@ -28,7 +28,7 @@ const IconUsers = () => (
 );
 
 const IconFileText = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
     <polyline points="14 2 14 8 20 8"/>
     <line x1="16" y1="13" x2="8" y2="13"/>
@@ -38,7 +38,7 @@ const IconFileText = () => (
 );
 
 const IconBarChart = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="18" y1="20" x2="18" y2="10"/>
     <line x1="12" y1="20" x2="12" y2="4"/>
     <line x1="6" y1="20" x2="6" y2="14"/>
@@ -54,13 +54,22 @@ function getGreeting(hour: number): string {
 }
 
 function formatHeaderDate(): string {
-  const d = new Date();
-  return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  return new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 }
 
 function formatActivityDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
+
+// ── Card styles ───────────────────────────────────────────────────────────────
+
+const CARD: React.CSSProperties = {
+  background: "white",
+  borderRadius: 20,
+  border: "1px solid #E2E8F0",
+  boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+  padding: 28,
+};
 
 // ── Dashboard Page ────────────────────────────────────────────────────────────
 
@@ -81,89 +90,79 @@ export default function DashboardPage() {
   useEffect(() => {
     fetch("/api/dashboard/stats")
       .then((r) => r.json())
-      .then((d) => {
-        setStats(d);
-        setLoading(false);
-      })
+      .then((d) => { setStats(d); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
 
   return (
-    <main className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <div className="px-8 py-7 max-w-6xl mx-auto">
+    <main className="min-h-screen" style={{ background: "#F8FAFC" }}>
+      <style>{`
+        .qa-note { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+        .qa-note:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(15,98,254,0.3); }
+        .qa-monthly { transition: background 0.15s ease, color 0.15s ease; }
+        .qa-monthly:hover { background: #EFF6FF !important; }
+      `}</style>
+
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 40px" }}>
 
         {/* Header */}
-        <div className="mb-7">
-          <h1 className="text-[22px] font-semibold mb-1" style={{ color: "var(--text1)" }}>
+        <div className="mb-8">
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: "#0F172A", marginBottom: 4 }}>
             Good {greeting}, {name}
           </h1>
-          <p className="text-[14px] flex items-center gap-2" style={{ color: "var(--text3)" }}>
+          <p style={{ fontSize: 14, color: "#64748B" }}>
             Here&apos;s your overview for {formatHeaderDate()}
           </p>
         </div>
 
         {/* Stats row */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-3 gap-5 mb-6">
+
           {/* Active Clients */}
-          <div
-            className="bg-white rounded-xl p-5 flex items-center gap-4"
-            style={{ border: "1px solid var(--border)" }}
-          >
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-              style={{ background: "var(--teal-light)", color: "var(--teal)" }}
-            >
-              <IconUsers />
-            </div>
-            <div>
-              <p className="text-[22px] font-bold leading-none" style={{ color: "var(--text1)" }}>
-                {loading ? "—" : stats?.activeClients ?? 0}
-              </p>
-              <p className="text-[12px] mt-1" style={{ color: "var(--text3)" }}>Active Clients</p>
+          <div style={CARD}>
+            <div className="flex items-start gap-4">
+              <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", color: "#2563EB", flexShrink: 0 }}>
+                <IconUsers />
+              </div>
+              <div>
+                <p style={{ fontSize: 36, fontWeight: 700, color: "#0F172A", lineHeight: 1 }}>
+                  {loading ? "—" : stats?.activeClients ?? 0}
+                </p>
+                <p style={{ fontSize: 14, color: "#64748B", marginTop: 6 }}>Active Clients</p>
+              </div>
             </div>
           </div>
 
           {/* Notes This Week */}
-          <div
-            className="bg-white rounded-xl p-5 flex items-center gap-4"
-            style={{ border: "1px solid var(--border)" }}
-          >
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-              style={{ background: "var(--teal-light)", color: "var(--teal)" }}
-            >
-              <IconFileText />
-            </div>
-            <div>
-              <p className="text-[22px] font-bold leading-none" style={{ color: "var(--text1)" }}>
-                {loading ? "—" : stats?.notesThisWeek ?? 0}
-              </p>
-              <p className="text-[12px] mt-1" style={{ color: "var(--text3)" }}>Notes This Week</p>
+          <div style={CARD}>
+            <div className="flex items-start gap-4">
+              <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#F5F3FF", display: "flex", alignItems: "center", justifyContent: "center", color: "#7C3AED", flexShrink: 0 }}>
+                <IconFileText />
+              </div>
+              <div>
+                <p style={{ fontSize: 36, fontWeight: 700, color: "#0F172A", lineHeight: 1 }}>
+                  {loading ? "—" : stats?.notesThisWeek ?? 0}
+                </p>
+                <p style={{ fontSize: 14, color: "#64748B", marginTop: 6 }}>Notes This Week</p>
+              </div>
             </div>
           </div>
 
           {/* Data Collected */}
-          <div
-            className="bg-white rounded-xl p-5 flex items-center gap-4 relative overflow-hidden"
-            style={{ border: "1px solid var(--border)" }}
-          >
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-              style={{ background: "var(--teal-light)", color: "var(--teal)" }}
-            >
-              <IconBarChart />
-            </div>
-            <div>
-              <p className="text-[22px] font-bold leading-none" style={{ color: "var(--text1)" }}>
-                {isAdmin ? 0 : 0}
-              </p>
-              <p className="text-[12px] mt-1" style={{ color: "var(--text3)" }}>Data Collected</p>
+          <div style={{ ...CARD, position: "relative", overflow: "hidden" }}>
+            <div className="flex items-start gap-4">
+              <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#E0F2FE", display: "flex", alignItems: "center", justifyContent: "center", color: "#0284C7", flexShrink: 0 }}>
+                <IconBarChart />
+              </div>
+              <div>
+                <p style={{ fontSize: 36, fontWeight: 700, color: "#0F172A", lineHeight: 1 }}>
+                  {isAdmin ? 0 : 0}
+                </p>
+                <p style={{ fontSize: 14, color: "#64748B", marginTop: 6 }}>Data Collected</p>
+              </div>
             </div>
             {!isAdmin && (
-              <span
-                className="absolute top-2 right-2 text-[10px] font-semibold px-2 py-0.5 rounded-full text-white"
-                style={{ background: "var(--teal)" }}
-              >
+              <span style={{ position: "absolute", top: 14, right: 14, fontSize: 10, fontWeight: 700, background: "#0F62FE", color: "white", padding: "2px 8px", borderRadius: 99 }}>
                 Coming Soon
               </span>
             )}
@@ -171,34 +170,38 @@ export default function DashboardPage() {
         </div>
 
         {/* Two-column section */}
-        <div className="grid grid-cols-3 gap-6 mb-6">
+        <div className="grid grid-cols-3 gap-5 mb-6">
+
           {/* Recent Activity */}
-          <div
-            className="col-span-2 bg-white rounded-xl p-5"
-            style={{ border: "1px solid var(--border)" }}
-          >
-            <div className="mb-4">
-              <p className="text-[14px] font-semibold" style={{ color: "var(--text1)" }}>Recent Activity</p>
-              <p className="text-[12px]" style={{ color: "var(--text3)" }}>Last 7 days</p>
+          <div className="col-span-2" style={CARD}>
+            <div style={{ marginBottom: 20 }}>
+              <p style={{ fontSize: 18, fontWeight: 700, color: "#0F172A" }}>Recent Activity</p>
+              <p style={{ fontSize: 13, color: "#64748B", marginTop: 2 }}>Last 7 days</p>
             </div>
             {loading ? (
-              <p className="text-[13px]" style={{ color: "var(--text3)" }}>Loading…</p>
+              <p style={{ fontSize: 13, color: "#94A3B8" }}>Loading…</p>
             ) : !stats?.recentActivity?.length ? (
-              <p className="text-[13px]" style={{ color: "var(--text3)" }}>No activity yet</p>
+              <p style={{ fontSize: 13, color: "#94A3B8" }}>No activity yet</p>
             ) : (
-              <ul className="space-y-3">
+              <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
                 {stats.recentActivity.map((item, i) => (
-                  <li key={i} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ background: "var(--teal)" }}
-                      />
-                      <span className="text-[13px]" style={{ color: "var(--text1)" }}>
-                        Session note — {item.clientName}
+                  <li
+                    key={i}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "12px 0",
+                      borderBottom: i < stats.recentActivity.length - 1 ? "1px solid #F1F5F9" : "none",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#22C55E", flexShrink: 0, display: "inline-block" }} />
+                      <span style={{ fontSize: 14, color: "#0F172A", fontWeight: 500 }}>
+                        {item.clientName ? `Session note · ${item.clientName}` : "Session note"}
                       </span>
                     </div>
-                    <span className="text-[12px]" style={{ color: "var(--text3)" }}>
+                    <span style={{ fontSize: 12, color: "#94A3B8", flexShrink: 0 }}>
                       {formatActivityDate(item.date)}
                     </span>
                   </li>
@@ -207,40 +210,31 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Quick Actions — not shown for students */}
+          {/* Quick Actions */}
           {!isStudent && (
-            <div
-              className="col-span-1 bg-white rounded-xl p-5"
-              style={{ border: "1px solid var(--border)" }}
-            >
-              <p className="text-[14px] font-semibold mb-4" style={{ color: "var(--text1)" }}>Quick Actions</p>
-              <div className="space-y-2">
-                {/* New Note */}
+            <div className="col-span-1" style={CARD}>
+              <p style={{ fontSize: 18, fontWeight: 700, color: "#0F172A", marginBottom: 20 }}>Quick Actions</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <a
                   href={isBCBA ? "/bcba" : "/clients"}
-                  className="block w-full text-center rounded-xl py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
-                  style={{ background: "var(--teal)" }}
+                  className="qa-note"
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "12px 0", borderRadius: 12, background: "linear-gradient(135deg, #0F62FE, #1B5BE8)", color: "white", fontSize: 14, fontWeight: 600, textDecoration: "none" }}
                 >
-                  ✦ New Note
+                  📝 New Note
                 </a>
-
-                {/* Collect Data — disabled */}
                 <button
                   disabled
                   title="Coming Soon"
-                  className="block w-full text-center rounded-xl py-2.5 text-[13px] font-medium cursor-not-allowed opacity-50"
-                  style={{ border: "1px solid var(--border)", color: "var(--text3)" }}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "12px 0", borderRadius: 12, background: "#F1F5F9", color: "#64748B", fontSize: 14, fontWeight: 500, border: "none", cursor: "not-allowed", opacity: 0.7 }}
                 >
-                  Collect Data
+                  📊 Collect Data
                 </button>
-
-                {/* Monthly Report */}
                 <a
                   href={isBCBA ? "/bcba" : "/clients"}
-                  className="block w-full text-center rounded-xl py-2.5 text-[13px] font-semibold transition-opacity hover:opacity-80"
-                  style={{ border: "1px solid var(--teal)", color: "var(--teal)" }}
+                  className="qa-monthly"
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "12px 0", borderRadius: 12, background: "transparent", border: "1.5px solid #0F62FE", color: "#0F62FE", fontSize: 14, fontWeight: 600, textDecoration: "none" }}
                 >
-                  Monthly Report
+                  📄 Monthly Report
                 </a>
               </div>
             </div>
@@ -248,27 +242,31 @@ export default function DashboardPage() {
         </div>
 
         {/* Welcome banner */}
-        <div
-          className="bg-white rounded-xl p-8 flex items-center gap-8"
-          style={{ border: "1px solid var(--border)" }}
-        >
-          <img src="/logo.png" alt="Path4ABA" width={64} height={64} style={{ objectFit: "contain", flexShrink: 0 }} />
-          <div>
-            <h2 className="text-xl font-semibold" style={{ color: "var(--text1)" }}>
-              Welcome to Path4ABA
-            </h2>
-            <p className="text-sm mt-1" style={{ color: "var(--text3)" }}>
-              Streamline your ABA practice with AI-powered documentation, data collection, and reporting tools.
-            </p>
-            <a
-              href="https://path4aba.app"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block mt-4 px-5 py-2 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90"
-              style={{ background: "var(--teal)" }}
-            >
-              Learn More
-            </a>
+        <div style={{ background: "linear-gradient(135deg, #071A52 0%, #0F62FE 100%)", borderRadius: 20, padding: "32px 40px", position: "relative", overflow: "hidden" }}>
+          {/* Decorative circles */}
+          <div style={{ position: "absolute", width: 300, height: 300, borderRadius: "50%", background: "rgba(63,169,245,0.15)", filter: "blur(60px)", top: -80, right: -80, pointerEvents: "none" }} />
+          <div style={{ position: "absolute", width: 200, height: 200, borderRadius: "50%", background: "rgba(255,255,255,0.05)", filter: "blur(40px)", bottom: -40, left: 100, pointerEvents: "none" }} />
+
+          <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 28 }}>
+            <div style={{ width: 56, height: 56, borderRadius: 16, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <img src="/logo.png" alt="Path4ABA" width={32} height={32} style={{ objectFit: "contain" }} />
+            </div>
+            <div>
+              <h2 style={{ fontSize: 22, fontWeight: 700, color: "white", margin: 0, marginBottom: 6 }}>
+                Welcome to Path4ABA
+              </h2>
+              <p style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", margin: 0, maxWidth: 480 }}>
+                Streamline your ABA practice with AI-powered documentation, data collection, and reporting tools.
+              </p>
+              <a
+                href="https://path4aba.app"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ display: "inline-block", marginTop: 16, padding: "9px 22px", borderRadius: 12, background: "white", color: "#0F62FE", fontSize: 14, fontWeight: 600, textDecoration: "none" }}
+              >
+                Learn More
+              </a>
+            </div>
           </div>
         </div>
 
