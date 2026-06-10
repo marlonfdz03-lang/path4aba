@@ -9,6 +9,7 @@ import { useSession } from "next-auth/react";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
+import { BACB_RULES } from "@/lib/bcba-students/calculations";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -67,8 +68,6 @@ function fmtDate(dateStr: string) {
   return new Date(dateStr + "-01").toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
-const GOAL = 2000;
-const MILESTONES = [100, 250, 500, 1000, 2000];
 const DONUT_COLORS = ["var(--teal)", "var(--navy2)", "#60A5FA", "#A78BFA"];
 
 // ── Stat Card ─────────────────────────────────────────────────────────────────
@@ -187,6 +186,18 @@ export default function BCBAStudentsDashboard() {
       </main>
     );
   }
+
+  // ── Track-aware goal ────────────────────────────────────────────────────────
+
+  const certTrack = profile?.certification_track === "BCaBA" ? "BCaBA" : "BCBA";
+  const fwType    = profile?.fieldwork_type === "concentrated" ? "concentrated" : "supervised";
+  const trackRules = BACB_RULES[certTrack][fwType];
+  const GOAL = trackRules.totalHoursRequired;
+  const MILESTONES =
+    GOAL >= 2000 ? [100, 250, 500, 1000, 2000] :
+    GOAL >= 1500 ? [100, 250, 500, 1000, 1500] :
+    GOAL >= 1300 ? [100, 250, 500, 1000, 1300] :
+                   [100, 250, 500, 1000];
 
   // ── Aggregates ──────────────────────────────────────────────────────────────
 
