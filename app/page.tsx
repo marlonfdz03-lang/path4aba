@@ -28,14 +28,6 @@ function Check() {
   );
 }
 
-function HeartLogo({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="white" stroke="none">
-      <path d="M12 21.593c-5.63-5.539-11-10.297-11-14.402 0-3.791 3.068-5.191 5.281-5.191 1.312 0 4.151.501 5.719 4.457 1.59-3.968 4.464-4.447 5.726-4.447 2.54 0 5.274 1.621 5.274 5.181 0 4.069-5.136 8.625-11 14.402z" />
-    </svg>
-  );
-}
-
 // ── Navbar ────────────────────────────────────────────────────────────────────
 
 function Navbar() {
@@ -62,19 +54,7 @@ function Navbar() {
         }}
       >
         <a href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              background: "linear-gradient(135deg, #0F62FE, #1B5BE8)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <HeartLogo size={16} />
-          </div>
+          <img src="/logo.png" alt="Path4ABA" style={{ width: 36, height: 36, objectFit: "contain" }} />
           <span style={{ fontSize: 16, fontWeight: 700, color: "#0A1628" }}>
             Path<span style={{ color: "#2563EB" }}>4</span>ABA
           </span>
@@ -815,19 +795,7 @@ function Footer() {
         >
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-              <div
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 7,
-                  background: "linear-gradient(135deg, #0F62FE, #1B5BE8)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <HeartLogo size={13} />
-              </div>
+              <img src="/logo.png" alt="Path4ABA" style={{ width: 32, height: 32, objectFit: "contain" }} />
               <span style={{ fontSize: 15, fontWeight: 700, color: "white" }}>
                 Path<span style={{ color: "#60A5FA" }}>4</span>ABA
               </span>
