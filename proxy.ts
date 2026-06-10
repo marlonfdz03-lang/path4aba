@@ -7,7 +7,7 @@ const { auth } = NextAuth(authConfig)
 
 const PUBLIC_PATHS = ['/login', '/pricing', '/privacy', '/terms', '/reset-password']
 // Exact-match public paths that can't use startsWith (e.g. '/' would match everything).
-const PUBLIC_EXACT = ['/']
+const PUBLIC_EXACT = ['/', '/sitemap.xml', '/robots.txt', '/google4328f22bc1963f35.html']
 
 // Authenticated users with no active subscription may still access these paths.
 const SUB_EXEMPT_PATHS = [
@@ -21,6 +21,9 @@ const SUB_EXEMPT_PATHS = [
   '/admin',
   '/settings', // users must reach billing/settings even without a subscription
   '/bcba-students', // layout.tsx handles its own paywall — sub-gate doesn't cover bcba_students_status
+  '/sitemap.xml',
+  '/robots.txt',
+  '/google4328f22bc1963f35.html',
 ]
 
 // 30-second TTL cache for sub-gate results — avoids a DB round-trip on every page load.
