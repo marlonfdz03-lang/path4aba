@@ -57,51 +57,105 @@ function IconGoogle() {
 
 function BrandPanel({ mobile = false }: { mobile?: boolean }) {
   if (mobile) {
-    // Mobile: compact strip with navy background + logo
     return (
       <div
         className="flex items-center gap-3 px-6 py-5"
-        style={{ background: "var(--navy)" }}
+        style={{ background: "linear-gradient(135deg, #071A52 0%, #0F62FE 100%)" }}
       >
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-          style={{ background: "linear-gradient(135deg, var(--teal), var(--sky))" }}
-        >
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+          style={{ background: "rgba(255,255,255,0.15)" }}>
           <img src="/logo.png" alt="" width={18} height={18} style={{ objectFit: "contain" }} />
         </div>
-        <span className="text-[15px] font-bold text-white tracking-tight">
-          Path<span style={{ color: "var(--teal2)" }}>4</span>ABA
-        </span>
-        <p className="text-[12px] ml-1" style={{ color: "rgba(255,255,255,0.45)" }}>
-          · AI-powered ABA tools
-        </p>
+        <div>
+          <span className="text-[15px] font-bold text-white tracking-tight">Path4ABA</span>
+          <p className="text-[11px] mt-0.5" style={{ color: "rgba(255,255,255,0.55)" }}>
+            Documentation · Supervision · Fieldwork
+          </p>
+        </div>
       </div>
     );
   }
 
-  // Desktop: hero image with dark overlay + logo top-left
   return (
     <div
-      className="flex flex-col h-full"
-      style={{
-        backgroundImage: "url('/login-hero.png')",
-        backgroundSize: "cover",
-        backgroundPosition: "center center",
-        backgroundRepeat: "no-repeat",
-        overflow: "hidden",
-      }}
+      className="flex flex-col h-full px-12 py-10"
+      style={{ background: "linear-gradient(135deg, #071A52 0%, #0F62FE 100%)" }}
     >
-      {/* Logo — top-left over the image */}
-      <div className="flex items-center gap-3 p-8">
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-          style={{ background: "linear-gradient(135deg, var(--teal), var(--sky))" }}
-        >
+      {/* Logo */}
+      <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background: "rgba(255,255,255,0.15)" }}>
           <img src="/logo.png" alt="" width={22} height={22} style={{ objectFit: "contain" }} />
         </div>
-        <span className="text-[16px] font-bold text-white tracking-tight">
-          Path<span style={{ color: "var(--teal2)" }}>4</span>ABA
-        </span>
+        <span className="text-[17px] font-bold text-white tracking-tight">Path4ABA</span>
+      </div>
+
+      {/* Headline + mockup */}
+      <div className="flex-1 flex flex-col justify-center min-h-0">
+        <h1 className="text-[36px] font-bold leading-[1.2] mb-2 text-white">
+          Documentation.<br />
+          Supervision.<br />
+          Fieldwork.
+        </h1>
+        <p className="text-[20px] font-medium mb-10" style={{ color: "rgba(255,255,255,0.55)" }}>
+          All in one place.
+        </p>
+
+        {/* Mini dashboard mockup card */}
+        <div style={{ transform: "rotate(-3deg)", width: 280 }}>
+          <div
+            className="bg-white rounded-2xl p-5"
+            style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[12px] font-bold uppercase tracking-wide" style={{ color: "#071A52" }}>
+                Recent Activity
+              </p>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                style={{ background: "#EFF6FF", color: "#0F62FE" }}>Live</span>
+            </div>
+            <div className="space-y-3">
+              {[
+                { label: "Session note generated", name: "J. Martinez", time: "2m ago", dot: "#0F62FE" },
+                { label: "Fieldwork hours logged", name: "A. Chen", time: "14m ago", dot: "#3FA9F5" },
+                { label: "Progress report ready", name: "M. Torres", time: "1h ago", dot: "#10B981" },
+              ].map((item) => (
+                <div key={item.name} className="flex items-center gap-3">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: item.dot }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-semibold truncate" style={{ color: "#0F172A" }}>{item.label}</p>
+                    <p className="text-[10px]" style={{ color: "#94A3B8" }}>{item.name} · {item.time}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 pt-3 flex items-center gap-3" style={{ borderTop: "1px solid #F1F5F9" }}>
+              {[
+                { n: "12", label: "Sessions" },
+                { n: "4", label: "Clients" },
+                { n: "98%", label: "Compliance" },
+              ].map((s) => (
+                <div key={s.label} className="flex-1 text-center">
+                  <p className="text-[14px] font-bold" style={{ color: "#071A52" }}>{s.n}</p>
+                  <p className="text-[9px] uppercase tracking-wide" style={{ color: "#94A3B8" }}>{s.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Coming Soon strip */}
+      <div className="flex-shrink-0 flex items-center gap-2 flex-wrap pt-6"
+        style={{ borderTop: "1px solid rgba(255,255,255,0.12)" }}>
+        <span className="text-[10px] font-semibold uppercase tracking-widest mr-1"
+          style={{ color: "rgba(255,255,255,0.35)" }}>Coming Soon</span>
+        {["Chrome Extension", "Progress Reports", "Advanced Analytics"].map((pill) => (
+          <span key={pill} className="text-[11px] font-medium px-2.5 py-1 rounded-full"
+            style={{ background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.6)" }}>
+            {pill}
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -213,13 +267,13 @@ function LoginContent() {
   return (
     <div
       className="flex flex-col lg:flex-row"
-      style={{ fontFamily: "var(--font-dm-sans, sans-serif)", height: "100vh", overflow: "hidden", alignItems: "stretch" }}
+      style={{ fontFamily: "var(--font-dm-sans, sans-serif)", height: "100vh", overflow: "hidden" }}
     >
       {/* Right panel (form) — first in DOM = top on mobile */}
-      <div className="order-1 lg:order-2 bg-white p-8 lg:p-12"
-        style={{ flex: 1, height: "100vh", overflowY: "auto", display: "flex", alignItems: "center", justifyContent: "center" }}
+      <div className="order-1 lg:order-2 bg-white"
+        style={{ flex: "1 1 50%", height: "100vh", overflowY: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 32px" }}
       >
-        <div className="w-full max-w-[400px]">
+        <div className="w-full max-w-[420px]">
 
           {/* Heading */}
           <div className="mb-8">
@@ -465,15 +519,14 @@ function LoginContent() {
       </div>
 
       {/* Left panel (branding) — second in DOM = bottom on mobile */}
-      <div className="order-2 lg:order-1 hidden lg:block"
-        style={{ width: 600, minWidth: 600, height: "100vh", flexShrink: 0 }}
+      <div className="order-2 lg:order-1 lg:block hidden"
+        style={{ flex: "0 0 50%", width: "50%", height: "100vh", overflow: "hidden" }}
       >
-        <div className="flex flex-col h-full">
-          <BrandPanel />
-        </div>
-        <div className="lg:hidden">
-          <BrandPanel mobile />
-        </div>
+        <BrandPanel />
+      </div>
+      {/* Mobile branding strip */}
+      <div className="order-2 lg:hidden">
+        <BrandPanel mobile />
       </div>
 
     </div>
