@@ -111,7 +111,7 @@ function BrandPanel({ mobile = false }: { mobile?: boolean }) {
       <div className="pointer-events-none" style={{ position:"absolute", width:250, height:250, borderRadius:"50%", background:"rgba(99,179,255,0.1)", filter:"blur(50px)", bottom:100, right:50 }} />
 
       {/* Content */}
-      <div className="relative z-10 flex flex-col h-full px-12 py-10">
+      <div className="relative z-10 flex flex-col h-full px-12 py-10" style={{ justifyContent: "flex-start" }}>
 
         {/* Logo */}
         <div className="flex items-center gap-3 flex-shrink-0">
@@ -135,12 +135,11 @@ function BrandPanel({ mobile = false }: { mobile?: boolean }) {
         </div>
 
         {/* Floating cards */}
-        <div className="flex-1 flex flex-col justify-center min-h-0 mt-8">
-          <div style={{ position: "relative", height: 300 }}>
+        <div style={{ position: "relative", marginTop: 40, height: 320 }}>
 
             {/* Card 3 — Chrome Extension (back) */}
             <div style={{
-              position: "absolute", bottom: 0, left: 10, right: -10, zIndex: 1,
+              position: "absolute", top: 100, left: 16, right: 30, zIndex: 1,
               animation: "float3 5s ease-in-out infinite",
               background: "rgba(7,26,82,0.9)", borderRadius: 16, padding: 20,
               border: "1px solid rgba(255,255,255,0.15)",
@@ -164,7 +163,7 @@ function BrandPanel({ mobile = false }: { mobile?: boolean }) {
 
             {/* Card 2 — Fieldwork Progress (middle) */}
             <div style={{
-              position: "absolute", top: 60, left: -10, right: 20, zIndex: 2,
+              position: "absolute", top: 50, left: 40, right: 10, zIndex: 2,
               animation: "float2 4.5s ease-in-out infinite",
               background: "rgba(255,255,255,0.92)", borderRadius: 16, padding: 20,
               borderTop: "3px solid #3FA9F5",
@@ -186,7 +185,7 @@ function BrandPanel({ mobile = false }: { mobile?: boolean }) {
 
             {/* Card 1 — Recent Activity (front) */}
             <div style={{
-              position: "absolute", top: 0, left: 0, right: 0, zIndex: 3,
+              position: "absolute", top: 0, left: 24, right: 24, zIndex: 3,
               animation: "float1 4s ease-in-out infinite",
               background: "rgba(255,255,255,0.95)", borderRadius: 16, padding: 20,
               borderTop: "3px solid #0F62FE",
@@ -229,20 +228,24 @@ function BrandPanel({ mobile = false }: { mobile?: boolean }) {
               </div>
             </div>
 
-          </div>
         </div>
 
-        {/* Coming Soon strip */}
-        <div className="flex-shrink-0 flex items-center gap-2 flex-wrap pt-5 mt-4"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-          <span className="text-[10px] font-semibold uppercase tracking-widest mr-1"
-            style={{ color: "rgba(255,255,255,0.3)" }}>Coming Soon</span>
-          {["Chrome Extension", "Progress Reports", "Advanced Analytics"].map((pill) => (
-            <span key={pill} className="text-[11px] font-medium px-2.5 py-1 rounded-full"
-              style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.55)" }}>
-              {pill}
-            </span>
-          ))}
+        {/* HIPAA badge */}
+        <div style={{
+          marginTop: "auto",
+          padding: "12px 20px",
+          background: "rgba(255,255,255,0.08)",
+          border: "1px solid rgba(255,255,255,0.15)",
+          borderRadius: 12,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          color: "rgba(255,255,255,0.85)",
+          fontSize: 13,
+          fontWeight: 500,
+        }}>
+          <span style={{ fontSize: 18 }}>🔒</span>
+          HIPAA Compliant · Your data is encrypted and secure
         </div>
 
       </div>
