@@ -21,20 +21,20 @@ export async function POST(req: NextRequest) {
     if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     if (!clientName) return NextResponse.json({ error: 'Client name is required.' }, { status: 400 })
 
-    // Check client limit based on subscription
-    const existingClients = await prisma.clients.count({ where: { rbt_id: user.id } })
-    const sub = await prisma.subscriptions.findFirst({
-      where: { user_id: user.id },
-      select: { plan: true },
-    })
-
-    // Plan keys match lib/stripe.ts PLAN_LIMITS: rbt_1 = 1 client, rbt_2 = 2 clients
-    const planLimits: Record<string, number> = { rbt_1: 1, rbt_2: 2 }
-    const limit = planLimits[sub?.plan || ''] ?? 1
-    if (existingClients >= limit) {
-      return NextResponse.json({
-        error: `Your plan allows ${limit} client${limit === 1 ? '' : 's'}. Upgrade to add more.`,
-      }, { status: 409 })
+    // Check client limit based on subscription (skipped for admin)
+    if (user.email !== 'marlonfdz03@gmail.com') {
+      const existingClients = await prisma.clients.count({ where: { rbt_id: user.id } })
+      const sub = await prisma.subscriptions.findFirst({
+        where: { user_id: user.id },
+        select: { plan: true },
+      })
+      const planLimits: Record<string, number> = { rbt_1: 1, rbt_2: 2 }
+      const limit = planLimits[sub?.plan || ''] ?? 1
+      if (existingClients >= limit) {
+        return NextResponse.json({
+          error: `Your plan allows ${limit} client${limit === 1 ? '' : 's'}. Upgrade to add more.`,
+        }, { status: 409 })
+      }
     }
 
     // Parse PDF — same pdf2json pipeline as extract-assessment

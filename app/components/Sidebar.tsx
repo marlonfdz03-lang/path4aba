@@ -202,6 +202,7 @@ export default function Sidebar() {
   const role = (user?.profession || "").toLowerCase();
   const isBCBA = ["bcba", "bcaba"].includes(role);
   const isStudentOnly = ["bcba_student", "bcaba_student"].includes(role);
+  const isOwner = session?.user?.email === "marlonfdz03@gmail.com";
 
   if (["/login", "/pricing", "/onboarding", "/privacy", "/terms", "/admin"].some(p => pathname === p || pathname.startsWith(p + "/"))) return null;
 
@@ -278,7 +279,42 @@ export default function Sidebar() {
 
       {/* Nav */}
       <div className="flex-1 overflow-y-auto px-[10px] py-3 space-y-5">
-        {isStudentOnly ? (
+        {isOwner ? (
+          // ── Owner (marlonfdz03@gmail.com) — full access, all features unlocked ──
+          <>
+            <div>
+              {sectionHeader("Workspace")}
+              <div className="space-y-0.5">
+                <NavItem href="/dashboard" label="Dashboard" icon={IconDashboard} active={isActive("/dashboard")} expanded={expanded} />
+                <NavItem href="/bcba" label="Clients" icon={IconUsers} active={isActive("/bcba")} expanded={expanded} />
+                <NavItem href="/schedule" label="Schedule" icon={IconCalendar} active={isActive("/schedule")} expanded={expanded} />
+                <NavItem href="/bcba-students" label="Fieldwork Tracker" icon={IconGraduationCap} active={isActive("/bcba-students")} expanded={expanded} />
+                <a
+                  href="/settings?tab=extension"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Chrome Extension"
+                  className="flex items-center rounded-[6px] text-sm font-medium transition-colors"
+                  style={{ gap: expanded ? 10 : 0, padding: "9px 10px", justifyContent: expanded ? "flex-start" : "center", color: "rgba(255,255,255,0.65)" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.08)"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                >
+                  <span className="flex-shrink-0"><IconChrome /></span>
+                  <span style={{ opacity: expanded ? 1 : 0, maxWidth: expanded ? 160 : 0, overflow: "hidden", whiteSpace: "nowrap", transition: "opacity 0.15s, max-width 0.2s" }}>
+                    Chrome Extension
+                  </span>
+                </a>
+              </div>
+            </div>
+            <div>
+              {sectionHeader("Account")}
+              <div className="space-y-0.5">
+                <NavItem href="/settings" label="Settings" icon={IconSettings} active={isActive("/settings")} expanded={expanded} />
+                <NavItem href="/help" label="Help" icon={IconHelp} active={isActive("/help")} expanded={expanded} />
+              </div>
+            </div>
+          </>
+        ) : isStudentOnly ? (
           // ── BCBA Student / BCaBA Student ─────────────────────────────────
           <>
             <div>

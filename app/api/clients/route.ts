@@ -29,6 +29,7 @@ export async function POST(req: Request) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const userId = (session.user as any).id as string
+  const userEmail = session.user.email
 
   const body = await req.json()
   const { id, clientName, clinicalProfile } = body
@@ -37,7 +38,7 @@ export async function POST(req: Request) {
   // Check if this is a new client (upsert create path) — skip limit check for updates
   const existingClient = await prisma.clients.findUnique({ where: { id }, select: { id: true } })
 
-  if (!existingClient) {
+  if (!existingClient && userEmail !== 'marlonfdz03@gmail.com') {
     const sub = await prisma.subscriptions.findFirst({
       where: { user_id: userId },
       select: { plan: true, status: true, trial_ends_at: true, current_period_ends_at: true },
