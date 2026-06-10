@@ -229,7 +229,7 @@ function Hero() {
             gap: 10,
           }}
         >
-          {["20+ Notes Generated", "HIPAA Compliant", "Built for ABA"].map((s) => (
+          {["100+ Notes Generated", "HIPAA Compliant", "Built for ABA"].map((s) => (
             <span
               key={s}
               style={{
@@ -671,6 +671,13 @@ function Testimonials() {
       quote:
         "Path4ABA makes it easy to stay BACB compliant. The hour tracking and monthly summaries save me so much time every month.",
       author: "Pedro G.",
+      role: "BCBA Student",
+      location: "South Florida",
+    },
+    {
+      quote:
+        "Path4ABA keeps me organized and on track with my BACB requirements. The fieldwork tracker is incredibly easy to use and saves me time every week.",
+      author: "Alberto C.",
       role: "BCBA Student",
       location: "South Florida",
     },
