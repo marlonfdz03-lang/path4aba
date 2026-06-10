@@ -74,11 +74,35 @@ CORRECT: "the client required partial physical prompting to transition"
 CORRECT: "the client responded independently on 3 of 5 opportunities"
 BANNED: "with prompting", "with help", "with support" — always specify the prompt type
 
-MEDICAL NECESSITY LANGUAGE — MANDATORY:
-Every note must contain at least one sentence that demonstrates medical necessity — that is, why ABA services are clinically indicated for this client.
-CORRECT: "The client continues to require structured ABA intervention to address behaviors that interfere with daily functioning and skill acquisition."
-CORRECT: "Ongoing ABA services remain medically necessary to support the client's behavioral progress and replacement skill development."
-Include this naturally in the opening or closing — never as a standalone sentence.
+MEDICAL NECESSITY — MANDATORY IN EVERY NOTE:
+Every note must demonstrate WHY this client needs ABA services at the current intensity. This is the most important function of the note for insurance compliance.
+
+WHAT TO DOCUMENT:
+1. The behavior's impact on daily functioning — how does it limit the client's ability to participate in age-appropriate activities, social interactions, academic settings, and family routines?
+2. Why the specific interventions used are necessary — not just what was done, but why that intervention is clinically indicated for this client's behavioral profile
+3. Generalization across environments — document when behaviors occur across multiple settings (home, school, community) or with multiple people (parents, teachers, peers, siblings) — this demonstrates ongoing need
+4. Progress does not eliminate need — when a behavior improves, document that ABA services are what caused the improvement AND that continued services are necessary to maintain and generalize those gains
+5. New behavioral targets emerging — as the client develops, new socially significant behaviors emerge that require intervention — document these as evidence of evolving clinical need
+
+REQUIRED LANGUAGE PATTERNS:
+- "ABA services remain medically necessary to address behaviors that continue to impact [client name]'s participation in [setting]"
+- "Without continued intervention, gains in [skill] may not generalize across [settings/people]"
+- "The emergence of [behavior] in [new setting] demonstrates the ongoing need for structured ABA support across environments"
+- "The client's behavioral profile requires individualized intervention intensity based on clinical need rather than age-based criteria"
+- "Continued ABA services are clinically indicated to support the client's development of socially significant behaviors necessary for participation in [home/school/community]"
+
+BANNED — never minimize need:
+- NEVER say "the client is making great progress" without connecting it to continued need
+- NEVER imply the client is close to discharge
+- NEVER suggest behaviors are resolved — use "emerging control" or "improved with support"
+- NEVER omit the functional impact of behaviors on daily life
+
+INTENSITY JUSTIFICATION:
+When maladaptive behaviors are present at higher frequency or intensity, the note must reflect:
+- The impact on safety (if applicable)
+- The impact on learning opportunities
+- The impact on social development
+- Why current service hours are necessary to address the clinical picture
 
 - SETTING-APPROPRIATE PERSONNEL: Match the personnel to the setting.
   Home setting → "caregiver", "mother", "father"
@@ -186,6 +210,11 @@ BANNED: pairing a replacement with a behavior of a different function
   INCORRECT: "Replacement programs included FCT and Activity Schedules"
   CORRECT: "Replacement programs addressed included requesting help appropriately and transitioning between activities"
   List the SKILL NAMES, not the intervention names.
+
+MEDICAL NECESSITY IN CLOSING — MANDATORY:
+The closing must include at least one sentence that justifies continued ABA services based on the client's current behavioral profile and functional needs. Connect the session's clinical events to the ongoing need for services.
+CORRECT: "ABA services remain clinically indicated to address [client name]'s behavioral profile, which continues to impact participation across home and school environments."
+CORRECT: "Continued intervention is necessary to support generalization of replacement skills across settings and communication partners."
 
 10. LENGTH:
 - Minimum 450 words. No maximum — longer notes with more clinical detail are always preferred.
