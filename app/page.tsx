@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   description:
     "Generate session notes, manage clients, and track fieldwork hours. Built for RBTs, BCBAs and ABA Students. HIPAA compliant. Start free for 7 days.",
   keywords:
-    "ABA therapy software, RBT session notes, BCBA documentation, fieldwork tracker, ABA student hours",
+    "ABA therapy software, RBT session notes, BCBA documentation, fieldwork tracker, ABA student hours, BACB compliant",
 };
 
 // ── Shared ────────────────────────────────────────────────────────────────────
@@ -123,9 +123,16 @@ function Hero() {
       style={{
         background: "linear-gradient(135deg, #040D21 0%, #071A52 50%, #0F3496 100%)",
         padding: "88px 24px 108px",
+        position: "relative",
+        overflow: "hidden",
       }}
     >
-      <div style={{ maxWidth: 800, margin: "0 auto", textAlign: "center" }}>
+      {/* Decorative glow circles */}
+      <div style={{ position: "absolute", width: 600, height: 600, borderRadius: "50%", background: "rgba(37,99,235,0.18)", filter: "blur(100px)", top: -200, right: -200, pointerEvents: "none" }} />
+      <div style={{ position: "absolute", width: 400, height: 400, borderRadius: "50%", background: "rgba(96,165,250,0.12)", filter: "blur(80px)", bottom: -100, left: -100, pointerEvents: "none" }} />
+      <div style={{ position: "absolute", width: 300, height: 300, borderRadius: "50%", background: "rgba(15,98,254,0.15)", filter: "blur(60px)", top: "40%", left: "50%", transform: "translate(-50%,-50%)", pointerEvents: "none" }} />
+
+      <div style={{ maxWidth: 800, margin: "0 auto", textAlign: "center", position: "relative", zIndex: 1 }}>
         <div
           style={{
             display: "inline-flex",
@@ -641,21 +648,37 @@ function Testimonials() {
   const testimonials = [
     {
       quote:
-        "Path4ABA has completely changed how I document sessions. What used to take me 30 minutes now takes less than 2.",
-      author: "Registered Behavior Technician",
+        "Path4ABA has completely transformed how I write session notes. What used to take me 30 minutes now takes 2. The AI knows ABA terminology and the notes are always clinical quality.",
+      author: "Jennifer Q.",
+      role: "RBT",
       location: "South Florida",
     },
     {
       quote:
-        "The fieldwork tracker keeps me on top of my BACB hours. I always know exactly where I stand for certification.",
-      author: "BCBA Student",
-      location: "Florida",
+        "I love how easy it is to manage my clients and generate notes directly from Office Puzzle. Everything is in one place and it just works.",
+      author: "Yuneisy M.",
+      role: "RBT",
+      location: "South Florida",
+    },
+    {
+      quote:
+        "The fieldwork tracker keeps me on top of my BACB hours. I always know exactly where I stand and what I need to complete my certification.",
+      author: "Jennifer Q.",
+      role: "BCBA Student",
+      location: "South Florida",
+    },
+    {
+      quote:
+        "Path4ABA makes it easy to stay BACB compliant. The hour tracking and monthly summaries save me so much time every month.",
+      author: "Pedro G.",
+      role: "BCBA Student",
+      location: "South Florida",
     },
   ];
 
   return (
     <section style={{ background: "white", padding: "80px 24px" }}>
-      <div style={{ maxWidth: 896, margin: "0 auto" }}>
+      <div style={{ maxWidth: 1152, margin: "0 auto" }}>
         <div style={{ textAlign: "center", marginBottom: 48 }}>
           <p
             style={{
@@ -677,7 +700,7 @@ function Testimonials() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
             gap: 24,
           }}
         >
@@ -686,28 +709,34 @@ function Testimonials() {
               key={i}
               style={{
                 borderRadius: 20,
-                padding: 32,
+                padding: 28,
                 background: "linear-gradient(135deg, #EFF6FF 0%, #F0F7FF 100%)",
                 border: "1px solid #DBEAFE",
+                display: "flex",
+                flexDirection: "column",
               }}
             >
               <div
                 style={{
-                  fontSize: 40,
+                  fontSize: 36,
                   lineHeight: 1,
                   color: "#2563EB",
-                  marginBottom: 16,
+                  marginBottom: 12,
                   fontFamily: "Georgia, serif",
                 }}
               >
                 &ldquo;
               </div>
-              <p style={{ fontSize: 15, lineHeight: 1.7, color: "#4A5568", fontStyle: "italic", marginBottom: 24 }}>
+              <p style={{ fontSize: 14, lineHeight: 1.75, color: "#4A5568", fontStyle: "italic", marginBottom: 20, flex: 1 }}>
                 {t.quote}
               </p>
               <div>
-                <p style={{ fontSize: 13, fontWeight: 700, color: "#0A1628" }}>{t.author}</p>
-                <p style={{ fontSize: 12, color: "#718096" }}>{t.location}</p>
+                <p style={{ fontSize: 13, fontWeight: 700, color: "#0A1628" }}>
+                  {t.author}
+                </p>
+                <p style={{ fontSize: 12, color: "#718096" }}>
+                  {t.role} &middot; {t.location}
+                </p>
               </div>
             </div>
           ))}
@@ -800,7 +829,7 @@ function Footer() {
               Clinical Intelligence for ABA Professionals
             </p>
             <p style={{ fontSize: 12, color: "rgba(255,255,255,0.25)" }}>
-              © 2026 Marlon FM Services Corp
+              © 2026 Marlon FM Services Corp · Sunrise, FL
             </p>
           </div>
 
@@ -808,7 +837,7 @@ function Footer() {
             {[
               { label: "Privacy Policy", href: "/privacy" },
               { label: "Terms of Service", href: "/terms" },
-              { label: "support@path4aba.com", href: "mailto:support@path4aba.com" },
+              { label: "support@path4abaapp.com", href: "mailto:support@path4abaapp.com" },
             ].map((link) => (
               <a
                 key={link.label}
@@ -834,7 +863,7 @@ function Footer() {
             >
               🔒 HIPAA Compliant
             </span>
-            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>Built in Florida 🌴</span>
+            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>HIPAA Compliant · Built in Florida 🌴</span>
           </div>
         </div>
       </div>

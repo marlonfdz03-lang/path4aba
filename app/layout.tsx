@@ -15,6 +15,8 @@ export const metadata: Metadata = {
   title: "Path4ABA — AI-Powered Clinical Documentation for ABA Professionals",
   description:
     "Generate session notes, manage clients, and track fieldwork hours. Built for RBTs, BCBAs and ABA Students. HIPAA compliant. Start free for 7 days.",
+  keywords:
+    "ABA therapy software, RBT session notes, BCBA documentation, fieldwork tracker, ABA student hours, BACB compliant",
   icons: {
     icon: "/logo.png",
     apple: "/logo.png",
