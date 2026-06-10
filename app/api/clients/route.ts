@@ -21,7 +21,9 @@ export async function GET() {
     orderBy: { created_at: 'desc' },
   })
 
-  return NextResponse.json(clients)
+  return NextResponse.json(clients, {
+    headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' },
+  })
 }
 
 export async function POST(req: Request) {

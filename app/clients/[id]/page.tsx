@@ -296,8 +296,28 @@ export default function ClientProfilePage() {
 
   if (clientLoading) {
     return (
-      <main className="min-h-screen p-10" style={{ background: "var(--bg)" }}>
-        <p className="text-[13px]" style={{ color: "var(--text3)" }}>Loading…</p>
+      <main className="min-h-screen" style={{ background: "var(--bg)", padding: "32px 40px" }}>
+        <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
+        {/* Skeleton header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 32 }}>
+          <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#E2E8F0", animation: "pulse 1.5s ease-in-out infinite" }} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ width: 180, height: 20, borderRadius: 6, background: "#E2E8F0", animation: "pulse 1.5s ease-in-out infinite" }} />
+            <div style={{ width: 120, height: 14, borderRadius: 6, background: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
+          </div>
+        </div>
+        {/* Skeleton tabs */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 28 }}>
+          {[80, 100, 70, 60, 60].map((w, i) => (
+            <div key={i} style={{ width: w, height: 34, borderRadius: 99, background: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
+          ))}
+        </div>
+        {/* Skeleton content block */}
+        <div style={{ background: "white", borderRadius: 12, border: "1px solid #E2E8F0", padding: 28 }}>
+          {[200, 160, 220, 140].map((w, i) => (
+            <div key={i} style={{ width: w, height: 14, borderRadius: 6, background: "#F1F5F9", marginBottom: 16, animation: "pulse 1.5s ease-in-out infinite" }} />
+          ))}
+        </div>
       </main>
     );
   }

@@ -80,5 +80,7 @@ export async function GET() {
     }))
   }
 
-  return NextResponse.json({ activeClients, notesThisWeek, recentActivity })
+  return NextResponse.json({ activeClients, notesThisWeek, recentActivity }, {
+    headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' },
+  })
 }

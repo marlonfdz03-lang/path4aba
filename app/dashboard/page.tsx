@@ -101,6 +101,7 @@ export default function DashboardPage() {
         .qa-note:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(15,98,254,0.3); }
         .qa-monthly { transition: background 0.15s ease, color 0.15s ease; }
         .qa-monthly:hover { background: #EFF6FF !important; }
+        @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .5 } }
       `}</style>
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 40px" }}>
@@ -125,9 +126,11 @@ export default function DashboardPage() {
                 <IconUsers />
               </div>
               <div>
-                <p style={{ fontSize: 36, fontWeight: 700, color: "#0F172A", lineHeight: 1 }}>
-                  {loading ? "—" : stats?.activeClients ?? 0}
-                </p>
+                {loading ? (
+                  <div style={{ width: 60, height: 36, borderRadius: 8, background: "#E2E8F0", animation: "pulse 1.5s ease-in-out infinite" }} />
+                ) : (
+                  <p style={{ fontSize: 36, fontWeight: 700, color: "#0F172A", lineHeight: 1 }}>{stats?.activeClients ?? 0}</p>
+                )}
                 <p style={{ fontSize: 14, color: "#64748B", marginTop: 6 }}>Active Clients</p>
               </div>
             </div>
@@ -140,9 +143,11 @@ export default function DashboardPage() {
                 <IconFileText />
               </div>
               <div>
-                <p style={{ fontSize: 36, fontWeight: 700, color: "#0F172A", lineHeight: 1 }}>
-                  {loading ? "—" : stats?.notesThisWeek ?? 0}
-                </p>
+                {loading ? (
+                  <div style={{ width: 60, height: 36, borderRadius: 8, background: "#E2E8F0", animation: "pulse 1.5s ease-in-out infinite" }} />
+                ) : (
+                  <p style={{ fontSize: 36, fontWeight: 700, color: "#0F172A", lineHeight: 1 }}>{stats?.notesThisWeek ?? 0}</p>
+                )}
                 <p style={{ fontSize: 14, color: "#64748B", marginTop: 6 }}>Notes This Week</p>
               </div>
             </div>
@@ -179,7 +184,11 @@ export default function DashboardPage() {
               <p style={{ fontSize: 13, color: "#64748B", marginTop: 2 }}>Last 7 days</p>
             </div>
             {loading ? (
-              <p style={{ fontSize: 13, color: "#94A3B8" }}>Loading…</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {[1, 2, 3].map(i => (
+                  <div key={i} style={{ height: 18, borderRadius: 6, background: "#F1F5F9", animation: "pulse 1.5s ease-in-out infinite" }} />
+                ))}
+              </div>
             ) : !stats?.recentActivity?.length ? (
               <p style={{ fontSize: 13, color: "#94A3B8" }}>No activity yet</p>
             ) : (

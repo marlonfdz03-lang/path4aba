@@ -320,9 +320,14 @@ export default function ClientsPage() {
 
         {/* Content */}
         {!loaded ? (
-          <p className="text-[13px]" style={{ color: "var(--text3)" }}>
-            Loading clients…
-          </p>
+          <>
+            <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}>
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} style={{ background: "#F1F5F9", borderRadius: 10, height: 220, animation: "pulse 1.5s ease-in-out infinite" }} />
+              ))}
+            </div>
+          </>
         ) : filtered.length === 0 ? (
           <div
             className="bg-white rounded-[10px] border p-10 text-center"
