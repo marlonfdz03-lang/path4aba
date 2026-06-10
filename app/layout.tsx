@@ -12,8 +12,9 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Path4ABA",
-  description: "Clinical Intelligence for ABA",
+  title: "Path4ABA — AI-Powered Clinical Documentation for ABA Professionals",
+  description:
+    "Generate session notes, manage clients, and track fieldwork hours. Built for RBTs, BCBAs and ABA Students. HIPAA compliant. Start free for 7 days.",
   icons: {
     icon: "/logo.png",
     apple: "/logo.png",

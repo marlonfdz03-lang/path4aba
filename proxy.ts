@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from 'next/server'
 const { auth } = NextAuth(authConfig)
 
 const PUBLIC_PATHS = ['/login', '/pricing', '/privacy', '/terms', '/reset-password']
+// Exact-match public paths that can't use startsWith (e.g. '/' would match everything).
+const PUBLIC_EXACT = ['/']
 
 // Authenticated users with no active subscription may still access these paths.
 const SUB_EXEMPT_PATHS = [
@@ -57,7 +59,9 @@ export const proxy = auth(async function proxy(req: NextRequest & { auth: any })
 
   // ── Page routes ───────────────────────────────────────────────────────────
   const isLoggedIn = !!req.auth
-  const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p))
+  const isPublic =
+    PUBLIC_EXACT.includes(pathname) ||
+    PUBLIC_PATHS.some((p) => pathname.startsWith(p))
 
   if (isLoggedIn) {
     const earlyRole: string = (req.auth as any)?.user?.role || ''

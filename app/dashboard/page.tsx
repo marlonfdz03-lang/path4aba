@@ -268,9 +268,7 @@ export default function DashboardPage() {
                 Streamline your ABA practice with AI-powered documentation, data collection, and reporting tools.
               </p>
               <a
-                href="https://path4aba.app"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/"
                 style={{ display: "inline-block", marginTop: 16, padding: "9px 22px", borderRadius: 12, background: "white", color: "#0F62FE", fontSize: 14, fontWeight: 600, textDecoration: "none" }}
               >
                 Learn More
