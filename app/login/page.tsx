@@ -111,7 +111,7 @@ function BrandPanel({ mobile = false }: { mobile?: boolean }) {
       <div className="pointer-events-none" style={{ position:"absolute", width:250, height:250, borderRadius:"50%", background:"rgba(99,179,255,0.1)", filter:"blur(50px)", bottom:100, right:50 }} />
 
       {/* Content */}
-      <div className="relative z-10 flex flex-col h-full px-12 py-10" style={{ justifyContent: "flex-start" }}>
+      <div className="relative z-10 flex flex-col h-full px-12 py-10" style={{ justifyContent: "space-between", paddingBottom: 32 }}>
 
         {/* Logo */}
         <div className="flex items-center gap-3 flex-shrink-0">
@@ -135,11 +135,11 @@ function BrandPanel({ mobile = false }: { mobile?: boolean }) {
         </div>
 
         {/* Floating cards */}
-        <div style={{ position: "relative", marginTop: 40, height: 320 }}>
+        <div style={{ position: "relative", marginTop: 40, height: 380 }}>
 
             {/* Card 3 — Chrome Extension (back) */}
             <div style={{
-              position: "absolute", top: 100, left: 16, right: 30, zIndex: 1,
+              position: "absolute", top: 80, left: 16, right: 30, zIndex: 1,
               animation: "float3 5s ease-in-out infinite",
               background: "rgba(7,26,82,0.9)", borderRadius: 16, padding: 20,
               border: "1px solid rgba(255,255,255,0.15)",
@@ -163,7 +163,7 @@ function BrandPanel({ mobile = false }: { mobile?: boolean }) {
 
             {/* Card 2 — Fieldwork Progress (middle) */}
             <div style={{
-              position: "absolute", top: 50, left: 40, right: 10, zIndex: 2,
+              position: "absolute", top: 40, left: 30, right: 10, zIndex: 2,
               animation: "float2 4.5s ease-in-out infinite",
               background: "rgba(255,255,255,0.92)", borderRadius: 16, padding: 20,
               borderTop: "3px solid #3FA9F5",
