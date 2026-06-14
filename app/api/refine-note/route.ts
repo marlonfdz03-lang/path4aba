@@ -22,7 +22,7 @@ function calculateSimilarity(text1: string, text2: string): number {
 
 export async function POST(req: NextRequest) {
   try {
-    const { originalNote, clientProfile, clientId } = await req.json();
+    const { originalNote, clientProfile, clientId, nextAppointmentDate, clinicalEvents } = await req.json();
 
     if (!originalNote || originalNote.trim().length < 50) {
       return NextResponse.json({ error: 'Note is too short to refine' }, { status: 400 });
@@ -40,16 +40,45 @@ export async function POST(req: NextRequest) {
       previousTexts = prevNotes.map(r => r.note_text).filter(Boolean) as string[];
     }
 
-    const userMessage = (noteText: string, variationHint = '') =>
-      `Refine this ABA session note. Preserve all clinical facts. Apply all quality rules.${variationHint}
+    const userMessage = (noteText: string, variationHint = ''): string => {
+      const parts: string[] = [
+        `Refine this ABA session note. Preserve all clinical facts. Apply all quality rules.${variationHint}`,
+        '',
+        'CLIENT PROFILE CONTEXT (use to ensure interventions match approved list):',
+        `Approved interventions: ${clientProfile?.approvedInterventions?.join(', ') || 'DRA, DRI, FCT, NCR, Redirection, Behavior Momentum, Premack, Choices'}`,
+        `Prohibited interventions: ${clientProfile?.prohibitedInterventions?.join(', ') || 'Punishment, ResponseCost, Restraint, TimeOut, Extinction'}`,
+        `Reinforcers: ${JSON.stringify(clientProfile?.reinforcers || {})}`,
+      ];
 
-CLIENT PROFILE CONTEXT (use to ensure interventions match approved list):
-Approved interventions: ${clientProfile?.approvedInterventions?.join(', ') || 'DRA, DRI, FCT, NCR, Redirection, Behavior Momentum, Premack, Choices'}
-Prohibited interventions: ${clientProfile?.prohibitedInterventions?.join(', ') || 'Punishment, ResponseCost, Restraint, TimeOut, Extinction'}
-Reinforcers: ${JSON.stringify(clientProfile?.reinforcers || {})}
+      const maladaptive: string[] = Array.isArray(clientProfile?.activePrograms?.maladaptive)
+        ? clientProfile.activePrograms.maladaptive : [];
+      if (maladaptive.length) {
+        parts.push(`Maladaptive behaviors targeted: ${maladaptive.join(', ')}`);
+      }
 
-ORIGINAL NOTE TO REFINE:
-${noteText}`;
+      const replacementSkills: string[] = Array.isArray(clientProfile?.activePrograms?.replacementSkills)
+        ? clientProfile.activePrograms.replacementSkills : [];
+      if (replacementSkills.length) {
+        parts.push(`Replacement skills targeted: ${replacementSkills.join(', ')}`);
+      }
+
+      const continuitySummary: string | undefined = clientProfile?.continuityContext?.summary;
+      if (continuitySummary) {
+        parts.push('', `CONTINUITY CONTEXT: ${continuitySummary}`);
+      }
+
+      if (clinicalEvents && typeof clinicalEvents === 'string' && clinicalEvents.trim()) {
+        parts.push('', 'CLINICAL EVENTS THIS SESSION:', clinicalEvents.trim());
+      }
+
+      if (nextAppointmentDate) {
+        parts.push('', `Next appointment: ${nextAppointmentDate} — mention this at the end of the note.`);
+      }
+
+      parts.push('', 'ORIGINAL NOTE TO REFINE:', noteText);
+
+      return parts.join('\n');
+    };
 
     const encoder = new TextEncoder();
 
@@ -72,13 +101,13 @@ ${noteText}`;
 
           // Similarity check against previous session notes
           const tooSimilar = previousTexts.length > 0 &&
-            previousTexts.some(prev => calculateSimilarity(refinedNote, prev) > 0.60);
+            previousTexts.some(prev => calculateSimilarity(refinedNote, prev) > 0.55);
 
           if (tooSimilar) {
             controller.enqueue(encoder.encode('\n__REGEN__\n'));
             const variationHint = '\n\nIMPORTANT: The refined note is too similar to a previous session note for this client. You must significantly vary the sentence starters, narrative structure, intervention descriptions, and behavior topographies. The note must read as a distinctly different session.';
             const stream2 = await openai.chat.completions.create({
-              model: 'gpt-4o', temperature: 0.3, max_tokens: 1500, stream: true,
+              model: 'gpt-4o', temperature: 0.7, max_tokens: 1500, stream: true,
               messages: [
                 { role: 'system', content: NOTE_PERFECTOR_PROMPT },
                 { role: 'user', content: userMessage(originalNote, variationHint) }
@@ -89,7 +118,7 @@ ${noteText}`;
               const delta = chunk.choices[0]?.delta?.content || '';
               if (delta) { regenNote += delta; controller.enqueue(encoder.encode(delta)); }
             }
-            const stillSimilar = previousTexts.some(prev => calculateSimilarity(regenNote, prev) > 0.60);
+            const stillSimilar = previousTexts.some(prev => calculateSimilarity(regenNote, prev) > 0.55);
             controller.enqueue(encoder.encode(`\n__META__${JSON.stringify({ similarityWarning: stillSimilar })}`));
           } else {
             controller.enqueue(encoder.encode('\n__META__{}'));
