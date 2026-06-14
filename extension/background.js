@@ -22,6 +22,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'FETCH') {
     console.log('[Path4ABA] FETCH received:', message.payload?.method, message.payload?.url);
     const { url, method, headers, body, credentials } = message.payload;
+    console.log('[Path4ABA] FETCH starting:', method, url);
     fetch(url, {
       method,
       headers,
@@ -29,10 +30,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       credentials: credentials || 'omit',
     })
       .then(async (res) => {
+        console.log('[Path4ABA] FETCH complete:', res.ok, res.status);
         const data = await res.text();
+        console.log('[Path4ABA] sendResponse called, data.length:', data.length);
         sendResponse({ ok: res.ok, status: res.status, data });
       })
       .catch((err) => {
+        console.error('[Path4ABA] FETCH error:', err);
         sendResponse({ ok: false, status: 0, error: err.message });
       });
     return true; // keep channel open for async sendResponse
