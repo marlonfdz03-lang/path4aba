@@ -1,15 +1,31 @@
 // Path4ABA Extension — background.js (service worker)
-// This file intentionally minimal. All API calls are made directly from popup.js.
-// The service worker keeps the extension alive for chrome.storage access.
+// All API calls are proxied through here so fetch() works from detached popup windows.
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[Path4ABA] Extension installed.');
 });
 
-// Keep service worker alive during active use
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'ping') {
     sendResponse({ ok: true });
+    return false;
   }
-  return false;
+
+  if (message.type === 'FETCH') {
+    const { url, method, headers, body, credentials } = message.payload;
+    fetch(url, {
+      method,
+      headers,
+      body: body || undefined,
+      credentials: credentials || 'omit',
+    })
+      .then(async (res) => {
+        const data = await res.text();
+        sendResponse({ ok: res.ok, status: res.status, data });
+      })
+      .catch((err) => {
+        sendResponse({ ok: false, status: 0, error: err.message });
+      });
+    return true; // keep channel open for async sendResponse
+  }
 });

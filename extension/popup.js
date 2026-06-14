@@ -62,12 +62,12 @@ chrome.storage.onChanged.addListener((changes, area) => {
 const INIT_TIMEOUT_MS = 10000;
 
 function apiWithTimeout(path, ms) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(
-    () => ctrl.abort(new DOMException('Request timed out', 'AbortError')),
-    ms,
-  );
-  return api(path, { signal: ctrl.signal }).finally(() => clearTimeout(timer));
+  return Promise.race([
+    api(path),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new DOMException('Request timed out', 'AbortError')), ms)
+    ),
+  ]);
 }
 
 async function api(path, options = {}) {
@@ -85,19 +85,43 @@ async function api(path, options = {}) {
 
   const url = `${BASE}${path}`;
   try {
-    const res = await fetch(url, {
-      credentials: credentialsMode,
-      ...options,
-      headers: {
-        ...baseHeaders,
-        ...authHeaders,
-        ...(options.headers || {}),
-      },
+    // Route through the background service worker so fetch() works from
+    // detached popup windows (chrome.windows.create), where direct fetch()
+    // calls can stall and never leave the browser.
+    const result = await new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage(
+        {
+          type: 'FETCH',
+          payload: {
+            url,
+            method,
+            headers: { ...baseHeaders, ...authHeaders, ...(options.headers || {}) },
+            body: options.body ?? null,
+            credentials: credentialsMode,
+          },
+        },
+        (res) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve(res);
+          }
+        }
+      );
     });
+
+    if (result.error) {
+      const err = new Error(result.error);
+      console.error('[Path4ABA] fetch error:', err.name, err.message);
+      throw err;
+    }
+
+    const { ok, status, data } = result;
+
     // Token rejected — clear in-memory only. Only schedule a reconnect if the
     // user is on the main screen (active session). Skip during token verification
     // or init, where the reconnect loop is already managing things.
-    if (res.status === 401 && extensionToken) {
+    if (status === 401 && extensionToken) {
       extensionToken = null;
       const mainEl = document.getElementById('screen-main');
       const onMain = mainEl && mainEl.style.display !== 'none';
@@ -108,7 +132,30 @@ async function api(path, options = {}) {
         console.warn('[Path4ABA] api: 401 on', path, '(not on main screen — skipping reconnect trigger)');
       }
     }
-    return res;
+
+    // Build a Response-compatible object so all callers (including streamGenerate)
+    // work unchanged. The body ReadableStream splits at __REGEN__ so the sentinel
+    // arrives as its own read(), keeping streamGenerate()'s chunk logic correct
+    // even though the background delivers the full response body at once.
+    const encoder = new TextEncoder();
+    const segments = data.split('__REGEN__');
+    return {
+      ok,
+      status,
+      json: async () => JSON.parse(data),
+      text: async () => data,
+      body: new ReadableStream({
+        start(controller) {
+          segments.forEach((seg, i) => {
+            controller.enqueue(encoder.encode(seg));
+            if (i < segments.length - 1) {
+              controller.enqueue(encoder.encode('__REGEN__'));
+            }
+          });
+          controller.close();
+        },
+      }),
+    };
   } catch (err) {
     console.error('[Path4ABA] fetch error:', err.name, err.message);
     throw err;
