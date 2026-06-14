@@ -364,10 +364,10 @@ function WhoItsFor() {
 // ── Features ──────────────────────────────────────────────────────────────────
 
 function Features() {
-  const features = [
+  const features: Array<{ icon: string; title: string; desc: string; badge?: string; href?: string }> = [
     { icon: "✨", title: "AI Session Notes", desc: "Generate clinical-quality notes that pass insurance audits" },
     { icon: "👥", title: "Client Management", desc: "Upload assessments, track behaviors and skills" },
-    { icon: "🔗", title: "Chrome Extension", desc: "Generate notes directly from Office Puzzle", badge: "Coming Soon" },
+    { icon: "🔗", title: "Chrome Extension", desc: "Generate notes directly from Office Puzzle", href: "https://chromewebstore.google.com/detail/imignknofjahdlgopbfkpopcdnffchgk" },
     { icon: "📊", title: "Progress Reports", desc: "AI-powered progress reports with behavior trend analysis" },
     { icon: "📋", title: "Fieldwork Tracker", desc: "BACB-compliant hour tracking for ABA students" },
     { icon: "🔒", title: "HIPAA Compliant", desc: "All data encrypted and stored securely on Azure" },
@@ -401,43 +401,54 @@ function Features() {
             gap: 20,
           }}
         >
-          {features.map((f) => (
-            <div
-              key={f.title}
-              style={{
-                borderRadius: 16,
-                padding: "24px 24px 28px",
-                background: "rgba(255,255,255,0.05)",
-                border: "1px solid rgba(255,255,255,0.1)",
-                position: "relative",
-              }}
-            >
-              {f.badge && (
-                <span
-                  style={{
-                    position: "absolute",
-                    top: 16,
-                    right: 16,
-                    fontSize: 10,
-                    fontWeight: 700,
-                    padding: "3px 10px",
-                    borderRadius: 99,
-                    background: "rgba(96,165,250,0.18)",
-                    color: "#60A5FA",
-                  }}
-                >
-                  {f.badge}
-                </span>
-              )}
-              <div style={{ fontSize: 28, marginBottom: 12 }}>{f.icon}</div>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "white", marginBottom: 8 }}>
-                {f.title}
-              </h3>
-              <p style={{ fontSize: 13, lineHeight: 1.6, color: "rgba(255,255,255,0.55)" }}>
-                {f.desc}
-              </p>
-            </div>
-          ))}
+          {features.map((f) => {
+            const cardStyle: React.CSSProperties = {
+              borderRadius: 16,
+              padding: "24px 24px 28px",
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              position: "relative",
+              display: "block",
+              textDecoration: "none",
+            };
+            const inner = (
+              <>
+                {f.badge && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: 16,
+                      right: 16,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      padding: "3px 10px",
+                      borderRadius: 99,
+                      background: "rgba(96,165,250,0.18)",
+                      color: "#60A5FA",
+                    }}
+                  >
+                    {f.badge}
+                  </span>
+                )}
+                <div style={{ fontSize: 28, marginBottom: 12 }}>{f.icon}</div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "white", marginBottom: 8 }}>
+                  {f.title}
+                </h3>
+                <p style={{ fontSize: 13, lineHeight: 1.6, color: "rgba(255,255,255,0.55)" }}>
+                  {f.desc}
+                </p>
+              </>
+            );
+            return f.href ? (
+              <a key={f.title} href={f.href} target="_blank" rel="noopener noreferrer" style={cardStyle}>
+                {inner}
+              </a>
+            ) : (
+              <div key={f.title} style={cardStyle}>
+                {inner}
+              </div>
+            );
+          })}
         </div>
       </div>
     </section>

@@ -368,7 +368,7 @@ export default function Sidebar() {
                 <NavItem href="/bcba" label="Clients" icon={IconUsers} active={isActive("/bcba")} expanded={expanded} />
                 <NavItem href="/schedule" label="Schedule" icon={IconCalendar} active={isActive("/schedule")} expanded={expanded} />
                 <a
-                  href="/settings?tab=extension"
+                  href="https://chromewebstore.google.com/detail/imignknofjahdlgopbfkpopcdnffchgk"
                   target="_blank"
                   rel="noopener noreferrer"
                   title="Chrome Extension"
@@ -408,7 +408,7 @@ export default function Sidebar() {
                 <NavItem href="/clients" label="Clients" icon={IconUsers} active={isActive("/clients")} badge={clientCount} expanded={expanded} />
                 <NavItem href="/schedule" label="Schedule" icon={IconCalendar} active={isActive("/schedule")} expanded={expanded} />
                 <a
-                  href="/settings?tab=extension"
+                  href="https://chromewebstore.google.com/detail/imignknofjahdlgopbfkpopcdnffchgk"
                   target="_blank"
                   rel="noopener noreferrer"
                   title="Chrome Extension"
