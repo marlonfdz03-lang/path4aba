@@ -59,7 +59,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 // ── API helper ─────────────────────────────
-const INIT_TIMEOUT_MS = 10000;
+const INIT_TIMEOUT_MS = 20000;
 
 function apiWithTimeout(path, ms) {
   return Promise.race([
@@ -1174,7 +1174,7 @@ document.getElementById('activateBtn').addEventListener('click', async () => {
     console.log('[Path4ABA] activateBtn: testing token (in-memory only until verified):', raw.slice(0, 12) + '…');
     extensionToken = raw;
 
-    // Use apiWithTimeout (6 s abort) — same pattern as init()
+    // Use apiWithTimeout (20 s abort) — same pattern as init()
     const [bcbaResult, rbtResult] = await Promise.allSettled([
       apiWithTimeout(`/api/bcba/clients`, INIT_TIMEOUT_MS),
       apiWithTimeout('/api/rbt/clients',  INIT_TIMEOUT_MS),
