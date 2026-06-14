@@ -23,11 +23,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     console.log('[Path4ABA] FETCH received:', message.payload?.method, message.payload?.url);
     const { url, method, headers, body, credentials } = message.payload;
     console.log('[Path4ABA] FETCH starting:', method, url);
+
+    // Ping chrome.storage.local every 5 s so the service worker is not garbage-
+    // collected while awaiting a slow network response from path4aba.app.
+    const keepAlive = setInterval(() => chrome.storage.local.get('__keepalive__'), 5000);
+
     fetch(url, {
       method,
       headers,
       body: body || undefined,
       credentials: credentials || 'omit',
+      keepalive: true,
     })
       .then(async (res) => {
         console.log('[Path4ABA] FETCH complete:', res.ok, res.status);
@@ -38,6 +44,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .catch((err) => {
         console.error('[Path4ABA] FETCH error:', err);
         sendResponse({ ok: false, status: 0, error: err.message });
+      })
+      .finally(() => {
+        clearInterval(keepAlive);
       });
     return true; // keep channel open for async sendResponse
   }
