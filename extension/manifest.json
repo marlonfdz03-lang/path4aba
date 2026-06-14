@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Path4ABA",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Clinical documentation for ABA professionals — generate and refine notes from any webpage.",
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": [
