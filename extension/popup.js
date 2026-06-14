@@ -465,7 +465,7 @@ function renderBehaviors() {
   noMsg.style.display = 'none';
 
   const maxSel = 99;
-  hint.textContent = userRole === 'rbt' ? `(select 5)` : '(optional)';
+  hint.textContent = userRole === 'rbt' ? `(recommended: at least 5)` : '(optional)';
 
   grid.innerHTML = '';
   behaviors.forEach(({ name, functions }) => {
@@ -519,7 +519,7 @@ function renderSkills() {
   noMsg.style.display = 'none';
 
   const maxSel = 99;
-  hint.textContent = userRole === 'rbt' ? `(select 2)` : '(optional)';
+  hint.textContent = userRole === 'rbt' ? `(recommended: at least 2)` : '(optional)';
 
   grid.innerHTML = '';
 
@@ -611,13 +611,56 @@ function renderPresent() {
     if (isCustom) {
       item.querySelector('.remove-present-btn')?.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (selectedProfile?.caregivers) {
-          selectedProfile.caregivers = selectedProfile.caregivers.filter(c => c !== name);
+        if (selectedProfile) {
+          selectedProfile.whoWasPresent = (selectedProfile.whoWasPresent || []).filter(n => n !== name);
+          selectedProfile.caregivers = (selectedProfile.caregivers || []).filter(c => c !== name);
         }
         selectedPresent = selectedPresent.filter(n => n !== name);
         renderPresent();
       });
     }
+  });
+
+  // ── Add New person inline form ──
+  const addBtn = document.createElement('button');
+  addBtn.textContent = '+ Add New';
+  addBtn.style.cssText = 'font-size:11px;color:#2563EB;background:none;border:none;cursor:pointer;padding:4px 0;margin-top:2px;';
+
+  const addForm = document.createElement('div');
+  addForm.style.cssText = 'display:none;margin-top:4px;gap:4px;align-items:center;';
+
+  const addInput = document.createElement('input');
+  addInput.type = 'text';
+  addInput.placeholder = 'Name…';
+  addInput.style.cssText = 'flex:1;font-size:12px;border:1px solid #e5e7eb;border-radius:6px;padding:5px 8px;outline:none;min-width:0;';
+
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = 'Save';
+  saveBtn.style.cssText = 'font-size:11px;padding:5px 10px;background:#2563EB;color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap;';
+
+  addForm.appendChild(addInput);
+  addForm.appendChild(saveBtn);
+  grid.appendChild(addBtn);
+  grid.appendChild(addForm);
+
+  addBtn.addEventListener('click', () => {
+    addForm.style.display = addForm.style.display === 'none' ? 'flex' : 'none';
+    if (addForm.style.display !== 'none') addInput.focus();
+  });
+
+  saveBtn.addEventListener('click', () => {
+    const name = addInput.value.trim();
+    if (!name) return;
+    if (!selectedProfile) selectedProfile = {};
+    if (!selectedProfile.whoWasPresent) selectedProfile.whoWasPresent = [];
+    if (!selectedProfile.whoWasPresent.includes(name)) selectedProfile.whoWasPresent.push(name);
+    if (selectedClientId) {
+      api(`/api/rbt/clients/${selectedClientId}/who-was-present`, {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      }).catch(() => {});
+    }
+    renderPresent();
   });
 }
 
@@ -627,6 +670,8 @@ function resetSessionConditions() {
   environmentalChange = false;
   const envDesc = document.getElementById('envDescription');
   if (envDesc) { envDesc.style.display = 'none'; envDesc.value = ''; }
+  const medDesc = document.getElementById('medDescription');
+  if (medDesc) { medDesc.style.display = 'none'; medDesc.value = ''; }
   const missedDesc = document.getElementById('missedDescription');
   if (missedDesc) { missedDesc.style.display = 'none'; missedDesc.value = ''; }
   medicationChange = false;
@@ -673,6 +718,8 @@ document.getElementById('locationGroup').addEventListener('click', (e) => {
       if (desc) desc.style.display = isYes ? '' : 'none';
     } else if (id === 'medGroup') {
       medicationChange = isYes;
+      const desc = document.getElementById('medDescription');
+      if (desc) desc.style.display = isYes ? '' : 'none';
     } else if (id === 'missedGroup') {
       missedSessions = isYes;
       const desc = document.getElementById('missedDescription');
@@ -843,7 +890,11 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
       type: 'non-edible', item, deliveredWhen: 'contingent on task engagement'
     })),
     clinicalEvents: [
-      medicationChange ? 'Medication consumed today.' : '',
+      medicationChange
+        ? (document.getElementById('medDescription')?.value?.trim()
+            ? `Medication change: ${document.getElementById('medDescription').value.trim()}`
+            : 'Medication change noted this session.')
+        : '',
       document.getElementById('nextApptDate')?.value
         ? `Next scheduled appointment: ${document.getElementById('nextApptDate').value}.`
         : '',
@@ -916,68 +967,79 @@ document.getElementById('refineBtn').addEventListener('click', async () => {
 });
 
 // ── Stream handler (shared for generate + refine) ──
+// Buffers the full note before displaying. If the server flags similarity,
+// auto-retries up to MAX_RETRIES times before showing the final result.
 async function streamGenerate(endpoint, body, method = 'POST') {
   const outputSection = document.getElementById('outputSection');
   const outputNote = document.getElementById('outputNote');
   const streamStatus = document.getElementById('streamStatus');
-  const similarityWarn = document.getElementById('similarityWarn');
   const generateBtn = document.getElementById('generateBtn');
   const refineBtn = document.getElementById('refineBtn');
 
   outputNote.value = '';
-  similarityWarn.style.display = 'none';
   outputSection.style.display = '';
   streamStatus.style.display = '';
   streamStatus.textContent = 'Generating note…';
   generateBtn.disabled = true;
   refineBtn.disabled = true;
 
+  let finalText = '';
+  let retries = 0;
+  const MAX_RETRIES = 2;
+
   try {
-    const res = await api(endpoint, {
-      method,
-      body: JSON.stringify(body),
-    });
+    while (true) {
+      const res = await api(endpoint, { method, body: JSON.stringify(body) });
 
-    if (!res.ok || !res.body) {
-      const data = await res.json().catch(() => ({}));
-      streamStatus.style.display = 'none';
-      showError(data.error || 'Generation failed. Please try again.');
-      return;
-    }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let fullText = '';
-
-    outer: while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-
-      if (chunk.includes('__META__')) {
-        const parts = chunk.split('__META__');
-        if (parts[0]) { fullText += parts[0]; outputNote.value = fullText; }
-        try {
-          const meta = JSON.parse(parts[1]);
-          if (meta.error) { showError(meta.error); return; }
-          similarityWarn.style.display = meta.similarityWarning ? '' : 'none';
-        } catch {}
-        break outer;
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        streamStatus.style.display = 'none';
+        showError(data.error || 'Generation failed. Please try again.');
+        return;
       }
 
-      if (chunk.includes('__REGEN__')) {
-        fullText = '';
-        outputNote.value = '';
-        streamStatus.textContent = 'Regenerating for uniqueness…';
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+      let hasSimilarityWarning = false;
+
+      outer: while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+
+        if (chunk.includes('__META__')) {
+          const parts = chunk.split('__META__');
+          if (parts[0]) fullText += parts[0];
+          try {
+            const meta = JSON.parse(parts[1]);
+            if (meta.error) { showError(meta.error); return; }
+            hasSimilarityWarning = !!meta.similarityWarning;
+          } catch {}
+          break outer;
+        }
+
+        if (chunk.includes('__REGEN__')) {
+          fullText = '';
+          streamStatus.textContent = 'Regenerating for uniqueness…';
+          continue;
+        }
+
+        fullText += chunk;
+      }
+
+      finalText = fullText;
+
+      if (hasSimilarityWarning && retries < MAX_RETRIES) {
+        retries++;
+        streamStatus.textContent = `Checking uniqueness… regenerating (${retries}/${MAX_RETRIES})`;
         continue;
       }
 
-      fullText += chunk;
-      outputNote.value = fullText;
-      // Auto-scroll textarea to bottom while streaming
-      outputNote.scrollTop = outputNote.scrollHeight;
+      break;
     }
 
+    outputNote.value = finalText;
     streamStatus.style.display = 'none';
   } catch {
     streamStatus.style.display = 'none';
@@ -1017,18 +1079,25 @@ function resetAfterSave() {
   document.querySelectorAll('#skillsGrid .check-item').forEach(el => {
     el.classList.remove('checked', 'disabled');
   });
-  // Reset present
-  selectedPresent = [];
+  // Reset present grid visually (state cleared by resetSessionConditions)
   document.querySelectorAll('#presentGrid .check-item').forEach(el => {
     el.classList.remove('checked');
   });
-  // Reset session conditions
+  // Reset all session condition toggles and description fields (env/med/missed/compliance)
   resetSessionConditions();
   // Reset next appointment date fields
   const nextApptEl = document.getElementById('nextApptDate');
   if (nextApptEl) nextApptEl.value = '';
   const nextApptRefineEl = document.getElementById('nextApptDateRefine');
   if (nextApptRefineEl) nextApptRefineEl.value = '';
+  // Reset date to today
+  const genDate = document.getElementById('genDate');
+  if (genDate) genDate.value = new Date().toISOString().split('T')[0];
+  // Clear generated note and hide output area
+  const outputNote = document.getElementById('outputNote');
+  if (outputNote) outputNote.value = '';
+  const outputSection = document.getElementById('outputSection');
+  if (outputSection) outputSection.style.display = 'none';
   // Update generate button state
   updateGenerateBtn();
 }

@@ -200,6 +200,7 @@
             <button class="toggle-btn active" data-val="no">No</button>
             <button class="toggle-btn" data-val="yes">Yes</button>
           </div>
+          <textarea id="medDescription" class="input-field" rows="2" placeholder="Describe the medication change…" style="display:none;margin-top:6px;font-size:12px;"></textarea>
         </div>
 
         <div class="field">
@@ -239,7 +240,7 @@
         </div>
 
         <div class="field" id="nextApptField">
-          <label class="field-label">Next Appointment Date <span class="hint">(optional)</span></label>
+          <label class="field-label">Next Appointment Date <span class="hint">(optional — recommended)</span></label>
           <input type="date" id="nextApptDate" class="input-field" />
         </div>
 
@@ -410,9 +411,6 @@
       </div>
       <div id="streamStatus" class="stream-status" style="display:none"></div>
       <textarea id="outputNote" class="textarea output-note"></textarea>
-      <div id="similarityWarn" class="warn-banner" style="display:none">
-        ⚠️ This note may be similar to a previous session. Review before submitting.
-      </div>
     </div>
 
   </div>
