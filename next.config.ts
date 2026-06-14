@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
         source: "/api/:path*",
         headers: [
           // Static CORS headers guaranteed to reach the client.
-          // Access-Control-Allow-Origin is set dynamically in middleware.ts
+          // Access-Control-Allow-Origin is set dynamically in proxy.ts
           // (it must echo the exact chrome-extension:// origin — can't be static here).
           { key: "Access-Control-Allow-Methods", value: "GET, POST, PATCH, DELETE, OPTIONS" },
           { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization, X-Requested-With" },

@@ -29,14 +29,16 @@ const SUB_EXEMPT_PATHS = [
 // 30-second TTL cache for sub-gate results — avoids a DB round-trip on every page load.
 const subCache = new Map<string, { result: boolean; exp: number }>()
 
+const CORS_ALLOWED_ORIGINS = new Set([
+  'chrome-extension://imignknofjahdlgopbfkpopcdnffchgk', // production
+  'chrome-extension://mkdnlgafciigijkhfefohienddpppgch', // dev (unpacked)
+  'https://path4aba.app',
+  'http://localhost:3000',
+])
+
 function corsHeaders(origin: string | null): Record<string, string> {
   const allowed =
-    origin &&
-    (origin.startsWith('chrome-extension://') ||
-      origin === 'https://path4aba.app' ||
-      origin === 'http://localhost:3000')
-      ? origin
-      : 'https://path4aba.app'
+    origin && CORS_ALLOWED_ORIGINS.has(origin) ? origin : 'https://path4aba.app'
   return {
     'Access-Control-Allow-Origin': allowed,
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
