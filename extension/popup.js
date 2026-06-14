@@ -59,11 +59,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 // ── API helper ─────────────────────────────
-const INIT_TIMEOUT_MS = 2000;
+const INIT_TIMEOUT_MS = 10000;
 
 function apiWithTimeout(path, ms) {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), ms);
+  const timer = setTimeout(
+    () => ctrl.abort(new DOMException('Request timed out', 'AbortError')),
+    ms,
+  );
   return api(path, { signal: ctrl.signal }).finally(() => clearTimeout(timer));
 }
 
@@ -363,7 +366,7 @@ async function loadClientProfile(clientId) {
 
   const t0 = performance.now();
   try {
-    const res = await apiWithTimeout(`/api/bcba/client/${clientId}`, 3000);
+    const res = await apiWithTimeout(`/api/bcba/client/${clientId}`, INIT_TIMEOUT_MS);
     const elapsed = Math.round(performance.now() - t0);
     console.log(`[Path4ABA] loadClientProfile: ${elapsed}ms`);
     if (!res.ok) {
@@ -1126,8 +1129,8 @@ document.getElementById('activateBtn').addEventListener('click', async () => {
 
     // Use apiWithTimeout (6 s abort) — same pattern as init()
     const [bcbaResult, rbtResult] = await Promise.allSettled([
-      apiWithTimeout('/api/bcba/clients', 6000),
-      apiWithTimeout('/api/rbt/clients',  6000),
+      apiWithTimeout(`/api/bcba/clients`, INIT_TIMEOUT_MS),
+      apiWithTimeout('/api/rbt/clients',  INIT_TIMEOUT_MS),
     ]);
 
     const responses = [bcbaResult, rbtResult]
