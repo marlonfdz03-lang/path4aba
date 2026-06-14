@@ -943,6 +943,11 @@ document.getElementById('refineBtn').addEventListener('click', async () => {
     originalNote,
     clientId: selectedClientId,
     nextAppointmentDate: nextApptRefine || undefined,
+    continuityContext: profile.continuityContext || null,
+    clinicalEvents: [
+      profile.environmentalChange ? `Environmental change: ${profile.environmentalChangeDescription || 'yes'}` : null,
+      profile.medicationChange ? `Medication change: ${profile.medDescription || 'yes'}` : null,
+    ].filter(Boolean).join('; ') || undefined,
     clientProfile: {
       approvedInterventions: (profile.interventions || []).map(i => typeof i === 'string' ? i : i?.name || ''),
       prohibitedInterventions: ['Punishment', 'ResponseCost', 'Restraint', 'StandaloneExtinction', 'TimeOut', 'Overcorrection', 'Aversive'],
@@ -958,6 +963,9 @@ document.getElementById('refineBtn').addEventListener('click', async () => {
           ...(profile.replacementBehaviors || []).map(s => typeof s === 'string' ? s : s?.name || ''),
           ...(profile.skillAcquisition || []).map(s => typeof s === 'string' ? s : s?.name || ''),
         ],
+      },
+      continuityContext: {
+        summary: profile.continuityContext?.summary || '',
       },
       diagnosis: profile.diagnosis || [],
       setting: selectedLocation || '',
