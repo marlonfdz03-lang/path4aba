@@ -11,6 +11,7 @@ const openai = new OpenAI({
 export interface ProgressReportInput {
   clientId: string
   rbtId: string
+  bcbaId?: string
   periodStart: string
   periodEnd: string
   periodLabel: string
@@ -151,6 +152,21 @@ export async function generateProgressReport(
     select: { interventions_used: true },
   })
 
+  let bcbaSessionCount = 0
+  if (input.bcbaId) {
+    const [xpNotes, supervisionNotes] = await Promise.all([
+      prisma.supervision_notes_97153xp.findMany({
+        where: { client_id: clientId, bcba_id: input.bcbaId, session_date: { gte: periodStart, lte: periodEnd } },
+        select: { note_text: true },
+      }),
+      prisma.supervision_notes.findMany({
+        where: { client_id: clientId, bcba_id: input.bcbaId, session_date: { gte: periodStart, lte: periodEnd } },
+        select: { note_text: true },
+      }),
+    ])
+    bcbaSessionCount = xpNotes.length + supervisionNotes.length
+  }
+
   const behaviorMap = new Map<string, number[]>()
   for (const row of maladaptiveData) {
     if (!behaviorMap.has(row.behavior_name)) behaviorMap.set(row.behavior_name, [])
@@ -290,7 +306,7 @@ Reference intervention consistency when relevant:
 Period: ${periodLabel} (${periodStart} to ${periodEnd})
 Diagnosis: ${diagnosis}
 Approved interventions: ${approvedInterventions || 'Not specified'}
-Sessions documented: ${sessionNotes.length}
+Sessions documented by RBT: ${sessionNotes.length}${bcbaSessionCount ? `\nSessions documented by BCBA: ${bcbaSessionCount}` : ''}
 
 --- BEHAVIOR TRENDS ---
 ${behaviorTrends.length > 0
