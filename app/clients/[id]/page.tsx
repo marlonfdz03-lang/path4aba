@@ -17,7 +17,7 @@ const LOCATION_OPTIONS = [
 
 const FIXED_PRESENT = ["Caregiver", "Teacher"];
 
-type Tab = "overview" | "generate" | "refine" | "notes" | "data";
+type Tab = "overview" | "treatment_map" | "generate" | "refine" | "notes" | "data";
 
 // ── Shared micro-components ────────────────────────────────────────────────
 
@@ -679,6 +679,7 @@ export default function ClientProfilePage() {
 
   const TABS: { key: Tab; label: string }[] = [
     { key: "overview", label: "Overview" },
+    { key: "treatment_map", label: "Treatment Map" },
     { key: "generate", label: "Generate Note" },
     { key: "refine", label: "Refine Note" },
     { key: "notes", label: "Notes" },
@@ -896,6 +897,129 @@ export default function ClientProfilePage() {
               </div>
             </div>
           </div>
+          </div>
+        )}
+
+        {/* ── Treatment Map Tab ── */}
+        {activeTab === "treatment_map" && (
+          <div className="space-y-4">
+            {/* Header */}
+            <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[13px] font-semibold" style={{ color: "var(--text1)" }}>Treatment Map</p>
+                  <p className="text-[12px] mt-0.5" style={{ color: "var(--text3)" }}>Clinical relationship between behaviors, functions, replacements, and interventions</p>
+                </div>
+                <span className="text-[11px] px-2.5 py-1 rounded-full font-semibold" style={{ background: "#EFF6FF", color: "#2563EB" }}>Read Only</span>
+              </div>
+            </div>
+
+            {/* Treatment Map Table */}
+            {(() => {
+              const behaviors = (client.clinicalProfile?.maladaptiveBehaviors || []);
+              const interventions = (client.clinicalProfile?.interventions || []).map((i: any) => typeof i === "string" ? i : i?.name || "").filter(Boolean);
+              const replacements = [
+                ...(client.clinicalProfile?.replacementBehaviors || []),
+                ...(client.clinicalProfile?.skillAcquisition || []),
+              ].map((s: any) => typeof s === "string" ? s : s?.name || "").filter(Boolean);
+
+              if (behaviors.length === 0) {
+                return (
+                  <div className="bg-white rounded-[10px] border p-8 text-center" style={{ borderColor: "var(--border)" }}>
+                    <p className="text-[13px]" style={{ color: "var(--text3)" }}>No behaviors found in this client's profile. Upload an assessment to generate the Treatment Map.</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="bg-white rounded-[10px] border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[13px]">
+                      <thead>
+                        <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
+                          {["Maladaptive Behavior", "Function", "Functionally Equivalent Replacement", "Interventions", "Status"].map(h => (
+                            <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text3)" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {behaviors.map((b: any, i: number) => {
+                          const name = typeof b === "string" ? b : b?.name || "";
+                          const functions: string[] = typeof b === "object" ? (b.functions || b.function || []) : [];
+                          const funcLabel = functions.length > 0 ? functions.join(", ") : "—";
+
+                          // Find functionally equivalent replacement
+                          const primaryFunc = functions[0] || "";
+                          const replacementSkills = [
+                            ...(client.clinicalProfile?.replacementBehaviors || []),
+                            ...(client.clinicalProfile?.skillAcquisition || []),
+                          ];
+                          const matchedReplacement = replacementSkills.find((s: any) => {
+                            const tf = typeof s === "object" ? (s.targetFunction || "") : "";
+                            return tf.toLowerCase() === primaryFunc.toLowerCase();
+                          });
+                          const replacementName = matchedReplacement
+                            ? (typeof matchedReplacement === "string" ? matchedReplacement : matchedReplacement?.name || "")
+                            : (replacements[i % Math.max(replacements.length, 1)] || "Per treatment plan");
+
+                          // Top 3 interventions
+                          const topInterventions = interventions.slice(0, 3).join(", ") || "Per treatment plan";
+
+                          return (
+                            <tr key={i} className="border-b last:border-0 hover:bg-gray-50 transition-colors" style={{ borderColor: "var(--border)" }}>
+                              <td className="px-4 py-3 font-semibold" style={{ color: "var(--text1)" }}>{name}</td>
+                              <td className="px-4 py-3">
+                                {functions.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {functions.map((f: string, fi: number) => (
+                                      <span key={fi} className="text-[11px] px-2 py-0.5 rounded-full font-medium capitalize" style={{
+                                        background: f === "escape" ? "#FEF3C7" : f === "attention" ? "#EFF6FF" : f === "tangible" ? "#F0FDF4" : "#F5F3FF",
+                                        color: f === "escape" ? "#D97706" : f === "attention" ? "#2563EB" : f === "tangible" ? "#16A34A" : "#7C3AED"
+                                      }}>{f}</span>
+                                    ))}
+                                  </div>
+                                ) : <span style={{ color: "var(--text3)" }}>—</span>}
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-1.5">
+                                  {matchedReplacement && <span style={{ color: "#0D9488", fontSize: 11, fontWeight: 600 }}>✦</span>}
+                                  <span style={{ color: "var(--text2)" }}>{replacementName}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text2)" }}>{topInterventions}</td>
+                              <td className="px-4 py-3">
+                                <span className="text-[11px] px-2.5 py-1 rounded-full font-semibold" style={{ background: "#DCFCE7", color: "#16A34A" }}>
+                                  🟢 Active
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Legend */}
+            <div className="bg-white rounded-[10px] border p-4" style={{ borderColor: "var(--border)" }}>
+              <p className="text-[11px] font-semibold uppercase tracking-wide mb-3" style={{ color: "var(--text3)" }}>Function Legend</p>
+              <div className="flex flex-wrap gap-3">
+                {[
+                  { label: "Escape", bg: "#FEF3C7", color: "#D97706" },
+                  { label: "Attention", bg: "#EFF6FF", color: "#2563EB" },
+                  { label: "Tangible", bg: "#F0FDF4", color: "#16A34A" },
+                  { label: "Automatic", bg: "#F5F3FF", color: "#7C3AED" },
+                ].map(f => (
+                  <span key={f.label} className="text-[11px] px-2.5 py-1 rounded-full font-medium" style={{ background: f.bg, color: f.color }}>{f.label}</span>
+                ))}
+                <span className="text-[11px] px-2.5 py-1 rounded-full font-medium" style={{ background: "#F0FDF4", color: "#0D9488" }}>✦ Functionally equivalent replacement</span>
+              </div>
+              <p className="text-[11px] mt-3" style={{ color: "var(--text3)" }}>
+                The Treatment Map is generated from the client's uploaded assessment. Contact your BCBA to update or modify treatment targets.
+              </p>
+            </div>
           </div>
         )}
 
