@@ -3,7 +3,7 @@
   "name": "Path4ABA",
   "version": "1.0.1",
   "description": "Clinical documentation for ABA professionals — generate and refine notes from any webpage.",
-  "permissions": ["storage", "activeTab", "scripting"],
+  "permissions": ["storage", "activeTab", "scripting", "tabs"],
   "host_permissions": [
     "https://path4aba.app/*",
     "https://*/*",

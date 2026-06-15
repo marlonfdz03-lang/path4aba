@@ -18,6 +18,7 @@ let selectedSkills = [];     // names
 let selectedLocation = null;
 let activeTab = 'generate';
 let dataMode = 'single';     // 'single' | 'week'
+let opCheckInterval = null;
 
 // Auth token (replaces cookie-based auth)
 let extensionToken = null;
@@ -809,6 +810,9 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.getElementById(`tabContent-${activeTab}`).style.display = '';
     document.getElementById('outputSection').style.display = 'none';
     document.querySelectorAll('.error-msg').forEach(el => el.remove());
+    // Stop OP polling whenever leaving the Data tab
+    clearInterval(opCheckInterval);
+    opCheckInterval = null;
   });
 });
 
@@ -1504,8 +1508,9 @@ async function runSingleAutofill(type) {
   const btn = document.getElementById(btnId);
   btn.disabled = true; btn.textContent = 'Filling…';
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) { setStatus(statusId, 'Could not access the active tab.', true); return; }
+    const tabs = await chrome.tabs.query({ url: '*://*.officepuzzle.com/*' });
+    const tab = tabs[0];
+    if (!tab?.id) { setStatus(statusId, 'No Office Puzzle tab found. Open the datasheet first.', true); return; }
     const result = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: officePuzzleDatasheetAutofiller, args: [tasks], world: 'MAIN' });
     const log  = result?.[0]?.result || [];
     const ok   = log.filter(l => l.startsWith('✓'));
@@ -1776,8 +1781,9 @@ async function runWeekAutofill(type) {
   const btn = document.getElementById(btnId);
   btn.disabled = true; btn.textContent = 'Filling…';
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) { setStatus(statusId, 'Could not access the active tab.', true); return; }
+    const tabs = await chrome.tabs.query({ url: '*://*.officepuzzle.com/*' });
+    const tab = tabs[0];
+    if (!tab?.id) { setStatus(statusId, 'No Office Puzzle tab found. Open the datasheet first.', true); return; }
     const result = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: officePuzzleDatasheetAutofiller, args: [tasks], world: 'MAIN' });
     const log  = result?.[0]?.result || [];
     const ok   = log.filter(l => l.startsWith('✓'));
@@ -1831,6 +1837,9 @@ document.getElementById('saveWeekDataBtn')?.addEventListener('click', async () =
 // ── Set week start date default on tab open ─
 document.getElementById('tabData').addEventListener('click', () => {
   applyDataTabGate();
+  // Start polling for Office Puzzle charts page while Data tab is active
+  checkOfficePuzzlePage();
+  opCheckInterval = setInterval(checkOfficePuzzlePage, 2000);
   if (!dataTabEnabled) return;
   if (!document.getElementById('weekStartDate').value) {
     const today = new Date();
@@ -1849,7 +1858,7 @@ function applyDataTabGate() {
   const lockedScreen = document.getElementById('dataLockedScreen');
   const content = document.getElementById('dataTabContent');
   if (!lockedScreen) return;
-  if (dataTabEnabled) {
+  if (userRole === 'admin' || dataTabEnabled === true) {
     lockedScreen.style.display = 'none';
     if (content) content.style.display = '';
   } else {
@@ -1864,9 +1873,10 @@ function applyDataTabGate() {
 
 async function checkOfficePuzzlePage() {
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tabs = await chrome.tabs.query({ url: '*://*.officepuzzle.com/*' });
+    const tab = tabs[0];
     const url = tab?.url || '';
-    const isOPCharts = url.includes('officepuzzle.com') && url.includes('/data/charts');
+    const isOPCharts = url.includes('/data/charts');
     const chartsEl = document.getElementById('extractChartsSection');
     if (chartsEl) chartsEl.style.display = isOPCharts ? '' : 'none';
   } catch { /* ignore — happens in non-tab contexts */ }
@@ -2238,7 +2248,9 @@ document.getElementById('extractChartsBtn').addEventListener('click', async () =
   showExtractStatus('Scrolling page to load all charts…', 'info');
 
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tabs = await chrome.tabs.query({ url: '*://*.officepuzzle.com/*' });
+    const tab = tabs[0];
+    if (!tab?.id) throw new Error('No Office Puzzle tab found. Open the charts page first.');
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: officePuzzleExtractor,
@@ -2351,7 +2363,7 @@ document.getElementById('saveChartsBtn').addEventListener('click', async () => {
 
   const btn = document.getElementById('saveChartsBtn');
   btn.disabled = true;
-  btn.textContent = 'Saving…';
+  btn.textContent = 'Updating existing charts…';
 
   try {
     const maladRecs = [];
@@ -2420,9 +2432,9 @@ document.getElementById('saveChartsBtn').addEventListener('click', async () => {
 // ─────────────────────────────────────────────
 
 // Injected into the Office Puzzle datasheet page — must be fully self-contained.
-// Office Puzzle shows ONE behavior/skill per datasheet page. This function reads
-// the page header to identify which behavior is currently shown, then fills only that one.
-function officePuzzleDatasheetAutofiller(tasks) {
+// Intercepts OP's own page-load GETs to capture item IDs + existing records, then
+// POSTs complete trial patterns directly to the OP API — no DOM clicks needed.
+async function officePuzzleDatasheetAutofiller(tasks) {
   // ── Helpers ──────────────────────────────────────────────────────────────────
   function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
 
@@ -2433,61 +2445,66 @@ function officePuzzleDatasheetAutofiller(tasks) {
     const g = gcd(correctCount, incorrect);
     const cycle = [
       ...Array(correctCount / g).fill('+'),
-      ...Array(incorrect   / g).fill('-'),
+      ...Array(incorrect / g).fill('-'),
     ];
     const seq = [];
     for (let i = 0; i < g; i++) seq.push(...cycle);
     return seq;
   }
 
-  // Scan ALL rows for a "Days" row (cells contain bare day numbers 1–31).
-  // OP puts this row at the bottom of tbody, not in thead.
+  function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // Scroll incrementally top→bottom in 600px steps, 150ms per step, so Vue renders
+  // all lazy-mounted cells. Then scroll back to top and wait for a final settle.
+  async function scrollFullPage() {
+    const step = 600;
+    let pos = 0;
+    let pageHeight = document.documentElement.scrollHeight;
+    while (pos < pageHeight) {
+      pos = Math.min(pos + step, pageHeight);
+      window.scrollTo(0, pos);
+      await delay(150);
+      pageHeight = document.documentElement.scrollHeight; // re-read; new content may have mounted
+    }
+    window.scrollTo(0, 0);
+    await delay(300);
+  }
+
+  // Search only within the specific table passed — NOT document-wide.
+  // Finds the "Days" row (cells[0] === "Days"), then returns the column index for dayNumber,
+  // skipping col 1 which is always the previous-month overflow (e.g. "31" or "30").
   function findDayColumn(table, dayNumber) {
-    const day = parseInt(dayNumber);
-    const allRows = Array.from(table.querySelectorAll('tr'));
+    const day = parseInt(dayNumber, 10);
+    const rows = Array.from(table.querySelectorAll('tr'));
+    let daysRowFound = false;
+    let targetCol = -1;
 
-    for (const row of allRows) {
+    for (const row of rows) {
       const cells = Array.from(row.querySelectorAll('th, td'));
-      let dayHits = 0;
-      let targetCol = -1;
+      if (!cells.length || cells[0].textContent.trim() !== 'Days') continue;
+      daysRowFound = true;
+      // col 1 is always the previous-month overflow — skip it, search the rest
       cells.forEach((cell, colIdx) => {
+        if (colIdx === 1) return;
         const raw = cell.textContent.trim();
-        if (!/^\d{1,2}$/.test(raw)) return; // must be a bare 1–2 digit number
-        const n = parseInt(raw, 10);
-        if (n < 1 || n > 31) return;
-        dayHits++;
-        if (n === day) targetCol = colIdx;
+        // Match "11" for day 11, and also "01" for day 1 (zero-padded cells)
+        if (parseInt(raw, 10) === day && /^\d{1,2}$/.test(raw)) targetCol = colIdx;
       });
-      // ≥5 day-number cells → this is the Days row
-      if (dayHits >= 5 && targetCol !== -1) return targetCol;
+      break; // Days row is unique per table — stop after finding it
     }
-    return -1;
+
+    console.log(`findDayColumn: table has ${rows.length} rows, Days row found: ${daysRowFound}, day ${day} at col ${targetCol}`);
+    return targetCol;
   }
 
-  // Read the page header to identify which behavior/skill this datasheet page shows.
-  function detectCurrentPageName() {
-    const selectors = [
-      'h4', 'h3', 'h2',
-      '[class*="behavior-name"],[class*="skill-name"],[class*="program-name"]',
-      '[class*="sheet-title"],[class*="goal-name"],[class*="chart-title"]',
-      '.page-title',
-    ];
-    for (const sel of selectors) {
-      for (const el of document.querySelectorAll(sel)) {
-        const text = el.textContent.trim();
-        if (text.length > 2 && text.length < 120 && !/marker|office puzzle/i.test(text)) return text;
-      }
-    }
-    return null;
-  }
-
-  // Fuzzy match: does task name match detected page name?
+  // Fuzzy match: do two behavior/skill names refer to the same target?
   function namesMatch(a, b) {
     function norm(s) {
       return s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
     }
-    const al = norm(a);
-    const bl = norm(b);
+    const al = norm(a), bl = norm(b);
     if (al === bl) return true;
     if (al.includes(bl) || bl.includes(al)) return true;
     const aWords = al.split(' ').filter(w => w.length > 2);
@@ -2495,56 +2512,178 @@ function officePuzzleDatasheetAutofiller(tasks) {
     return aWords.some(w => bWords.has(w));
   }
 
-  // ── Detect which behavior is on this page ─────────────────────────────────
-  const pageName = detectCurrentPageName();
-  if (!pageName) {
-    return ['❌ Could not detect behavior name from this page. Make sure you are on a datasheet page.'];
-  }
-
-  // Match ALL tasks for this behavior (may be multiple days in full-week mode)
-  const matchingTasks = tasks.filter(t => namesMatch(t.name, pageName));
-  if (!matchingTasks.length) {
-    const names = [...new Set(tasks.map(t => t.name))].join(', ');
-    return [`❌ "${pageName}" not found in your loaded data. Navigate to a sheet for: ${names}`];
-  }
-
-  // ── Find the datasheet table ──────────────────────────────────────────────
-  const table = Array.from(document.querySelectorAll('table')).find(t => t.querySelector('td.value'))
-    || document.querySelector('table');
-  if (!table) return [`❌ "${matchingTasks[0].name}" — no datasheet table found on this page`];
-
-  const bodyRows   = Array.from(table.querySelectorAll('tbody tr'));
-  const filledDays = [];
-
-  for (const task of matchingTasks) {
-    const colIndex = findDayColumn(table, task.dayNumber);
-    if (colIndex === -1) continue;
-
-    if (task.type === 'replacement') {
-      const totalTrials = 12;
-      const correct = Math.min(totalTrials, Math.max(0, Math.round(task.value / 100 * totalTrials)));
-      const seq = generateSequence(correct, totalTrials);
-      bodyRows.slice(0, totalTrials).forEach((row, i) => {
-        const cell = row.children[colIndex];
-        if (!cell || !cell.classList.contains('value')) return;
-        if (cell.textContent.trim() !== seq[i]) cell.click();
+  // Return the first <table> after h4El in DOM order that has a "Days" row (cells[0] === "Days")
+  // and at least 10 rows. Skips small/wrapper tables without stopping at intervening <h4>s,
+  // because the real datasheet table may not be the immediately next table.
+  function findTableForH4(h4El, orderedElements) {
+    let pastH4 = false;
+    for (const el of orderedElements) {
+      if (el === h4El) { pastH4 = true; continue; }
+      if (!pastH4 || el.tagName !== 'TABLE') continue;
+      const tableRows = Array.from(el.querySelectorAll('tr'));
+      if (tableRows.length < 10) continue;
+      const hasDaysRow = tableRows.some(row => {
+        const cells = row.querySelectorAll('th, td');
+        return cells.length > 0 && cells[0].textContent.trim() === 'Days';
       });
-    } else {
-      const freq = Math.round(task.value);
-      bodyRows.forEach((row, i) => {
-        const cell = row.children[colIndex];
-        if (!cell || !cell.classList.contains('value')) return;
-        const shouldMark = i < freq;
-        const isMarked   = cell.textContent.trim().toUpperCase() === 'X';
-        if (shouldMark !== isMarked) cell.click();
+      if (hasDaysRow) return el;
+    }
+    return null;
+  }
+
+  // ── Step 1: Intercept OP's page-load GETs to capture item IDs + existing records ──
+  // behaviorName → { itemId: string, records: [{id, date, value, recordings, labels, hours, initials}] }
+  const opDataMap = {};
+  let opApiBase = null;   // full URL prefix up to and including 'service_plan_item_data'
+  let opViewMonth = null; // 'YYYY-MM' of the month currently shown on the OP page
+
+  const origOpen = XMLHttpRequest.prototype.open;
+  const origSend = XMLHttpRequest.prototype.send;
+
+  XMLHttpRequest.prototype.open = function(method, url) {
+    this._opUrl = url;
+    this._opMethod = method;
+    return origOpen.apply(this, arguments);
+  };
+
+  XMLHttpRequest.prototype.send = function(body) {
+    if (this._opUrl && this._opUrl.includes('service_plan_item_data') && this._opMethod === 'GET') {
+      if (!opApiBase) {
+        const m = this._opUrl.match(/(https?:\/\/.+?service_plan_item_data)/);
+        if (m) opApiBase = m[1];
+      }
+      if (!opViewMonth) {
+        const m = this._opUrl.match(/date\.ge=(\d{4}-\d{2})-\d{2}/);
+        if (m) opViewMonth = m[1];
+      }
+      this.addEventListener('load', () => {
+        try {
+          const records = JSON.parse(this.responseText);
+          if (!Array.isArray(records)) return;
+          records.forEach(r => {
+            const name = r.item?.name?.trim();
+            if (!name) return;
+            if (!opDataMap[name]) opDataMap[name] = { itemId: r.item.id, records: [] };
+            opDataMap[name].records.push({
+              id: r.id, date: r.date, value: r.value,
+              recordings: r.recordings, labels: r.labels,
+              hours: r.hours, initials: r.initials,
+            });
+          });
+        } catch(e) {}
       });
     }
-    filledDays.push(task.dayNumber);
+    return origSend.apply(this, arguments);
+  };
+
+  // Wait for OP's own GETs to fire and populate the map
+  await delay(2000);
+
+  // Restore XHR prototypes
+  XMLHttpRequest.prototype.open = origOpen;
+  XMLHttpRequest.prototype.send = origSend;
+
+  // ── Step 2: Validate captured context ────────────────────────────────────────
+  if (!opApiBase) {
+    // Fallback: construct from page URL if OP made no GET requests during our window
+    const buId = window.location.pathname.match(/\/([a-f0-9]{24})\//)?.[1];
+    if (buId) {
+      opApiBase = `https://api.officepuzzle.com/v1/business_units/${buId}/service_plan_item_data`;
+    } else {
+      return ['❌ Could not capture OP API URL. Open the datasheet page fully before running autofill.'];
+    }
   }
 
-  if (!filledDays.length) return [`❌ "${matchingTasks[0].name}" — could not match any day columns`];
-  const daysStr = filledDays.length === 1 ? `day ${filledDays[0]}` : `days ${filledDays.join(', ')}`;
-  return [`✓ "${matchingTasks[0].name}" filled (${daysStr}) — navigate to the next behavior sheet to continue`];
+  if (!opViewMonth) {
+    const now = new Date();
+    opViewMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  // ── Step 3: Group tasks by unique name ───────────────────────────────────────
+  const tasksByName = new Map();
+  for (const task of tasks) {
+    if (!tasksByName.has(task.name)) tasksByName.set(task.name, []);
+    tasksByName.get(task.name).push(task);
+  }
+
+  // ── Step 4: POST each task directly to OP API ────────────────────────────────
+  const log = [];
+
+  for (const [name, nameTasks] of tasksByName) {
+    const opKey = Object.keys(opDataMap).find(k => namesMatch(name, k));
+    if (!opKey) {
+      const captured = Object.keys(opDataMap).map(k => `"${k}"`).join(', ') || 'none captured';
+      log.push(`❌ "${name}" — not found in OP data map. Captured: ${captured}`);
+      continue;
+    }
+    const { itemId, records } = opDataMap[opKey];
+    const filledDays = [];
+
+    for (const task of nameTasks) {
+      const targetDate = `${opViewMonth}-${String(task.dayNumber).padStart(2, '0')}`;
+      const existing = records.find(r => r.date && r.date.startsWith(targetDate));
+
+      let recordings, labels, value;
+      if (task.type === 'replacement') {
+        const totalTrials = task.trials ?? 12;
+        const correct = Math.min(totalTrials, Math.max(0, Math.round(task.value / 100 * totalTrials)));
+        const seq = Array.isArray(task.sequence) && task.sequence.length === totalTrials
+          ? task.sequence
+          : generateSequence(correct, totalTrials);
+        recordings = seq.map(s => s === '+' ? 1 : -1);
+        labels = seq.slice();
+        value = task.value; // percentage
+      } else {
+        const freq = Math.round(task.value);
+        const totalTrials = 20; // maladaptive default — no DOM to read
+        const safeFilled = Math.min(freq, totalTrials);
+        recordings = [...Array(safeFilled).fill(1), ...Array(totalTrials - safeFilled).fill(-1)];
+        labels = [...Array(safeFilled).fill('X'), ...Array(totalTrials - safeFilled).fill('')];
+        value = freq;
+      }
+
+      const postBody = {
+        date: targetDate,
+        value,
+        recordings,
+        labels,
+        hours: existing?.hours ?? 5,
+        userHours: existing?.hours ?? 5,
+        initials: existing?.initials ?? '',
+        isBaseline: false,
+        isActive: true,
+        period: 'day',
+        id: existing?.id ?? null,
+        item: { id: itemId },
+      };
+
+      try {
+        const res = await fetch(opApiBase, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(postBody),
+        });
+        if (res.ok) {
+          filledDays.push(task.dayNumber);
+        } else {
+          const errText = await res.text().catch(() => '');
+          log.push(`❌ "${name}" day ${task.dayNumber} — POST ${res.status}: ${errText.slice(0, 120)}`);
+        }
+      } catch(e) {
+        log.push(`❌ "${name}" day ${task.dayNumber} — fetch error: ${e.message}`);
+      }
+
+      await delay(300);
+    }
+
+    if (filledDays.length) {
+      const daysStr = filledDays.length === 1 ? `day ${filledDays[0]}` : `days ${filledDays.join(', ')}`;
+      log.push(`✓ "${name}" filled (${daysStr})`);
+    }
+  }
+
+  return log.length ? log : ['❌ No data was filled'];
 }
 
 // ── Open as Window ─────────────────────────

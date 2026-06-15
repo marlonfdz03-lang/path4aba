@@ -25,6 +25,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Missing client_id or note_text' }, { status: 400 })
   }
 
+  // Block exact duplicate before fuzzy check
+  const exactMatch = await prisma.session_notes.findFirst({
+    where: { client_id, note_text },
+    select: { id: true },
+  })
+  if (exactMatch) {
+    return NextResponse.json({ error: 'This note has already been saved.', duplicate: true }, { status: 409 })
+  }
+
   // Similarity check against the last 10 notes for this client
   const prevNotes = await prisma.session_notes.findMany({
     where: { client_id },

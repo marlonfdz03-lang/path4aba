@@ -29,10 +29,22 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const userId = (session.user as any).id as string
   const { clientId, noteText, sessionDate } = await req.json()
   if (!clientId || !noteText) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+
+  // Block duplicate: check if identical note already exists for this client
+  const existing = await prisma.session_notes.findFirst({
+    where: {
+      client_id: clientId,
+      note_text: noteText,
+    },
+    select: { id: true },
+  })
+
+  if (existing) {
+    return NextResponse.json({ error: 'This note has already been saved.', duplicate: true }, { status: 409 })
+  }
 
   await prisma.session_notes.create({
     data: {
@@ -42,7 +54,6 @@ export async function POST(req: Request) {
       session_date: sessionDate || new Date().toISOString().split('T')[0],
     },
   })
-
   return NextResponse.json({ ok: true })
 }
 

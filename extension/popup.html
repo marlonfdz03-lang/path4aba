@@ -136,22 +136,6 @@
     <!-- Role badge -->
     <div id="roleBadge" class="role-badge" style="display:none"></div>
 
-    <!-- ── Office Puzzle: Extract Charts ── -->
-    <div id="extractChartsSection" style="display:none">
-      <div class="op-section">
-        <div class="op-header">
-          <span class="op-badge">Office Puzzle</span>
-          <span class="op-label">Charts page detected</span>
-        </div>
-        <p class="muted-text" style="margin:4px 0 10px">Select the matching client above, then extract their chart history into Path4ABA.</p>
-        <button id="extractChartsBtn" class="btn-primary full-width op-extract-btn">Extract Charts</button>
-        <div id="extractChartsStatus" style="display:none"></div>
-        <div id="extractChartsPreview" style="display:none">
-          <div id="extractChartsSummary"></div>
-          <button id="saveChartsBtn" class="btn-primary full-width" style="margin-top:10px;background:#16a34a;border-color:#16a34a">Save to Path4ABA</button>
-        </div>
-      </div>
-    </div>
 
 
     <!-- Action tabs — shown after client selected -->
@@ -274,125 +258,157 @@
       <!-- ── Data Autofill Tab ── -->
       <div id="tabContent-data" class="tab-content" style="display:none">
 
-        <!-- Coming Soon locked screen (shown when data_tab_enabled=false) -->
+        <!-- Coming Soon locked screen (always shown) -->
         <div id="dataLockedScreen" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;text-align:center;gap:12px;">
-          <div style="font-size:40px;line-height:1;">🔒</div>
-          <p style="margin:0;font-size:16px;font-weight:700;color:#1f2937;">Coming Soon</p>
-          <p style="margin:0;font-size:12px;color:#6b7280;line-height:1.5;">This feature is currently in development.<br>Stay tuned!</p>
+          <div style="font-size:40px;line-height:1;">🚀</div>
+          <p style="margin:0;font-size:16px;font-weight:700;color:#1f2937;">Data Tools — Coming Soon</p>
+          <p style="margin:0;font-size:12px;color:#6b7280;line-height:1.5;">Autofill, chart extraction, and data management tools are coming soon. Stay tuned!</p>
         </div>
 
         <!-- Data tab content (hidden when locked) -->
         <div id="dataTabContent">
 
-        <!-- Pending review banner (unreviewed anomalies) -->
-        <div id="correctionsBanner" style="display:none;background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:8px 10px;margin-bottom:6px;cursor:pointer;">
-          <p id="correctionsBannerText" style="margin:0;font-size:11px;font-weight:600;color:#854d0e;"></p>
-        </div>
-
-        <!-- Corrected-data sync banner -->
-        <div id="correctedSyncBanner" style="display:none;background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:8px 10px;margin-bottom:6px;">
-          <p style="margin:0 0 6px;font-size:11px;font-weight:600;color:#854d0e;">Corrected data needs to be updated in Office Puzzle</p>
-          <button id="autofillCorrectedBtn" class="btn-primary full-width" style="font-size:11px;padding:5px 0;">Autofill Corrections</button>
-        </div>
-
-        <div class="data-warn">⚠️ Confirm values match your real session observation. This tool does not replace clinical judgment.</div>
-
-        <!-- Mode toggle -->
-        <div class="field" style="margin-bottom:8px;">
-          <div class="toggle-group" id="dataModeGroup">
-            <button class="toggle-btn active" data-val="single">Single Day</button>
-            <button class="toggle-btn" data-val="week">Full Week</button>
+          <!-- Pending review banner (unreviewed anomalies) -->
+          <div id="correctionsBanner" style="display:none;background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:8px 10px;margin-bottom:6px;cursor:pointer;">
+            <p id="correctionsBannerText" style="margin:0;font-size:11px;font-weight:600;color:#854d0e;"></p>
           </div>
-        </div>
 
-        <!-- ── Single Day ── -->
-        <div id="singleDaySection">
-          <div style="display:flex;gap:8px;">
-            <div style="flex:1;">
-              <label class="field-label">Month</label>
-              <select id="singleMonth" class="select" style="height:34px;"></select>
-            </div>
-            <div style="width:74px;">
-              <label class="field-label">Day</label>
-              <input type="number" id="singleDay" class="input" min="1" max="31" placeholder="1–31" style="height:34px;">
+          <!-- Corrected-data sync banner -->
+          <div id="correctedSyncBanner" style="display:none;background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:8px 10px;margin-bottom:6px;">
+            <p style="margin:0 0 6px;font-size:11px;font-weight:600;color:#854d0e;">Corrected data needs to be updated in Office Puzzle</p>
+            <button id="autofillCorrectedBtn" class="btn-primary full-width" style="font-size:11px;padding:5px 0;">Autofill Corrections</button>
+          </div>
+
+          <div class="data-warn">⚠️ Confirm values match your real session observation. This tool does not replace clinical judgment.</div>
+
+          <!-- ── Section 1: Extract Charts (shown only when on Office Puzzle /data/charts) ── -->
+          <div id="extractChartsSection" style="display:none;margin-bottom:10px;">
+            <div class="op-section">
+              <div class="op-header">
+                <span class="op-badge">Office Puzzle</span>
+                <span class="op-label">Charts page detected</span>
+              </div>
+              <p class="muted-text" style="margin:4px 0 10px">Select the matching client above, then extract their chart history into Path4ABA.</p>
+              <button id="extractChartsBtn" class="btn-primary full-width op-extract-btn">Extract Charts</button>
+              <div id="extractChartsStatus" style="display:none"></div>
+              <div id="extractChartsPreview" style="display:none">
+                <div id="extractChartsSummary"></div>
+                <button id="saveChartsBtn" class="btn-primary full-width" style="margin-top:10px;background:#16a34a;border-color:#16a34a">Save to Path4ABA</button>
+              </div>
             </div>
           </div>
 
-          <div id="singleStatus" style="display:none;margin-top:6px;font-size:11px;padding:6px 8px;border-radius:6px;"></div>
-
-          <div id="singleDataSection" style="display:none;margin-top:8px;">
-            <div style="display:flex;gap:8px;margin-bottom:8px;">
-              <button id="showSingleMaladBtn" class="btn-outline" style="flex:1;font-size:11px;border-color:#d97706;color:#92400e;">Maladaptives</button>
-              <button id="showSingleReplBtn" class="btn-outline" style="flex:1;font-size:11px;border-color:#059669;color:#065f46;">Replacements</button>
-            </div>
-
-            <div id="singleMaladSection" style="display:none;">
-              <p style="font-size:10px;font-weight:700;color:#92400e;margin:0 0 5px;letter-spacing:.05em;">MALADAPTIVES</p>
-              <div id="singleMaladList"></div>
-              <button id="autofillSingleMaladBtn" class="btn-primary full-width" style="margin-top:6px;background:#d97706;border-color:#d97706;">Autofill Maladaptives</button>
-              <div id="singleMaladStatus" style="display:none;margin-top:5px;font-size:11px;padding:5px 8px;border-radius:5px;"></div>
-            </div>
-
-            <div id="singleReplSection" style="display:none;margin-top:8px;">
-              <p style="font-size:10px;font-weight:700;color:#065f46;margin:0 0 5px;letter-spacing:.05em;">REPLACEMENTS</p>
-              <div id="singleReplList"></div>
-              <button id="autofillSingleReplBtn" class="btn-primary full-width" style="margin-top:6px;background:#059669;border-color:#059669;">Autofill Replacements</button>
-              <div id="singleReplStatus" style="display:none;margin-top:5px;font-size:11px;padding:5px 8px;border-radius:5px;"></div>
-            </div>
-
-            <div id="singleConfirmSection" style="margin-top:10px;padding-top:8px;border-top:1px solid #e5e7eb;">
-              <label style="display:flex;align-items:flex-start;gap:6px;font-size:11px;color:#374151;cursor:pointer;margin-bottom:8px;">
-                <input type="checkbox" id="singleConfirmCheck" style="margin-top:2px;flex-shrink:0;">
-                <span>I confirm this data reflects actual session observation.</span>
-              </label>
-              <button id="saveSingleDataBtn" class="btn-outline full-width">Save to Path4ABA</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- ── Full Week ── -->
-        <div id="fullWeekSection" style="display:none">
-          <div class="field">
-            <label class="field-label">Week Start (Monday)</label>
-            <input type="date" id="weekStartDate" class="input">
+          <!-- ── Section 2: Fix Past Data ── -->
+          <div style="margin-bottom:10px;padding:10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;">
+            <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#9a3412;letter-spacing:.04em;">2 · FIX PAST DATA</p>
+            <p style="margin:0 0 8px;font-size:10px;color:#6b7280;">Review and dismiss flagged data corrections for this client.</p>
+            <button id="loadCorrectionsBtn" class="btn-outline full-width" style="font-size:11px;border-color:#ea580c;color:#9a3412;">Load Corrections</button>
+            <div id="correctionsStatus" style="display:none;margin-top:5px;font-size:11px;padding:5px 8px;border-radius:5px;"></div>
+            <div id="correctionsList" style="display:none;margin-top:8px;"></div>
           </div>
 
-          <div id="weekDaysSection" style="display:none;margin-bottom:10px;">
-            <label class="field-label" style="display:block;margin-bottom:5px;">Days Worked</label>
-            <div id="weekDaysList" style="display:flex;flex-direction:column;gap:5px;"></div>
-          </div>
+          <!-- ── Section 3: Fill Data ── -->
+          <div style="padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+            <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#1e293b;letter-spacing:.04em;">3 · FILL DATA</p>
 
-          <div id="weekStatus" style="display:none;font-size:11px;padding:6px 8px;border-radius:6px;margin-bottom:8px;"></div>
-
-          <div id="weekDataSection" style="display:none;">
-            <div style="display:flex;gap:8px;margin-bottom:8px;">
-              <button id="showWeekMaladBtn" class="btn-outline" style="flex:1;font-size:11px;border-color:#d97706;color:#92400e;">Maladaptives</button>
-              <button id="showWeekReplBtn" class="btn-outline" style="flex:1;font-size:11px;border-color:#059669;color:#065f46;">Replacements</button>
+            <!-- Mode toggle -->
+            <div class="field" style="margin-bottom:8px;">
+              <div class="toggle-group" id="dataModeGroup">
+                <button class="toggle-btn active" data-val="single">Single Day</button>
+                <button class="toggle-btn" data-val="week">Full Week</button>
+              </div>
             </div>
 
-            <div id="weekMaladSection" style="display:none;">
-              <p style="font-size:10px;font-weight:700;color:#92400e;margin:0 0 5px;letter-spacing:.05em;">MALADAPTIVES</p>
-              <div id="weekMaladList"></div>
-              <button id="autofillWeekMaladBtn" class="btn-primary full-width" style="margin-top:6px;background:#d97706;border-color:#d97706;">Autofill Maladaptives</button>
-              <div id="weekMaladStatus" style="display:none;margin-top:5px;font-size:11px;padding:5px 8px;border-radius:5px;"></div>
+            <!-- ── Single Day ── -->
+            <div id="singleDaySection">
+              <div style="display:flex;gap:8px;">
+                <div style="flex:1;">
+                  <label class="field-label">Month</label>
+                  <select id="singleMonth" class="select" style="height:34px;"></select>
+                </div>
+                <div style="width:74px;">
+                  <label class="field-label">Day</label>
+                  <input type="number" id="singleDay" class="input" min="1" max="31" placeholder="1–31" style="height:34px;">
+                </div>
+              </div>
+
+              <div id="singleStatus" style="display:none;margin-top:6px;font-size:11px;padding:6px 8px;border-radius:6px;"></div>
+
+              <div id="singleDataSection" style="display:none;margin-top:8px;">
+                <div style="display:flex;gap:8px;margin-bottom:8px;">
+                  <button id="showSingleMaladBtn" class="btn-outline" style="flex:1;font-size:11px;border-color:#d97706;color:#92400e;">Maladaptives</button>
+                  <button id="showSingleReplBtn" class="btn-outline" style="flex:1;font-size:11px;border-color:#059669;color:#065f46;">Replacements</button>
+                </div>
+
+                <div id="singleMaladSection" style="display:none;">
+                  <p style="font-size:10px;font-weight:700;color:#92400e;margin:0 0 5px;letter-spacing:.05em;">MALADAPTIVES</p>
+                  <div id="singleMaladList"></div>
+                  <button id="autofillSingleMaladBtn" class="btn-primary full-width" style="margin-top:6px;background:#d97706;border-color:#d97706;">Autofill Maladaptives</button>
+                  <div id="singleMaladStatus" style="display:none;margin-top:5px;font-size:11px;padding:5px 8px;border-radius:5px;"></div>
+                </div>
+
+                <div id="singleReplSection" style="display:none;margin-top:8px;">
+                  <p style="font-size:10px;font-weight:700;color:#065f46;margin:0 0 5px;letter-spacing:.05em;">REPLACEMENTS</p>
+                  <div id="singleReplList"></div>
+                  <button id="autofillSingleReplBtn" class="btn-primary full-width" style="margin-top:6px;background:#059669;border-color:#059669;">Autofill Replacements</button>
+                  <div id="singleReplStatus" style="display:none;margin-top:5px;font-size:11px;padding:5px 8px;border-radius:5px;"></div>
+                </div>
+
+                <div id="singleConfirmSection" style="margin-top:10px;padding-top:8px;border-top:1px solid #e5e7eb;">
+                  <label style="display:flex;align-items:flex-start;gap:6px;font-size:11px;color:#374151;cursor:pointer;margin-bottom:8px;">
+                    <input type="checkbox" id="singleConfirmCheck" style="margin-top:2px;flex-shrink:0;">
+                    <span>I confirm this data reflects actual session observation.</span>
+                  </label>
+                  <button id="saveSingleDataBtn" class="btn-outline full-width">Save to Path4ABA</button>
+                </div>
+              </div>
             </div>
 
-            <div id="weekReplSection" style="display:none;margin-top:8px;">
-              <p style="font-size:10px;font-weight:700;color:#065f46;margin:0 0 5px;letter-spacing:.05em;">REPLACEMENTS</p>
-              <div id="weekReplList"></div>
-              <button id="autofillWeekReplBtn" class="btn-primary full-width" style="margin-top:6px;background:#059669;border-color:#059669;">Autofill Replacements</button>
-              <div id="weekReplStatus" style="display:none;margin-top:5px;font-size:11px;padding:5px 8px;border-radius:5px;"></div>
+            <!-- ── Full Week ── -->
+            <div id="fullWeekSection" style="display:none">
+              <div class="field">
+                <label class="field-label">Week Start (Monday)</label>
+                <input type="date" id="weekStartDate" class="input">
+              </div>
+
+              <div id="weekDaysSection" style="display:none;margin-bottom:10px;">
+                <label class="field-label" style="display:block;margin-bottom:5px;">Days Worked</label>
+                <div id="weekDaysList" style="display:flex;flex-direction:column;gap:5px;"></div>
+              </div>
+
+              <div id="weekStatus" style="display:none;font-size:11px;padding:6px 8px;border-radius:6px;margin-bottom:8px;"></div>
+
+              <div id="weekDataSection" style="display:none;">
+                <div style="display:flex;gap:8px;margin-bottom:8px;">
+                  <button id="showWeekMaladBtn" class="btn-outline" style="flex:1;font-size:11px;border-color:#d97706;color:#92400e;">Maladaptives</button>
+                  <button id="showWeekReplBtn" class="btn-outline" style="flex:1;font-size:11px;border-color:#059669;color:#065f46;">Replacements</button>
+                </div>
+
+                <div id="weekMaladSection" style="display:none;">
+                  <p style="font-size:10px;font-weight:700;color:#92400e;margin:0 0 5px;letter-spacing:.05em;">MALADAPTIVES</p>
+                  <div id="weekMaladList"></div>
+                  <button id="autofillWeekMaladBtn" class="btn-primary full-width" style="margin-top:6px;background:#d97706;border-color:#d97706;">Autofill Maladaptives</button>
+                  <div id="weekMaladStatus" style="display:none;margin-top:5px;font-size:11px;padding:5px 8px;border-radius:5px;"></div>
+                </div>
+
+                <div id="weekReplSection" style="display:none;margin-top:8px;">
+                  <p style="font-size:10px;font-weight:700;color:#065f46;margin:0 0 5px;letter-spacing:.05em;">REPLACEMENTS</p>
+                  <div id="weekReplList"></div>
+                  <button id="autofillWeekReplBtn" class="btn-primary full-width" style="margin-top:6px;background:#059669;border-color:#059669;">Autofill Replacements</button>
+                  <div id="weekReplStatus" style="display:none;margin-top:5px;font-size:11px;padding:5px 8px;border-radius:5px;"></div>
+                </div>
+
+                <div id="weekConfirmSection" style="margin-top:10px;padding-top:8px;border-top:1px solid #e5e7eb;">
+                  <label style="display:flex;align-items:flex-start;gap:6px;font-size:11px;color:#374151;cursor:pointer;margin-bottom:8px;">
+                    <input type="checkbox" id="weekConfirmCheck" style="margin-top:2px;flex-shrink:0;">
+                    <span>I confirm this data reflects actual session observation.</span>
+                  </label>
+                  <button id="saveWeekDataBtn" class="btn-outline full-width">Save to Path4ABA</button>
+                </div>
+              </div>
             </div>
 
-            <div id="weekConfirmSection" style="margin-top:10px;padding-top:8px;border-top:1px solid #e5e7eb;">
-              <label style="display:flex;align-items:flex-start;gap:6px;font-size:11px;color:#374151;cursor:pointer;margin-bottom:8px;">
-                <input type="checkbox" id="weekConfirmCheck" style="margin-top:2px;flex-shrink:0;">
-                <span>I confirm this data reflects actual session observation.</span>
-              </label>
-              <button id="saveWeekDataBtn" class="btn-outline full-width">Save to Path4ABA</button>
-            </div>
-          </div>
-        </div>
+          </div><!-- /Section 3 -->
 
         </div><!-- /dataTabContent -->
 
@@ -416,5 +432,6 @@
   </div>
 
   <script src="popup.js"></script>
+  <script src="data-tab-logic.js"></script>
 </body>
 </html>
