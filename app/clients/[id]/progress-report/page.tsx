@@ -3,18 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import dynamic from 'next/dynamic';
-
-const PDFDownloadLink = dynamic(
-  () => import('@react-pdf/renderer').then(mod => mod.PDFDownloadLink),
-  { ssr: false }
-);
-
-const ProgressReportPDF = dynamic(
-  () => import('./ProgressReportPDF').then(mod => mod.ProgressReportPDF),
-  { ssr: false }
-) as any;
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function trendIcon(trend: string) {
@@ -235,6 +223,13 @@ export default function ProgressReportPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)", fontFamily: "var(--font-dm-sans, sans-serif)" }}>
+      <style>{`
+        @media print {
+          nav, header, button, .no-print { display: none !important; }
+          body { background: white !important; }
+          .print-content { padding: 0 !important; }
+        }
+      `}</style>
       {/* Header */}
       <div className="px-6 py-4 border-b flex items-center justify-between" style={{ background: "white", borderColor: "var(--border)" }}>
         <div className="flex items-center gap-3">
@@ -259,25 +254,13 @@ export default function ProgressReportPage() {
             {generating ? "Generating…" : "Generate Report"}
           </button>
           {hasData && (
-            <PDFDownloadLink
-              document={
-                <ProgressReportPDF
-                  clientCode={clientName}
-                  periodLabel={selectedMonth}
-                  generatedAt={new Date().toLocaleDateString()}
-                  behaviorTrends={behaviorTrends}
-                  skillTrends={skillTrends}
-                  goalProgress={goalProgress}
-                  narrative={narrative}
-                  clinicalProfile={clinicalProfile}
-                />
-              }
-              fileName={`progress-report-${clientName}-${selectedMonth}.pdf`}
+            <button
+              onClick={() => window.print()}
               className="px-4 py-2 rounded-lg text-[13px] font-semibold border hover:opacity-80 transition-opacity"
-              style={{ borderColor: "var(--border)", color: "var(--text1)", textDecoration: 'none' }}
+              style={{ borderColor: "var(--border)", color: "var(--text1)" }}
             >
-              {({ loading }) => loading ? 'Preparing PDF…' : '↓ Download PDF'}
-            </PDFDownloadLink>
+              ↓ Save as PDF
+            </button>
           )}
         </div>
       </div>
