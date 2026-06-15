@@ -78,14 +78,14 @@ export async function GET(req: Request) {
       })
 
       const rbt = await prisma.users.findUnique({ where: { id: client.rbt_id! }, select: { email: true } })
-      if (rbt?.email) {
-        await sendProgressReportReadyEmail(rbt.email, client.internal_code, periodLabel, 'rbt')
+      if (rbt?.email && typeof rbt.email === 'string') {
+        await sendProgressReportReadyEmail(rbt.email, client.internal_code ?? 'Client', periodLabel, 'rbt')
       }
 
       if (connection?.bcba_id) {
         const bcba = await prisma.users.findUnique({ where: { id: connection.bcba_id }, select: { email: true } })
-        if (bcba?.email) {
-          await sendProgressReportReadyEmail(bcba.email, client.internal_code, periodLabel, 'bcba')
+        if (bcba?.email && typeof bcba.email === 'string') {
+          await sendProgressReportReadyEmail(bcba.email, client.internal_code ?? 'Client', periodLabel, 'bcba')
         }
       }
 
