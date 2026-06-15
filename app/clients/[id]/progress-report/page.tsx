@@ -258,7 +258,7 @@ export default function ProgressReportPage() {
                   <table className="w-full text-[13px]">
                     <thead>
                       <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
-                        {["Behavior", "Function", "Intervention", "Trend", "Status", "Why It Matters"].map(h => (
+                        {["Behavior", "Function", "Intervention", "Baseline", "Current", "Trend", "Status"].map(h => (
                           <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text3)" }}>{h}</th>
                         ))}
                       </tr>
@@ -267,22 +267,23 @@ export default function ProgressReportPage() {
                       {behaviorTrends.map((b, i) => (
                         <tr key={i} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
                           <td className="px-4 py-3 font-medium" style={{ color: "var(--text1)" }}>{b.name}</td>
-                          <td className="px-4 py-3 capitalize" style={{ color: "var(--text2)" }}>{getBehaviorFunction(b.name)}</td>
-                          <td className="px-4 py-3" style={{ color: "var(--text2)" }}>{getBehaviorIntervention(b.name)}</td>
+                          <td className="px-4 py-3 capitalize text-[12px]" style={{ color: "var(--text2)" }}>{getBehaviorFunction(b.name) || "—"}</td>
+                          <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text2)" }}>{getBehaviorIntervention(b.name)}</td>
+                          <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text3)" }}>
+                            {b.weeklyFrequencies?.length > 0 ? `${b.weeklyFrequencies[0]}/wk` : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-[12px] font-semibold" style={{ color: "var(--text1)" }}>
+                            {b.weeklyFrequencies?.length > 0 ? `${b.weeklyFrequencies[b.weeklyFrequencies.length - 1]}/wk` : "—"}
+                          </td>
                           <td className="px-4 py-3">
                             <span className="font-bold text-[16px]" style={{ color: trendColor(b.trend) }}>{trendIcon(b.trend)}</span>
                             {b.changePercent !== null && (
                               <span className="text-[11px] ml-1" style={{ color: trendColor(b.trend) }}>
-                                {b.changePercent > 0 ? "+" : ""}{b.changePercent.toFixed(0)}%
+                                {b.changePercent > 0 ? "+" : ""}{Math.abs(b.changePercent).toFixed(0)}%
                               </span>
                             )}
                           </td>
                           <td className="px-4 py-3"><StatusPill status={b.trend} /></td>
-                          <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text3)" }}>
-                            {b.trend === "worsening" ? "Requires immediate clinical attention" :
-                             b.trend === "improving" ? "Intervention is supporting progress" :
-                             "Continued monitoring required"}
-                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -301,7 +302,7 @@ export default function ProgressReportPage() {
                   <table className="w-full text-[13px]">
                     <thead>
                       <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
-                        {["Skill", "Avg Accuracy", "Trend", "Status", "Clinical Note"].map(h => (
+                        {["Skill", "Baseline", "Current", "Goal", "Trend", "Status"].map(h => (
                           <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text3)" }}>{h}</th>
                         ))}
                       </tr>
@@ -310,26 +311,29 @@ export default function ProgressReportPage() {
                       {skillTrends.map((s, i) => (
                         <tr key={i} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
                           <td className="px-4 py-3 font-medium" style={{ color: "var(--text1)" }}>{s.name}</td>
+                          <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text3)" }}>
+                            {s.weeklyPercentages?.length > 0 ? `${s.weeklyPercentages[0].toFixed(0)}%` : "—"}
+                          </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
-                              <div className="w-20"><ProgressBar value={s.avgPercentage} color={trendColor(s.trend)} /></div>
-                              <span style={{ color: "var(--text2)" }}>{s.avgPercentage.toFixed(0)}%</span>
+                              <div className="w-16"><ProgressBar value={s.avgPercentage} color={trendColor(s.trend)} /></div>
+                              <span className="text-[12px] font-semibold" style={{ color: trendColor(s.trend) }}>{s.avgPercentage.toFixed(0)}%</span>
                             </div>
+                          </td>
+                          <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text3)" }}>
+                            {goalProgress.find(g => g.targetName === s.name)?.goalValue != null
+                              ? `${goalProgress.find(g => g.targetName === s.name)?.goalValue}%`
+                              : "—"}
                           </td>
                           <td className="px-4 py-3">
                             <span className="font-bold text-[16px]" style={{ color: trendColor(s.trend) }}>{trendIcon(s.trend)}</span>
                             {s.changePercent !== null && (
                               <span className="text-[11px] ml-1" style={{ color: trendColor(s.trend) }}>
-                                {s.changePercent > 0 ? "+" : ""}{s.changePercent.toFixed(0)}%
+                                {s.changePercent > 0 ? "+" : ""}{Math.abs(s.changePercent).toFixed(0)}%
                               </span>
                             )}
                           </td>
                           <td className="px-4 py-3"><StatusPill status={s.trend} /></td>
-                          <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text3)" }}>
-                            {s.trend === "improving" ? "Continue current teaching procedures" :
-                             s.trend === "worsening" ? "Review teaching procedures with BCBA" :
-                             "Maintain current intervention frequency"}
-                          </td>
                         </tr>
                       ))}
                     </tbody>
