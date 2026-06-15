@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { PDFDownloadLink } from '@react-pdf/renderer';
+import { ProgressReportPDF } from './ProgressReportPDF';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -215,6 +217,27 @@ export default function ProgressReportPage() {
           >
             {generating ? "Generating…" : "Generate Report"}
           </button>
+          {hasData && (
+            <PDFDownloadLink
+              document={
+                <ProgressReportPDF
+                  clientCode={clientName}
+                  periodLabel={selectedMonth}
+                  generatedAt={new Date().toLocaleDateString()}
+                  behaviorTrends={behaviorTrends}
+                  skillTrends={skillTrends}
+                  goalProgress={goalProgress}
+                  narrative={narrative}
+                  clinicalProfile={clinicalProfile}
+                />
+              }
+              fileName={`progress-report-${clientName}-${selectedMonth}.pdf`}
+              className="px-4 py-2 rounded-lg text-[13px] font-semibold border hover:opacity-80 transition-opacity"
+              style={{ borderColor: "var(--border)", color: "var(--text1)", textDecoration: 'none' }}
+            >
+              {({ loading }) => loading ? 'Preparing PDF…' : '↓ Download PDF'}
+            </PDFDownloadLink>
+          )}
         </div>
       </div>
 
