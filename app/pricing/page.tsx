@@ -99,6 +99,72 @@ const BCBA_PLANS: Plan[] = [
   },
 ];
 
+function WaitlistCard({
+  planLabel,
+  email,
+  onEmailChange,
+  onSubmit,
+  loading,
+  done,
+  error,
+}: {
+  planLabel: string;
+  email: string;
+  onEmailChange: (v: string) => void;
+  onSubmit: () => void;
+  loading: boolean;
+  done: boolean;
+  error: string;
+}) {
+  return (
+    <div className="max-w-md mx-auto w-full">
+      <div className="rounded-2xl overflow-hidden" style={{ background: "white", border: "1px solid var(--border)", boxShadow: "0 4px 24px rgba(0,0,0,0.07)" }}>
+        <div className="h-[3px]" style={{ background: "linear-gradient(90deg, var(--teal), var(--sky))" }} />
+        <div className="p-8 flex flex-col items-center text-center">
+          <span className="text-[11px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full mb-5" style={{ background: "rgba(27,168,160,0.12)", color: "#24BDB4" }}>
+            Coming Soon — Join the Waitlist
+          </span>
+          <h3 className="text-[20px] font-semibold mb-2" style={{ color: "var(--text1)" }}>
+            {planLabel} plans are on the way
+          </h3>
+          <p className="text-[14px] mb-8 leading-relaxed" style={{ color: "var(--text3)" }}>
+            We&apos;re finishing up {planLabel} features. Enter your email and we&apos;ll notify you the moment they launch.
+          </p>
+          {done ? (
+            <div className="w-full px-5 py-3.5 rounded-xl text-[14px] font-semibold" style={{ background: "#E6F9F5", border: "1px solid #A7F3D0", color: "#065F46" }}>
+              ✓ You&apos;re on the list! We&apos;ll email you when plans launch.
+            </div>
+          ) : (
+            <div className="w-full flex flex-col gap-2">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => onEmailChange(e.target.value)}
+                placeholder="your@email.com"
+                className="w-full border rounded-xl px-4 py-3 text-[14px] focus:outline-none"
+                style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onSubmit(); } }}
+              />
+              <button
+                onClick={onSubmit}
+                disabled={loading || !email.trim()}
+                className="w-full py-3 rounded-xl text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{ background: "var(--teal)" }}
+              >
+                {loading ? "Sending…" : "Notify Me"}
+              </button>
+              {error && <p className="text-[12px] text-center" style={{ color: "#DC2626" }}>{error}</p>}
+            </div>
+          )}
+          <p className="text-[12px] mt-5" style={{ color: "var(--text3)" }}>
+            No spam. We&apos;ll only email you when your plan is ready.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PlanCard({
   plan,
   interval,
@@ -208,6 +274,10 @@ function PricingContent() {
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoApplied, setPromoApplied] = useState(false);
   const [promoError, setPromoError] = useState("");
+  const [waitlistEmail, setWaitlistEmail] = useState("");
+  const [waitlistLoading, setWaitlistLoading] = useState(false);
+  const [waitlistDone, setWaitlistDone] = useState(false);
+  const [waitlistError, setWaitlistError] = useState("");
 
   useEffect(() => {
     if (addonOnly) return;
@@ -239,6 +309,27 @@ function PricingContent() {
     setPromoLoading(false);
     if (valid) setPromoApplied(true);
     else setPromoError(error || "Invalid promo code");
+  }
+
+  async function handleWaitlist(plan: string) {
+    const email = waitlistEmail.trim();
+    if (!email) return;
+    setWaitlistLoading(true);
+    setWaitlistError("");
+    try {
+      const res = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, plan }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setWaitlistDone(true);
+    } catch (err: any) {
+      setWaitlistError(err.message || "Something went wrong. Please try again.");
+    } finally {
+      setWaitlistLoading(false);
+    }
   }
 
   async function handleStart(planKey: PlanKey) {
@@ -375,124 +466,30 @@ function PricingContent() {
           </div>
         )}
 
-        {/* BCBA Plans */}
+        {/* BCBA Plans — Coming Soon */}
         {profession === "bcba" && (
-          <div className="flex flex-col md:flex-row gap-5">
-            {BCBA_PLANS.map((plan) => (
-              <PlanCard
-                key={plan.key}
-                plan={plan}
-                interval={interval}
-                onStart={() => handleStart(plan.key)}
-                loading={loadingPlan === plan.key}
-                disabled={!agreedToTerms || !!loadingPlan}
-                promoApplied={promoApplied}
-              />
-            ))}
-          </div>
+          <WaitlistCard
+            planLabel="BCBA / BCaBA"
+            email={waitlistEmail}
+            onEmailChange={(v) => { setWaitlistEmail(v); setWaitlistError(""); }}
+            onSubmit={() => handleWaitlist("bcba")}
+            loading={waitlistLoading}
+            done={waitlistDone}
+            error={waitlistError}
+          />
         )}
 
-        {/* BCBA Students */}
+        {/* BCBA Students — Coming Soon */}
         {profession === "student" && (
-          <>
-            {addonOnly && (
-              <div className="mb-6 text-center">
-                <a
-                  href="/pricing"
-                  className="inline-flex items-center gap-1 text-[13px] font-medium hover:underline mb-4"
-                  style={{ color: "var(--teal)" }}
-                >
-                  ← See all plans
-                </a>
-                <p className="text-[15px] font-semibold mt-2" style={{ color: "var(--text1)" }}>
-                  Add Fieldwork Tracking to your RBT plan for $14.99/mo
-                </p>
-              </div>
-            )}
-          <div className={addonOnly ? "max-w-sm mx-auto" : "flex flex-col md:flex-row gap-5"}>
-
-            {/* Plan 1: Add-on for RBT */}
-            <div className="flex-1 bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-              <div className="h-[3px]" style={{ background: "linear-gradient(90deg, var(--teal), var(--sky))" }} />
-              <div className="p-7 flex flex-col">
-                <p className="text-[11px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--text3)" }}>Add-on for RBT</p>
-                <p className="text-[13px] mb-5 leading-relaxed" style={{ color: "var(--text3)" }}>Fieldwork Tracker — requires an active RBT plan on Path4ABA.</p>
-                <div className="flex items-end gap-1.5 mb-1">
-                  <span className="text-[38px] font-semibold leading-none" style={{ color: "var(--text1)" }}>
-                    ${interval === "month" ? "14.99" : "149"}
-                  </span>
-                  <span className="text-[13px] mb-1.5" style={{ color: "var(--text3)" }}>/{interval === "month" ? "mo" : "yr"}</span>
-                </div>
-                <div className="mb-5 h-5">
-                  {interval === "year" && (
-                    <p className="text-[12px] font-medium" style={{ color: "var(--teal)" }}>Save $31/year vs monthly</p>
-                  )}
-                </div>
-                <button
-                  onClick={() => router.push("/login")}
-                  className="w-full py-3 rounded-xl text-[14px] font-semibold transition-opacity hover:opacity-90 mb-2"
-                  style={{ background: "transparent", border: "1.5px solid #0F62FE", color: "#0F62FE" }}
-                >
-                  Log In to Add
-                </button>
-                <p className="text-[11px] text-center mb-6" style={{ color: "var(--text3)" }}>
-                  Available in your RBT dashboard after login
-                </p>
-                <div className="h-px mb-5" style={{ background: "var(--border)" }} />
-                <ul className="space-y-2.5 flex-1">
-                  {["Track fieldwork hours", "BACB compliance calculations", "Monthly M-FVF PDF export", "200+ BCBA-compliant notes"].map((f) => (
-                    <li key={f} className="flex items-start gap-2.5">
-                      <span style={{ color: "var(--teal)", flexShrink: 0, marginTop: 1 }}>{CHECK}</span>
-                      <span className="text-[13px]" style={{ color: "var(--text2)" }}>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            {/* Plan 2: Standalone — hidden when coming from the sidebar addon link */}
-            {!addonOnly && <div className="flex-1 bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)", boxShadow: "0 20px 60px rgba(13,43,78,0.12)" }}>
-              <div className="h-[3px]" style={{ background: "linear-gradient(90deg, var(--teal), var(--sky))" }} />
-              <div className="p-7 flex flex-col">
-                <p className="text-[11px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--text3)" }}>BCBA Students Standalone</p>
-                <p className="text-[13px] mb-5 leading-relaxed" style={{ color: "var(--text3)" }}>Fieldwork Tracker — no existing Path4ABA subscription required.</p>
-                <div className="flex items-end gap-1.5 mb-1">
-                  {promoApplied && (
-                    <span className="text-[22px] font-medium leading-none line-through self-end mb-0.5" style={{ color: "var(--text3)" }}>${standalonePrice}</span>
-                  )}
-                  <span className="text-[38px] font-semibold leading-none" style={{ color: "var(--text1)" }}>
-                    ${promoApplied ? parseFloat((standalonePrice - (interval === "month" ? 5 : 60)).toFixed(2)) : standalonePrice}
-                  </span>
-                  <span className="text-[13px] mb-1.5" style={{ color: "var(--text3)" }}>/{interval === "month" ? "mo" : "yr"}</span>
-                </div>
-                <div className="mb-5 h-5">
-                  {interval === "year" && (
-                    <p className="text-[12px] font-medium" style={{ color: "var(--teal)" }}>Save ${standaloneSavings}/year vs monthly</p>
-                  )}
-                </div>
-                <button
-                  onClick={handleStartStandalone}
-                  disabled={!!loadingPlan || !agreedToTerms}
-                  className="w-full py-3 rounded-xl text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed mb-3"
-                  style={{ background: "var(--navy)" }}
-                >
-                  {loadingPlan === "bcba_students_standalone" ? "Redirecting…" : "Start Free Trial"}
-                </button>
-                <p className="text-[11px] text-center mb-6" style={{ color: "var(--text3)" }}>7 days free · No credit card required</p>
-                <div className="h-px mb-5" style={{ background: "var(--border)" }} />
-                <ul className="space-y-2.5 flex-1">
-                  {["Track fieldwork hours", "BACB compliance calculations", "Monthly M-FVF PDF export", "200+ BCBA-compliant notes", "7-day free trial"].map((f) => (
-                    <li key={f} className="flex items-start gap-2.5">
-                      <span style={{ color: "var(--teal)", flexShrink: 0, marginTop: 1 }}>{CHECK}</span>
-                      <span className="text-[13px]" style={{ color: "var(--text2)" }}>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>}
-
-          </div>
-          </>
+          <WaitlistCard
+            planLabel="BCBA / BCaBA Student"
+            email={waitlistEmail}
+            onEmailChange={(v) => { setWaitlistEmail(v); setWaitlistError(""); }}
+            onSubmit={() => handleWaitlist("bcba_student")}
+            loading={waitlistLoading}
+            done={waitlistDone}
+            error={waitlistError}
+          />
         )}
 
         {/* Add-ons — only for RBT and BCBA */}

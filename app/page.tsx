@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import WaitlistSection from "@/app/components/WaitlistSection";
 
 export const metadata: Metadata = {
   title: "Path4ABA — AI-Powered Clinical Documentation for ABA Professionals",
@@ -234,7 +235,14 @@ function Hero() {
 // ── Who It's For ──────────────────────────────────────────────────────────────
 
 function WhoItsFor() {
-  const cards = [
+  const cards: Array<{
+    emoji: string;
+    title: string;
+    description: string;
+    price: string;
+    features: string[];
+    comingSoon?: boolean;
+  }> = [
     {
       emoji: "🧑‍⚕️",
       title: "For RBTs",
@@ -260,6 +268,7 @@ function WhoItsFor() {
         "Multi-RBT oversight",
         "Clinical profile tools",
       ],
+      comingSoon: true,
     },
     {
       emoji: "🎓",
@@ -273,6 +282,7 @@ function WhoItsFor() {
         "Monthly M-FVF PDF export",
         "Progress dashboards",
       ],
+      comingSoon: true,
     },
   ];
 
@@ -314,8 +324,28 @@ function WhoItsFor() {
                 boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
                 display: "flex",
                 flexDirection: "column",
+                position: "relative",
               }}
             >
+              {card.comingSoon && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: 20,
+                    right: 20,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    padding: "4px 10px",
+                    borderRadius: 99,
+                    background: "rgba(37,99,235,0.1)",
+                    color: "#2563EB",
+                  }}
+                >
+                  Coming Soon
+                </span>
+              )}
               <div style={{ fontSize: 36, marginBottom: 16 }}>{card.emoji}</div>
               <h3 style={{ fontSize: 20, fontWeight: 700, color: "#0A1628", marginBottom: 10 }}>
                 {card.title}
@@ -352,7 +382,27 @@ function WhoItsFor() {
                   </li>
                 ))}
               </ul>
-              <p style={{ fontSize: 13, fontWeight: 700, color: "#2563EB" }}>{card.price}</p>
+              {card.comingSoon ? (
+                <a
+                  href="#waitlist"
+                  style={{
+                    display: "inline-block",
+                    padding: "10px 20px",
+                    borderRadius: 10,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    border: "1.5px solid #2563EB",
+                    color: "#2563EB",
+                    textDecoration: "none",
+                    textAlign: "center",
+                    marginBottom: 8,
+                  }}
+                >
+                  Join Waitlist
+                </a>
+              ) : (
+                <p style={{ fontSize: 13, fontWeight: 700, color: "#2563EB" }}>{card.price}</p>
+              )}
             </div>
           ))}
         </div>
@@ -865,6 +915,7 @@ export default function LandingPage() {
       <Navbar />
       <Hero />
       <WhoItsFor />
+      <WaitlistSection />
       <Features />
       <PricingTeaser />
       <Testimonials />
