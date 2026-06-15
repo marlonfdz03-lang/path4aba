@@ -3,8 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { PDFDownloadLink } from '@react-pdf/renderer';
-import { ProgressReportPDF } from './ProgressReportPDF';
+import dynamic from 'next/dynamic';
+
+const PDFDownloadLink = dynamic(
+  () => import('@react-pdf/renderer').then(mod => mod.PDFDownloadLink),
+  { ssr: false }
+);
+
+const ProgressReportPDF = dynamic(
+  () => import('./ProgressReportPDF').then(mod => mod.ProgressReportPDF),
+  { ssr: false }
+) as any;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
