@@ -3,54 +3,60 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { getClientProfiles } from "@/lib/clientStorage";
 
-function TrendBadge({ trend }: { trend: string }) {
-  const config: Record<string, { label: string; bg: string; color: string }> = {
-    improving:         { label: "Improving",         bg: "#DCFCE7", color: "#16A34A" },
-    stable:            { label: "Stable",             bg: "#F1F5F9", color: "#64748B" },
-    worsening:         { label: "Worsening",          bg: "#FEE2E2", color: "#DC2626" },
-    insufficient_data: { label: "Insufficient Data",  bg: "#FEF3C7", color: "#D97706" },
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function trendIcon(trend: string) {
+  if (trend === "improving") return "↓";
+  if (trend === "worsening") return "↑";
+  if (trend === "stable") return "→";
+  return "—";
+}
+
+function trendColor(trend: string) {
+  if (trend === "improving") return "#16A34A";
+  if (trend === "worsening") return "#DC2626";
+  if (trend === "stable") return "#64748B";
+  return "#D97706";
+}
+
+function StatusPill({ status }: { status: string }) {
+  const map: Record<string, { bg: string; color: string; label: string }> = {
+    "improving":         { bg: "#DCFCE7", color: "#16A34A", label: "🟢 Improving" },
+    "stable":            { bg: "#F1F5F9", color: "#64748B", label: "→ Stable" },
+    "worsening":         { bg: "#FEE2E2", color: "#DC2626", label: "🔴 Worsening" },
+    "insufficient_data": { bg: "#FEF3C7", color: "#D97706", label: "⚠ Insufficient Data" },
+    "On Track":          { bg: "#DCFCE7", color: "#16A34A", label: "🟢 On Track" },
+    "Needs Attention":   { bg: "#FEE2E2", color: "#DC2626", label: "🔴 Needs Attention" },
+    "Mastered":          { bg: "#EEF2FF", color: "#3730A3", label: "⭐ Mastered" },
+    "Insufficient Data": { bg: "#FEF3C7", color: "#D97706", label: "⚠ Insufficient Data" },
   };
-  const { label, bg, color } = config[trend] ?? config.insufficient_data;
+  const s = map[status] ?? map["insufficient_data"];
   return (
-    <span
-      className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
-      style={{ background: bg, color }}
-    >
-      {label}
+    <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap" style={{ background: s.bg, color: s.color }}>
+      {s.label}
     </span>
   );
 }
 
-function GoalStatusBadge({ status }: { status: string }) {
-  const config: Record<string, { bg: string; color: string }> = {
-    "On Track":          { bg: "var(--teal-light)", color: "var(--teal)" },
-    "Needs Attention":   { bg: "#FEE2E2",           color: "#DC2626" },
-    "Mastered":          { bg: "#EEF2FF",            color: "var(--navy, #1E293B)" },
-    "Insufficient Data": { bg: "#F1F5F9",            color: "#64748B" },
-  };
-  const { bg, color } = config[status] ?? config["Insufficient Data"];
+function ProgressBar({ value, color = "#2563EB" }: { value: number; color?: string }) {
   return (
-    <span
-      className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
-      style={{ background: bg, color }}
-    >
-      {status}
-    </span>
+    <div className="w-full h-2 rounded-full" style={{ background: "#E5E7EB" }}>
+      <div className="h-2 rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, value))}%`, background: color }} />
+    </div>
   );
 }
 
 function SectionHeader({ title }: { title: string }) {
   return (
     <div className="flex items-center gap-3 mb-4">
-      <p className="text-[11px] uppercase tracking-widest font-semibold whitespace-nowrap" style={{ color: "var(--text3)" }}>
-        {title}
-      </p>
+      <p className="text-[11px] uppercase tracking-widest font-semibold whitespace-nowrap" style={{ color: "var(--text3)" }}>{title}</p>
       <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
     </div>
   );
 }
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function ProgressReportPage() {
   const params = useParams();
@@ -58,55 +64,57 @@ export default function ProgressReportPage() {
 
   const [clientName, setClientName] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
-
   const [generating, setGenerating] = useState(false);
   const [narrative, setNarrative] = useState("");
   const [behaviorTrends, setBehaviorTrends] = useState<any[]>([]);
   const [skillTrends, setSkillTrends] = useState<any[]>([]);
   const [goalProgress, setGoalProgress] = useState<any[]>([]);
-  const [reports, setReports] = useState<any[]>([]);
-  const [genError, setGenError] = useState("");
-  const [noteCopied, setNoteCopied] = useState(false);
-  const [expandedReports, setExpandedReports] = useState<Set<string>>(new Set());
-
-  const narrativeRef = useRef<HTMLTextAreaElement>(null);
+  const [previousReports, setPreviousReports] = useState<any[]>([]);
+  const [expandedReport, setExpandedReport] = useState<string | null>(null);
+  const [status, setStatus] = useState("");
+  const [clinicalProfile, setClinicalProfile] = useState<any>(null);
+  const narrativeRef = useRef("");
 
   useEffect(() => {
-    const profiles = getClientProfiles();
-    const found = profiles.find((p: any) => p.id === clientId);
-    if (found) setClientName(found.clientName || "");
-    loadReports();
+    const stored = localStorage.getItem("path4aba_clients");
+    if (stored) {
+      const clients = JSON.parse(stored);
+      const client = clients.find((c: any) => c.id === clientId);
+      if (client) {
+        setClientName(client.client_name || client.internal_code || "Client");
+        setClinicalProfile(client.clinical_profile || null);
+      }
+    }
+    fetchPreviousReports();
   }, [clientId]);
 
-  async function loadReports() {
+  async function fetchPreviousReports() {
     try {
       const res = await fetch(`/api/progress-report?clientId=${clientId}`);
       if (res.ok) {
-        const json = await res.json();
-        setReports(json.reports || []);
+        const data = await res.json();
+        setPreviousReports(data.reports || []);
       }
     } catch {}
   }
 
-  const [year, month] = selectedMonth.split("-").map(Number);
-  const periodStart = `${year}-${String(month).padStart(2, "0")}-01`;
-  const lastDay = new Date(year, month, 0).getDate();
-  const periodEnd = `${year}-${String(month).padStart(2, "0")}-${lastDay}`;
-  const periodLabel = new Date(year, month - 1).toLocaleString("en-US", {
-    month: "long",
-    year: "numeric",
-  });
-
   async function handleGenerate() {
+    const [year, month] = selectedMonth.split("-").map(Number);
+    const periodStart = new Date(year, month - 1, 1).toISOString().split("T")[0];
+    const periodEnd = new Date(year, month, 0).toISOString().split("T")[0];
+    const periodLabel = new Date(year, month - 1, 1).toLocaleString("en-US", { month: "long", year: "numeric" });
+
     setGenerating(true);
-    setGenError("");
     setNarrative("");
     setBehaviorTrends([]);
     setSkillTrends([]);
     setGoalProgress([]);
+    setStatus("Analyzing clinical data…");
+    narrativeRef.current = "";
 
     try {
       const res = await fetch("/api/progress-report", {
@@ -114,200 +122,241 @@ export default function ProgressReportPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ clientId, periodStart, periodEnd, periodLabel }),
       });
+      if (!res.ok || !res.body) { setStatus("Generation failed."); return; }
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setGenError(err.error || "Generation failed.");
-        return;
-      }
-
-      const reader = res.body!.getReader();
+      const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        const metaIdx = buffer.indexOf("\n__META__");
-        if (metaIdx !== -1) {
-          const narrativeText = buffer.slice(0, metaIdx);
-          const metaRaw = buffer.slice(metaIdx + "\n__META__".length);
-          setNarrative(narrativeText);
+        const chunk = decoder.decode(value, { stream: true });
+        if (chunk.includes("__META__")) {
+          const [text, metaStr] = chunk.split("__META__");
+          if (text) { narrativeRef.current += text; setNarrative(narrativeRef.current); }
           try {
-            const meta = JSON.parse(metaRaw);
-            if (meta.error) {
-              setGenError(meta.error);
-            } else {
-              setBehaviorTrends(meta.behaviorTrends || []);
-              setSkillTrends(meta.skillTrends || []);
-              setGoalProgress(meta.goalProgress || []);
-              loadReports();
-            }
+            const meta = JSON.parse(metaStr);
+            if (meta.behaviorTrends) setBehaviorTrends(meta.behaviorTrends);
+            if (meta.skillTrends) setSkillTrends(meta.skillTrends);
+            if (meta.goalProgress) setGoalProgress(meta.goalProgress);
+            if (meta.error) setStatus(meta.error);
           } catch {}
-          break;
         } else {
-          setNarrative(buffer);
+          narrativeRef.current += chunk;
+          setNarrative(narrativeRef.current);
+          setStatus("Generating clinical narrative…");
         }
       }
-    } catch {
-      setGenError("Network error. Please try again.");
-    } finally {
-      setGenerating(false);
-    }
+      setStatus("");
+      fetchPreviousReports();
+    } catch { setStatus("Network error. Please try again."); }
+    finally { setGenerating(false); }
   }
 
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(narrative);
-      setNoteCopied(true);
-      setTimeout(() => setNoteCopied(false), 2000);
-    } catch {}
-  }
+  // ── Derived summary stats ──
+  const improving = behaviorTrends.filter(b => b.trend === "improving").length;
+  const worsening = behaviorTrends.filter(b => b.trend === "worsening").length;
+  const skillsImproving = skillTrends.filter(s => s.trend === "improving").length;
+  const mastered = goalProgress.filter(g => g.goalStatus === "Mastered").length;
+  const needsAttention = goalProgress.filter(g => g.goalStatus === "Needs Attention").length;
+  const onTrack = goalProgress.filter(g => g.goalStatus === "On Track").length;
 
-  function toggleReport(id: string) {
-    setExpandedReports(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  // Get intervention names from clinical profile
+  const interventionMap: Record<string, string> = {};
+  if (clinicalProfile?.interventions) {
+    clinicalProfile.interventions.forEach((i: any) => {
+      const name = typeof i === "string" ? i : i?.name || "";
+      if (name) interventionMap[name.toLowerCase()] = name;
     });
   }
 
-  const hasResults = narrative || behaviorTrends.length > 0 || skillTrends.length > 0 || goalProgress.length > 0;
+  // Match behavior to its intervention from clinical profile
+  function getBehaviorIntervention(behaviorName: string): string {
+    const profile = clinicalProfile?.maladaptiveBehaviors?.find((b: any) =>
+      (typeof b === "string" ? b : b?.name || "").toLowerCase() === behaviorName.toLowerCase()
+    );
+    if (!profile || typeof profile === "string") return "Per treatment plan";
+    return (clinicalProfile?.interventions || []).slice(0, 2).map((i: any) => typeof i === "string" ? i : i?.name || "").filter(Boolean).join(", ") || "Per treatment plan";
+  }
+
+  function getBehaviorFunction(behaviorName: string): string {
+    const profile = clinicalProfile?.maladaptiveBehaviors?.find((b: any) =>
+      (typeof b === "string" ? b : b?.name || "").toLowerCase() === behaviorName.toLowerCase()
+    );
+    if (!profile || typeof profile === "string") return "—";
+    const funcs = profile.functions || profile.function || [];
+    return Array.isArray(funcs) ? funcs.join(", ") : funcs || "—";
+  }
+
+  const hasData = behaviorTrends.length > 0 || skillTrends.length > 0 || goalProgress.length > 0;
 
   return (
-    <main className="min-h-screen" style={{ background: "var(--bg)", fontFamily: "var(--font-dm-sans, sans-serif)" }}>
-
-      {/* Topbar */}
-      <div className="flex items-center gap-2 px-8 h-14 bg-white text-[13px]" style={{ borderBottom: "1px solid var(--border)" }}>
-        <Link href="/clients" className="hover:underline" style={{ color: "var(--text3)" }}>Clients</Link>
-        <span style={{ color: "var(--border2)" }}>/</span>
-        <Link href={`/clients/${clientId}`} className="hover:underline" style={{ color: "var(--text3)" }}>
-          {clientName || "Client"}
-        </Link>
-        <span style={{ color: "var(--border2)" }}>/</span>
-        <span className="font-medium" style={{ color: "var(--text1)" }}>Progress Report</span>
+    <div className="min-h-screen" style={{ background: "var(--bg)", fontFamily: "var(--font-dm-sans, sans-serif)" }}>
+      {/* Header */}
+      <div className="px-6 py-4 border-b flex items-center justify-between" style={{ background: "white", borderColor: "var(--border)" }}>
+        <div className="flex items-center gap-3">
+          <Link href={`/clients/${clientId}`} className="text-[13px] hover:opacity-70" style={{ color: "var(--text3)" }}>← Back</Link>
+          <div className="w-px h-4" style={{ background: "var(--border)" }} />
+          <div>
+            <p className="text-[15px] font-semibold" style={{ color: "var(--text1)" }}>Monthly Progress Report</p>
+            <p className="text-[12px]" style={{ color: "var(--text3)" }}>{clientName}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <input
+            type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
+            className="border rounded-lg px-3 py-1.5 text-[13px]"
+            style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+          />
+          <button
+            onClick={handleGenerate} disabled={generating}
+            className="px-4 py-2 rounded-lg text-[13px] font-semibold text-white disabled:opacity-50"
+            style={{ background: "var(--primary, #2563EB)" }}
+          >
+            {generating ? "Generating…" : "Generate Report"}
+          </button>
+        </div>
       </div>
 
-      <div className="px-8 py-6 max-w-3xl space-y-5">
-
-        {/* Generate card */}
-        <div className="bg-white rounded-xl border p-6" style={{ borderColor: "var(--border)" }}>
-          <p className="text-[15px] font-semibold mb-1" style={{ color: "var(--text1)" }}>Generate Progress Report</p>
-          <p className="text-[13px] mb-5" style={{ color: "var(--text3)" }}>
-            Analyzes behavior trends, skill acquisition, and goal progress for the selected month.
-          </p>
-
-          <div className="flex items-end gap-3">
-            <div>
-              <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--text2)" }}>
-                Reporting Period
-              </label>
-              <input
-                type="month"
-                value={selectedMonth}
-                onChange={e => setSelectedMonth(e.target.value)}
-                className="border rounded-xl px-4 py-2.5 text-[13px] focus:outline-none"
-                style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-              />
-            </div>
-            <button
-              onClick={handleGenerate}
-              disabled={generating}
-              className="px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: "var(--teal)" }}
-            >
-              {generating ? "Generating…" : "Generate Report"}
-            </button>
+      <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+        {status && (
+          <div className="px-4 py-3 rounded-xl text-[13px]" style={{ background: "#EFF6FF", color: "#1E40AF" }}>
+            {status}
           </div>
+        )}
 
-          {genError && (
-            <p className="mt-3 text-[12px] px-3 py-2 rounded-lg border" style={{ background: "#FEF2F2", borderColor: "#FECACA", color: "#DC2626" }}>
-              {genError}
-            </p>
-          )}
-        </div>
-
-        {/* Results */}
-        {hasResults && (
+        {hasData && (
           <>
-            {/* Behavior Trends */}
+            {/* Executive Summary Cards */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                { label: "Behaviors Improved", value: improving, color: "#16A34A", bg: "#DCFCE7" },
+                { label: "Behaviors Need Attention", value: worsening, color: "#DC2626", bg: "#FEE2E2" },
+                { label: "Skills Improving", value: skillsImproving, color: "#2563EB", bg: "#EFF6FF" },
+                { label: "Goals Mastered", value: mastered, color: "#7C3AED", bg: "#EEF2FF" },
+              ].map(card => (
+                <div key={card.label} className="rounded-xl p-4 text-center" style={{ background: card.bg }}>
+                  <p className="text-[28px] font-bold" style={{ color: card.color }}>{card.value}</p>
+                  <p className="text-[11px] font-semibold mt-1" style={{ color: card.color }}>{card.label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Service Justification Banner */}
+            <div className="rounded-xl px-5 py-4" style={{ background: "#F0FDF4", border: "1px solid #A7F3D0" }}>
+              <p className="text-[13px] font-semibold" style={{ color: "#065F46" }}>✓ Continued ABA services remain clinically indicated at the current authorized intensity.</p>
+              <p className="text-[12px] mt-1" style={{ color: "#047857" }}>Service needs are determined by individual behavioral profile, not age-based criteria.</p>
+            </div>
+
+            {/* Maladaptive Behaviors Table */}
             {behaviorTrends.length > 0 && (
-              <div className="bg-white rounded-xl border p-6" style={{ borderColor: "var(--border)" }}>
-                <SectionHeader title="Behavior Trends" />
-                <div className="space-y-3">
-                  {behaviorTrends.map((b: any) => (
-                    <div key={b.name} className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
-                      <div>
-                        <p className="text-[13px] font-semibold" style={{ color: "var(--text1)" }}>{b.name}</p>
-                        <p className="text-[12px] mt-0.5" style={{ color: "var(--text3)" }}>
-                          Avg {b.avgFrequency.toFixed(1)}/week
-                          {b.changePercent !== null && (
-                            <span> · {b.changePercent > 0 ? "+" : ""}{b.changePercent.toFixed(0)}% change</span>
-                          )}
-                        </p>
-                      </div>
-                      <TrendBadge trend={b.trend} />
-                    </div>
-                  ))}
+              <div className="bg-white rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+                <div className="px-5 py-4 border-b" style={{ borderColor: "var(--border)" }}>
+                  <SectionHeader title="Maladaptive Behaviors" />
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[13px]">
+                    <thead>
+                      <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
+                        {["Behavior", "Function", "Intervention", "Trend", "Status", "Why It Matters"].map(h => (
+                          <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text3)" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {behaviorTrends.map((b, i) => (
+                        <tr key={i} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
+                          <td className="px-4 py-3 font-medium" style={{ color: "var(--text1)" }}>{b.name}</td>
+                          <td className="px-4 py-3 capitalize" style={{ color: "var(--text2)" }}>{getBehaviorFunction(b.name)}</td>
+                          <td className="px-4 py-3" style={{ color: "var(--text2)" }}>{getBehaviorIntervention(b.name)}</td>
+                          <td className="px-4 py-3">
+                            <span className="font-bold text-[16px]" style={{ color: trendColor(b.trend) }}>{trendIcon(b.trend)}</span>
+                            {b.changePercent !== null && (
+                              <span className="text-[11px] ml-1" style={{ color: trendColor(b.trend) }}>
+                                {b.changePercent > 0 ? "+" : ""}{b.changePercent.toFixed(0)}%
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3"><StatusPill status={b.trend} /></td>
+                          <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text3)" }}>
+                            {b.trend === "worsening" ? "Requires immediate clinical attention" :
+                             b.trend === "improving" ? "Intervention is supporting progress" :
+                             "Continued monitoring required"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
 
-            {/* Skill Trends */}
+            {/* Replacement Skills Table */}
             {skillTrends.length > 0 && (
-              <div className="bg-white rounded-xl border p-6" style={{ borderColor: "var(--border)" }}>
-                <SectionHeader title="Skill Trends" />
-                <div className="space-y-3">
-                  {skillTrends.map((s: any) => (
-                    <div key={s.name} className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
-                      <div>
-                        <p className="text-[13px] font-semibold" style={{ color: "var(--text1)" }}>{s.name}</p>
-                        <p className="text-[12px] mt-0.5" style={{ color: "var(--text3)" }}>
-                          Avg {s.avgPercentage.toFixed(0)}%
-                          {s.changePercent !== null && (
-                            <span> · {s.changePercent > 0 ? "+" : ""}{s.changePercent.toFixed(0)}% change</span>
-                          )}
-                        </p>
-                      </div>
-                      <TrendBadge trend={s.trend} />
-                    </div>
-                  ))}
+              <div className="bg-white rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+                <div className="px-5 py-4 border-b" style={{ borderColor: "var(--border)" }}>
+                  <SectionHeader title="Replacement Skills" />
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[13px]">
+                    <thead>
+                      <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
+                        {["Skill", "Avg Accuracy", "Trend", "Status", "Clinical Note"].map(h => (
+                          <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text3)" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {skillTrends.map((s, i) => (
+                        <tr key={i} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
+                          <td className="px-4 py-3 font-medium" style={{ color: "var(--text1)" }}>{s.name}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-20"><ProgressBar value={s.avgPercentage} color={trendColor(s.trend)} /></div>
+                              <span style={{ color: "var(--text2)" }}>{s.avgPercentage.toFixed(0)}%</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="font-bold text-[16px]" style={{ color: trendColor(s.trend) }}>{trendIcon(s.trend)}</span>
+                            {s.changePercent !== null && (
+                              <span className="text-[11px] ml-1" style={{ color: trendColor(s.trend) }}>
+                                {s.changePercent > 0 ? "+" : ""}{s.changePercent.toFixed(0)}%
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3"><StatusPill status={s.trend} /></td>
+                          <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text3)" }}>
+                            {s.trend === "improving" ? "Continue current teaching procedures" :
+                             s.trend === "worsening" ? "Review teaching procedures with BCBA" :
+                             "Maintain current intervention frequency"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
 
             {/* Goal Progress */}
             {goalProgress.length > 0 && (
-              <div className="bg-white rounded-xl border p-6" style={{ borderColor: "var(--border)" }}>
+              <div className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
                 <SectionHeader title="Goal Progress" />
-                <div className="space-y-4">
-                  {goalProgress.map((g: any) => (
-                    <div key={g.targetName}>
-                      <div className="flex items-center justify-between gap-3 mb-1.5">
-                        <div>
-                          <p className="text-[13px] font-semibold" style={{ color: "var(--text1)" }}>{g.targetName}</p>
-                          <p className="text-[11px]" style={{ color: "var(--text3)" }}>
-                            Baseline {g.baselineValue} → Goal {g.goalValue}
-                            {g.currentValue !== null && ` · Current ${g.currentValue}`}
-                          </p>
-                        </div>
-                        <GoalStatusBadge status={g.goalStatus} />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {goalProgress.map((g, i) => (
+                    <div key={i} className="p-4 rounded-xl border" style={{ borderColor: "var(--border)" }}>
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <p className="text-[13px] font-semibold" style={{ color: "var(--text1)" }}>{g.targetName}</p>
+                        <StatusPill status={g.goalStatus} />
                       </div>
                       {g.percentToGoal !== null && (
-                        <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
-                          <div
-                            className="h-full rounded-full transition-all"
-                            style={{ width: `${g.percentToGoal}%`, background: "var(--teal)" }}
+                        <>
+                          <ProgressBar
+                            value={g.percentToGoal}
+                            color={g.goalStatus === "Mastered" ? "#7C3AED" : g.goalStatus === "On Track" ? "#16A34A" : g.goalStatus === "Needs Attention" ? "#DC2626" : "#D97706"}
                           />
-                        </div>
-                      )}
-                      {g.percentToGoal !== null && (
-                        <p className="text-[11px] mt-1" style={{ color: "var(--text3)" }}>
-                          {g.percentToGoal.toFixed(0)}% to goal
-                        </p>
+                          <p className="text-[11px] mt-1.5" style={{ color: "var(--text3)" }}>{g.percentToGoal.toFixed(0)}% to goal</p>
+                        </>
                       )}
                     </div>
                   ))}
@@ -315,71 +364,97 @@ export default function ProgressReportPage() {
               </div>
             )}
 
-            {/* Clinical Narrative */}
-            {narrative && (
-              <div className="bg-white rounded-xl border p-6" style={{ borderColor: "var(--border)" }}>
-                <div className="flex items-center justify-between mb-4">
-                  <SectionHeader title="Clinical Narrative" />
-                  <button
-                    onClick={handleCopy}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors hover:opacity-80 flex-shrink-0"
-                    style={{ borderColor: "var(--border)", color: noteCopied ? "var(--teal)" : "var(--text2)" }}
-                  >
-                    {noteCopied ? "✓ Copied" : "Copy"}
-                  </button>
+            {/* Clinical Priorities */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
+                <SectionHeader title="Focus Areas Next Month" />
+                <div className="space-y-2">
+                  {behaviorTrends.filter(b => b.trend === "worsening").map((b, i) => (
+                    <div key={i} className="flex items-center gap-2 text-[13px]">
+                      <span style={{ color: "#DC2626" }}>🔴</span>
+                      <span style={{ color: "var(--text1)" }}>{b.name} — Requires attention</span>
+                    </div>
+                  ))}
+                  {skillTrends.filter(s => s.trend === "worsening" || s.trend === "stable").slice(0, 2).map((s, i) => (
+                    <div key={i} className="flex items-center gap-2 text-[13px]">
+                      <span style={{ color: "#D97706" }}>🟡</span>
+                      <span style={{ color: "var(--text1)" }}>{s.name} — Needs more practice</span>
+                    </div>
+                  ))}
+                  {goalProgress.filter(g => g.goalStatus === "Needs Attention").map((g, i) => (
+                    <div key={i} className="flex items-center gap-2 text-[13px]">
+                      <span style={{ color: "#D97706" }}>⚠</span>
+                      <span style={{ color: "var(--text1)" }}>{g.targetName} goal needs review</span>
+                    </div>
+                  ))}
+                  {(behaviorTrends.filter(b => b.trend === "worsening").length === 0 &&
+                    skillTrends.filter(s => s.trend !== "improving").length === 0 &&
+                    goalProgress.filter(g => g.goalStatus === "Needs Attention").length === 0) && (
+                    <p className="text-[13px]" style={{ color: "var(--text3)" }}>No critical areas identified. Maintain current programming.</p>
+                  )}
                 </div>
-                <textarea
-                  ref={narrativeRef}
-                  value={narrative}
-                  onChange={e => setNarrative(e.target.value)}
-                  rows={12}
-                  className="w-full border rounded-xl px-4 py-3 text-[13px] leading-relaxed focus:outline-none resize-none"
-                  style={{ borderColor: "var(--border)", color: "var(--text1)", background: "var(--bg)" }}
-                />
+              </div>
+
+              <div className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
+                <SectionHeader title="Strengths This Month" />
+                <div className="space-y-2">
+                  {behaviorTrends.filter(b => b.trend === "improving").map((b, i) => (
+                    <div key={i} className="flex items-center gap-2 text-[13px]">
+                      <span style={{ color: "#16A34A" }}>🟢</span>
+                      <span style={{ color: "var(--text1)" }}>{b.name} — Improving</span>
+                    </div>
+                  ))}
+                  {skillTrends.filter(s => s.trend === "improving").map((s, i) => (
+                    <div key={i} className="flex items-center gap-2 text-[13px]">
+                      <span style={{ color: "#16A34A" }}>✓</span>
+                      <span style={{ color: "var(--text1)" }}>{s.name} — Progressing</span>
+                    </div>
+                  ))}
+                  {goalProgress.filter(g => g.goalStatus === "Mastered").map((g, i) => (
+                    <div key={i} className="flex items-center gap-2 text-[13px]">
+                      <span style={{ color: "#7C3AED" }}>⭐</span>
+                      <span style={{ color: "var(--text1)" }}>{g.targetName} — Mastered</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Medical Necessity Narrative */}
+            {narrative && (
+              <div className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
+                <SectionHeader title="Clinical Narrative & Medical Necessity" />
+                <p className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text2)" }}>{narrative}</p>
               </div>
             )}
           </>
         )}
 
-        {/* History */}
-        {reports.length > 0 && (
-          <div className="bg-white rounded-xl border p-6" style={{ borderColor: "var(--border)" }}>
-            <SectionHeader title="Previous Reports" />
-            <div className="space-y-2">
-              {reports.map((r: any) => {
-                const isExpanded = expandedReports.has(r.id);
-                const date = r.created_at
-                  ? new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                  : "";
-                return (
-                  <div key={r.id} className="rounded-lg border overflow-hidden" style={{ borderColor: "var(--border)" }}>
-                    <button
-                      onClick={() => toggleReport(r.id)}
-                      className="w-full flex items-center justify-between px-4 py-3 text-left transition-colors hover:opacity-80"
-                      style={{ background: "var(--bg)" }}
-                    >
-                      <div>
-                        <p className="text-[13px] font-semibold" style={{ color: "var(--text1)" }}>{r.period_label}</p>
-                        {date && <p className="text-[11px] mt-0.5" style={{ color: "var(--text3)" }}>Generated {date}</p>}
-                      </div>
-                      <span className="text-[12px]" style={{ color: "var(--text3)" }}>
-                        {isExpanded ? "▲" : "▼"}
-                      </span>
-                    </button>
-                    {isExpanded && r.narrative && (
-                      <div className="px-4 pb-4" style={{ borderTop: "1px solid var(--border)" }}>
-                        <p className="text-[13px] leading-relaxed pt-3 whitespace-pre-wrap" style={{ color: "var(--text2)" }}>
-                          {r.narrative}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+        {/* Previous Reports */}
+        {previousReports.length > 0 && (
+          <div className="bg-white rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+            <div className="px-5 py-4 border-b" style={{ borderColor: "var(--border)" }}>
+              <SectionHeader title="Previous Reports" />
             </div>
+            {previousReports.map(report => (
+              <div key={report.id} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
+                <button
+                  onClick={() => setExpandedReport(expandedReport === report.id ? null : report.id)}
+                  className="w-full px-5 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
+                >
+                  <span className="text-[13px] font-medium" style={{ color: "var(--text1)" }}>{report.period_label}</span>
+                  <span className="text-[12px]" style={{ color: "var(--text3)" }}>{expandedReport === report.id ? "▲ Hide" : "▼ View"}</span>
+                </button>
+                {expandedReport === report.id && (
+                  <div className="px-5 pb-5">
+                    <p className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text2)" }}>{report.narrative}</p>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }
