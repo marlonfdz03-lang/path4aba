@@ -442,13 +442,31 @@ export default function ProgressReportPage() {
             </div>
             {previousReports.map(report => (
               <div key={report.id} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
-                <button
-                  onClick={() => setExpandedReport(expandedReport === report.id ? null : report.id)}
-                  className="w-full px-5 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
-                >
-                  <span className="text-[13px] font-medium" style={{ color: "var(--text1)" }}>{report.period_label}</span>
-                  <span className="text-[12px]" style={{ color: "var(--text3)" }}>{expandedReport === report.id ? "▲ Hide" : "▼ View"}</span>
-                </button>
+                <div className="px-5 py-3 flex items-center justify-between">
+                  <button
+                    onClick={() => setExpandedReport(expandedReport === report.id ? null : report.id)}
+                    className="text-[13px] font-medium text-left hover:opacity-70"
+                    style={{ color: "var(--text1)" }}
+                  >
+                    {report.period_label}
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        const [year, month] = report.period_start.split("-");
+                        setSelectedMonth(`${year}-${month}`);
+                        handleGenerate();
+                      }}
+                      className="text-[11px] px-3 py-1 rounded-lg border font-medium hover:opacity-70"
+                      style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+                    >
+                      Update Report
+                    </button>
+                    <span className="text-[12px]" style={{ color: "var(--text3)" }}>
+                      {expandedReport === report.id ? "▲" : "▼"}
+                    </span>
+                  </div>
+                </div>
                 {expandedReport === report.id && (
                   <div className="px-5 pb-5">
                     <p className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text2)" }}>{report.narrative}</p>

@@ -29,8 +29,22 @@ export async function POST(req: NextRequest) {
           (chunk) => { controller.enqueue(encoder.encode(chunk)) }
         )
 
-        await prisma.progress_reports.create({
-          data: {
+        await prisma.progress_reports.upsert({
+          where: {
+            client_id_period_start_period_end: {
+              client_id: clientId,
+              period_start: periodStart,
+              period_end: periodEnd,
+            }
+          },
+          update: {
+            behavior_trends: result.behaviorTrends as any,
+            skill_trends: result.skillTrends as any,
+            goal_progress: result.goalProgress as any,
+            narrative: result.narrative,
+            continuity_context: result.continuityContext as any,
+          },
+          create: {
             client_id: clientId,
             rbt_id: userId,
             period_start: periodStart,
@@ -41,7 +55,7 @@ export async function POST(req: NextRequest) {
             goal_progress: result.goalProgress as any,
             narrative: result.narrative,
             continuity_context: result.continuityContext as any,
-          },
+          }
         })
 
         const existingProfile = (client.clinical_profile as any) || {}
