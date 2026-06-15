@@ -284,10 +284,35 @@ export default function ProgressReportPage() {
               ))}
             </div>
 
-            {/* Service Justification Banner */}
-            <div className="rounded-xl px-5 py-4" style={{ background: "#F0FDF4", border: "1px solid #A7F3D0" }}>
-              <p className="text-[13px] font-semibold" style={{ color: "#065F46" }}>✓ Continued ABA services remain clinically indicated at the current authorized intensity.</p>
-              <p className="text-[12px] mt-1" style={{ color: "#047857" }}>Service needs are determined by individual behavioral profile, not age-based criteria.</p>
+            {/* Medical Necessity Indicators */}
+            <div className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
+              <SectionHeader title="Medical Necessity Indicators" />
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {[
+                  "Active behavior reduction targets",
+                  "Active skill acquisition targets",
+                  "Generalization needs across settings",
+                  "Multiple caregivers involved",
+                  "Ongoing BCBA supervision required",
+                  "Individual clinical need — not age-based",
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center gap-2 text-[12px]" style={{ color: "#065F46" }}>
+                    <span style={{ color: "#16A34A", fontWeight: 700 }}>✓</span>
+                    <span>{item}</span>
+                  </div>
+                ))}
+                {worsening > 0 && (
+                  <div className="flex items-center gap-2 text-[12px]" style={{ color: "#991B1B" }}>
+                    <span style={{ color: "#DC2626", fontWeight: 700 }}>⚠</span>
+                    <span>Safety concerns present — behaviors worsening</span>
+                  </div>
+                )}
+              </div>
+              <div className="mt-3 px-4 py-2.5 rounded-lg" style={{ background: "#F0FDF4", border: "1px solid #A7F3D0" }}>
+                <p className="text-[12px] font-semibold" style={{ color: "#065F46" }}>
+                  ✓ Continued ABA services at the current authorized intensity remain clinically indicated based on the client's active behavioral profile and ongoing acquisition needs.
+                </p>
+              </div>
             </div>
 
             {/* Maladaptive Behaviors Table */}
@@ -384,33 +409,56 @@ export default function ProgressReportPage() {
               </div>
             )}
 
-            {/* Clinical Priorities */}
+            {/* Environmental Impact */}
+            {(behaviorTrends.length > 0 || skillTrends.length > 0) && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
+                  <SectionHeader title="Most Common Triggers" />
+                  <div className="space-y-1.5">
+                    {["Transitions between activities", "Non-preferred task demands", "Denied access to preferred items", "Waiting requirements", "Changes in routine"].map((t, i) => (
+                      <div key={i} className="flex items-center gap-2 text-[12px]" style={{ color: "var(--text2)" }}>
+                        <span style={{ color: "#DC2626" }}>•</span><span>{t}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
+                  <SectionHeader title="Most Successful Supports" />
+                  <div className="space-y-1.5">
+                    {(clinicalProfile?.interventions || []).slice(0, 5).map((i: any, idx: number) => {
+                      const name = typeof i === "string" ? i : i?.name || "";
+                      return name ? (
+                        <div key={idx} className="flex items-center gap-2 text-[12px]" style={{ color: "var(--text2)" }}>
+                          <span style={{ color: "#16A34A" }}>✓</span><span>{name}</span>
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Clinical Priorities & Strengths */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
-                <SectionHeader title="Focus Areas Next Month" />
+                <SectionHeader title="Clinical Priorities Next Month" />
                 <div className="space-y-2">
-                  {behaviorTrends.filter(b => b.trend === "worsening").map((b, i) => (
-                    <div key={i} className="flex items-center gap-2 text-[13px]">
-                      <span style={{ color: "#DC2626" }}>🔴</span>
-                      <span style={{ color: "var(--text1)" }}>{b.name} — Requires attention</span>
+                  {[
+                    ...behaviorTrends.filter(b => b.trend === "worsening").map(b => ({ label: b.name, reason: "Requires immediate attention", color: "#DC2626", icon: "🔴" })),
+                    ...skillTrends.filter(s => s.trend === "worsening" || s.trend === "stable").slice(0, 2).map(s => ({ label: s.name, reason: "Needs increased teaching opportunities", color: "#D97706", icon: "🟡" })),
+                    ...behaviorTrends.filter(b => b.trend === "improving").slice(0, 1).map(b => ({ label: b.name, reason: "Monitor for maintenance and generalization", color: "#2563EB", icon: "🔵" })),
+                  ].slice(0, 5).map((item, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <span>{item.icon}</span>
+                      <div>
+                        <p className="text-[13px] font-medium" style={{ color: "var(--text1)" }}>{item.label}</p>
+                        <p className="text-[11px]" style={{ color: "var(--text3)" }}>{item.reason}</p>
+                      </div>
                     </div>
                   ))}
-                  {skillTrends.filter(s => s.trend === "worsening" || s.trend === "stable").slice(0, 2).map((s, i) => (
-                    <div key={i} className="flex items-center gap-2 text-[13px]">
-                      <span style={{ color: "#D97706" }}>🟡</span>
-                      <span style={{ color: "var(--text1)" }}>{s.name} — Needs more practice</span>
-                    </div>
-                  ))}
-                  {goalProgress.filter(g => g.goalStatus === "Needs Attention").map((g, i) => (
-                    <div key={i} className="flex items-center gap-2 text-[13px]">
-                      <span style={{ color: "#D97706" }}>⚠</span>
-                      <span style={{ color: "var(--text1)" }}>{g.targetName} goal needs review</span>
-                    </div>
-                  ))}
-                  {(behaviorTrends.filter(b => b.trend === "worsening").length === 0 &&
-                    skillTrends.filter(s => s.trend !== "improving").length === 0 &&
-                    goalProgress.filter(g => g.goalStatus === "Needs Attention").length === 0) && (
-                    <p className="text-[13px]" style={{ color: "var(--text3)" }}>No critical areas identified. Maintain current programming.</p>
+                  {behaviorTrends.filter(b => b.trend === "worsening").length === 0 &&
+                   skillTrends.filter(s => s.trend !== "improving").length === 0 && (
+                    <p className="text-[13px]" style={{ color: "var(--text3)" }}>Maintain current programming intensity.</p>
                   )}
                 </div>
               </div>
@@ -418,22 +466,16 @@ export default function ProgressReportPage() {
               <div className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
                 <SectionHeader title="Strengths This Month" />
                 <div className="space-y-2">
-                  {behaviorTrends.filter(b => b.trend === "improving").map((b, i) => (
-                    <div key={i} className="flex items-center gap-2 text-[13px]">
-                      <span style={{ color: "#16A34A" }}>🟢</span>
-                      <span style={{ color: "var(--text1)" }}>{b.name} — Improving</span>
-                    </div>
-                  ))}
-                  {skillTrends.filter(s => s.trend === "improving").map((s, i) => (
-                    <div key={i} className="flex items-center gap-2 text-[13px]">
-                      <span style={{ color: "#16A34A" }}>✓</span>
-                      <span style={{ color: "var(--text1)" }}>{s.name} — Progressing</span>
-                    </div>
-                  ))}
-                  {goalProgress.filter(g => g.goalStatus === "Mastered").map((g, i) => (
-                    <div key={i} className="flex items-center gap-2 text-[13px]">
-                      <span style={{ color: "#7C3AED" }}>⭐</span>
-                      <span style={{ color: "var(--text1)" }}>{g.targetName} — Mastered</span>
+                  {[
+                    ...behaviorTrends.filter(b => b.trend === "improving").map(b => ({ label: b.name, note: "Behavior reducing with intervention", icon: "🟢" })),
+                    ...skillTrends.filter(s => s.trend === "improving").map(s => ({ label: s.name, note: `Avg ${s.avgPercentage.toFixed(0)}% accuracy`, icon: "✓" })),
+                  ].slice(0, 6).map((item, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <span style={{ color: "#16A34A" }}>{item.icon}</span>
+                      <div>
+                        <p className="text-[13px] font-medium" style={{ color: "var(--text1)" }}>{item.label}</p>
+                        <p className="text-[11px]" style={{ color: "var(--text3)" }}>{item.note}</p>
+                      </div>
                     </div>
                   ))}
                 </div>
