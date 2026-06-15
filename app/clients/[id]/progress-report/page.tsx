@@ -188,10 +188,6 @@ export default function ProgressReportPage() {
   const improving = behaviorTrends.filter(b => b.trend === "improving").length;
   const worsening = behaviorTrends.filter(b => b.trend === "worsening").length;
   const skillsImproving = skillTrends.filter(s => s.trend === "improving").length;
-  const mastered = goalProgress.filter(g => g.goalStatus === "Mastered").length;
-  const needsAttention = goalProgress.filter(g => g.goalStatus === "Needs Attention").length;
-  const onTrack = goalProgress.filter(g => g.goalStatus === "On Track").length;
-
   // Get intervention names from clinical profile
   const interventionMap: Record<string, string> = {};
   if (clinicalProfile?.interventions) {
@@ -275,12 +271,11 @@ export default function ProgressReportPage() {
         {hasData && (
           <>
             {/* Executive Summary Cards */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {[
                 { label: "Behaviors Improved", value: improving, color: "#16A34A", bg: "#DCFCE7" },
                 { label: "Behaviors Need Attention", value: worsening, color: "#DC2626", bg: "#FEE2E2" },
                 { label: "Skills Improving", value: skillsImproving, color: "#2563EB", bg: "#EFF6FF" },
-                { label: "Goals Mastered", value: mastered, color: "#7C3AED", bg: "#EEF2FF" },
               ].map(card => (
                 <div key={card.label} className="rounded-xl p-4 text-center" style={{ background: card.bg }}>
                   <p className="text-[28px] font-bold" style={{ color: card.color }}>{card.value}</p>
@@ -385,32 +380,6 @@ export default function ProgressReportPage() {
                       ))}
                     </tbody>
                   </table>
-                </div>
-              </div>
-            )}
-
-            {/* Goal Progress */}
-            {goalProgress.length > 0 && (
-              <div className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
-                <SectionHeader title="Goal Progress" />
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {goalProgress.map((g, i) => (
-                    <div key={i} className="p-4 rounded-xl border" style={{ borderColor: "var(--border)" }}>
-                      <div className="flex items-start justify-between gap-2 mb-3">
-                        <p className="text-[13px] font-semibold" style={{ color: "var(--text1)" }}>{g.targetName}</p>
-                        <StatusPill status={g.goalStatus} />
-                      </div>
-                      {g.percentToGoal !== null && (
-                        <>
-                          <ProgressBar
-                            value={g.percentToGoal}
-                            color={g.goalStatus === "Mastered" ? "#7C3AED" : g.goalStatus === "On Track" ? "#16A34A" : g.goalStatus === "Needs Attention" ? "#DC2626" : "#D97706"}
-                          />
-                          <p className="text-[11px] mt-1.5" style={{ color: "var(--text3)" }}>{g.percentToGoal.toFixed(0)}% to goal</p>
-                        </>
-                      )}
-                    </div>
-                  ))}
                 </div>
               </div>
             )}

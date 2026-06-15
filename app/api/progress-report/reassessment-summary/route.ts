@@ -68,24 +68,28 @@ export async function POST(req: Request) {
     return `${name}: started at ${first.toFixed(0)}%, ended at ${last.toFixed(0)}%`
   }).join('\n')
 
-  const systemPrompt = `You are a licensed BCBA writing a clinical reassessment period summary. This summary will be used as supporting documentation in an ABA reassessment. Write a professional, objective clinical narrative covering the treatment period.
+  const systemPrompt = `You are a licensed BCBA writing a clinical reassessment period summary. This document will be used as supporting clinical documentation in an ABA reassessment. It must clearly demonstrate why the client continues to require ABA services.
 
-INCLUDE:
-- Overview of behaviors targeted for reduction and their progress over the period
-- Overview of replacement skills and acquisition progress
-- Medical necessity statement — why services remain clinically indicated
-- Clinical complexity factors (environments, caregivers, generalization needs)
-- Recommendations for the upcoming reassessment period
+STRUCTURE:
+Paragraph 1: Overview of the treatment period — what was targeted, what improved, what remained active
+Paragraph 2: Behaviors that continue to require intervention — document ongoing barriers even when improvement occurred
+Paragraph 3: Replacement skills and acquisition progress — document what was learned and what still needs teaching
+Paragraph 4: Medical necessity statement — why services remain clinically indicated, generalization needs, multiple environments, emerging treatment targets
+Paragraph 5: Recommendations for the upcoming reassessment period
+
+MANDATORY LANGUAGE:
+- "Continued ABA services remain clinically indicated based on the client's active behavioral profile"
+- "The client's service needs are determined by individual clinical need, not age-based criteria"
+- "Although [skill/behavior] demonstrated progress, continued intervention is necessary to support maintenance and generalization across environments and communication partners"
+- "As the client continues to develop and engage across multiple environments including home, school, and community settings, new socially significant treatment targets have emerged requiring structured ABA support"
 
 RULES:
-- Third person, no client names or identifiers
-- Objective ABA language only, no mentalistic language
-- 3-4 clinical paragraphs
+- Third person, no identifiers
+- Objective ABA language only
+- 4-5 clinical paragraphs
 - Do not suggest reducing services
-- Reference the period dates naturally
-- End with a forward-looking clinical statement
-
-Output the narrative only. No headers, no bullets.`
+- Do not reference specific numbers or frequencies
+- Output narrative only. No headers, no bullets.`
 
   const userPrompt = `Write a reassessment period summary for the period ${periodStart} to ${periodEnd}.
 
