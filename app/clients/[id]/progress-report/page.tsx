@@ -89,6 +89,12 @@ export default function ProgressReportPage() {
   const [status, setStatus] = useState("");
   const [clinicalProfile, setClinicalProfile] = useState<any>(null);
   const narrativeRef = useRef("");
+  const [showReassessment, setShowReassessment] = useState(false);
+  const [reassessStart, setReassessStart] = useState("");
+  const [reassessEnd, setReassessEnd] = useState("");
+  const [reassessSummary, setReassessSummary] = useState("");
+  const [reassessGenerating, setReassessGenerating] = useState(false);
+  const [reassessError, setReassessError] = useState("");
 
   useEffect(() => {
     const stored = localStorage.getItem("path4aba_clients");
@@ -162,6 +168,32 @@ export default function ProgressReportPage() {
       fetchPreviousReports();
     } catch { setStatus("Network error. Please try again."); }
     finally { setGenerating(false); }
+  }
+
+  async function handleGenerateReassessment() {
+    if (!reassessStart || !reassessEnd) return;
+    setReassessGenerating(true);
+    setReassessSummary("");
+    setReassessError("");
+    try {
+      const res = await fetch("/api/progress-report/reassessment-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId, periodStart: reassessStart, periodEnd: reassessEnd }),
+      });
+      if (!res.ok || !res.body) { setReassessError("Generation failed."); return; }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let text = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        text += chunk;
+        setReassessSummary(text);
+      }
+    } catch { setReassessError("Network error. Please try again."); }
+    finally { setReassessGenerating(false); }
   }
 
   // ── Derived summary stats ──
@@ -508,6 +540,63 @@ export default function ProgressReportPage() {
             ))}
           </div>
         )}
+        {/* Reassessment Summary Tool */}
+        <div className="bg-white rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+          <button
+            onClick={() => setShowReassessment(!showReassessment)}
+            className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+          >
+            <div className="text-left">
+              <p className="text-[14px] font-semibold" style={{ color: "var(--text1)" }}>📋 Create Reassessment Summary</p>
+              <p className="text-[12px] mt-0.5" style={{ color: "var(--text3)" }}>Generate a clinical summary for a custom period to include in your reassessment</p>
+            </div>
+            <span style={{ color: "var(--text3)" }}>{showReassessment ? "▲" : "▼"}</span>
+          </button>
+          {showReassessment && (
+            <div className="px-5 pb-5 border-t" style={{ borderColor: "var(--border)" }}>
+              <div className="flex items-center gap-3 mt-4 mb-4">
+                <div className="flex-1">
+                  <label className="text-[11px] font-semibold uppercase tracking-wide mb-1 block" style={{ color: "var(--text3)" }}>Start Date</label>
+                  <input type="date" value={reassessStart} onChange={e => setReassessStart(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2 text-[13px]" style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[11px] font-semibold uppercase tracking-wide mb-1 block" style={{ color: "var(--text3)" }}>End Date</label>
+                  <input type="date" value={reassessEnd} onChange={e => setReassessEnd(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2 text-[13px]" style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
+                </div>
+                <div className="pt-5">
+                  <button
+                    onClick={handleGenerateReassessment}
+                    disabled={!reassessStart || !reassessEnd || reassessGenerating}
+                    className="px-4 py-2 rounded-lg text-[13px] font-semibold text-white disabled:opacity-50"
+                    style={{ background: "var(--primary, #2563EB)" }}
+                  >
+                    {reassessGenerating ? "Generating…" : "Generate Summary"}
+                  </button>
+                </div>
+              </div>
+              {reassessError && <p className="text-[12px] px-3 py-2 rounded-lg mb-3" style={{ background: "#fef2f2", color: "#991b1b" }}>{reassessError}</p>}
+              {reassessSummary && (
+                <div className="rounded-xl border p-4" style={{ borderColor: "var(--border)" }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-[12px] font-semibold" style={{ color: "var(--text3)" }}>
+                      Reassessment Summary · {reassessStart} to {reassessEnd}
+                    </p>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(reassessSummary)}
+                      className="text-[12px] px-3 py-1 rounded-lg border hover:opacity-70"
+                      style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <p className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text2)" }}>{reassessSummary}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
