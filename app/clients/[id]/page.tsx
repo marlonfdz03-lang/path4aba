@@ -227,6 +227,10 @@ export default function ClientProfilePage() {
     noteText?: string;
   } | null>(null);
   const [continuityCtx, setContinuityCtx] = useState<any>(null);
+  const [authorizedHoursPerWeek, setAuthorizedHoursPerWeek] = useState<number>(
+    client?.clinicalProfile?.authorizedHoursPerWeek || 0
+  );
+  const [savingHours, setSavingHours] = useState(false);
 
   async function loadNotesFromSupabase(clientId: string) {
     try {
@@ -679,6 +683,19 @@ export default function ClientProfilePage() {
     setGeneratingCode(false);
   }
 
+  async function handleSaveAuthorizedHours(hours: number) {
+    setSavingHours(true);
+    try {
+      await fetch(`/api/clients/${client.id}/profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authorizedHoursPerWeek: hours }),
+      });
+      setAuthorizedHoursPerWeek(hours);
+    } catch {}
+    finally { setSavingHours(false); }
+  }
+
   const isAdmin = (session?.user as any)?.role === 'admin';
 
   const TABS: { key: Tab; label: string }[] = [
@@ -825,12 +842,23 @@ export default function ClientProfilePage() {
               <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
                 <SectionHeader title="Clinical Snapshot" />
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between py-2 border-b" style={{ borderColor: "var(--border)" }}>
-                    <span className="text-[12px]" style={{ color: "var(--text3)" }}>Authorized Hours (weekly)</span>
-                    <span className="text-[13px] font-medium" style={{ color: "var(--text1)" }}>
-                      {client.authorized_hours_weekly ? `${client.authorized_hours_weekly} hrs/week` : "Not set"}
-                    </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px]" style={{ color: "var(--text3)" }}>Authorized Hours/Week</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      max="40"
+                      value={authorizedHoursPerWeek || ""}
+                      onChange={e => setAuthorizedHoursPerWeek(Number(e.target.value))}
+                      onBlur={e => handleSaveAuthorizedHours(Number(e.target.value))}
+                      placeholder="0"
+                      className="w-16 text-right border rounded px-2 py-0.5 text-[12px]"
+                      style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                    />
+                    <span className="text-[12px] font-semibold" style={{ color: "var(--text1)" }}>hrs/wk</span>
                   </div>
+                </div>
                   {[
                     { label: "Maladaptive Behaviors", value: client.clinicalProfile?.maladaptiveBehaviors?.length || 0 },
                     { label: "Approved Interventions", value: client.clinicalProfile?.interventions?.length || 0 },

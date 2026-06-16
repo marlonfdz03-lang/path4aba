@@ -99,6 +99,7 @@ export async function POST(req: NextRequest) {
             missedHours: result.missedHours,
             attendanceRate: result.attendanceRate,
             missedReasons: result.missedReasons,
+            serviceUtilization: result.serviceUtilization,
           })}`
         ))
       } catch (err) {

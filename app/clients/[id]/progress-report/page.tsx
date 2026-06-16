@@ -76,6 +76,7 @@ export default function ProgressReportPage() {
   const [expandedReport, setExpandedReport] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [clinicalProfile, setClinicalProfile] = useState<any>(null);
+  const [serviceUtilization, setServiceUtilization] = useState<any>(null);
   const narrativeRef = useRef("");
   const [showReassessment, setShowReassessment] = useState(false);
   const [reassessStart, setReassessStart] = useState("");
@@ -144,6 +145,7 @@ export default function ProgressReportPage() {
             if (meta.behaviorTrends) setBehaviorTrends(meta.behaviorTrends);
             if (meta.skillTrends) setSkillTrends(meta.skillTrends);
             if (meta.goalProgress) setGoalProgress(meta.goalProgress);
+            if (meta.serviceUtilization) setServiceUtilization(meta.serviceUtilization);
             if (meta.error) setStatus(meta.error);
           } catch {}
         } else {
@@ -283,6 +285,45 @@ export default function ProgressReportPage() {
                 </div>
               ))}
             </div>
+
+            {/* Service Utilization */}
+            {serviceUtilization && (
+              <div className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
+                <SectionHeader title="Service Utilization" />
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-4">
+                  {[
+                    { label: "Authorized Hours", value: serviceUtilization.authorizedHoursTotal > 0 ? `${serviceUtilization.authorizedHoursTotal}h` : "—" },
+                    { label: "Delivered Hours", value: serviceUtilization.deliveredHours > 0 ? `${serviceUtilization.deliveredHours}h` : "—" },
+                    { label: "Missed Hours", value: serviceUtilization.missedHoursTotal > 0 ? `${serviceUtilization.missedHoursTotal}h` : "0h" },
+                    { label: "Attendance Rate", value: serviceUtilization.attendanceRate !== null ? `${serviceUtilization.attendanceRate}%` : "—" },
+                  ].map(item => (
+                    <div key={item.label} className="text-center p-3 rounded-xl" style={{ background: "var(--bg)" }}>
+                      <p className="text-[20px] font-bold" style={{ color: "var(--text1)" }}>{item.value}</p>
+                      <p className="text-[11px] mt-0.5" style={{ color: "var(--text3)" }}>{item.label}</p>
+                    </div>
+                  ))}
+                </div>
+                {Object.keys(serviceUtilization.missedReasons || {}).length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--text3)" }}>Missed Session Reasons</p>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(serviceUtilization.missedReasons).map(([reason, count]: [string, any]) => (
+                        <span key={reason} className="text-[12px] px-3 py-1 rounded-full border" style={{ borderColor: "var(--border)", color: "var(--text2)" }}>
+                          {reason} ({count})
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {serviceUtilization.missedHoursTotal > 0 && (
+                  <div className="mt-3 px-4 py-2.5 rounded-lg" style={{ background: "#FEF3C7", border: "1px solid #FCD34D" }}>
+                    <p className="text-[12px]" style={{ color: "#92400E" }}>
+                      The client missed {serviceUtilization.missedHoursTotal} authorized treatment hours during the reporting period. Reduced treatment exposure may have limited opportunities for skill acquisition, maintenance, and generalization. Consistent service delivery remains necessary to support continued progress.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Medical Necessity Indicators */}
             <div className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>

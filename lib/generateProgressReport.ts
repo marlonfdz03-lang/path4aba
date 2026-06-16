@@ -52,6 +52,7 @@ export interface ContinuityContext {
   skillTrends: Record<string, 'improving' | 'stable' | 'worsening' | 'insufficient_data'>
   frequentlyUsedInterventions: string[]
   summary: string
+  serviceUtilization?: any
 }
 
 function calculateBehaviorTrend(values: number[]): {
@@ -128,6 +129,7 @@ export async function generateProgressReport(
   missedHours: number
   attendanceRate: number | null
   missedReasons: string[]
+  serviceUtilization: any
 }> {
   const { clientId, periodStart, periodEnd, periodLabel } = input
 
@@ -165,15 +167,31 @@ export async function generateProgressReport(
   const totalMissedHours = missedHoursData.reduce((sum, m) => sum + (m.hours || 0), 0)
   const missedReasons = [...new Set(missedHoursData.map(m => m.reason).filter(Boolean))] as string[]
 
-  const clientHours = await prisma.clients.findUnique({
-    where: { id: clientId },
-    select: { authorized_hours_weekly: true },
-  })
-  const daysInPeriod = Math.floor((new Date(periodEnd).getTime() - new Date(periodStart).getTime()) / (24 * 60 * 60 * 1000)) + 1
-  const weeksInPeriod = daysInPeriod / 7
-  const authorizedHours = (clientHours?.authorized_hours_weekly || 0) * weeksInPeriod
-  const deliveredHours = Math.max(0, authorizedHours - totalMissedHours)
-  const attendanceRate = authorizedHours > 0 ? Math.round((deliveredHours / authorizedHours) * 100) : null
+  const authorizedHoursPerWeek = (clinicalProfile as any)?.authorizedHoursPerWeek || 0
+  const weeksInPeriod = Math.round(
+    (new Date(periodEnd).getTime() - new Date(periodStart).getTime()) / (7 * 24 * 60 * 60 * 1000)
+  )
+  const authorizedHoursTotal = authorizedHoursPerWeek * weeksInPeriod
+  const deliveredHours = Math.max(0, authorizedHoursTotal - totalMissedHours)
+  const attendanceRate = authorizedHoursTotal > 0 ? Math.round((deliveredHours / authorizedHoursTotal) * 100) : null
+
+  const missedReasonCounts = missedHoursData
+    .map((m: any) => m.reason)
+    .filter(Boolean)
+    .reduce((acc: Record<string, number>, r: string) => {
+      acc[r] = (acc[r] || 0) + 1;
+      return acc;
+    }, {})
+
+  const serviceUtilization = {
+    authorizedHoursPerWeek,
+    authorizedHoursTotal,
+    deliveredHours,
+    missedHoursTotal: totalMissedHours,
+    attendanceRate,
+    missedReasons: missedReasonCounts,
+    sessionCount: sessionNotes.length,
+  }
 
   let bcbaSessionCount = 0
   if (input.bcbaId) {
@@ -315,8 +333,8 @@ Period: ${periodLabel} (${periodStart} to ${periodEnd})
 Diagnosis: ${diagnosis}
 Approved interventions: ${approvedInterventions || 'Not specified'}
 Sessions documented by RBT: ${sessionNotes.length}${bcbaSessionCount ? `\nSessions documented by BCBA: ${bcbaSessionCount}` : ''}
-Authorized hours this period: ${authorizedHours > 0 ? authorizedHours + ' hrs' : 'Not configured'}
-Delivered hours: ${authorizedHours > 0 ? deliveredHours + ' hrs' : 'N/A'}
+Authorized hours this period: ${authorizedHoursTotal > 0 ? authorizedHoursTotal + ' hrs' : 'Not configured'}
+Delivered hours: ${authorizedHoursTotal > 0 ? deliveredHours + ' hrs' : 'N/A'}
 Missed hours: ${totalMissedHours > 0 ? totalMissedHours + ' hrs' : 'None recorded'}
 Attendance rate: ${attendanceRate !== null ? attendanceRate + '%' : 'N/A'}
 Missed hour reasons: ${missedReasons.length > 0 ? missedReasons.join(', ') : 'None'}
@@ -370,7 +388,8 @@ Write the narrative now.`
     skillTrends: skillTrendMap,
     frequentlyUsedInterventions,
     summary,
+    serviceUtilization,
   }
 
-  return { behaviorTrends, skillTrends, goalProgress, narrative, continuityContext, authorizedHours, deliveredHours, missedHours: totalMissedHours, attendanceRate, missedReasons }
+  return { behaviorTrends, skillTrends, goalProgress, narrative, continuityContext, serviceUtilization, authorizedHours: authorizedHoursTotal, deliveredHours, missedHours: totalMissedHours, attendanceRate, missedReasons }
 }
