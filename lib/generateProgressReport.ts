@@ -130,6 +130,10 @@ export async function generateProgressReport(
   attendanceRate: number | null
   missedReasons: string[]
   serviceUtilization: any
+  behaviorWeeklyTable: any
+  skillWeeklyTable: any
+  activeTreatmentAreas: any
+  clinicalBarriers: string[]
 }> {
   const { clientId, periodStart, periodEnd, periodLabel } = input
 
@@ -156,7 +160,7 @@ export async function generateProgressReport(
 
   const sessionNotes = await prisma.session_notes.findMany({
     where: { client_id: clientId, session_date: { gte: periodStart, lte: periodEnd } },
-    select: { interventions_used: true },
+    select: { interventions_used: true, behaviors_addressed: true, skills_addressed: true },
   })
 
   const missedHoursData = await prisma.missed_hours.findMany({
@@ -228,6 +232,26 @@ export async function generateProgressReport(
     return { name, weeklyPercentages: pcts, trend, avgPercentage: pcts.reduce((a, b) => a + b, 0) / pcts.length, changePercent }
   })
 
+  const behaviorWeeklyTable: Record<string, { baseline: number | null; weeks: (number | null)[]; monthlyAvg: number | null }> = {}
+  for (const [name, freqs] of behaviorMap.entries()) {
+    const avg = freqs.length > 0 ? freqs.reduce((a, b) => a + b, 0) / freqs.length : null
+    behaviorWeeklyTable[name] = {
+      baseline: null,
+      weeks: [freqs[0] ?? null, freqs[1] ?? null, freqs[2] ?? null, freqs[3] ?? null],
+      monthlyAvg: avg !== null ? Math.round(avg * 10) / 10 : null,
+    }
+  }
+
+  const skillWeeklyTable: Record<string, { baseline: number | null; weeks: (number | null)[]; monthlyAvg: number | null }> = {}
+  for (const [name, pcts] of skillMap.entries()) {
+    const avg = pcts.length > 0 ? pcts.reduce((a, b) => a + b, 0) / pcts.length : null
+    skillWeeklyTable[name] = {
+      baseline: null,
+      weeks: [pcts[0] ?? null, pcts[1] ?? null, pcts[2] ?? null, pcts[3] ?? null],
+      monthlyAvg: avg !== null ? Math.round(avg * 10) / 10 : null,
+    }
+  }
+
   const latestSkillData = new Map<string, number>()
   for (const row of replacementData) latestSkillData.set(row.replacement_skill, row.observed_percentage ?? 0)
   const latestBehaviorData = new Map<string, number>()
@@ -280,9 +304,23 @@ export async function generateProgressReport(
     .slice(0, 5)
     .map(([name]) => name)
 
-  const diagnosis = (clinicalProfile.diagnosis || []).join(', ') || 'Not specified'
-  const approvedInterventions = (clinicalProfile.interventions || [])
-    .map((i: any) => typeof i === 'string' ? i : i?.name || '').filter(Boolean).join(', ')
+  const behaviorsWorked = [...new Set(sessionNotes.flatMap(n => n.behaviors_addressed || []))]
+  const skillsWorked = [...new Set(sessionNotes.flatMap(n => n.skills_addressed || []))]
+
+  const activeTreatmentAreas = {
+    behaviorReductionTargets: behaviorsWorked,
+    replacementPrograms: skillsWorked,
+    frequentlyUsedInterventions,
+    rbtSessionCount: sessionNotes.length,
+    bcbaSessionCount: bcbaSessionCount,
+  }
+
+  const clinicalBarriers: string[] = []
+  if (totalMissedHours > 0) clinicalBarriers.push('Missed treatment hours during reporting period')
+  if (attendanceRate !== null && attendanceRate < 80) clinicalBarriers.push('Reduced treatment exposure may have impacted progress')
+  if (missedReasons.length > 0) missedReasons.forEach(r => clinicalBarriers.push(r))
+  const profileBarriers = (clinicalProfile as any)?.commonBarriers || []
+  profileBarriers.forEach((b: string) => { if (!clinicalBarriers.includes(b)) clinicalBarriers.push(b) })
 
   const systemPrompt = `You are a licensed BCBA generating a monthly ABA therapy progress report. This report serves as clinical documentation of treatment response and medical necessity. Write a narrative that clearly answers: WHY does this client still need ABA services?
 
@@ -328,31 +366,41 @@ ONGOING NEED DESPITE PROGRESS:
 - Do not reference specific frequencies or percentages — use qualitative language
 - Output the narrative only. No headers, no bullets. Flowing clinical paragraphs.`
 
-  const userPrompt = `Generate a monthly progress report for:
+  const behaviorTableText = Object.entries(behaviorWeeklyTable).map(([name, data]) => {
+    const avg = data.monthlyAvg !== null ? String(data.monthlyAvg) : '—'
+    return `${name}: W1 ${data.weeks[0] ?? '—'} | W2 ${data.weeks[1] ?? '—'} | W3 ${data.weeks[2] ?? '—'} | W4 ${data.weeks[3] ?? '—'} | Avg ${avg}`
+  }).join('\n') || 'Data unavailable'
+
+  const skillTableText = Object.entries(skillWeeklyTable).map(([name, data]) => {
+    const avg = data.monthlyAvg !== null ? `${data.monthlyAvg}%` : '—'
+    return `${name}: W1 ${data.weeks[0] !== null ? data.weeks[0] + '%' : '—'} | W2 ${data.weeks[1] !== null ? data.weeks[1] + '%' : '—'} | W3 ${data.weeks[2] !== null ? data.weeks[2] + '%' : '—'} | W4 ${data.weeks[3] !== null ? data.weeks[3] + '%' : '—'} | Avg ${avg}`
+  }).join('\n') || 'Data unavailable'
+
+  const userPrompt = `Generate a monthly ABA therapy progress report narrative for:
 Period: ${periodLabel} (${periodStart} to ${periodEnd})
-Diagnosis: ${diagnosis}
-Approved interventions: ${approvedInterventions || 'Not specified'}
-Sessions documented by RBT: ${sessionNotes.length}${bcbaSessionCount ? `\nSessions documented by BCBA: ${bcbaSessionCount}` : ''}
+RBT Sessions documented: ${sessionNotes.length}
+BCBA Sessions documented: ${bcbaSessionCount}
 Authorized hours this period: ${authorizedHoursTotal > 0 ? authorizedHoursTotal + ' hrs' : 'Not configured'}
 Delivered hours: ${authorizedHoursTotal > 0 ? deliveredHours + ' hrs' : 'N/A'}
 Missed hours: ${totalMissedHours > 0 ? totalMissedHours + ' hrs' : 'None recorded'}
 Attendance rate: ${attendanceRate !== null ? attendanceRate + '%' : 'N/A'}
 Missed hour reasons: ${missedReasons.length > 0 ? missedReasons.join(', ') : 'None'}
 
---- BEHAVIOR TRENDS ---
-${behaviorTrends.length > 0
-    ? behaviorTrends.map(b => `${b.name}: ${b.trend} (avg ${b.avgFrequency.toFixed(1)}/week${b.changePercent !== null ? `, ${b.changePercent > 0 ? '+' : ''}${b.changePercent.toFixed(0)}% change` : ''})`).join('\n')
-    : 'No behavior data'}
+--- MALADAPTIVE BEHAVIOR DATA ---
+${behaviorTableText}
 
---- SKILL TRENDS ---
-${skillTrends.length > 0
-    ? skillTrends.map(s => `${s.name}: ${s.trend} (avg ${s.avgPercentage.toFixed(0)}%${s.changePercent !== null ? `, ${s.changePercent > 0 ? '+' : ''}${s.changePercent.toFixed(0)}% change` : ''})`).join('\n')
-    : 'No skill data'}
+--- REPLACEMENT SKILL DATA ---
+${skillTableText}
 
---- FREQUENTLY USED INTERVENTIONS ---
-${frequentlyUsedInterventions.join(', ') || 'No session data'}
+--- ACTIVE TREATMENT AREAS ---
+Behavior reduction targets worked: ${activeTreatmentAreas.behaviorReductionTargets.join(', ') || 'None documented'}
+Replacement programs worked: ${activeTreatmentAreas.replacementPrograms.join(', ') || 'None documented'}
+Frequently used interventions: ${frequentlyUsedInterventions.join(', ') || 'None documented'}
 
-Write the narrative now.`
+--- CLINICAL BARRIERS ---
+${clinicalBarriers.length > 0 ? clinicalBarriers.join('\n') : 'No specific barriers documented'}
+
+Write the 4-paragraph narrative now. Follow the structure exactly.`
 
   let narrative = ''
   if (onChunk) {
@@ -391,5 +439,5 @@ Write the narrative now.`
     serviceUtilization,
   }
 
-  return { behaviorTrends, skillTrends, goalProgress, narrative, continuityContext, serviceUtilization, authorizedHours: authorizedHoursTotal, deliveredHours, missedHours: totalMissedHours, attendanceRate, missedReasons }
+  return { behaviorTrends, skillTrends, goalProgress, narrative, continuityContext, serviceUtilization, authorizedHours: authorizedHoursTotal, deliveredHours, missedHours: totalMissedHours, attendanceRate, missedReasons, behaviorWeeklyTable, skillWeeklyTable, activeTreatmentAreas, clinicalBarriers }
 }

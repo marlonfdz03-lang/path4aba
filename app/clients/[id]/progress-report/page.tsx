@@ -77,6 +77,10 @@ export default function ProgressReportPage() {
   const [status, setStatus] = useState("");
   const [clinicalProfile, setClinicalProfile] = useState<any>(null);
   const [serviceUtilization, setServiceUtilization] = useState<any>(null);
+  const [behaviorWeeklyTable, setBehaviorWeeklyTable] = useState<any>({});
+  const [skillWeeklyTable, setSkillWeeklyTable] = useState<any>({});
+  const [activeTreatmentAreas, setActiveTreatmentAreas] = useState<any>(null);
+  const [clinicalBarriers, setClinicalBarriers] = useState<string[]>([]);
   const narrativeRef = useRef("");
   const [showReassessment, setShowReassessment] = useState(false);
   const [reassessStart, setReassessStart] = useState("");
@@ -146,6 +150,10 @@ export default function ProgressReportPage() {
             if (meta.skillTrends) setSkillTrends(meta.skillTrends);
             if (meta.goalProgress) setGoalProgress(meta.goalProgress);
             if (meta.serviceUtilization) setServiceUtilization(meta.serviceUtilization);
+            if (meta.behaviorWeeklyTable) setBehaviorWeeklyTable(meta.behaviorWeeklyTable);
+            if (meta.skillWeeklyTable) setSkillWeeklyTable(meta.skillWeeklyTable);
+            if (meta.activeTreatmentAreas) setActiveTreatmentAreas(meta.activeTreatmentAreas);
+            if (meta.clinicalBarriers) setClinicalBarriers(meta.clinicalBarriers);
             if (meta.error) setStatus(meta.error);
           } catch {}
         } else {
@@ -357,41 +365,33 @@ export default function ProgressReportPage() {
             </div>
 
             {/* Maladaptive Behaviors Table */}
-            {behaviorTrends.length > 0 && (
+            {Object.keys(behaviorWeeklyTable).length > 0 && (
               <div className="bg-white rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
-                <div className="px-5 py-4 border-b" style={{ borderColor: "var(--border)" }}>
-                  <SectionHeader title="Maladaptive Behaviors" />
+                <div className="px-5 py-3 border-b" style={{ borderColor: "var(--border)", background: "#FEF2F2" }}>
+                  <p className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "#991B1B" }}>Maladaptive Behavior Summary</p>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-[13px]">
                     <thead>
                       <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
-                        {["Behavior", "Function", "Intervention", "Baseline", "Current", "Trend", "Status"].map(h => (
+                        {["Behavior", "Baseline", "Week 1", "Week 2", "Week 3", "Week 4", "Monthly Avg"].map(h => (
                           <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text3)" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {behaviorTrends.map((b, i) => (
+                      {Object.entries(behaviorWeeklyTable).map(([name, data]: [string, any], i) => (
                         <tr key={i} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
-                          <td className="px-4 py-3 font-medium" style={{ color: "var(--text1)" }}>{b.name}</td>
-                          <td className="px-4 py-3 capitalize text-[12px]" style={{ color: "var(--text2)" }}>{getBehaviorFunction(b.name) || "—"}</td>
-                          <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text2)" }}>{getBehaviorIntervention(b.name)}</td>
-                          <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text3)" }}>
-                            {b.weeklyFrequencies?.length > 0 ? `${b.weeklyFrequencies[0]}/wk` : "—"}
+                          <td className="px-4 py-3 font-semibold" style={{ color: "var(--text1)" }}>{name}</td>
+                          <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text3)" }}>—</td>
+                          {data.weeks.map((w: number | null, wi: number) => (
+                            <td key={wi} className="px-4 py-3 text-[12px]" style={{ color: w !== null ? "var(--text1)" : "var(--text3)" }}>
+                              {w !== null ? w : "—"}
+                            </td>
+                          ))}
+                          <td className="px-4 py-3 text-[12px] font-semibold" style={{ color: "var(--teal, #0D9488)" }}>
+                            {data.monthlyAvg !== null ? data.monthlyAvg : "—"}
                           </td>
-                          <td className="px-4 py-3 text-[12px] font-semibold" style={{ color: "var(--text1)" }}>
-                            {b.weeklyFrequencies?.length > 0 ? `${b.weeklyFrequencies[b.weeklyFrequencies.length - 1]}/wk` : "—"}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="font-bold text-[16px]" style={{ color: trendColor(b.trend) }}>{trendIcon(b.trend)}</span>
-                            {b.changePercent !== null && (
-                              <span className="text-[11px] ml-1" style={{ color: trendColor(b.trend) }}>
-                                {b.changePercent > 0 ? "+" : ""}{Math.abs(b.changePercent).toFixed(0)}%
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3"><StatusPill status={b.trend} /></td>
                         </tr>
                       ))}
                     </tbody>
@@ -401,51 +401,79 @@ export default function ProgressReportPage() {
             )}
 
             {/* Replacement Skills Table */}
-            {skillTrends.length > 0 && (
+            {Object.keys(skillWeeklyTable).length > 0 && (
               <div className="bg-white rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
-                <div className="px-5 py-4 border-b" style={{ borderColor: "var(--border)" }}>
-                  <SectionHeader title="Replacement Skills" />
+                <div className="px-5 py-3 border-b" style={{ borderColor: "var(--border)", background: "#F0FDF4" }}>
+                  <p className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "#065F46" }}>Replacement Skill Summary</p>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-[13px]">
                     <thead>
                       <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
-                        {["Skill", "Baseline", "Current", "Goal", "Trend", "Status"].map(h => (
+                        {["Skill", "Baseline", "Week 1", "Week 2", "Week 3", "Week 4", "Monthly Avg"].map(h => (
                           <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text3)" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {skillTrends.map((s, i) => (
+                      {Object.entries(skillWeeklyTable).map(([name, data]: [string, any], i) => (
                         <tr key={i} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
-                          <td className="px-4 py-3 font-medium" style={{ color: "var(--text1)" }}>{s.name}</td>
-                          <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text3)" }}>
-                            {s.weeklyPercentages?.length > 0 ? `${s.weeklyPercentages[0].toFixed(0)}%` : "—"}
+                          <td className="px-4 py-3 font-semibold" style={{ color: "var(--text1)" }}>{name}</td>
+                          <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text3)" }}>—</td>
+                          {data.weeks.map((w: number | null, wi: number) => (
+                            <td key={wi} className="px-4 py-3 text-[12px]" style={{ color: w !== null ? "var(--text1)" : "var(--text3)" }}>
+                              {w !== null ? `${w}%` : "—"}
+                            </td>
+                          ))}
+                          <td className="px-4 py-3 text-[12px] font-semibold" style={{ color: "var(--teal, #0D9488)" }}>
+                            {data.monthlyAvg !== null ? `${data.monthlyAvg}%` : "—"}
                           </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-16"><ProgressBar value={s.avgPercentage} color={trendColor(s.trend)} /></div>
-                              <span className="text-[12px] font-semibold" style={{ color: trendColor(s.trend) }}>{s.avgPercentage.toFixed(0)}%</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text3)" }}>
-                            {goalProgress.find(g => g.targetName === s.name)?.goalValue != null
-                              ? `${goalProgress.find(g => g.targetName === s.name)?.goalValue}%`
-                              : "—"}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="font-bold text-[16px]" style={{ color: trendColor(s.trend) }}>{trendIcon(s.trend)}</span>
-                            {s.changePercent !== null && (
-                              <span className="text-[11px] ml-1" style={{ color: trendColor(s.trend) }}>
-                                {s.changePercent > 0 ? "+" : ""}{Math.abs(s.changePercent).toFixed(0)}%
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3"><StatusPill status={s.trend} /></td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {/* Active Treatment Areas */}
+            {activeTreatmentAreas && (
+              <div className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
+                <SectionHeader title="Active Treatment Areas" />
+                <div className="grid gap-4 sm:grid-cols-3">
+                  {[
+                    { label: "Behavior Reduction Targets", items: activeTreatmentAreas.behaviorReductionTargets },
+                    { label: "Replacement Programs", items: activeTreatmentAreas.replacementPrograms },
+                    { label: "Interventions Used", items: activeTreatmentAreas.frequentlyUsedInterventions },
+                  ].map(col => (
+                    <div key={col.label}>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--text3)" }}>{col.label}</p>
+                      {col.items?.length > 0 ? col.items.map((item: string, i: number) => (
+                        <p key={i} className="text-[12px] py-0.5" style={{ color: "var(--text2)" }}>• {item}</p>
+                      )) : <p className="text-[12px]" style={{ color: "var(--text3)" }}>None documented</p>}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 pt-4 border-t flex gap-6" style={{ borderColor: "var(--border)" }}>
+                  <p className="text-[12px]" style={{ color: "var(--text3)" }}>RBT Sessions: <span className="font-semibold" style={{ color: "var(--text1)" }}>{activeTreatmentAreas.rbtSessionCount}</span></p>
+                  {activeTreatmentAreas.bcbaSessionCount > 0 && (
+                    <p className="text-[12px]" style={{ color: "var(--text3)" }}>BCBA Sessions: <span className="font-semibold" style={{ color: "var(--text1)" }}>{activeTreatmentAreas.bcbaSessionCount}</span></p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Clinical Barriers */}
+            {clinicalBarriers.length > 0 && (
+              <div className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
+                <SectionHeader title="Clinical Barriers" />
+                <div className="space-y-1.5">
+                  {clinicalBarriers.map((barrier, i) => (
+                    <div key={i} className="flex items-center gap-2 text-[12px]" style={{ color: "var(--text2)" }}>
+                      <span style={{ color: "#D97706" }}>•</span>
+                      <span>{barrier}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

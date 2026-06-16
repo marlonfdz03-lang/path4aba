@@ -100,6 +100,10 @@ export async function POST(req: NextRequest) {
             attendanceRate: result.attendanceRate,
             missedReasons: result.missedReasons,
             serviceUtilization: result.serviceUtilization,
+            behaviorWeeklyTable: result.behaviorWeeklyTable,
+            skillWeeklyTable: result.skillWeeklyTable,
+            activeTreatmentAreas: result.activeTreatmentAreas,
+            clinicalBarriers: result.clinicalBarriers,
           })}`
         ))
       } catch (err) {
