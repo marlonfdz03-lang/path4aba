@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { getClientProfiles } from "@/lib/clientStorage";
 import { saveNote, getNotesByClientId, deleteNote } from "@/lib/noteStorage";
@@ -168,6 +169,7 @@ function NoteOutput({
 
 export default function ClientProfilePage() {
   const params = useParams();
+  const { data: session } = useSession();
 
   const [client, setClient] = useState<any>(null);
   const [clientLoading, setClientLoading] = useState(true);
@@ -677,9 +679,11 @@ export default function ClientProfilePage() {
     setGeneratingCode(false);
   }
 
+  const isAdmin = (session?.user as any)?.role === 'admin';
+
   const TABS: { key: Tab; label: string }[] = [
     { key: "overview", label: "Overview" },
-    { key: "treatment_map", label: "Treatment Map" },
+    ...(isAdmin ? [{ key: "treatment_map" as Tab, label: "Treatment Map" }] : []),
     { key: "generate", label: "Generate Note" },
     { key: "refine", label: "Refine Note" },
     { key: "notes", label: "Notes" },
