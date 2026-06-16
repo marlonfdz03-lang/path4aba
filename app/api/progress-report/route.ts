@@ -1,6 +1,7 @@
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { generateProgressReport } from '@/lib/generateProgressReport'
+import { createClinicalTimelineEntry } from '@/lib/clinicalTimeline'
 import { NextRequest } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -56,6 +57,23 @@ export async function POST(req: NextRequest) {
             narrative: result.narrative,
             continuity_context: result.continuityContext as any,
           }
+        })
+
+        await createClinicalTimelineEntry({
+          clientId,
+          date: new Date().toISOString().split('T')[0],
+          type: 'monthly_progress_report',
+          title: `Monthly Progress Report — ${periodLabel}`,
+          summary: result.narrative ? result.narrative.split(/[.!?]/)[0] + '.' : undefined,
+          metadata: {
+            periodLabel,
+            periodStart,
+            periodEnd,
+            behaviorTrends: result.behaviorTrends.map((b: any) => ({ name: b.name, trend: b.trend })),
+            skillTrends: result.skillTrends.map((s: any) => ({ name: s.name, trend: s.trend })),
+          },
+          createdBy: userId,
+          source: 'progress_report',
         })
 
         const existingProfile = (client.clinical_profile as any) || {}
