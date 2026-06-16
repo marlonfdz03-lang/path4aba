@@ -931,9 +931,14 @@ export default function ClientProfilePage() {
               rawBehaviors.forEach((b: any) => {
                 const name = typeof b === "string" ? b : b?.name || "";
                 const funcs: string[] = typeof b === "object" ? (b.functions || b.function || []) : [];
-                const primaryFunc = (funcs[0] || "unknown").toLowerCase();
-                if (!functionGroups[primaryFunc]) functionGroups[primaryFunc] = { behaviors: [], replacements: [] };
-                if (name) functionGroups[primaryFunc].behaviors.push(name);
+                const allFuncs = funcs.length > 0 ? funcs : ["unknown"];
+                allFuncs.forEach((func: string) => {
+                  const fKey = func.toLowerCase();
+                  if (!functionGroups[fKey]) functionGroups[fKey] = { behaviors: [], replacements: [] };
+                  if (name && !functionGroups[fKey].behaviors.includes(name)) {
+                    functionGroups[fKey].behaviors.push(name);
+                  }
+                });
               });
               rawReplacements.forEach((s: any) => {
                 const name = typeof s === "string" ? s : s?.name || "";
@@ -962,7 +967,7 @@ export default function ClientProfilePage() {
                       <table className="w-full text-[13px]">
                         <thead>
                           <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
-                            {["Behavior", "Primary Function", "Approved Interventions"].map(h => (
+                            {["Behavior", "Functions"].map(h => (
                               <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text3)" }}>{h}</th>
                             ))}
                           </tr>
@@ -971,18 +976,20 @@ export default function ClientProfilePage() {
                           {rawBehaviors.map((b: any, i: number) => {
                             const name = typeof b === "string" ? b : b?.name || "";
                             const funcs: string[] = typeof b === "object" ? (b.functions || b.function || []) : [];
-                            const primaryFunc = funcs[0] || "";
-                            const fc = funcColors[primaryFunc.toLowerCase()] || funcColors.unknown;
                             return (
                               <tr key={i} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
                                 <td className="px-4 py-3 font-semibold" style={{ color: "var(--text1)" }}>{name}</td>
                                 <td className="px-4 py-3">
-                                  {primaryFunc ? (
-                                    <span className="text-[11px] px-2.5 py-1 rounded-full font-semibold capitalize" style={{ background: fc.bg, color: fc.color }}>{primaryFunc}</span>
+                                  {funcs.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1">
+                                      {funcs.map((f: string, fi: number) => {
+                                        const fci = funcColors[f.toLowerCase()] || funcColors.unknown;
+                                        return (
+                                          <span key={fi} className="text-[11px] px-2 py-0.5 rounded-full font-semibold capitalize" style={{ background: fci.bg, color: fci.color }}>{f}</span>
+                                        );
+                                      })}
+                                    </div>
                                   ) : <span style={{ color: "var(--text3)" }}>—</span>}
-                                </td>
-                                <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text2)" }}>
-                                  {approvedInterventions.slice(0, 4).join(", ") || "Per treatment plan"}
                                 </td>
                               </tr>
                             );
