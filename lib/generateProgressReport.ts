@@ -169,7 +169,8 @@ export async function generateProgressReport(
     where: { id: clientId },
     select: { authorized_hours_weekly: true },
   })
-  const weeksInPeriod = Math.round((new Date(periodEnd).getTime() - new Date(periodStart).getTime()) / (7 * 24 * 60 * 60 * 1000))
+  const daysInPeriod = Math.floor((new Date(periodEnd).getTime() - new Date(periodStart).getTime()) / (24 * 60 * 60 * 1000)) + 1
+  const weeksInPeriod = daysInPeriod / 7
   const authorizedHours = (clientHours?.authorized_hours_weekly || 0) * weeksInPeriod
   const deliveredHours = Math.max(0, authorizedHours - totalMissedHours)
   const attendanceRate = authorizedHours > 0 ? Math.round((deliveredHours / authorizedHours) * 100) : null
@@ -282,8 +283,8 @@ This is the most important paragraph for insurance. Document:
 - Why service intensity cannot be reduced based on age alone — must be based on individual clinical need
 - Use: "Continued ABA services at the current authorized intensity remain clinically indicated based on the client's active behavioral profile and ongoing acquisition needs."
 
-Paragraph 4 — CLINICAL PRIORITIES FOR NEXT MONTH:
-What should the RBT and BCBA focus on? What needs more attention? What interventions should be prioritized?
+Paragraph 4 — CONTINUED TREATMENT NEEDS:
+Summarize the active behavior-reduction and skill-acquisition areas that require continued intervention. Do not label only some targets as priorities — all active treatment targets remain part of the treatment plan unless discontinued by the BCBA. Emphasize that continued structured intervention is necessary across all active programs.
 
 ═══ MEDICAL NECESSITY LANGUAGE — MANDATORY ═══
 Every report must contain at least one sentence from each of these:
@@ -329,11 +330,6 @@ ${behaviorTrends.length > 0
 ${skillTrends.length > 0
     ? skillTrends.map(s => `${s.name}: ${s.trend} (avg ${s.avgPercentage.toFixed(0)}%${s.changePercent !== null ? `, ${s.changePercent > 0 ? '+' : ''}${s.changePercent.toFixed(0)}% change` : ''})`).join('\n')
     : 'No skill data'}
-
---- GOAL PROGRESS ---
-${goalProgress.length > 0
-    ? goalProgress.map(g => `${g.targetName} (${g.targetType}): ${g.goalStatus} — baseline ${g.baselineValue} → goal ${g.goalValue}${g.currentValue !== null ? `, current ${g.currentValue}` : ''}${g.percentToGoal !== null ? ` (${g.percentToGoal.toFixed(0)}% to goal)` : ''}`).join('\n')
-    : 'No STOs defined'}
 
 --- FREQUENTLY USED INTERVENTIONS ---
 ${frequentlyUsedInterventions.join(', ') || 'No session data'}
