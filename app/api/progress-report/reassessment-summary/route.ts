@@ -20,104 +20,244 @@ export async function POST(req: Request) {
   if (!clientId || !periodStart || !periodEnd) return Response.json({ error: 'Missing fields' }, { status: 400 })
 
   const client = await prisma.clients.findFirst({
-    where: { id: clientId, rbt_id: userId },
+    where: {
+      id: clientId,
+      OR: [
+        { rbt_id: userId },
+        { bcba_clients: { some: { bcba_id: userId } } }
+      ]
+    },
     select: { clinical_profile: true, internal_code: true },
   })
   if (!client) return Response.json({ error: 'Client not found' }, { status: 404 })
 
-  const [maladaptiveData, replacementData, sessionNotes, progressReports] = await Promise.all([
-    prisma.maladaptive_data.findMany({
-      where: { client_id: clientId, week_start: { gte: periodStart, lte: periodEnd } },
-      orderBy: { week_start: 'asc' },
+  // Fetch all data in parallel
+  const [progressReports, timelineEntries, missedHoursData, sessionNotes, bcbaNotes] = await Promise.all([
+    prisma.progress_reports.findMany({
+      where: { client_id: clientId, period_start: { gte: periodStart }, period_end: { lte: periodEnd } },
+      orderBy: { period_start: 'asc' },
     }),
-    prisma.replacement_data.findMany({
-      where: { client_id: clientId, week_start: { gte: periodStart, lte: periodEnd } },
-      orderBy: { week_start: 'asc' },
+    prisma.clinical_timeline_entries.findMany({
+      where: { client_id: clientId, date: { gte: periodStart, lte: periodEnd } },
+      orderBy: { date: 'asc' },
+    }),
+    prisma.missed_hours.findMany({
+      where: { client_id: clientId, date: { gte: periodStart, lte: periodEnd } },
+      select: { hours: true, reason: true },
     }),
     prisma.session_notes.findMany({
       where: { client_id: clientId, session_date: { gte: periodStart, lte: periodEnd } },
-      select: { interventions_used: true, session_date: true },
+      select: { interventions_used: true, behaviors_addressed: true, skills_addressed: true },
     }),
-    prisma.progress_reports.findMany({
-      where: { client_id: clientId, period_start: { gte: periodStart }, period_end: { lte: periodEnd } },
-      select: { period_label: true, narrative: true },
-      orderBy: { period_start: 'asc' },
+    prisma.supervision_notes.findMany({
+      where: { client_id: clientId, session_date: { gte: periodStart, lte: periodEnd } },
+      select: { note_text: true, supervision_type: true },
     }),
   ])
 
-  const behaviorSummary = new Map<string, number[]>()
-  for (const row of maladaptiveData) {
-    if (!behaviorSummary.has(row.behavior_name)) behaviorSummary.set(row.behavior_name, [])
-    behaviorSummary.get(row.behavior_name)!.push(row.frequency ?? 0)
+  // Service utilization across all months
+  const clinicalProfile = (client.clinical_profile as any) || {}
+  const authorizedHoursPerWeek = clinicalProfile?.authorizedHoursPerWeek || 0
+  const totalMissedHours = missedHoursData.reduce((sum, m) => sum + (m.hours || 0), 0)
+  const missedReasons = [...new Set(missedHoursData.map(m => m.reason).filter(Boolean))] as string[]
+
+  // Calculate months in period
+  const startDate = new Date(periodStart)
+  const endDate = new Date(periodEnd)
+  const weeksInPeriod = Math.round((endDate.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000))
+  const authorizedHoursTotal = authorizedHoursPerWeek * weeksInPeriod
+  const deliveredHours = Math.max(0, authorizedHoursTotal - totalMissedHours)
+  const attendanceRate = authorizedHoursTotal > 0 ? Math.round((deliveredHours / authorizedHoursTotal) * 100) : null
+
+  // Behavior trends across monthly reports
+  const behaviorFirstLast: Record<string, { first: number; last: number; months: number[] }> = {}
+  for (const report of progressReports) {
+    const trends = (report.behavior_trends as any[]) || []
+    for (const t of trends) {
+      if (!behaviorFirstLast[t.name]) behaviorFirstLast[t.name] = { first: t.avgFrequency, last: t.avgFrequency, months: [] }
+      behaviorFirstLast[t.name].last = t.avgFrequency
+      behaviorFirstLast[t.name].months.push(t.avgFrequency)
+    }
   }
 
-  const skillSummary = new Map<string, number[]>()
-  for (const row of replacementData) {
-    if (!skillSummary.has(row.replacement_skill)) skillSummary.set(row.replacement_skill, [])
-    skillSummary.get(row.replacement_skill)!.push(row.observed_percentage ?? 0)
+  // Skill trends across monthly reports
+  const skillFirstLast: Record<string, { first: number; last: number; months: number[] }> = {}
+  for (const report of progressReports) {
+    const trends = (report.skill_trends as any[]) || []
+    for (const t of trends) {
+      if (!skillFirstLast[t.name]) skillFirstLast[t.name] = { first: t.avgPercentage, last: t.avgPercentage, months: [] }
+      skillFirstLast[t.name].last = t.avgPercentage
+      skillFirstLast[t.name].months.push(t.avgPercentage)
+    }
   }
 
-  const behaviorLines = Array.from(behaviorSummary.entries()).map(([name, freqs]) => {
-    const first = freqs[0]; const last = freqs[freqs.length - 1]
-    const change = first > 0 ? ((last - first) / first * 100).toFixed(0) : 'N/A'
-    return `${name}: started at ${first}/wk, ended at ${last}/wk (${change}% change)`
-  }).join('\n')
+  // Clinical barriers from all monthly reports
+  const allBarriers = new Set<string>()
+  for (const report of progressReports) {
+    const ctx = (report.continuity_context as any) || {}
+    if (ctx.clinicalBarriers) ctx.clinicalBarriers.forEach((b: string) => allBarriers.add(b))
+  }
+  if (missedReasons.length > 0) missedReasons.forEach(r => allBarriers.add(r))
 
-  const skillLines = Array.from(skillSummary.entries()).map(([name, pcts]) => {
-    const first = pcts[0]; const last = pcts[pcts.length - 1]
-    return `${name}: started at ${first.toFixed(0)}%, ended at ${last.toFixed(0)}%`
-  }).join('\n')
+  // Active treatment areas from session notes
+  const behaviorsWorked = [...new Set(sessionNotes.flatMap(n => n.behaviors_addressed || []))]
+  const skillsWorked = [...new Set(sessionNotes.flatMap(n => n.skills_addressed || []))]
+  const interventionCount = new Map<string, number>()
+  for (const note of sessionNotes) {
+    for (const i of (note.interventions_used || [])) {
+      interventionCount.set(i, (interventionCount.get(i) || 0) + 1)
+    }
+  }
+  const topInterventions = Array.from(interventionCount.entries())
+    .sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name]) => name)
 
-  const systemPrompt = `You are a licensed BCBA writing a clinical reassessment period summary. This document will be used as supporting clinical documentation in an ABA reassessment. It must clearly demonstrate why the client continues to require ABA services.
+  // Build behavior summary table text
+  const behaviorSummaryText = Object.entries(behaviorFirstLast).map(([name, data]) => {
+    const change = data.first > 0 ? ((data.last - data.first) / data.first * 100).toFixed(0) : 'N/A'
+    const direction = data.last < data.first ? '↓' : data.last > data.first ? '↑' : '→'
+    return `${name}: Initial avg ${data.first.toFixed(1)} → Current avg ${data.last.toFixed(1)} (${direction}${Math.abs(Number(change))}%)`
+  }).join('\n') || 'No behavior data available'
 
-STRUCTURE:
-Paragraph 1: Overview of the treatment period — what was targeted, what improved, what remained active
-Paragraph 2: Behaviors that continue to require intervention — document ongoing barriers even when improvement occurred
-Paragraph 3: Replacement skills and acquisition progress — document what was learned and what still needs teaching
-Paragraph 4: Medical necessity statement — why services remain clinically indicated, generalization needs, multiple environments, emerging treatment targets
-Paragraph 5: Recommendations for the upcoming reassessment period
+  const skillSummaryText = Object.entries(skillFirstLast).map(([name, data]) => {
+    const change = data.first > 0 ? ((data.last - data.first) / data.first * 100).toFixed(0) : 'N/A'
+    const direction = data.last > data.first ? '↑' : data.last < data.first ? '↓' : '→'
+    return `${name}: Initial avg ${data.first.toFixed(0)}% → Current avg ${data.last.toFixed(0)}% (${direction}${Math.abs(Number(change))}%)`
+  }).join('\n') || 'No skill data available'
 
-MANDATORY LANGUAGE:
-- "Continued ABA services remain clinically indicated based on the client's active behavioral profile"
-- "The client's service needs are determined by individual clinical need, not age-based criteria"
-- "Although [skill/behavior] demonstrated progress, continued intervention is necessary to support maintenance and generalization across environments and communication partners"
-- "As the client continues to develop and engage across multiple environments including home, school, and community settings, new socially significant treatment targets have emerged requiring structured ABA support"
+  const systemPrompt = `You are a licensed BCBA writing a clinical reassessment period summary. This document will be used as supporting clinical documentation in an ABA reassessment and must clearly demonstrate why the client continues to require ABA services.
+
+STRUCTURE — write exactly 6 paragraphs:
+
+Paragraph 1 — TREATMENT PERIOD OVERVIEW:
+Summarize the assessment period. Reference how many months of service were provided, the general attendance pattern, and what treatment areas were active. Do not list specific numbers — describe them qualitatively.
+
+Paragraph 2 — BEHAVIOR REDUCTION PROGRESS:
+Document observed changes in maladaptive behaviors across the period. Connect any reductions to consistent ABA intervention. Even improving behaviors must be framed as ongoing targets. Use: "Although [behavior] demonstrated reduction, continued intervention remains necessary to support maintenance and generalization."
+
+Paragraph 3 — REPLACEMENT SKILL ACQUISITION:
+Document skill acquisition progress. Connect gains to structured ABA teaching procedures. Even high-performing skills must be framed as requiring continued support for generalization. Use: "Skills that demonstrated progress continue to require structured support to generalize across environments and communication partners."
+
+Paragraph 4 — CLINICAL BARRIERS AND TREATMENT FACTORS:
+Document barriers that impacted treatment. Reference missed hours, attendance inconsistencies, generalization challenges, and environmental factors. Connect barriers to ongoing need.
+
+Paragraph 5 — MEDICAL NECESSITY AND SERVICE JUSTIFICATION:
+This is the most critical paragraph. Must include:
+"Continued ABA services at the current authorized intensity remain clinically indicated."
+"Service needs are determined by the client's individual behavioral profile and treatment needs, not age-based criteria alone."
+Reference that active targets remain present, generalization is ongoing, and BCBA oversight continues to be necessary.
+
+Paragraph 6 — CONTINUED TREATMENT NEEDS:
+Summarize ongoing needs. Reference all active treatment areas. Do not suggest reducing services. End with: "All active behavior-reduction and skill-acquisition targets remain part of the treatment plan unless modified or discontinued by the supervising BCBA."
 
 RULES:
-- Third person, no identifiers
-- Objective ABA language only
-- 4-5 clinical paragraphs
-- Do not suggest reducing services
-- Do not reference specific numbers or frequencies
+- Third person only — "the client"
+- No names, DOB, insurance ID, diagnosis
+- No specific frequencies or percentages in the narrative
+- No mentalistic language
+- Never suggest reducing services
+- Never say behaviors are resolved
 - Output narrative only. No headers, no bullets.`
 
-  const userPrompt = `Write a reassessment period summary for the period ${periodStart} to ${periodEnd}.
+  const userPrompt = `Write a reassessment period summary for ${periodStart} to ${periodEnd}.
 
-Sessions documented: ${sessionNotes.length}
 Monthly reports available: ${progressReports.length}
+Timeline events: ${timelineEntries.length}
+RBT sessions documented: ${sessionNotes.length}
+BCBA sessions documented: ${bcbaNotes.length}
+Authorized hours: ${authorizedHoursTotal > 0 ? authorizedHoursTotal + ' hrs total' : 'Not configured'}
+Delivered hours: ${deliveredHours > 0 ? deliveredHours + ' hrs' : 'N/A'}
+Total missed hours: ${totalMissedHours > 0 ? totalMissedHours + ' hrs' : 'None recorded'}
+Attendance rate: ${attendanceRate !== null ? attendanceRate + '%' : 'N/A'}
 
-BEHAVIOR DATA:
-${behaviorLines || 'No behavior data available'}
+BEHAVIOR TRENDS ACROSS PERIOD:
+${behaviorSummaryText}
 
-REPLACEMENT SKILL DATA:
-${skillLines || 'No skill data available'}
+REPLACEMENT SKILL TRENDS ACROSS PERIOD:
+${skillSummaryText}
 
-${progressReports.length > 0 ? `MONTHLY NARRATIVE SUMMARIES:\n${progressReports.map(r => `${r.period_label}: ${r.narrative?.slice(0, 200)}...`).join('\n\n')}` : ''}
+ACTIVE TREATMENT AREAS:
+Behaviors worked: ${behaviorsWorked.join(', ') || 'None documented'}
+Skills worked: ${skillsWorked.join(', ') || 'None documented'}
+Top interventions: ${topInterventions.join(', ') || 'None documented'}
 
-Write the reassessment summary now.`
+CLINICAL BARRIERS:
+${[...allBarriers].join('\n') || 'None documented'}
+
+TIMELINE EVENTS:
+${timelineEntries.map(e => `${e.date}: ${e.title}`).join('\n') || 'None'}
+
+Write the 6-paragraph reassessment narrative now.`
+
+  // Save structured data for timeline
+  const reassessmentData = {
+    periodStart,
+    periodEnd,
+    monthsReviewed: progressReports.length,
+    authorizedHoursTotal,
+    deliveredHours,
+    totalMissedHours,
+    attendanceRate,
+    behaviorSummary: behaviorFirstLast,
+    skillSummary: skillFirstLast,
+    clinicalBarriers: [...allBarriers],
+    activeTreatmentAreas: { behaviorsWorked, skillsWorked, topInterventions },
+    bcbaDocumentation: bcbaNotes.length > 0,
+  }
 
   const encoder = new TextEncoder()
+  let fullNarrative = ''
+
   const stream = new ReadableStream({
     async start(controller) {
       try {
         const aiStream = await openai.chat.completions.create({
-          model: 'gpt-4o', temperature: 0.4, max_tokens: 1200, stream: true,
+          model: 'gpt-4o', temperature: 0.4, max_tokens: 1800, stream: true,
           messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
         })
         for await (const chunk of aiStream) {
           const delta = chunk.choices[0]?.delta?.content || ''
-          if (delta) controller.enqueue(encoder.encode(delta))
+          if (delta) {
+            fullNarrative += delta
+            controller.enqueue(encoder.encode(delta))
+          }
         }
+
+        // Save timeline entry
+        try {
+          const periodLabel = `${new Date(periodStart).toLocaleString('en-US', { month: 'long', year: 'numeric' })} – ${new Date(periodEnd).toLocaleString('en-US', { month: 'long', year: 'numeric' })}`
+          await prisma.clinical_timeline_entries.upsert({
+            where: { client_id_type_title: {
+              client_id: clientId,
+              type: 'reassessment_summary',
+              title: `Reassessment Summary — ${periodLabel}`
+            }},
+            update: {
+              date: periodEnd,
+              summary: fullNarrative.split(/(?<=[.!?])\s+/).slice(0, 1).join(' '),
+              metadata: reassessmentData,
+              importance: 'high',
+              source: 'auto',
+            },
+            create: {
+              client_id: clientId,
+              date: periodEnd,
+              type: 'reassessment_summary',
+              title: `Reassessment Summary — ${periodLabel}`,
+              summary: fullNarrative.split(/(?<=[.!?])\s+/).slice(0, 1).join(' '),
+              metadata: reassessmentData,
+              importance: 'high',
+              source: 'auto',
+              created_by: userId,
+            }
+          })
+        } catch (tlErr) {
+          console.error('[reassessment timeline]', tlErr)
+        }
+
+        // Send structured data
+        controller.enqueue(encoder.encode(
+          `\n__REASSESS_META__${JSON.stringify(reassessmentData)}`
+        ))
       } catch (err: any) {
         controller.enqueue(encoder.encode(`Error: ${err.message}`))
       } finally {

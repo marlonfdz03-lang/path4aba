@@ -187,7 +187,12 @@ export default function ProgressReportPage() {
         const { done, value } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
-        text += chunk;
+        if (chunk.includes("__REASSESS_META__")) {
+          const [narrative] = chunk.split("__REASSESS_META__");
+          if (narrative) text += narrative;
+        } else {
+          text += chunk;
+        }
         setReassessSummary(text);
       }
     } catch { setReassessError("Network error. Please try again."); }
