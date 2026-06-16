@@ -21,7 +21,7 @@ export async function GET(
   try {
     const client = await prisma.clients.findFirst({
       where: { id },
-      select: { id: true, internal_code: true, clinical_profile: true },
+      select: { id: true, internal_code: true, clinical_profile: true, treatment_map_approved: true },
     })
 
     if (!client) return NextResponse.json({ error: 'Not found' }, { status: 404 })

@@ -260,7 +260,7 @@ export default function ClientProfilePage() {
       const res = await fetch(`/api/clients/${id}`);
       if (res.ok) {
         const data = await res.json();
-        const found = { id: data.id, clientName: data.clinical_profile?.name || data.internal_code || "Unnamed Client", clinicalProfile: data.clinical_profile, authorized_hours_weekly: data.authorized_hours_weekly ?? null };
+        const found = { id: data.id, clientName: data.clinical_profile?.name || data.internal_code || "Unnamed Client", clinicalProfile: data.clinical_profile, authorized_hours_weekly: data.authorized_hours_weekly ?? null, treatmentMapApproved: data.treatment_map_approved ?? false };
         setClient(found);
         const loadedFromDB = await loadNotesFromSupabase(found.id);
         if (!loadedFromDB) setDailyNotes(getNotesByClientId(found.id));
@@ -700,7 +700,7 @@ export default function ClientProfilePage() {
 
   const TABS: { key: Tab; label: string }[] = [
     { key: "overview", label: "Overview" },
-    ...(isAdmin ? [{ key: "treatment_map" as Tab, label: "Treatment Map" }] : []),
+    ...(client?.treatmentMapApproved ? [{ key: "treatment_map" as Tab, label: "Treatment Map" }] : []),
     { key: "generate", label: "Generate Note" },
     { key: "refine", label: "Refine Note" },
     { key: "notes", label: "Notes" },

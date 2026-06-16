@@ -19,6 +19,8 @@ model clients {
   primary_setting           String?
   rbt_id                    String?
   authorized_hours_weekly   Float?    @default(0)
+  treatment_map_approved    Boolean?  @default(false)
+  treatment_map_data        Json?
   bcba_clients              bcba_clients[]
   client_access_codes       client_access_codes[]
   maladaptive_data          maladaptive_data[]

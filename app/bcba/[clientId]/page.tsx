@@ -7,7 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 
-type BCBATab = "overview" | "notes" | "schedule" | "97153xp" | "supervision" | "parent_training" | "reassessment";
+type BCBATab = "overview" | "notes" | "schedule" | "97153xp" | "supervision" | "parent_training" | "reassessment" | "treatment_map";
 
 const SUPERVISION_TYPE_LABELS: Record<string, string> = {
   face_to_face: "Face-to-Face",
@@ -84,8 +84,9 @@ function TabBar({ active, onChange, isBCBAPro }: { active: BCBATab; onChange: (t
     { id: "schedule",       label: "Schedule" },
     { id: "97153xp",        label: "97153XP" },
     { id: "supervision",    label: "Supervision Notes" },
-    { id: "parent_training",label: "Parent Training" },
-    { id: "reassessment",   label: "Assessment Tools", proOnly: true },
+    { id: "parent_training",  label: "Parent Training" },
+    { id: "treatment_map",    label: "Treatment Map" },
+    { id: "reassessment",     label: "Assessment Tools", proOnly: true },
   ];
   return (
     <div className="flex border-b bg-white px-8 overflow-x-auto" style={{ borderColor: "var(--border)" }}>
@@ -183,6 +184,8 @@ export default function BCBAClientPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [profileSaved, setProfileSaved] = useState(false);
+  const [treatmentMapApproved, setTreatmentMapApproved] = useState(false);
+  const [savingTreatmentMap, setSavingTreatmentMap] = useState(false);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -216,6 +219,9 @@ export default function BCBAClientPage() {
 
     const xpRes = await fetch(`/api/bcba/97153xp-notes?clientId=${clientId}`);
     if (xpRes.ok) { const d = await xpRes.json(); setXp97153Notes(d.notes || []); }
+
+    const tmRes = await fetch(`/api/bcba/treatment-map?clientId=${clientId}`);
+    if (tmRes.ok) { const d = await tmRes.json(); setTreatmentMapApproved(!!d.treatmentMapApproved); }
 
     setLoading(false);
   }
@@ -285,6 +291,20 @@ export default function BCBAClientPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleToggleTreatmentMapApproval() {
+    setSavingTreatmentMap(true);
+    const newValue = !treatmentMapApproved;
+    try {
+      await fetch('/api/bcba/treatment-map', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId, approved: newValue }),
+      });
+      setTreatmentMapApproved(newValue);
+    } catch {}
+    finally { setSavingTreatmentMap(false); }
   }
 
   async function fetchRbtSessionContext(date: string) {
@@ -1331,6 +1351,170 @@ export default function BCBAClientPage() {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── Treatment Map Tab ── */}
+        {activeTab === "treatment_map" && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-[10px] border p-5 flex items-center justify-between" style={{ borderColor: "var(--border)" }}>
+              <div>
+                <p className="text-[14px] font-semibold" style={{ color: "var(--text1)" }}>Treatment Map</p>
+                <p className="text-[12px] mt-0.5" style={{ color: treatmentMapApproved ? "#16A34A" : "var(--text3)" }}>
+                  {treatmentMapApproved ? "Approved — visible to the RBT" : "Not yet approved — hidden from RBT"}
+                </p>
+              </div>
+              <button
+                onClick={handleToggleTreatmentMapApproval}
+                disabled={savingTreatmentMap}
+                className="px-4 py-2 rounded-lg text-[13px] font-semibold text-white disabled:opacity-60 transition-opacity hover:opacity-90"
+                style={{ background: treatmentMapApproved ? "#DC2626" : "var(--teal)" }}
+              >
+                {savingTreatmentMap ? "Saving…" : treatmentMapApproved ? "Revoke Approval" : "Approve for RBT"}
+              </button>
+            </div>
+
+            {(() => {
+              const rawBehaviors = cp.maladaptiveBehaviors || [];
+              const rawReplacements = [...(cp.replacementBehaviors || []), ...(cp.skillAcquisition || [])];
+
+              if (rawBehaviors.length === 0 && rawReplacements.length === 0) {
+                return (
+                  <div className="bg-white rounded-[10px] border p-8 text-center" style={{ borderColor: "var(--border)" }}>
+                    <p className="text-[13px]" style={{ color: "var(--text3)" }}>No clinical data found. Upload an assessment to generate the Treatment Map.</p>
+                  </div>
+                );
+              }
+
+              const funcColors: Record<string, { bg: string; color: string; border: string }> = {
+                escape:    { bg: "#FEF3C7", color: "#D97706", border: "#FCD34D" },
+                attention: { bg: "#EFF6FF", color: "#2563EB", border: "#BFDBFE" },
+                tangible:  { bg: "#F0FDF4", color: "#16A34A", border: "#A7F3D0" },
+                automatic: { bg: "#F5F3FF", color: "#7C3AED", border: "#DDD6FE" },
+                unknown:   { bg: "#F9FAFB", color: "#6B7280", border: "#E5E7EB" },
+              };
+
+              const functionGroups: Record<string, { behaviors: string[]; replacements: string[] }> = {};
+              rawBehaviors.forEach((b: any) => {
+                const name = typeof b === "string" ? b : b?.name || "";
+                const funcs: string[] = typeof b === "object" ? (b.functions || b.function || []) : [];
+                const allFuncs = funcs.length > 0 ? funcs : ["unknown"];
+                allFuncs.forEach((func: string) => {
+                  const fKey = func.toLowerCase();
+                  if (!functionGroups[fKey]) functionGroups[fKey] = { behaviors: [], replacements: [] };
+                  if (name && !functionGroups[fKey].behaviors.includes(name)) functionGroups[fKey].behaviors.push(name);
+                });
+              });
+              rawReplacements.forEach((s: any) => {
+                const name = typeof s === "string" ? s : s?.name || "";
+                const tf = (typeof s === "object" ? (s.targetFunction || "") : "").toLowerCase();
+                if (tf && functionGroups[tf]) functionGroups[tf].replacements.push(name);
+                else if (tf) functionGroups[tf] = { behaviors: [], replacements: [name] };
+              });
+
+              return (
+                <>
+                  {rawBehaviors.length > 0 && (
+                    <div className="bg-white rounded-[10px] border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+                      <div className="px-5 py-3 border-b" style={{ borderColor: "var(--border)", background: "#FEF2F2" }}>
+                        <p className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "#991B1B" }}>Maladaptive Behaviors</p>
+                      </div>
+                      <table className="w-full text-[13px]">
+                        <thead>
+                          <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
+                            {["Behavior", "Functions"].map(h => (
+                              <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text3)" }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rawBehaviors.map((b: any, i: number) => {
+                            const name = typeof b === "string" ? b : b?.name || "";
+                            const funcs: string[] = typeof b === "object" ? (b.functions || b.function || []) : [];
+                            return (
+                              <tr key={i} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
+                                <td className="px-4 py-3 font-semibold" style={{ color: "var(--text1)" }}>{name}</td>
+                                <td className="px-4 py-3">
+                                  {funcs.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1">
+                                      {funcs.map((f: string, fi: number) => {
+                                        const fci = funcColors[f.toLowerCase()] || funcColors.unknown;
+                                        return <span key={fi} className="text-[11px] px-2 py-0.5 rounded-full font-semibold capitalize" style={{ background: fci.bg, color: fci.color }}>{f}</span>;
+                                      })}
+                                    </div>
+                                  ) : <span style={{ color: "var(--text3)" }}>—</span>}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {rawReplacements.length > 0 && (
+                    <div className="bg-white rounded-[10px] border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+                      <div className="px-5 py-3 border-b" style={{ borderColor: "var(--border)", background: "#F0FDF4" }}>
+                        <p className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "#065F46" }}>Replacement Skills</p>
+                      </div>
+                      <table className="w-full text-[13px]">
+                        <thead>
+                          <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
+                            {["Replacement Skill", "Function Addressed"].map(h => (
+                              <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text3)" }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rawReplacements.map((s: any, i: number) => {
+                            const name = typeof s === "string" ? s : s?.name || "";
+                            const tf = typeof s === "object" ? (s.targetFunction || "") : "";
+                            const fc = funcColors[tf.toLowerCase()] || funcColors.unknown;
+                            return (
+                              <tr key={i} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
+                                <td className="px-4 py-3 font-semibold" style={{ color: "var(--text1)" }}>{name}</td>
+                                <td className="px-4 py-3">
+                                  {tf ? <span className="text-[11px] px-2.5 py-1 rounded-full font-semibold capitalize" style={{ background: fc.bg, color: fc.color }}>{tf}</span>
+                                    : <span style={{ color: "var(--text3)" }}>—</span>}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {Object.keys(functionGroups).length > 0 && (
+                    <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide mb-4" style={{ color: "var(--text3)" }}>Function Map</p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {Object.entries(functionGroups).map(([func, data]) => {
+                          const fc = funcColors[func] || funcColors.unknown;
+                          return (
+                            <div key={func} className="rounded-xl p-4 border" style={{ background: fc.bg, borderColor: fc.border }}>
+                              <p className="text-[12px] font-bold uppercase tracking-wide mb-3 capitalize" style={{ color: fc.color }}>{func}</p>
+                              {data.behaviors.length > 0 && (
+                                <div className="mb-2">
+                                  <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: fc.color }}>Behaviors</p>
+                                  {data.behaviors.map((b, i) => <p key={i} className="text-[12px]" style={{ color: "var(--text1)" }}>• {b}</p>)}
+                                </div>
+                              )}
+                              {data.replacements.length > 0 && (
+                                <div>
+                                  <p className="text-[10px] font-semibold uppercase tracking-wide mb-1 mt-2" style={{ color: fc.color }}>Replacement Skills</p>
+                                  {data.replacements.map((r, i) => <p key={i} className="text-[12px]" style={{ color: "var(--text1)" }}>✓ {r}</p>)}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 
