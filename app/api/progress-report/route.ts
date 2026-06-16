@@ -76,6 +76,11 @@ export async function POST(req: NextRequest) {
             skillTrends: result.skillTrends,
             goalProgress: result.goalProgress,
             continuityContext: result.continuityContext,
+            authorizedHours: result.authorizedHours,
+            deliveredHours: result.deliveredHours,
+            missedHours: result.missedHours,
+            attendanceRate: result.attendanceRate,
+            missedReasons: result.missedReasons,
           })}`
         ))
       } catch (err) {

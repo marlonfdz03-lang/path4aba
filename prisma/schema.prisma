@@ -18,6 +18,7 @@ model clients {
   diagnosis                 String?
   primary_setting           String?
   rbt_id                    String?
+  authorized_hours_weekly   Float?    @default(0)
   bcba_clients              bcba_clients[]
   client_access_codes       client_access_codes[]
   maladaptive_data          maladaptive_data[]

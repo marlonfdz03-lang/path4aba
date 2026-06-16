@@ -256,7 +256,7 @@ export default function ClientProfilePage() {
       const res = await fetch(`/api/clients/${id}`);
       if (res.ok) {
         const data = await res.json();
-        const found = { id: data.id, clientName: data.clinical_profile?.name || data.internal_code || "Unnamed Client", clinicalProfile: data.clinical_profile };
+        const found = { id: data.id, clientName: data.clinical_profile?.name || data.internal_code || "Unnamed Client", clinicalProfile: data.clinical_profile, authorized_hours_weekly: data.authorized_hours_weekly ?? null };
         setClient(found);
         const loadedFromDB = await loadNotesFromSupabase(found.id);
         if (!loadedFromDB) setDailyNotes(getNotesByClientId(found.id));
@@ -825,6 +825,12 @@ export default function ClientProfilePage() {
               <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
                 <SectionHeader title="Clinical Snapshot" />
                 <div className="space-y-3">
+                  <div className="flex items-center justify-between py-2 border-b" style={{ borderColor: "var(--border)" }}>
+                    <span className="text-[12px]" style={{ color: "var(--text3)" }}>Authorized Hours (weekly)</span>
+                    <span className="text-[13px] font-medium" style={{ color: "var(--text1)" }}>
+                      {client.authorized_hours_weekly ? `${client.authorized_hours_weekly} hrs/week` : "Not set"}
+                    </span>
+                  </div>
                   {[
                     { label: "Maladaptive Behaviors", value: client.clinicalProfile?.maladaptiveBehaviors?.length || 0 },
                     { label: "Approved Interventions", value: client.clinicalProfile?.interventions?.length || 0 },

@@ -123,6 +123,11 @@ export async function generateProgressReport(
   goalProgress: GoalProgress[]
   narrative: string
   continuityContext: ContinuityContext
+  authorizedHours: number
+  deliveredHours: number
+  missedHours: number
+  attendanceRate: number | null
+  missedReasons: string[]
 }> {
   const { clientId, periodStart, periodEnd, periodLabel } = input
 
@@ -151,6 +156,23 @@ export async function generateProgressReport(
     where: { client_id: clientId, session_date: { gte: periodStart, lte: periodEnd } },
     select: { interventions_used: true },
   })
+
+  const missedHoursData = await prisma.missed_hours.findMany({
+    where: { client_id: clientId, date: { gte: periodStart, lte: periodEnd } },
+    select: { hours: true, reason: true },
+  })
+
+  const totalMissedHours = missedHoursData.reduce((sum, m) => sum + (m.hours || 0), 0)
+  const missedReasons = [...new Set(missedHoursData.map(m => m.reason).filter(Boolean))] as string[]
+
+  const clientHours = await prisma.clients.findUnique({
+    where: { id: clientId },
+    select: { authorized_hours_weekly: true },
+  })
+  const weeksInPeriod = Math.round((new Date(periodEnd).getTime() - new Date(periodStart).getTime()) / (7 * 24 * 60 * 60 * 1000))
+  const authorizedHours = (clientHours?.authorized_hours_weekly || 0) * weeksInPeriod
+  const deliveredHours = Math.max(0, authorizedHours - totalMissedHours)
+  const attendanceRate = authorizedHours > 0 ? Math.round((deliveredHours / authorizedHours) * 100) : null
 
   let bcbaSessionCount = 0
   if (input.bcbaId) {
@@ -292,6 +314,11 @@ Period: ${periodLabel} (${periodStart} to ${periodEnd})
 Diagnosis: ${diagnosis}
 Approved interventions: ${approvedInterventions || 'Not specified'}
 Sessions documented by RBT: ${sessionNotes.length}${bcbaSessionCount ? `\nSessions documented by BCBA: ${bcbaSessionCount}` : ''}
+Authorized hours this period: ${authorizedHours > 0 ? authorizedHours + ' hrs' : 'Not configured'}
+Delivered hours: ${authorizedHours > 0 ? deliveredHours + ' hrs' : 'N/A'}
+Missed hours: ${totalMissedHours > 0 ? totalMissedHours + ' hrs' : 'None recorded'}
+Attendance rate: ${attendanceRate !== null ? attendanceRate + '%' : 'N/A'}
+Missed hour reasons: ${missedReasons.length > 0 ? missedReasons.join(', ') : 'None'}
 
 --- BEHAVIOR TRENDS ---
 ${behaviorTrends.length > 0
@@ -349,5 +376,5 @@ Write the narrative now.`
     summary,
   }
 
-  return { behaviorTrends, skillTrends, goalProgress, narrative, continuityContext }
+  return { behaviorTrends, skillTrends, goalProgress, narrative, continuityContext, authorizedHours, deliveredHours, missedHours: totalMissedHours, attendanceRate, missedReasons }
 }
