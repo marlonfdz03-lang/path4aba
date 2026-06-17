@@ -53,6 +53,17 @@ export async function POST(req: Request) {
           return new Response('No userId', { status: 200 })
         }
 
+        // Verify user exists — retry once after 2s if not found (race condition with registration)
+        let userExists = await prisma.users.findUnique({ where: { id: userId }, select: { id: true } })
+        if (!userExists) {
+          await new Promise(resolve => setTimeout(resolve, 2000))
+          userExists = await prisma.users.findUnique({ where: { id: userId }, select: { id: true } })
+        }
+        if (!userExists) {
+          console.error('[webhook] User not found for userId:', userId)
+          return new Response('User not found', { status: 200 })
+        }
+
         const trialEnd = new Date()
         trialEnd.setDate(trialEnd.getDate() + 7)
 
