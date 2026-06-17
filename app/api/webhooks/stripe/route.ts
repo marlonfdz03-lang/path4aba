@@ -186,10 +186,39 @@ export async function POST(req: Request) {
         break
       }
 
+      case 'invoice.paid': {
+        const invoice = event.data.object as Stripe.Invoice
+        const subscriptionId = (invoice as any).subscription as string
+        if (!subscriptionId) break
+
+        const periodEnd = (invoice as any).lines?.data?.[0]?.period?.end
+        const currentPeriodEnd = periodEnd ? new Date(periodEnd * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+
+        await prisma.subscriptions.updateMany({
+          where: { stripe_subscription_id: subscriptionId },
+          data: {
+            status: 'active',
+            current_period_ends_at: currentPeriodEnd,
+          },
+        }).catch(err => console.error('[webhook] invoice.paid error:', err))
+
+        console.log('[webhook] invoice.paid — marked active for subscription:', subscriptionId)
+        break
+      }
+
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice
+        const subscriptionId = (invoice as any).subscription as string
         const customerEmail = (invoice as any).customer_email as string | null
         const customerId = invoice.customer as string | null
+
+        if (subscriptionId) {
+          await prisma.subscriptions.updateMany({
+            where: { stripe_subscription_id: subscriptionId },
+            data: { status: 'canceled' },
+          }).catch(err => console.error('[webhook] invoice.payment_failed status error:', err))
+          console.log('[webhook] invoice.payment_failed — marked canceled for subscription:', subscriptionId)
+        }
 
         ;(async () => {
           try {
