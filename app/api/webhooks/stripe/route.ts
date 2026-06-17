@@ -57,22 +57,30 @@ export async function POST(req: Request) {
 
         if (plan === 'bcba_students') {
           try {
-            await prisma.subscriptions.upsert({
+            const existingBcbaSub = await prisma.subscriptions.findFirst({
               where: { user_id: userId },
-              create: {
-                user_id: userId,
-                bcba_students_status: 'trialing',
-                bcba_students_trial_ends_at: trialEnd,
-                bcba_students_subscription_id: session.subscription?.toString() || null,
-                stripe_customer_id: session.customer?.toString() || null,
-              },
-              update: {
-                bcba_students_status: 'trialing',
-                bcba_students_trial_ends_at: trialEnd,
-                bcba_students_subscription_id: session.subscription?.toString() || null,
-                stripe_customer_id: session.customer?.toString() || null,
-              },
             })
+            if (existingBcbaSub) {
+              await prisma.subscriptions.update({
+                where: { id: existingBcbaSub.id },
+                data: {
+                  bcba_students_status: 'trialing',
+                  bcba_students_trial_ends_at: trialEnd,
+                  bcba_students_subscription_id: session.subscription?.toString() || null,
+                  stripe_customer_id: session.customer?.toString() || null,
+                },
+              })
+            } else {
+              await prisma.subscriptions.create({
+                data: {
+                  user_id: userId,
+                  bcba_students_status: 'trialing',
+                  bcba_students_trial_ends_at: trialEnd,
+                  bcba_students_subscription_id: session.subscription?.toString() || null,
+                  stripe_customer_id: session.customer?.toString() || null,
+                },
+              })
+            }
             console.log('[webhook] bcba_students subscription saved for:', userId)
           } catch (err: any) {
             console.error('[webhook] bcba_students upsert error:', err.message)
@@ -80,24 +88,32 @@ export async function POST(req: Request) {
           }
         } else {
           try {
-            await prisma.subscriptions.upsert({
+            const existingSub = await prisma.subscriptions.findFirst({
               where: { user_id: userId },
-              create: {
-                user_id: userId,
-                plan,
-                status: 'trialing',
-                trial_ends_at: trialEnd,
-                stripe_customer_id: session.customer?.toString() || null,
-                stripe_subscription_id: session.subscription?.toString() || null,
-              },
-              update: {
-                plan,
-                status: 'trialing',
-                trial_ends_at: trialEnd,
-                stripe_customer_id: session.customer?.toString() || null,
-                stripe_subscription_id: session.subscription?.toString() || null,
-              },
             })
+            if (existingSub) {
+              await prisma.subscriptions.update({
+                where: { id: existingSub.id },
+                data: {
+                  plan,
+                  status: 'trialing',
+                  trial_ends_at: trialEnd,
+                  stripe_customer_id: session.customer?.toString() || null,
+                  stripe_subscription_id: session.subscription?.toString() || null,
+                },
+              })
+            } else {
+              await prisma.subscriptions.create({
+                data: {
+                  user_id: userId,
+                  plan,
+                  status: 'trialing',
+                  trial_ends_at: trialEnd,
+                  stripe_customer_id: session.customer?.toString() || null,
+                  stripe_subscription_id: session.subscription?.toString() || null,
+                },
+              })
+            }
             console.log('Subscription saved for:', userId)
           } catch (err: any) {
             console.error('Prisma upsert error:', err.message)
