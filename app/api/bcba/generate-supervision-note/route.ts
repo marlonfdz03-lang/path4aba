@@ -106,6 +106,51 @@ export async function POST(request: Request) {
           console.error('[generate-supervision-note] save error:', saveError)
         }
 
+        if (contactType !== 'group_supervision' && protocolModifications && protocolModifications.length > 0) {
+          for (const mod of protocolModifications) {
+            try {
+              await prisma.clinical_timeline_entries.upsert({
+                where: {
+                  client_id_type_title: {
+                    client_id: clientId,
+                    type: 'protocol_change',
+                    title: `Protocol Modified: ${mod}`,
+                  },
+                },
+                update: {
+                  summary: clinicalRationale || null,
+                  metadata: {
+                    contactType,
+                    expectedOutcome: expectedOutcome || null,
+                    sessionDate,
+                    bcbaId: userId,
+                  },
+                  importance: 'high',
+                  date: sessionDate,
+                },
+                create: {
+                  client_id: clientId,
+                  type: 'protocol_change',
+                  title: `Protocol Modified: ${mod}`,
+                  summary: clinicalRationale || null,
+                  metadata: {
+                    contactType,
+                    expectedOutcome: expectedOutcome || null,
+                    sessionDate,
+                    bcbaId: userId,
+                  },
+                  created_by: userId,
+                  source: '97155',
+                  importance: 'high',
+                  date: sessionDate,
+                },
+              })
+            } catch (timelineError) {
+              console.error('[generate-supervision-note] timeline entry error:', timelineError)
+            }
+          }
+        }
+
         controller.enqueue(encoder.encode(
           `\n__META__${JSON.stringify({ similarityWarning: result.similarityWarning || false })}`
         ))
