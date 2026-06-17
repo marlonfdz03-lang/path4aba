@@ -188,6 +188,11 @@ export default function BCBAClientPage() {
   const [profileSaved, setProfileSaved] = useState(false);
   const [treatmentMapApproved, setTreatmentMapApproved] = useState(false);
   const [savingTreatmentMap, setSavingTreatmentMap] = useState(false);
+  const [treatmentMapData, setTreatmentMapData] = useState<any>(null);
+  const [tmEditMode, setTmEditMode] = useState(false);
+  const [tmDraft, setTmDraft] = useState<any>(null);
+  const [savingTmData, setSavingTmData] = useState(false);
+  const [tmInterventionInputs, setTmInterventionInputs] = useState<Record<string, string>>({});
 
   // Invite RBT flow
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -263,7 +268,7 @@ export default function BCBAClientPage() {
     if (xpRes.ok) { const d = await xpRes.json(); setXp97153Notes(d.notes || []); }
 
     const tmRes = await fetch(`/api/bcba/treatment-map?clientId=${clientId}`);
-    if (tmRes.ok) { const d = await tmRes.json(); setTreatmentMapApproved(!!d.treatmentMapApproved); }
+    if (tmRes.ok) { const d = await tmRes.json(); setTreatmentMapApproved(!!d.treatmentMapApproved); if (d.treatmentMapData) setTreatmentMapData(d.treatmentMapData); }
 
     setLoading(false);
   }
@@ -435,6 +440,97 @@ export default function BCBAClientPage() {
       setTreatmentMapApproved(newValue);
     } catch {}
     finally { setSavingTreatmentMap(false); }
+  }
+
+  function initTmFromProfile(): any {
+    const cpData = (client?.clinical_profile || {}) as any;
+    const rawBehaviors = cpData.maladaptiveBehaviors || [];
+    const rawReplacements = [...(cpData.replacementBehaviors || []), ...(cpData.skillAcquisition || [])];
+    return {
+      behaviors: rawBehaviors.map((b: any) => ({
+        id: Math.random().toString(36).slice(2),
+        name: typeof b === "string" ? b : b?.name || "",
+        definition: typeof b === "object" ? (b.topography || b.definition || "") : "",
+        functions: typeof b === "object" ? (b.functions || (b.function ? [b.function] : [])) : [],
+        interventions: typeof b === "object" ? (b.interventions || []) : [],
+        consequenceStrategies: typeof b === "object" ? (b.consequenceStrategies || "") : "",
+      })),
+      replacementSkills: rawReplacements.map((s: any) => ({
+        id: Math.random().toString(36).slice(2),
+        name: typeof s === "string" ? s : s?.name || "",
+        targetFunctions: typeof s === "object" ? ([s.targetFunction].filter(Boolean)) : [],
+        goal: typeof s === "object" ? (s.goal || "") : "",
+        teachingStrategy: typeof s === "object" ? (s.teachingStrategy || s.strategy || "") : "",
+      })),
+      notes: "",
+    };
+  }
+
+  function handleTmEdit() {
+    const base = treatmentMapData || initTmFromProfile();
+    setTmDraft(JSON.parse(JSON.stringify(base)));
+    setTmEditMode(true);
+  }
+
+  function handleTmCancel() {
+    setTmDraft(null);
+    setTmEditMode(false);
+  }
+
+  async function handleSaveTreatmentMap() {
+    if (!tmDraft) return;
+    setSavingTmData(true);
+    try {
+      const res = await fetch('/api/bcba/treatment-map', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId, treatmentMapData: tmDraft, approved: treatmentMapApproved }),
+      });
+      if (res.ok) {
+        setTreatmentMapData(tmDraft);
+        setTmEditMode(false);
+        setTmDraft(null);
+      }
+    } catch {}
+    finally { setSavingTmData(false); }
+  }
+
+  function updateTmBehavior(id: string, field: string, value: any) {
+    setTmDraft((prev: any) => ({
+      ...prev,
+      behaviors: prev.behaviors.map((b: any) => b.id === id ? { ...b, [field]: value } : b),
+    }));
+  }
+
+  function updateTmSkill(id: string, field: string, value: any) {
+    setTmDraft((prev: any) => ({
+      ...prev,
+      replacementSkills: prev.replacementSkills.map((s: any) => s.id === id ? { ...s, [field]: value } : s),
+    }));
+  }
+
+  function deleteTmBehavior(id: string) {
+    setTmDraft((prev: any) => ({ ...prev, behaviors: prev.behaviors.filter((b: any) => b.id !== id) }));
+  }
+
+  function deleteTmSkill(id: string) {
+    setTmDraft((prev: any) => ({ ...prev, replacementSkills: prev.replacementSkills.filter((s: any) => s.id !== id) }));
+  }
+
+  function addTmBehavior() {
+    const id = Math.random().toString(36).slice(2);
+    setTmDraft((prev: any) => ({
+      ...prev,
+      behaviors: [...prev.behaviors, { id, name: "", definition: "", functions: [], interventions: [], consequenceStrategies: "" }],
+    }));
+  }
+
+  function addTmSkill() {
+    const id = Math.random().toString(36).slice(2);
+    setTmDraft((prev: any) => ({
+      ...prev,
+      replacementSkills: [...prev.replacementSkills, { id, name: "", targetFunctions: [], goal: "", teachingStrategy: "" }],
+    }));
   }
 
   async function fetchRbtSessionContext(date: string) {
@@ -1515,6 +1611,7 @@ export default function BCBAClientPage() {
         {/* ── Treatment Map Tab ── */}
         {activeTab === "treatment_map" && (
           <div className="space-y-4">
+            {/* ── Header bar ── */}
             <div className="bg-white rounded-[10px] border p-5 flex items-center justify-between" style={{ borderColor: "var(--border)" }}>
               <div>
                 <p className="text-[14px] font-semibold" style={{ color: "var(--text1)" }}>Treatment Map</p>
@@ -1522,157 +1619,398 @@ export default function BCBAClientPage() {
                   {treatmentMapApproved ? "Approved — visible to the RBT" : "Not yet approved — hidden from RBT"}
                 </p>
               </div>
-              <button
-                onClick={handleToggleTreatmentMapApproval}
-                disabled={savingTreatmentMap}
-                className="px-4 py-2 rounded-lg text-[13px] font-semibold text-white disabled:opacity-60 transition-opacity hover:opacity-90"
-                style={{ background: treatmentMapApproved ? "#DC2626" : "var(--teal)" }}
-              >
-                {savingTreatmentMap ? "Saving…" : treatmentMapApproved ? "Revoke Approval" : "Approve for RBT"}
-              </button>
+              <div className="flex items-center gap-2">
+                {tmEditMode ? (
+                  <>
+                    <button onClick={handleTmCancel} disabled={savingTmData}
+                      className="px-4 py-2 rounded-lg text-[13px] font-semibold border transition-opacity hover:opacity-80 disabled:opacity-50"
+                      style={{ borderColor: "var(--border)", color: "var(--text2)", background: "var(--bg)" }}>
+                      Cancel
+                    </button>
+                    <button onClick={handleSaveTreatmentMap} disabled={savingTmData}
+                      className="px-4 py-2 rounded-lg text-[13px] font-semibold text-white disabled:opacity-60 transition-opacity hover:opacity-90"
+                      style={{ background: "var(--teal)" }}>
+                      {savingTmData ? "Saving…" : "Save Changes"}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={handleTmEdit}
+                      className="px-4 py-2 rounded-lg text-[13px] font-semibold border transition-opacity hover:opacity-80"
+                      style={{ borderColor: "var(--border)", color: "var(--text2)", background: "var(--bg)" }}>
+                      Edit
+                    </button>
+                    <button onClick={handleToggleTreatmentMapApproval} disabled={savingTreatmentMap}
+                      className="px-4 py-2 rounded-lg text-[13px] font-semibold text-white disabled:opacity-60 transition-opacity hover:opacity-90"
+                      style={{ background: treatmentMapApproved ? "#DC2626" : "var(--teal)" }}>
+                      {savingTreatmentMap ? "Saving…" : treatmentMapApproved ? "Revoke Approval" : "Approve for RBT"}
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
-            {(() => {
-              const rawBehaviors = cp.maladaptiveBehaviors || [];
-              const rawReplacements = [...(cp.replacementBehaviors || []), ...(cp.skillAcquisition || [])];
-
-              if (rawBehaviors.length === 0 && rawReplacements.length === 0) {
-                return (
-                  <div className="bg-white rounded-[10px] border p-8 text-center" style={{ borderColor: "var(--border)" }}>
-                    <p className="text-[13px]" style={{ color: "var(--text3)" }}>No clinical data found. Upload an assessment to generate the Treatment Map.</p>
+            {tmEditMode && tmDraft ? (
+              /* ── EDIT MODE ── */
+              <div className="space-y-4">
+                {/* Behaviors */}
+                <div className="bg-white rounded-[10px] border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+                  <div className="px-5 py-3 border-b flex items-center justify-between" style={{ borderColor: "var(--border)", background: "#FEF2F2" }}>
+                    <p className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "#991B1B" }}>Maladaptive Behaviors</p>
+                    <button onClick={addTmBehavior} className="text-[12px] font-semibold px-3 py-1 rounded-lg transition-opacity hover:opacity-80" style={{ background: "#FEE2E2", color: "#991B1B" }}>+ Add Behavior</button>
                   </div>
-                );
-              }
+                  {tmDraft.behaviors.length === 0 ? (
+                    <p className="px-5 py-6 text-[13px] text-center" style={{ color: "var(--text3)" }}>No behaviors added yet. Click "+ Add Behavior" to start.</p>
+                  ) : (
+                    <div className="divide-y" style={{ borderColor: "var(--border)" }}>
+                      {tmDraft.behaviors.map((b: any) => {
+                        const funcOptions = ["escape", "attention", "tangible", "automatic"];
+                        const tmFuncColors: Record<string, { bg: string; color: string }> = {
+                          escape: { bg: "#FEF3C7", color: "#D97706" },
+                          attention: { bg: "#EFF6FF", color: "#2563EB" },
+                          tangible: { bg: "#F0FDF4", color: "#16A34A" },
+                          automatic: { bg: "#F5F3FF", color: "#7C3AED" },
+                        };
+                        return (
+                          <div key={b.id} className="p-5">
+                            <div className="flex items-start gap-3">
+                              <div className="flex-1 space-y-3">
+                                <input value={b.name} onChange={e => updateTmBehavior(b.id, "name", e.target.value)}
+                                  placeholder="Behavior name"
+                                  className="w-full border rounded-lg px-3 py-1.5 text-[13px] font-semibold"
+                                  style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
+                                <textarea value={b.definition} onChange={e => updateTmBehavior(b.id, "definition", e.target.value)}
+                                  placeholder="Operational definition / topography" rows={2}
+                                  className="w-full border rounded-lg px-3 py-1.5 text-[13px] resize-none"
+                                  style={{ borderColor: "var(--border)", color: "var(--text2)" }} />
+                                <div>
+                                  <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text3)" }}>Function(s)</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {funcOptions.map(f => {
+                                      const active = b.functions.includes(f);
+                                      const fc = tmFuncColors[f];
+                                      return (
+                                        <button key={f} type="button"
+                                          onClick={() => updateTmBehavior(b.id, "functions", active ? b.functions.filter((x: string) => x !== f) : [...b.functions, f])}
+                                          className="text-[11px] px-2.5 py-1 rounded-full font-semibold capitalize border transition-all"
+                                          style={active ? { background: fc.bg, color: fc.color, borderColor: fc.color } : { background: "var(--bg)", color: "var(--text3)", borderColor: "var(--border)" }}>
+                                          {f}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                                <div>
+                                  <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text3)" }}>Interventions / Antecedent Strategies</p>
+                                  <div className="flex flex-wrap gap-1 mb-2">
+                                    {b.interventions.map((iv: string, ii: number) => (
+                                      <span key={ii} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full" style={{ background: "var(--bg)", color: "var(--text2)", border: "1px solid var(--border)" }}>
+                                        {iv}
+                                        <button type="button" onClick={() => updateTmBehavior(b.id, "interventions", b.interventions.filter((_: any, i: number) => i !== ii))} className="ml-0.5 leading-none hover:text-red-500">×</button>
+                                      </span>
+                                    ))}
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <input value={tmInterventionInputs[b.id] || ""}
+                                      onChange={e => setTmInterventionInputs(prev => ({ ...prev, [b.id]: e.target.value }))}
+                                      onKeyDown={e => {
+                                        if (e.key === "Enter" && (tmInterventionInputs[b.id] || "").trim()) {
+                                          e.preventDefault();
+                                          updateTmBehavior(b.id, "interventions", [...b.interventions, tmInterventionInputs[b.id].trim()]);
+                                          setTmInterventionInputs(prev => ({ ...prev, [b.id]: "" }));
+                                        }
+                                      }}
+                                      placeholder="Type intervention, press Enter"
+                                      className="flex-1 border rounded-lg px-3 py-1.5 text-[12px]"
+                                      style={{ borderColor: "var(--border)", color: "var(--text2)" }} />
+                                    <button type="button"
+                                      onClick={() => {
+                                        const val = (tmInterventionInputs[b.id] || "").trim();
+                                        if (val) { updateTmBehavior(b.id, "interventions", [...b.interventions, val]); setTmInterventionInputs(prev => ({ ...prev, [b.id]: "" })); }
+                                      }}
+                                      className="px-3 py-1.5 rounded-lg text-[12px] font-semibold"
+                                      style={{ background: "var(--bg)", color: "var(--teal)", border: "1px solid var(--teal)" }}>
+                                      Add
+                                    </button>
+                                  </div>
+                                </div>
+                                <div>
+                                  <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text3)" }}>Consequence Strategies</p>
+                                  <textarea value={b.consequenceStrategies} onChange={e => updateTmBehavior(b.id, "consequenceStrategies", e.target.value)}
+                                    placeholder="Describe consequence strategies..." rows={2}
+                                    className="w-full border rounded-lg px-3 py-1.5 text-[13px] resize-none"
+                                    style={{ borderColor: "var(--border)", color: "var(--text2)" }} />
+                                </div>
+                              </div>
+                              <button type="button" onClick={() => deleteTmBehavior(b.id)}
+                                className="mt-1 p-1.5 rounded-lg transition-colors hover:bg-red-50 hover:text-red-600 shrink-0" style={{ color: "var(--text3)" }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
 
-              const funcColors: Record<string, { bg: string; color: string; border: string }> = {
-                escape:    { bg: "#FEF3C7", color: "#D97706", border: "#FCD34D" },
-                attention: { bg: "#EFF6FF", color: "#2563EB", border: "#BFDBFE" },
-                tangible:  { bg: "#F0FDF4", color: "#16A34A", border: "#A7F3D0" },
-                automatic: { bg: "#F5F3FF", color: "#7C3AED", border: "#DDD6FE" },
-                unknown:   { bg: "#F9FAFB", color: "#6B7280", border: "#E5E7EB" },
-              };
+                {/* Replacement Skills */}
+                <div className="bg-white rounded-[10px] border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+                  <div className="px-5 py-3 border-b flex items-center justify-between" style={{ borderColor: "var(--border)", background: "#F0FDF4" }}>
+                    <p className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "#065F46" }}>Replacement Skills</p>
+                    <button onClick={addTmSkill} className="text-[12px] font-semibold px-3 py-1 rounded-lg transition-opacity hover:opacity-80" style={{ background: "#DCFCE7", color: "#065F46" }}>+ Add Skill</button>
+                  </div>
+                  {tmDraft.replacementSkills.length === 0 ? (
+                    <p className="px-5 py-6 text-[13px] text-center" style={{ color: "var(--text3)" }}>No replacement skills added yet.</p>
+                  ) : (
+                    <div className="divide-y" style={{ borderColor: "var(--border)" }}>
+                      {tmDraft.replacementSkills.map((s: any) => {
+                        const funcOptions = ["escape", "attention", "tangible", "automatic"];
+                        const tmFuncColors: Record<string, { bg: string; color: string }> = {
+                          escape: { bg: "#FEF3C7", color: "#D97706" },
+                          attention: { bg: "#EFF6FF", color: "#2563EB" },
+                          tangible: { bg: "#F0FDF4", color: "#16A34A" },
+                          automatic: { bg: "#F5F3FF", color: "#7C3AED" },
+                        };
+                        return (
+                          <div key={s.id} className="p-5">
+                            <div className="flex items-start gap-3">
+                              <div className="flex-1 space-y-3">
+                                <input value={s.name} onChange={e => updateTmSkill(s.id, "name", e.target.value)}
+                                  placeholder="Skill / program name"
+                                  className="w-full border rounded-lg px-3 py-1.5 text-[13px] font-semibold"
+                                  style={{ borderColor: "var(--border)", color: "var(--text1)" }} />
+                                <div>
+                                  <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text3)" }}>Target Function(s)</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {funcOptions.map(f => {
+                                      const active = s.targetFunctions.includes(f);
+                                      const fc = tmFuncColors[f];
+                                      return (
+                                        <button key={f} type="button"
+                                          onClick={() => updateTmSkill(s.id, "targetFunctions", active ? s.targetFunctions.filter((x: string) => x !== f) : [...s.targetFunctions, f])}
+                                          className="text-[11px] px-2.5 py-1 rounded-full font-semibold capitalize border transition-all"
+                                          style={active ? { background: fc.bg, color: fc.color, borderColor: fc.color } : { background: "var(--bg)", color: "var(--text3)", borderColor: "var(--border)" }}>
+                                          {f}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                                <textarea value={s.goal} onChange={e => updateTmSkill(s.id, "goal", e.target.value)}
+                                  placeholder="Measurable goal / objective" rows={2}
+                                  className="w-full border rounded-lg px-3 py-1.5 text-[13px] resize-none"
+                                  style={{ borderColor: "var(--border)", color: "var(--text2)" }} />
+                                <textarea value={s.teachingStrategy} onChange={e => updateTmSkill(s.id, "teachingStrategy", e.target.value)}
+                                  placeholder="Teaching strategy (DTT, NET, errorless, etc.)" rows={2}
+                                  className="w-full border rounded-lg px-3 py-1.5 text-[13px] resize-none"
+                                  style={{ borderColor: "var(--border)", color: "var(--text2)" }} />
+                              </div>
+                              <button type="button" onClick={() => deleteTmSkill(s.id)}
+                                className="mt-1 p-1.5 rounded-lg transition-colors hover:bg-red-50 hover:text-red-600 shrink-0" style={{ color: "var(--text3)" }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
 
-              const functionGroups: Record<string, { behaviors: string[]; replacements: string[] }> = {};
-              rawBehaviors.forEach((b: any) => {
-                const name = typeof b === "string" ? b : b?.name || "";
-                const funcs: string[] = typeof b === "object" ? (b.functions || b.function || []) : [];
-                const allFuncs = funcs.length > 0 ? funcs : ["unknown"];
-                allFuncs.forEach((func: string) => {
-                  const fKey = func.toLowerCase();
-                  if (!functionGroups[fKey]) functionGroups[fKey] = { behaviors: [], replacements: [] };
-                  if (name && !functionGroups[fKey].behaviors.includes(name)) functionGroups[fKey].behaviors.push(name);
+                {/* General Notes */}
+                <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--text3)" }}>General Notes</p>
+                  <textarea value={tmDraft.notes || ""} onChange={e => setTmDraft((prev: any) => ({ ...prev, notes: e.target.value }))}
+                    placeholder="Additional clinical notes, environmental modifications, crisis plan..."
+                    rows={4} className="w-full border rounded-lg px-3 py-2 text-[13px] resize-none"
+                    style={{ borderColor: "var(--border)", color: "var(--text2)" }} />
+                </div>
+              </div>
+            ) : (
+              /* ── VIEW MODE ── */
+              (() => {
+                const tmData = treatmentMapData;
+                const rawBehaviors = tmData ? tmData.behaviors : (cp.maladaptiveBehaviors || []);
+                const rawReplacements = tmData ? tmData.replacementSkills : [...(cp.replacementBehaviors || []), ...(cp.skillAcquisition || [])];
+
+                if (rawBehaviors.length === 0 && rawReplacements.length === 0) {
+                  return (
+                    <div className="bg-white rounded-[10px] border p-8 text-center" style={{ borderColor: "var(--border)" }}>
+                      <p className="text-[13px]" style={{ color: "var(--text3)" }}>No treatment map data yet. Click "Edit" to build the treatment map, or upload an assessment to generate initial data.</p>
+                    </div>
+                  );
+                }
+
+                const funcColors: Record<string, { bg: string; color: string; border: string }> = {
+                  escape:    { bg: "#FEF3C7", color: "#D97706", border: "#FCD34D" },
+                  attention: { bg: "#EFF6FF", color: "#2563EB", border: "#BFDBFE" },
+                  tangible:  { bg: "#F0FDF4", color: "#16A34A", border: "#A7F3D0" },
+                  automatic: { bg: "#F5F3FF", color: "#7C3AED", border: "#DDD6FE" },
+                  unknown:   { bg: "#F9FAFB", color: "#6B7280", border: "#E5E7EB" },
+                };
+
+                const behaviors = rawBehaviors.map((b: any) => ({
+                  name: typeof b === "string" ? b : b?.name || "",
+                  functions: tmData ? (b.functions || []) : (typeof b === "object" ? (b.functions || (b.function ? [b.function] : [])) : []),
+                  definition: b.definition || b.topography || "",
+                  interventions: b.interventions || [],
+                  consequenceStrategies: b.consequenceStrategies || "",
+                }));
+
+                const skills = rawReplacements.map((s: any) => ({
+                  name: typeof s === "string" ? s : s?.name || "",
+                  targetFunctions: tmData ? (s.targetFunctions || []) : (typeof s === "object" ? [s.targetFunction].filter(Boolean) : []),
+                  goal: s.goal || "",
+                  teachingStrategy: s.teachingStrategy || s.strategy || "",
+                }));
+
+                const functionGroups: Record<string, { behaviors: string[]; replacements: string[] }> = {};
+                behaviors.forEach(({ name, functions }: any) => {
+                  const allFuncs = functions.length > 0 ? functions : ["unknown"];
+                  allFuncs.forEach((func: string) => {
+                    const fKey = func.toLowerCase();
+                    if (!functionGroups[fKey]) functionGroups[fKey] = { behaviors: [], replacements: [] };
+                    if (name && !functionGroups[fKey].behaviors.includes(name)) functionGroups[fKey].behaviors.push(name);
+                  });
                 });
-              });
-              rawReplacements.forEach((s: any) => {
-                const name = typeof s === "string" ? s : s?.name || "";
-                const tf = (typeof s === "object" ? (s.targetFunction || "") : "").toLowerCase();
-                if (tf && functionGroups[tf]) functionGroups[tf].replacements.push(name);
-                else if (tf) functionGroups[tf] = { behaviors: [], replacements: [name] };
-              });
+                skills.forEach(({ name, targetFunctions }: any) => {
+                  const tfs = targetFunctions.length > 0 ? targetFunctions : ["unknown"];
+                  tfs.forEach((tf: string) => {
+                    const key = tf.toLowerCase();
+                    if (!functionGroups[key]) functionGroups[key] = { behaviors: [], replacements: [] };
+                    if (name && !functionGroups[key].replacements.includes(name)) functionGroups[key].replacements.push(name);
+                  });
+                });
 
-              return (
-                <>
-                  {rawBehaviors.length > 0 && (
-                    <div className="bg-white rounded-[10px] border overflow-hidden" style={{ borderColor: "var(--border)" }}>
-                      <div className="px-5 py-3 border-b" style={{ borderColor: "var(--border)", background: "#FEF2F2" }}>
-                        <p className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "#991B1B" }}>Maladaptive Behaviors</p>
-                      </div>
-                      <table className="w-full text-[13px]">
-                        <thead>
-                          <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
-                            {["Behavior", "Functions"].map(h => (
-                              <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text3)" }}>{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rawBehaviors.map((b: any, i: number) => {
-                            const name = typeof b === "string" ? b : b?.name || "";
-                            const funcs: string[] = typeof b === "object" ? (b.functions || b.function || []) : [];
-                            return (
+                return (
+                  <>
+                    {behaviors.length > 0 && (
+                      <div className="bg-white rounded-[10px] border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+                        <div className="px-5 py-3 border-b" style={{ borderColor: "var(--border)", background: "#FEF2F2" }}>
+                          <p className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "#991B1B" }}>Maladaptive Behaviors</p>
+                        </div>
+                        <table className="w-full text-[13px]">
+                          <thead>
+                            <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
+                              {["Behavior", "Functions", ...(tmData ? ["Interventions"] : [])].map(h => (
+                                <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text3)" }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {behaviors.map((b: any, i: number) => (
                               <tr key={i} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
-                                <td className="px-4 py-3 font-semibold" style={{ color: "var(--text1)" }}>{name}</td>
                                 <td className="px-4 py-3">
-                                  {funcs.length > 0 ? (
+                                  <p className="font-semibold" style={{ color: "var(--text1)" }}>{b.name}</p>
+                                  {b.definition && <p className="text-[12px] mt-0.5" style={{ color: "var(--text3)" }}>{b.definition}</p>}
+                                </td>
+                                <td className="px-4 py-3">
+                                  {b.functions.length > 0 ? (
                                     <div className="flex flex-wrap gap-1">
-                                      {funcs.map((f: string, fi: number) => {
+                                      {b.functions.map((f: string, fi: number) => {
                                         const fci = funcColors[f.toLowerCase()] || funcColors.unknown;
                                         return <span key={fi} className="text-[11px] px-2 py-0.5 rounded-full font-semibold capitalize" style={{ background: fci.bg, color: fci.color }}>{f}</span>;
                                       })}
                                     </div>
                                   ) : <span style={{ color: "var(--text3)" }}>—</span>}
                                 </td>
+                                {tmData && (
+                                  <td className="px-4 py-3">
+                                    {b.interventions.length > 0 ? (
+                                      <div className="flex flex-wrap gap-1">
+                                        {b.interventions.map((iv: string, ii: number) => (
+                                          <span key={ii} className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: "var(--bg)", color: "var(--text2)", border: "1px solid var(--border)" }}>{iv}</span>
+                                        ))}
+                                      </div>
+                                    ) : <span style={{ color: "var(--text3)" }}>—</span>}
+                                  </td>
+                                )}
                               </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-
-                  {rawReplacements.length > 0 && (
-                    <div className="bg-white rounded-[10px] border overflow-hidden" style={{ borderColor: "var(--border)" }}>
-                      <div className="px-5 py-3 border-b" style={{ borderColor: "var(--border)", background: "#F0FDF4" }}>
-                        <p className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "#065F46" }}>Replacement Skills</p>
-                      </div>
-                      <table className="w-full text-[13px]">
-                        <thead>
-                          <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
-                            {["Replacement Skill", "Function Addressed"].map(h => (
-                              <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text3)" }}>{h}</th>
                             ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rawReplacements.map((s: any, i: number) => {
-                            const name = typeof s === "string" ? s : s?.name || "";
-                            const tf = typeof s === "object" ? (s.targetFunction || "") : "";
-                            const fc = funcColors[tf.toLowerCase()] || funcColors.unknown;
-                            return (
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {skills.length > 0 && (
+                      <div className="bg-white rounded-[10px] border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+                        <div className="px-5 py-3 border-b" style={{ borderColor: "var(--border)", background: "#F0FDF4" }}>
+                          <p className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "#065F46" }}>Replacement Skills</p>
+                        </div>
+                        <table className="w-full text-[13px]">
+                          <thead>
+                            <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
+                              {["Skill / Program", "Target Function", ...(tmData ? ["Goal", "Strategy"] : [])].map(h => (
+                                <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text3)" }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {skills.map((s: any, i: number) => (
                               <tr key={i} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
-                                <td className="px-4 py-3 font-semibold" style={{ color: "var(--text1)" }}>{name}</td>
+                                <td className="px-4 py-3 font-semibold" style={{ color: "var(--text1)" }}>{s.name}</td>
                                 <td className="px-4 py-3">
-                                  {tf ? <span className="text-[11px] px-2.5 py-1 rounded-full font-semibold capitalize" style={{ background: fc.bg, color: fc.color }}>{tf}</span>
-                                    : <span style={{ color: "var(--text3)" }}>—</span>}
+                                  {s.targetFunctions.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1">
+                                      {s.targetFunctions.map((tf: string, tfi: number) => {
+                                        const fc = funcColors[tf.toLowerCase()] || funcColors.unknown;
+                                        return <span key={tfi} className="text-[11px] px-2.5 py-1 rounded-full font-semibold capitalize" style={{ background: fc.bg, color: fc.color }}>{tf}</span>;
+                                      })}
+                                    </div>
+                                  ) : <span style={{ color: "var(--text3)" }}>—</span>}
                                 </td>
+                                {tmData && (
+                                  <>
+                                    <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text2)" }}>{s.goal || <span style={{ color: "var(--text3)" }}>—</span>}</td>
+                                    <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text2)" }}>{s.teachingStrategy || <span style={{ color: "var(--text3)" }}>—</span>}</td>
+                                  </>
+                                )}
                               </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {Object.keys(functionGroups).length > 0 && (
+                      <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide mb-4" style={{ color: "var(--text3)" }}>Function Map</p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {Object.entries(functionGroups).map(([func, data]) => {
+                            const fc = funcColors[func] || funcColors.unknown;
+                            return (
+                              <div key={func} className="rounded-xl p-4 border" style={{ background: fc.bg, borderColor: fc.border }}>
+                                <p className="text-[12px] font-bold uppercase tracking-wide mb-3 capitalize" style={{ color: fc.color }}>{func}</p>
+                                {data.behaviors.length > 0 && (
+                                  <div className="mb-2">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: fc.color }}>Behaviors</p>
+                                    {data.behaviors.map((b, i) => <p key={i} className="text-[12px]" style={{ color: "var(--text1)" }}>• {b}</p>)}
+                                  </div>
+                                )}
+                                {data.replacements.length > 0 && (
+                                  <div>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1 mt-2" style={{ color: fc.color }}>Replacement Skills</p>
+                                    {data.replacements.map((r, i) => <p key={i} className="text-[12px]" style={{ color: "var(--text1)" }}>✓ {r}</p>)}
+                                  </div>
+                                )}
+                              </div>
                             );
                           })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-
-                  {Object.keys(functionGroups).length > 0 && (
-                    <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
-                      <p className="text-[11px] font-semibold uppercase tracking-wide mb-4" style={{ color: "var(--text3)" }}>Function Map</p>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {Object.entries(functionGroups).map(([func, data]) => {
-                          const fc = funcColors[func] || funcColors.unknown;
-                          return (
-                            <div key={func} className="rounded-xl p-4 border" style={{ background: fc.bg, borderColor: fc.border }}>
-                              <p className="text-[12px] font-bold uppercase tracking-wide mb-3 capitalize" style={{ color: fc.color }}>{func}</p>
-                              {data.behaviors.length > 0 && (
-                                <div className="mb-2">
-                                  <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: fc.color }}>Behaviors</p>
-                                  {data.behaviors.map((b, i) => <p key={i} className="text-[12px]" style={{ color: "var(--text1)" }}>• {b}</p>)}
-                                </div>
-                              )}
-                              {data.replacements.length > 0 && (
-                                <div>
-                                  <p className="text-[10px] font-semibold uppercase tracking-wide mb-1 mt-2" style={{ color: fc.color }}>Replacement Skills</p>
-                                  {data.replacements.map((r, i) => <p key={i} className="text-[12px]" style={{ color: "var(--text1)" }}>✓ {r}</p>)}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </>
-              );
-            })()}
+                    )}
+
+                    {tmData?.notes && (
+                      <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--text3)" }}>General Notes</p>
+                        <p className="text-[13px] whitespace-pre-wrap" style={{ color: "var(--text2)" }}>{tmData.notes}</p>
+                      </div>
+                    )}
+                  </>
+                );
+              })()
+            )}
           </div>
         )}
 
