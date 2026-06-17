@@ -1,12 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
-import { Pool } from 'pg'
-import { PrismaPg } from '@prisma/adapter-pg'
-import { PrismaClient } from '@/lib/generated/prisma/client'
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL })
-const adapter = new PrismaPg(pool)
-const prisma = new PrismaClient({ adapter } as any)
+import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 

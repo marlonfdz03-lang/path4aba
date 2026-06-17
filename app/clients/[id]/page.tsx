@@ -525,6 +525,10 @@ export default function ClientProfilePage() {
         interventionsUsed: sessionSummaryRef.current?.interventions || [],
       }),
     });
+    if (res.status === 409) {
+      alert("This note has already been saved.");
+      return;
+    }
     if (res.ok) {
       await loadNotesFromSupabase(client.id);
       setLastSavedNote(generatedNote);
