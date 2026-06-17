@@ -193,6 +193,11 @@ export default function ClientProfilePage() {
   const [selectedBehaviors, setSelectedBehaviors] = useState<string[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [generatedNote, setGeneratedNote] = useState("");
+  const [sessionSummary, setSessionSummary] = useState<{
+    behaviors: string[];
+    skills: string[];
+    interventions: string[];
+  } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [status, setStatus] = useState("");
   const [similarityWarning, setSimilarityWarning] = useState(false);
@@ -483,6 +488,11 @@ export default function ClientProfilePage() {
         const backupNote = { id: crypto.randomUUID(), clientId: client.id, date: date || new Date().toLocaleDateString(), note: fullText };
         saveNote(backupNote);
         setDailyNotes(prev => [backupNote, ...prev]);
+        setSessionSummary({
+          behaviors: selectedBehaviors,
+          skills: selectedSkills,
+          interventions: extractInterventionsFromNote(fullText),
+        });
       }
     } catch {
       setStatus("Network error. Please try again.");
@@ -500,7 +510,14 @@ export default function ClientProfilePage() {
     const res = await fetch("/api/session-notes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientId: client.id, noteText: generatedNote, sessionDate: date || today.toISOString().split("T")[0] }),
+      body: JSON.stringify({
+        clientId: client.id,
+        noteText: generatedNote,
+        sessionDate: date || today.toISOString().split("T")[0],
+        behaviorsAddressed: sessionSummary?.behaviors || selectedBehaviors,
+        skillsAddressed: sessionSummary?.skills || selectedSkills,
+        interventionsUsed: sessionSummary?.interventions || [],
+      }),
     });
     if (res.ok) {
       await loadNotesFromSupabase(client.id);
@@ -709,6 +726,21 @@ export default function ClientProfilePage() {
 
   function handleTabChange(tab: Tab) {
     setActiveTab(tab);
+  }
+
+  function extractInterventionsFromNote(noteText: string): string[] {
+    const knownInterventions = [
+      "FCT", "DRA", "DRI", "DRO", "Premack Principle", "Behavior Momentum",
+      "Functional Communication Training", "Differential Reinforcement",
+      "Redirection", "Prompting", "Prompt Fading", "Visual Schedule",
+      "Environmental Modification", "Token Economy", "Response Interruption",
+      "Errorless Teaching", "Incidental Teaching", "Natural Environment Teaching",
+      "Discrete Trial Training", "Activity Schedule", "Behavior-specific praise",
+      "NCR", "Noncontingent Reinforcement",
+    ];
+    return knownInterventions.filter(i =>
+      noteText.toLowerCase().includes(i.toLowerCase())
+    );
   }
 
   return (
@@ -1467,6 +1499,40 @@ export default function ClientProfilePage() {
                   onCopy={() => navigator.clipboard.writeText(generatedNote)}
                   onSave={handleSaveNote}
                 />
+              )}
+              {sessionSummary && (
+                <div className="mt-4 space-y-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text3)" }}>Session Summary — Ready to Copy</p>
+                  {[
+                    { label: "Maladaptive Behaviors", items: sessionSummary.behaviors, color: "#DC2626", bg: "#FEF2F2" },
+                    { label: "Replacement Skills", items: sessionSummary.skills, color: "#0D9488", bg: "#F0FDF4" },
+                    { label: "Interventions Used", items: sessionSummary.interventions, color: "#2563EB", bg: "#EFF6FF" },
+                  ].map(section => (
+                    <div key={section.label} className="rounded-xl border p-4" style={{ borderColor: "var(--border)", background: section.bg }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: section.color }}>{section.label}</p>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(section.items.join(", "))}
+                          className="text-[11px] px-2.5 py-1 rounded-lg border font-medium hover:opacity-70"
+                          style={{ borderColor: section.color, color: section.color, background: "white" }}
+                        >
+                          Copy
+                        </button>
+                      </div>
+                      {section.items.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {section.items.map((item, i) => (
+                            <span key={i} className="text-[12px] px-2.5 py-1 rounded-full font-medium" style={{ background: "white", color: section.color, border: `1px solid ${section.color}20` }}>
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[12px]" style={{ color: "var(--text3)" }}>None detected</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>

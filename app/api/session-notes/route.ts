@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const userId = (session.user as any).id as string
-  const { clientId, noteText, sessionDate } = await req.json()
+  const { clientId, noteText, sessionDate, behaviorsAddressed, skillsAddressed, interventionsUsed } = await req.json()
   if (!clientId || !noteText) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
 
   // Block duplicate: check if identical note already exists for this client
@@ -52,6 +52,9 @@ export async function POST(req: Request) {
       user_id: userId,
       note_text: noteText,
       session_date: sessionDate || new Date().toISOString().split('T')[0],
+      behaviors_addressed: behaviorsAddressed || [],
+      skills_addressed: skillsAddressed || [],
+      interventions_used: interventionsUsed || [],
     },
   })
   return NextResponse.json({ ok: true })
