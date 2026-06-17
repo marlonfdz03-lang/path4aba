@@ -113,11 +113,11 @@ export async function POST(request: Request) {
     sessionParams.discounts = [{ coupon: process.env.STRIPE_PROMO_COUPON_ID }]
   }
 
-  const session = await getStripe().checkout.sessions.create(sessionParams)
-  console.log('[create-trial] Stripe checkout created:', session.id)
+  const stripeSession = await getStripe().checkout.sessions.create(sessionParams)
+  console.log('[create-trial] Stripe checkout created:', stripeSession.id)
 
   const name = user.name || user.email.split('@')[0] || 'there'
   sendWelcomeEmail(user.email, name).catch(err => console.error('[create-trial] welcome email error:', err))
 
-  return NextResponse.json({ url: session.url })
+  return NextResponse.json({ url: stripeSession.url })
 }
