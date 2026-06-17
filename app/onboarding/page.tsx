@@ -289,7 +289,7 @@ export default function OnboardingPage() {
     setPlanError("");
 
     const userId = (session?.user as any)?.id;
-    if (!userId) { router.push("/login"); return; }
+    if (!userId) { router.push("/login?redirect=/onboarding"); return; }
 
     const timeout = new Promise<Response>((_, reject) =>
       setTimeout(() => reject(new Error("timeout")), 10000)

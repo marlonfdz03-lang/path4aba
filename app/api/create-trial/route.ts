@@ -1,23 +1,31 @@
 import { NextResponse } from 'next/server'
+import { auth } from '@/auth'
 import { getStripe, PRICES, BCBA_STUDENTS_PRICES } from '@/lib/stripe'
 import { prisma } from '@/lib/prisma'
 import { sendWelcomeEmail } from '@/lib/email'
 
 export async function POST(request: Request) {
-  let body: { userId?: string; plan?: string; interval?: string; promoCode?: string }
+  // SECURITY: always get userId from server session, never trust client
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  const userId = (session.user as any).id as string
+
+  let body: { plan?: string; interval?: string; promoCode?: string }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { userId, plan, promoCode } = body
+  const { plan, promoCode } = body
   const interval = (body.interval === 'year' ? 'year' : 'month') as 'month' | 'year'
 
   console.log('[create-trial] request:', { userId, plan })
 
-  if (!userId || !plan) {
-    return NextResponse.json({ error: 'Missing userId or plan' }, { status: 400 })
+  if (!plan) {
+    return NextResponse.json({ error: 'Missing plan' }, { status: 400 })
   }
 
   // Verify user exists
