@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { sendPaymentConfirmationEmail, sendPaymentFailedEmail } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 30
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'stripe-key-required', {
   apiVersion: '2024-06-20' as any,
