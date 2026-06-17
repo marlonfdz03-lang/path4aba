@@ -33,7 +33,7 @@ export async function PATCH(req: Request) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const userId = (session.user as any).id as string
 
-  const { clientId, treatmentMapData, approved } = await req.json()
+  const { clientId, treatmentMapData, treatmentMapApproved } = await req.json()
   if (!clientId) return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
 
   const connection = await prisma.bcba_clients.findFirst({
@@ -41,12 +41,13 @@ export async function PATCH(req: Request) {
   })
   if (!connection) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+  const updateData: Record<string, unknown> = {}
+  if (treatmentMapData !== undefined) updateData.treatment_map_data = treatmentMapData
+  if (treatmentMapApproved !== undefined) updateData.treatment_map_approved = treatmentMapApproved
+
   await prisma.clients.update({
     where: { id: clientId },
-    data: {
-      treatment_map_data: treatmentMapData,
-      treatment_map_approved: approved,
-    }
+    data: updateData,
   })
 
   return NextResponse.json({ ok: true })
