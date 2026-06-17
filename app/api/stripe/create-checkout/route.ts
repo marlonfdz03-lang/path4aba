@@ -1,11 +1,19 @@
 import { NextResponse } from 'next/server'
+import { auth } from '@/auth'
 import { getStripe, PRICES } from '@/lib/stripe'
 import { prisma } from '@/lib/prisma'
 
 export async function POST(request: Request) {
-  const { plan, interval, userId, promoCode } = await request.json()
+  // SECURITY FIX: always get userId from server session, never trust client
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  const userId = (session.user as any).id as string
 
-  if (!plan || !interval || !userId) {
+  const { plan, interval, promoCode } = await request.json()
+
+  if (!plan || !interval) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
@@ -48,12 +56,11 @@ export async function POST(request: Request) {
     metadata: { userId, plan, promoCode: promoCode || '' },
   }
 
-  // Apply promo coupon if provided and env var is set
   if (promoCode && process.env.STRIPE_PROMO_COUPON_ID) {
     sessionParams.discounts = [{ coupon: process.env.STRIPE_PROMO_COUPON_ID }]
   }
 
-  const session = await getStripe().checkout.sessions.create(sessionParams)
+  const session2 = await getStripe().checkout.sessions.create(sessionParams)
 
-  return NextResponse.json({ url: session.url })
+  return NextResponse.json({ url: session2.url })
 }
