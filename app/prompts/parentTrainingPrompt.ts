@@ -75,6 +75,9 @@ If clientPresent = "partial":
 If clientPresent = "no":
   Do not invent client behavior. State that training was conducted without the client present and focus entirely on caregiver learning.
 
+If caregiver did not practice during the session:
+  Document the barrier explicitly. State that a home implementation plan was established for the next opportunity. Never fabricate practice that did not occur.
+
 ═══════════════════════════════════════
 CAREGIVER AS ACTIVE PARTICIPANT
 ═══════════════════════════════════════

@@ -46,7 +46,7 @@ BANNED phrases (never use):
 - "plan modification"
 
 TREATMENT INTEGRITY RULE:
-If any area is rated "Needs Improvement", describe the specific area objectively using observable language. State that the BCBA provided coaching, modeling, or performance feedback to the RBT in that area. Never frame this as a protocol modification, plan change, or treatment update. Example: "Data collection procedures were identified as an area for improvement; the BCBA provided in-vivo coaching and modeling to support accurate implementation."
+If any area is rated "Needs Improvement", describe the specific area objectively using observable language. State that the BCBA provided coaching, modeling, or performance feedback to the RBT in that area. Never frame this as a protocol modification, plan change, or treatment update. Needs Improvement in treatment integrity reflects implementation fidelity, not intervention effectiveness. Never imply the intervention itself is ineffective. Example: "Data collection procedures were identified as an area for improvement; the BCBA provided in-vivo coaching and modeling to support accurate implementation."
 
 NOTE STRUCTURE — write in this order:
 1. BCBA presence and purpose of overlap
