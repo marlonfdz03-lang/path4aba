@@ -16,17 +16,32 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  const client = await prisma.clients.findFirst({
+  // Allow RBT (owns client) or BCBA (has bcba_clients connection)
+  let client = await prisma.clients.findFirst({
     where: { id: clientId, rbt_id: userId },
+    select: { id: true, rbt_id: true, clinical_profile: true },
   })
-  if (!client) return Response.json({ error: 'Client not found' }, { status: 404 })
+  let isBcbaGenerated = false
+  if (!client) {
+    const bcbaConn = await prisma.bcba_clients.findFirst({
+      where: { bcba_id: userId, client_id: clientId },
+    })
+    if (!bcbaConn) return Response.json({ error: 'Client not found' }, { status: 404 })
+    client = await prisma.clients.findFirst({
+      where: { id: clientId },
+      select: { id: true, rbt_id: true, clinical_profile: true },
+    })
+    if (!client) return Response.json({ error: 'Client not found' }, { status: 404 })
+    isBcbaGenerated = true
+  }
+  const reportRbtId = isBcbaGenerated ? (client.rbt_id || userId) : userId
 
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
     async start(controller) {
       try {
         const result = await generateProgressReport(
-          { clientId, rbtId: userId, periodStart, periodEnd, periodLabel },
+          { clientId, rbtId: reportRbtId, periodStart, periodEnd, periodLabel },
           (chunk) => { controller.enqueue(encoder.encode(chunk)) }
         )
 
@@ -47,7 +62,7 @@ export async function POST(req: NextRequest) {
           },
           create: {
             client_id: clientId,
-            rbt_id: userId,
+            rbt_id: reportRbtId,
             period_start: periodStart,
             period_end: periodEnd,
             period_label: periodLabel,
@@ -72,7 +87,7 @@ export async function POST(req: NextRequest) {
             behaviorTrends: result.behaviorTrends.map((b: any) => ({ name: b.name, trend: b.trend })),
             skillTrends: result.skillTrends.map((s: any) => ({ name: s.name, trend: s.trend })),
           },
-          createdBy: userId,
+          createdBy: reportRbtId,
           source: 'progress_report',
         })
 
@@ -128,27 +143,35 @@ export async function GET(req: NextRequest) {
   const latest = searchParams.get('latest') === 'true'
   if (!clientId) return Response.json({ error: 'Missing clientId' }, { status: 400 })
 
+  // Check access: RBT owns client OR BCBA has connection
+  const rbtClient = await prisma.clients.findFirst({ where: { id: clientId, rbt_id: userId }, select: { id: true } })
+  const isBcba = !rbtClient
+  if (isBcba) {
+    const bcbaConn = await prisma.bcba_clients.findFirst({ where: { bcba_id: userId, client_id: clientId }, select: { id: true } })
+    if (!bcbaConn) return Response.json({ error: 'Unauthorized' }, { status: 403 })
+  }
+
+  // BCBAs see all reports for the client; RBTs see only their own
+  const reportWhere = isBcba ? { client_id: clientId } : { client_id: clientId, rbt_id: userId }
+  const reportSelect = {
+    id: true, period_label: true, period_start: true, period_end: true,
+    narrative: true, behavior_trends: true, skill_trends: true,
+    goal_progress: true, continuity_context: true, created_at: true,
+  }
+
   if (latest) {
     const report = await prisma.progress_reports.findFirst({
-      where: { client_id: clientId, rbt_id: userId },
+      where: reportWhere,
       orderBy: { created_at: 'desc' },
-      select: {
-        id: true, period_label: true, period_start: true, period_end: true,
-        narrative: true, behavior_trends: true, skill_trends: true,
-        goal_progress: true, continuity_context: true, created_at: true,
-      },
+      select: reportSelect,
     })
     return Response.json({ report: report ?? null })
   }
 
   const reports = await prisma.progress_reports.findMany({
-    where: { client_id: clientId, rbt_id: userId },
+    where: reportWhere,
     orderBy: { created_at: 'desc' },
-    select: {
-      id: true, period_label: true, period_start: true, period_end: true,
-      narrative: true, behavior_trends: true, skill_trends: true,
-      goal_progress: true, continuity_context: true, created_at: true,
-    },
+    select: reportSelect,
   })
 
   return Response.json({ reports })

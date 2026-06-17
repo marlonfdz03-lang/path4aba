@@ -2,12 +2,12 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 
-type BCBATab = "overview" | "notes" | "schedule" | "97153xp" | "supervision" | "parent_training" | "reassessment" | "treatment_map";
+type BCBATab = "overview" | "notes" | "schedule" | "97153xp" | "supervision" | "parent_training" | "reassessment" | "treatment_map" | "progress_report" | "clinical_timeline";
 
 const SUPERVISION_TYPE_LABELS: Record<string, string> = {
   face_to_face: "Face-to-Face",
@@ -86,6 +86,8 @@ function TabBar({ active, onChange, isBCBAPro }: { active: BCBATab; onChange: (t
     { id: "supervision",    label: "Supervision Notes" },
     { id: "parent_training",  label: "Parent Training" },
     { id: "treatment_map",    label: "Treatment Map" },
+    { id: "progress_report",  label: "Progress Report" },
+    { id: "clinical_timeline", label: "Clinical Timeline" },
     { id: "reassessment",     label: "Assessment Tools", proOnly: true },
   ];
   return (
@@ -194,6 +196,33 @@ export default function BCBAClientPage() {
   const [generatingInvite, setGeneratingInvite] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
 
+  // Progress Report tab state
+  const prNarrativeRef = useRef("");
+  const [prReports, setPrReports] = useState<any[]>([]);
+  const [prGenerating, setPrGenerating] = useState(false);
+  const [prNarrative, setPrNarrative] = useState("");
+  const [prBehaviorTrends, setPrBehaviorTrends] = useState<any[]>([]);
+  const [prSkillTrends, setPrSkillTrends] = useState<any[]>([]);
+  const [prGoalProgress, setPrGoalProgress] = useState<any[]>([]);
+  const [prServiceUtilization, setPrServiceUtilization] = useState<any>(null);
+  const [prBehaviorWeeklyTable, setPrBehaviorWeeklyTable] = useState<any>({});
+  const [prSkillWeeklyTable, setPrSkillWeeklyTable] = useState<any>({});
+  const [prActiveTreatmentAreas, setPrActiveTreatmentAreas] = useState<any>(null);
+  const [prClinicalBarriers, setPrClinicalBarriers] = useState<string[]>([]);
+  const [prExpandedReport, setPrExpandedReport] = useState<string | null>(null);
+  const [prStatus, setPrStatus] = useState("");
+  const [prError, setPrError] = useState("");
+  const [prSelectedMonth, setPrSelectedMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
+
+  // Clinical Timeline tab state
+  const [timelineEntries, setTimelineEntries] = useState<any[]>([]);
+  const [timelineFilter, setTimelineFilter] = useState("all");
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [expandedTimelineId, setExpandedTimelineId] = useState<string | null>(null);
+
   useEffect(() => {
     if (status === "loading") return;
     if (!session?.user) { router.push("/login"); return; }
@@ -205,6 +234,12 @@ export default function BCBAClientPage() {
 
     loadAll();
   }, [clientId, status]);
+
+  useEffect(() => {
+    if (!clientId) return;
+    if (activeTab === "progress_report") fetchPrReports();
+    if (activeTab === "clinical_timeline") fetchTimeline();
+  }, [activeTab, clientId]);
 
   async function loadAll() {
     const clientRes = await fetch(`/api/bcba/client/${clientId}`);
@@ -251,6 +286,74 @@ export default function BCBAClientPage() {
       console.error('[bcba] generate invite error:', err);
     }
     setGeneratingInvite(false);
+  }
+
+  async function fetchPrReports() {
+    try {
+      const res = await fetch(`/api/progress-report?clientId=${clientId}`);
+      if (res.ok) { const data = await res.json(); setPrReports(data.reports || []); }
+    } catch {}
+  }
+
+  async function handlePrGenerate() {
+    const [year, month] = prSelectedMonth.split("-").map(Number);
+    const periodStart = new Date(year, month - 1, 1).toISOString().split("T")[0];
+    const periodEnd   = new Date(year, month, 0).toISOString().split("T")[0];
+    const periodLabel = new Date(year, month - 1, 1).toLocaleString("en-US", { month: "long", year: "numeric" });
+
+    setPrGenerating(true); setPrNarrative(""); setPrBehaviorTrends([]); setPrSkillTrends([]);
+    setPrGoalProgress([]); setPrStatus("Analyzing clinical data…"); setPrError("");
+    prNarrativeRef.current = "";
+
+    try {
+      const res = await fetch("/api/progress-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId, periodStart, periodEnd, periodLabel }),
+      });
+      if (!res.ok || !res.body) {
+        const errData = await res.json().catch(() => ({}));
+        setPrError(errData.error || "Generation failed."); return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        if (chunk.includes("__META__")) {
+          const [text, metaStr] = chunk.split("__META__");
+          if (text) { prNarrativeRef.current += text; setPrNarrative(prNarrativeRef.current); }
+          try {
+            const meta = JSON.parse(metaStr);
+            if (meta.behaviorTrends)    setPrBehaviorTrends(meta.behaviorTrends);
+            if (meta.skillTrends)       setPrSkillTrends(meta.skillTrends);
+            if (meta.goalProgress)      setPrGoalProgress(meta.goalProgress);
+            if (meta.serviceUtilization) setPrServiceUtilization(meta.serviceUtilization);
+            if (meta.behaviorWeeklyTable) setPrBehaviorWeeklyTable(meta.behaviorWeeklyTable);
+            if (meta.skillWeeklyTable)  setPrSkillWeeklyTable(meta.skillWeeklyTable);
+            if (meta.activeTreatmentAreas) setPrActiveTreatmentAreas(meta.activeTreatmentAreas);
+            if (meta.clinicalBarriers)  setPrClinicalBarriers(meta.clinicalBarriers);
+            if (meta.error) setPrError(meta.error);
+          } catch {}
+        } else {
+          prNarrativeRef.current += chunk;
+          setPrNarrative(prNarrativeRef.current);
+          setPrStatus("Generating clinical narrative…");
+        }
+      }
+      setPrStatus(""); fetchPrReports();
+    } catch { setPrError("Network error. Please try again."); }
+    finally { setPrGenerating(false); }
+  }
+
+  async function fetchTimeline() {
+    setTimelineLoading(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/timeline`);
+      if (res.ok) { const data = await res.json(); setTimelineEntries(data.entries || []); }
+    } catch {}
+    setTimelineLoading(false);
   }
 
   function enterEditMode() {
@@ -426,6 +529,21 @@ export default function BCBAClientPage() {
   }
 
   const cp = client?.clinical_profile || {};
+  const prHasData = prBehaviorTrends.length > 0 || prSkillTrends.length > 0 || prGoalProgress.length > 0;
+  const prImproving = prBehaviorTrends.filter((b: any) => b.trend === "improving").length;
+  const prWorsening = prBehaviorTrends.filter((b: any) => b.trend === "worsening").length;
+  const prSkillsImproving = prSkillTrends.filter((s: any) => s.trend === "improving").length;
+  const filteredTimelineEntries = timelineFilter === "all"
+    ? timelineEntries
+    : timelineEntries.filter((e: any) => {
+        const typeMap: Record<string, string> = {
+          progress_reports: "monthly_progress_report",
+          assessments: "assessment",
+          reassessments: "reassessment_summary",
+          protocol_changes: "protocol_change",
+        };
+        return e.type === typeMap[timelineFilter];
+      });
 
   return (
     <main className="min-h-screen" style={{ background: "var(--bg)", fontFamily: "var(--font-dm-sans, sans-serif)" }}>
@@ -1573,6 +1691,315 @@ export default function BCBAClientPage() {
             <p className="text-[13px] max-w-xs" style={{ color: "var(--text3)" }}>
               Reassessment tools will be available here for BCBA Pro plan members.
             </p>
+          </div>
+        )}
+
+        {/* ── Progress Report Tab ── */}
+        {activeTab === "progress_report" && (
+          <div className="space-y-5">
+            {/* Controls */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <input
+                type="month" value={prSelectedMonth} onChange={e => setPrSelectedMonth(e.target.value)}
+                className="border rounded-lg px-3 py-1.5 text-[13px]"
+                style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+              />
+              <button
+                onClick={handlePrGenerate} disabled={prGenerating}
+                className="px-4 py-2 rounded-lg text-[13px] font-semibold text-white disabled:opacity-50 hover:opacity-90 transition-opacity"
+                style={{ background: "var(--teal)" }}
+              >
+                {prGenerating ? "Generating…" : "Generate Report"}
+              </button>
+            </div>
+
+            {/* Status / error */}
+            {prStatus && (
+              <div className="px-4 py-3 rounded-xl text-[13px]" style={{ background: "#EFF6FF", color: "#1E40AF" }}>{prStatus}</div>
+            )}
+            {prError && (
+              <div className="px-4 py-3 rounded-xl text-[13px]" style={{ background: "#FEF2F2", color: "#991B1B" }}>{prError}</div>
+            )}
+
+            {/* Results */}
+            {prHasData && (
+              <>
+                {/* Executive summary */}
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: "Behaviors Improved", value: prImproving, color: "#16A34A", bg: "#DCFCE7" },
+                    { label: "Need Attention", value: prWorsening, color: "#DC2626", bg: "#FEE2E2" },
+                    { label: "Skills Improving", value: prSkillsImproving, color: "#2563EB", bg: "#EFF6FF" },
+                  ].map(card => (
+                    <div key={card.label} className="rounded-xl p-4 text-center" style={{ background: card.bg }}>
+                      <p className="text-[28px] font-bold" style={{ color: card.color }}>{card.value}</p>
+                      <p className="text-[11px] font-semibold mt-1" style={{ color: card.color }}>{card.label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Service Utilization */}
+                {prServiceUtilization && (
+                  <div className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
+                    <SectionHeader title="Service Utilization" />
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-4">
+                      {[
+                        { label: "Authorized Hours", value: prServiceUtilization.authorizedHoursTotal > 0 ? `${prServiceUtilization.authorizedHoursTotal}h` : "—" },
+                        { label: "Delivered Hours", value: prServiceUtilization.deliveredHours > 0 ? `${prServiceUtilization.deliveredHours}h` : "—" },
+                        { label: "Missed Hours", value: prServiceUtilization.missedHoursTotal > 0 ? `${prServiceUtilization.missedHoursTotal}h` : "0h" },
+                        { label: "Attendance Rate", value: prServiceUtilization.attendanceRate !== null ? `${prServiceUtilization.attendanceRate}%` : "—" },
+                      ].map(item => (
+                        <div key={item.label} className="text-center p-3 rounded-xl" style={{ background: "var(--bg)" }}>
+                          <p className="text-[20px] font-bold" style={{ color: "var(--text1)" }}>{item.value}</p>
+                          <p className="text-[11px] mt-0.5" style={{ color: "var(--text3)" }}>{item.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                    {prServiceUtilization.missedHoursTotal > 0 && (
+                      <div className="px-4 py-2.5 rounded-lg" style={{ background: "#FEF3C7", border: "1px solid #FCD34D" }}>
+                        <p className="text-[12px]" style={{ color: "#92400E" }}>
+                          The client missed {prServiceUtilization.missedHoursTotal} authorized treatment hours. Reduced treatment exposure may limit skill acquisition and generalization.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Maladaptive Behavior Table */}
+                {Object.keys(prBehaviorWeeklyTable).length > 0 && (
+                  <div className="bg-white rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+                    <div className="px-5 py-3 border-b" style={{ borderColor: "var(--border)", background: "#FEF2F2" }}>
+                      <p className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "#991B1B" }}>Maladaptive Behavior Summary</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-[13px]">
+                        <thead>
+                          <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
+                            {["Behavior", "Baseline", "Week 1", "Week 2", "Week 3", "Week 4", "Monthly Avg"].map(h => (
+                              <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text3)" }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Object.entries(prBehaviorWeeklyTable).map(([name, data]: [string, any], i) => (
+                            <tr key={i} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
+                              <td className="px-4 py-3 font-semibold" style={{ color: "var(--text1)" }}>{name}</td>
+                              <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text3)" }}>—</td>
+                              {data.weeks.map((w: number | null, wi: number) => (
+                                <td key={wi} className="px-4 py-3 text-[12px]" style={{ color: w !== null ? "var(--text1)" : "var(--text3)" }}>{w !== null ? w : "—"}</td>
+                              ))}
+                              <td className="px-4 py-3 text-[12px] font-semibold" style={{ color: "var(--teal)" }}>{data.monthlyAvg !== null ? data.monthlyAvg : "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Replacement Skill Table */}
+                {Object.keys(prSkillWeeklyTable).length > 0 && (
+                  <div className="bg-white rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+                    <div className="px-5 py-3 border-b" style={{ borderColor: "var(--border)", background: "#F0FDF4" }}>
+                      <p className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "#065F46" }}>Replacement Skill Summary</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-[13px]">
+                        <thead>
+                          <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
+                            {["Skill", "Baseline", "Week 1", "Week 2", "Week 3", "Week 4", "Monthly Avg"].map(h => (
+                              <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text3)" }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Object.entries(prSkillWeeklyTable).map(([name, data]: [string, any], i) => (
+                            <tr key={i} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
+                              <td className="px-4 py-3 font-semibold" style={{ color: "var(--text1)" }}>{name}</td>
+                              <td className="px-4 py-3 text-[12px]" style={{ color: "var(--text3)" }}>—</td>
+                              {data.weeks.map((w: number | null, wi: number) => (
+                                <td key={wi} className="px-4 py-3 text-[12px]" style={{ color: w !== null ? "var(--text1)" : "var(--text3)" }}>{w !== null ? `${w}%` : "—"}</td>
+                              ))}
+                              <td className="px-4 py-3 text-[12px] font-semibold" style={{ color: "var(--teal)" }}>{data.monthlyAvg !== null ? `${data.monthlyAvg}%` : "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Active Treatment Areas */}
+                {prActiveTreatmentAreas && (
+                  <div className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
+                    <SectionHeader title="Active Treatment Areas" />
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      {[
+                        { label: "Behavior Reduction Targets", items: prActiveTreatmentAreas.behaviorReductionTargets },
+                        { label: "Replacement Programs", items: prActiveTreatmentAreas.replacementPrograms },
+                        { label: "Interventions Used", items: prActiveTreatmentAreas.frequentlyUsedInterventions },
+                      ].map(col => (
+                        <div key={col.label}>
+                          <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--text3)" }}>{col.label}</p>
+                          {col.items?.length > 0 ? col.items.map((item: string, i: number) => (
+                            <p key={i} className="text-[12px] py-0.5" style={{ color: "var(--text2)" }}>• {item}</p>
+                          )) : <p className="text-[12px]" style={{ color: "var(--text3)" }}>None documented</p>}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-4 pt-4 border-t flex gap-6" style={{ borderColor: "var(--border)" }}>
+                      <p className="text-[12px]" style={{ color: "var(--text3)" }}>RBT Sessions: <span className="font-semibold" style={{ color: "var(--text1)" }}>{prActiveTreatmentAreas.rbtSessionCount}</span></p>
+                      {prActiveTreatmentAreas.bcbaSessionCount > 0 && (
+                        <p className="text-[12px]" style={{ color: "var(--text3)" }}>BCBA Sessions: <span className="font-semibold" style={{ color: "var(--text1)" }}>{prActiveTreatmentAreas.bcbaSessionCount}</span></p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Clinical Barriers */}
+                {prClinicalBarriers.length > 0 && (
+                  <div className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
+                    <SectionHeader title="Clinical Barriers" />
+                    <div className="space-y-1.5">
+                      {prClinicalBarriers.map((barrier, i) => (
+                        <div key={i} className="flex items-center gap-2 text-[12px]" style={{ color: "var(--text2)" }}>
+                          <span style={{ color: "#D97706" }}>•</span><span>{barrier}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Narrative */}
+                {prNarrative && (
+                  <div className="bg-white rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
+                    <SectionHeader title="Clinical Narrative & Medical Necessity" />
+                    <p className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text2)" }}>{prNarrative}</p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Previous Reports */}
+            {prReports.length > 0 && (
+              <div className="bg-white rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+                <div className="px-5 py-4 border-b" style={{ borderColor: "var(--border)" }}>
+                  <SectionHeader title="Previous Reports" />
+                </div>
+                {prReports.map(report => (
+                  <div key={report.id} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
+                    <div className="px-5 py-3 flex items-center justify-between">
+                      <button
+                        onClick={() => setPrExpandedReport(prExpandedReport === report.id ? null : report.id)}
+                        className="text-[13px] font-medium text-left hover:opacity-70"
+                        style={{ color: "var(--text1)" }}
+                      >
+                        {report.period_label}
+                      </button>
+                      <span className="text-[12px]" style={{ color: "var(--text3)" }}>
+                        {prExpandedReport === report.id ? "▲" : "▼"}
+                      </span>
+                    </div>
+                    {prExpandedReport === report.id && (
+                      <div className="px-5 pb-5">
+                        <p className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text2)" }}>{report.narrative}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Clinical Timeline Tab ── */}
+        {activeTab === "clinical_timeline" && (
+          <div className="space-y-4">
+            {/* Filter row */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {[
+                { id: "all", label: "All" },
+                { id: "progress_reports", label: "Progress Reports" },
+                { id: "assessments", label: "Assessments" },
+                { id: "reassessments", label: "Reassessments" },
+                { id: "protocol_changes", label: "Protocol Changes" },
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setTimelineFilter(f.id)}
+                  className="px-3 py-1.5 rounded-full text-[12px] font-medium transition-colors"
+                  style={{
+                    background: timelineFilter === f.id ? "var(--teal)" : "var(--bg)",
+                    color: timelineFilter === f.id ? "white" : "var(--text2)",
+                    border: `1px solid ${timelineFilter === f.id ? "var(--teal)" : "var(--border)"}`,
+                  }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {timelineLoading && (
+              <p className="text-[13px]" style={{ color: "var(--text3)" }}>Loading…</p>
+            )}
+
+            {!timelineLoading && filteredTimelineEntries.length === 0 && (
+              <div className="bg-white rounded-xl border p-8 text-center" style={{ borderColor: "var(--border)" }}>
+                <p className="text-[14px] font-semibold mb-1" style={{ color: "var(--text1)" }}>No timeline entries yet</p>
+                <p className="text-[12px]" style={{ color: "var(--text3)" }}>Entries are created automatically when progress reports and reassessment summaries are generated.</p>
+              </div>
+            )}
+
+            {filteredTimelineEntries.map((entry: any) => {
+              const typeConfig: Record<string, { bg: string; color: string; label: string }> = {
+                monthly_progress_report: { bg: "#E6F9F5", color: "#0D8A6A", label: "Progress Report" },
+                reassessment_summary:    { bg: "#EFF6FF", color: "#1D4ED8", label: "Reassessment" },
+                assessment:              { bg: "#FEF3C7", color: "#92400E", label: "Assessment" },
+                protocol_change:         { bg: "#F3E8FF", color: "#6D28D9", label: "Protocol Change" },
+              };
+              const importanceConfig: Record<string, string> = {
+                low: "#16A34A", medium: "#2563EB", high: "#D97706", critical: "#DC2626",
+              };
+              const tc = typeConfig[entry.type] || { bg: "var(--bg)", color: "var(--text3)", label: entry.type };
+              const importanceColor = importanceConfig[entry.importance || "medium"] || "#2563EB";
+              const isExpanded = expandedTimelineId === entry.id;
+              const summary = entry.summary || "";
+              const truncated = summary.length > 150 && !isExpanded;
+              const formattedDate = entry.created_at
+                ? new Date(entry.created_at).toLocaleString("en-US", { month: "long", year: "numeric" })
+                : entry.date;
+
+              return (
+                <div key={entry.id} className="bg-white rounded-xl border" style={{ borderColor: "var(--border)" }}>
+                  <div className="px-5 py-4 flex items-start gap-3">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 mt-0.5" style={{ background: tc.bg, color: tc.color }}>
+                      {tc.label}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-[14px] font-semibold" style={{ color: "var(--text1)" }}>{entry.title}</p>
+                        <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style={{ background: importanceColor }} title={entry.importance || "medium"} />
+                      </div>
+                      <p className="text-[12px] mt-0.5" style={{ color: "var(--text3)" }}>{formattedDate}</p>
+                      {summary && (
+                        <p className="text-[13px] mt-1.5 leading-relaxed" style={{ color: "var(--text2)" }}>
+                          {truncated ? `${summary.slice(0, 150)}…` : summary}
+                        </p>
+                      )}
+                      {summary.length > 150 && (
+                        <button
+                          onClick={() => setExpandedTimelineId(isExpanded ? null : entry.id)}
+                          className="text-[12px] mt-1 hover:underline"
+                          style={{ color: "var(--teal)" }}
+                        >
+                          {isExpanded ? "Show less" : "Show more"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
