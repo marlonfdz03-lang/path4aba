@@ -223,6 +223,15 @@ export default function BCBAClientPage() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
 
+  // Reassessment tab state
+  const [reassessStart, setReassessStart] = useState("");
+  const [reassessEnd, setReassessEnd] = useState("");
+  const [reassessNarrative, setReassessNarrative] = useState("");
+  const [reassessGenerating, setReassessGenerating] = useState(false);
+  const [reassessMeta, setReassessMeta] = useState<any>(null);
+  const [reassessError, setReassessError] = useState("");
+  const [reassessCopied, setReassessCopied] = useState(false);
+
   // Clinical Timeline tab state
   const [timelineEntries, setTimelineEntries] = useState<any[]>([]);
   const [timelineFilter, setTimelineFilter] = useState("all");
@@ -300,6 +309,43 @@ export default function BCBAClientPage() {
       const res = await fetch(`/api/progress-report?clientId=${clientId}`);
       if (res.ok) { const data = await res.json(); setPrReports(data.reports || []); }
     } catch {}
+  }
+
+  async function handleGenerateReassessment() {
+    if (!reassessStart || !reassessEnd) return;
+    setReassessGenerating(true);
+    setReassessNarrative("");
+    setReassessMeta(null);
+    setReassessError("");
+    try {
+      const res = await fetch("/api/progress-report/reassessment-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId, periodStart: reassessStart, periodEnd: reassessEnd }),
+      });
+      if (!res.ok) throw new Error("Failed to generate");
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let full = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        full += chunk;
+        const metaIdx = full.indexOf("__REASSESS_META__");
+        if (metaIdx !== -1) {
+          setReassessNarrative(full.slice(0, metaIdx));
+          try { setReassessMeta(JSON.parse(full.slice(metaIdx + "__REASSESS_META__".length))); } catch {}
+          break;
+        } else {
+          setReassessNarrative(full);
+        }
+      }
+    } catch {
+      setReassessError("Failed to generate reassessment summary. Please try again.");
+    } finally {
+      setReassessGenerating(false);
+    }
   }
 
   async function handlePrGenerate() {
@@ -1770,19 +1816,170 @@ export default function BCBAClientPage() {
 
         {/* ── Assessment Tools Tab ── */}
         {activeTab === "reassessment" && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "rgba(27,168,160,0.1)" }}>
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-              </svg>
+          <div style={{ padding: "24px", maxWidth: 800 }}>
+            {/* Header */}
+            <div style={{ marginBottom: 24 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--text1)" }}>Reassessment Summary</h2>
+              <p style={{ fontSize: 13, color: "var(--text3)", marginTop: 4 }}>
+                Generate a clinical summary for a custom period to include in reassessment documentation.
+              </p>
             </div>
-            <span className="text-[11px] font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-4" style={{ background: "rgba(27,168,160,0.15)", color: "var(--teal)" }}>
-              Coming Soon
-            </span>
-            <p className="text-[15px] font-semibold mb-2" style={{ color: "var(--text1)" }}>Assessment Tools</p>
-            <p className="text-[13px] max-w-xs" style={{ color: "var(--text3)" }}>
-              Reassessment tools will be available here for BCBA Pro plan members.
-            </p>
+
+            {/* Date range + Generate */}
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-end", marginBottom: 24, flexWrap: "wrap" }}>
+              <div>
+                <label style={{ fontSize: 12, color: "var(--text3)", display: "block", marginBottom: 4 }}>Period Start</label>
+                <input
+                  type="date" value={reassessStart} onChange={e => setReassessStart(e.target.value)}
+                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text1)", fontSize: 13 }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: "var(--text3)", display: "block", marginBottom: 4 }}>Period End</label>
+                <input
+                  type="date" value={reassessEnd} onChange={e => setReassessEnd(e.target.value)}
+                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text1)", fontSize: 13 }}
+                />
+              </div>
+              <button
+                onClick={handleGenerateReassessment}
+                disabled={reassessGenerating || !reassessStart || !reassessEnd}
+                style={{
+                  padding: "8px 20px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  background: reassessGenerating || !reassessStart || !reassessEnd ? "var(--border)" : "var(--teal)",
+                  color: "white", cursor: reassessGenerating ? "wait" : "pointer", border: "none",
+                }}
+              >
+                {reassessGenerating ? "Generating…" : "Generate Summary"}
+              </button>
+            </div>
+
+            {/* Error */}
+            {reassessError && (
+              <p style={{ color: "#DC2626", fontSize: 13, marginBottom: 16 }}>{reassessError}</p>
+            )}
+
+            {/* Meta cards */}
+            {reassessMeta && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 24 }}>
+                <div style={{ background: "var(--card)", borderRadius: 12, padding: 16, border: "1px solid var(--border)" }}>
+                  <p style={{ fontSize: 11, color: "var(--text3)", marginBottom: 4 }}>BEHAVIORS TRACKED</p>
+                  <p style={{ fontSize: 22, fontWeight: 700, color: "var(--text1)" }}>
+                    {Object.keys(reassessMeta.behaviorSummary || {}).length}
+                  </p>
+                </div>
+                <div style={{ background: "var(--card)", borderRadius: 12, padding: 16, border: "1px solid var(--border)" }}>
+                  <p style={{ fontSize: 11, color: "var(--text3)", marginBottom: 4 }}>SKILLS TRACKED</p>
+                  <p style={{ fontSize: 22, fontWeight: 700, color: "var(--text1)" }}>
+                    {Object.keys(reassessMeta.skillSummary || {}).length}
+                  </p>
+                </div>
+                <div style={{ background: "var(--card)", borderRadius: 12, padding: 16, border: "1px solid var(--border)" }}>
+                  <p style={{ fontSize: 11, color: "var(--text3)", marginBottom: 4 }}>ATTENDANCE RATE</p>
+                  <p style={{ fontSize: 22, fontWeight: 700, color: "var(--teal)" }}>
+                    {reassessMeta.attendanceRate != null ? `${reassessMeta.attendanceRate}%` : "—"}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Behavior first→last table */}
+            {reassessMeta?.behaviorSummary && Object.keys(reassessMeta.behaviorSummary).length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text1)", marginBottom: 8 }}>Behavior Trends (First → Last Period)</p>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: "var(--card)" }}>
+                      <th style={{ padding: "8px 12px", textAlign: "left", color: "var(--text3)", borderBottom: "1px solid var(--border)" }}>Behavior</th>
+                      <th style={{ padding: "8px 12px", textAlign: "center", color: "var(--text3)", borderBottom: "1px solid var(--border)" }}>First Period Avg</th>
+                      <th style={{ padding: "8px 12px", textAlign: "center", color: "var(--text3)", borderBottom: "1px solid var(--border)" }}>Last Period Avg</th>
+                      <th style={{ padding: "8px 12px", textAlign: "center", color: "var(--text3)", borderBottom: "1px solid var(--border)" }}>Trend</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(reassessMeta.behaviorSummary).map(([name, data]: [string, any]) => {
+                      const improved = data.last < data.first;
+                      return (
+                        <tr key={name} style={{ borderBottom: "1px solid var(--border)" }}>
+                          <td style={{ padding: "8px 12px", color: "var(--text1)" }}>{name}</td>
+                          <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--text3)" }}>{data.first?.toFixed(1)}</td>
+                          <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--text3)" }}>{data.last?.toFixed(1)}</td>
+                          <td style={{ padding: "8px 12px", textAlign: "center" }}>
+                            <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: improved ? "#DCFCE7" : "#FEE2E2", color: improved ? "#16A34A" : "#DC2626" }}>
+                              {improved ? "↓ Improving" : "↑ Worsening"}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Skill first→last table */}
+            {reassessMeta?.skillSummary && Object.keys(reassessMeta.skillSummary).length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text1)", marginBottom: 8 }}>Skill Acquisition (First → Last Period)</p>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: "var(--card)" }}>
+                      <th style={{ padding: "8px 12px", textAlign: "left", color: "var(--text3)", borderBottom: "1px solid var(--border)" }}>Skill</th>
+                      <th style={{ padding: "8px 12px", textAlign: "center", color: "var(--text3)", borderBottom: "1px solid var(--border)" }}>First Period Avg</th>
+                      <th style={{ padding: "8px 12px", textAlign: "center", color: "var(--text3)", borderBottom: "1px solid var(--border)" }}>Last Period Avg</th>
+                      <th style={{ padding: "8px 12px", textAlign: "center", color: "var(--text3)", borderBottom: "1px solid var(--border)" }}>Trend</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(reassessMeta.skillSummary).map(([name, data]: [string, any]) => {
+                      const improved = data.last > data.first;
+                      return (
+                        <tr key={name} style={{ borderBottom: "1px solid var(--border)" }}>
+                          <td style={{ padding: "8px 12px", color: "var(--text1)" }}>{name}</td>
+                          <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--text3)" }}>{data.first?.toFixed(1)}%</td>
+                          <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--text3)" }}>{data.last?.toFixed(1)}%</td>
+                          <td style={{ padding: "8px 12px", textAlign: "center" }}>
+                            <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: improved ? "#DCFCE7" : "#FEE2E2", color: improved ? "#16A34A" : "#DC2626" }}>
+                              {improved ? "↑ Improving" : "↓ Declining"}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Narrative */}
+            {(reassessNarrative || reassessGenerating) && (
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text1)" }}>Clinical Summary & Medical Necessity</p>
+                  {reassessNarrative && !reassessGenerating && (
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(reassessNarrative); setReassessCopied(true); setTimeout(() => setReassessCopied(false), 2000); }}
+                      style={{ fontSize: 12, color: "var(--teal)", background: "none", border: "none", cursor: "pointer" }}
+                    >
+                      {reassessCopied ? "✓ Copied" : "Copy"}
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  value={reassessNarrative}
+                  onChange={e => setReassessNarrative(e.target.value)}
+                  rows={12}
+                  style={{
+                    width: "100%", padding: 16, borderRadius: 12, border: "1px solid var(--border)",
+                    background: "var(--card)", color: "var(--text1)", fontSize: 13,
+                    lineHeight: 1.7, resize: "vertical", fontFamily: "inherit",
+                  }}
+                />
+                {reassessGenerating && (
+                  <p style={{ fontSize: 12, color: "var(--text3)", marginTop: 8 }}>Generating clinical summary…</p>
+                )}
+              </div>
+            )}
           </div>
         )}
 
