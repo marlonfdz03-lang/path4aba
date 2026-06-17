@@ -513,9 +513,6 @@ export default function ClientProfilePage() {
     const today = new Date();
     const backupNote = { id: crypto.randomUUID(), clientId: client.id, date: date || today.toLocaleDateString(), note: generatedNote };
     saveNote(backupNote);
-    console.log('[save] sessionSummary:', sessionSummary);
-    console.log('[save] selectedBehaviors:', selectedBehaviors);
-    console.log('[save] selectedSkills:', selectedSkills);
     const res = await fetch("/api/session-notes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
