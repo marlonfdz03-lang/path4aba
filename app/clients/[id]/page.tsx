@@ -158,7 +158,7 @@ function NoteOutput({
       <textarea
         value={note}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border p-4 rounded-xl text-sm leading-7 h-64 resize-none focus:outline-none focus:ring-2"
+        className="w-full border p-4 rounded-xl text-sm leading-7 min-h-64 resize-none focus:outline-none focus:ring-2"
         style={{ borderColor: "var(--border)", color: "var(--text1)" }}
       />
     </div>
