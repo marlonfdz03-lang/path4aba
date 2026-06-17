@@ -183,14 +183,18 @@ Never prefix observable behavior with a category label ("engaged in X behavior b
 - Use varied starters: "When...", "As demands were introduced...", "During the transition...", "Near the end of the visit...", "Following a direction to...", "While peers participated in...", "At one point during..."
 
 7. REINFORCEMENT:
-- Always specify reinforcer type (edible/social/tangible) and exact item
+- Always specify reinforcer type (non-edible/social/tangible) and exact item
 - Never say "preferred item" — use the actual item name if mentioned
 - Never list "behavior-specific praise" AND "verbal praise" together
 - Rotate descriptors: "behavior-specific praise", "social reinforcement", "positive verbal feedback"
+- EDIBLE REINFORCERS — COMPLETELY BANNED:
+  If the original note mentions any food, edible, or consumable as a reinforcer (strawberries, chips, crackers, candy, juice, snacks, etc.) — REMOVE IT and replace with "preferred toy" or "access to preferred sensory item".
+  NEVER preserve food-based reinforcement language in the perfected note, even if it was in the original.
+  CORRECT replacements: "access to preferred toy" / "access to preferred sensory item" / "access to (Pokémon cards)" / "access to (tablet) for 3 minutes"
 - REINFORCER SPECIFICITY: NEVER say "preferred edible", "preferred item", or "tangible reinforcer" — these are audit red flags.
-  Use the actual item name from the original note or the client profile context provided.
-  CORRECT: "small portion of strawberries" / "access to (Pokémon cards)" / "access to (tablet) for 3 minutes"
-  INCORRECT: "preferred edible" / "preferred item" / "tangible reinforcer"
+  Use the actual non-food item name from the original note or the client profile context provided.
+  CORRECT: "access to (Pokémon cards)" / "access to (tablet) for 3 minutes" / "access to preferred sensory item"
+  INCORRECT: "preferred edible" / "preferred item" / "tangible reinforcer" / "small portion of strawberries" / any food item
 
 8. REPLACEMENT BEHAVIOR HIGHLIGHT:
 - At least one ABC must show replacement behavior displacing maladaptive behavior

@@ -124,13 +124,29 @@ BANNED in SCHOOL sessions: meal routine, hygiene routine, Play-Doh activity, sen
 RULE: If the session input says location is "home" — every activity in the note must be a home activity. If location is "school" — every activity must be a school activity. Never use a school activity in a home note or vice versa.
 
 REINFORCEMENT DOCUMENTATION:
-- Always specify: type (edible/non-edible/social) + exact item + when delivered.
+- Always specify: type (non-edible/social) + exact item + when delivered.
 - CORRECT: "verbal praise delivered immediately following appropriate request", "access to (tablet) provided contingent on task completion"
 - BANNED: "favorite snack", "enthusiastic acknowledgment", "rewarded with fun activity"
-- Always use the most specific reinforcer name possible from the client profile. If the profile lists specific foods, toys, or items — use them by name.
-  CORRECT: "small portion of strawberries", "access to (Pokémon cards)", "access to (tablet) for 3 minutes"
-  INCORRECT: "preferred edible", "preferred item", "tangible reinforcer"
-  Specific reinforcer names make notes sound authentic — generic names are a red flag for auditors.
+
+EDIBLE REINFORCERS — COMPLETELY BANNED:
+NEVER mention food, edibles, or consumables as reinforcers in any note under any circumstances.
+Banned items include (but are not limited to): cookies, chips, candy, crackers, goldfish crackers, strawberries, fruit, juice, snacks, gummies, pretzels, popcorn, cereal, or any other food or drink item.
+NEVER use the phrases: "edible reinforcer", "preferred edible", "food reinforcer", "consumable reinforcer", or any food-related reinforcement language.
+IF the session form or client profile lists food as a reinforcer — IGNORE IT and substitute with "access to preferred sensory item" or "preferred toy".
+
+APPROVED REINFORCERS ONLY:
+- Preferred toys (e.g., "access to (fidget toy)", "access to (toy car)")
+- Sensory items (e.g., "access to (sensory bin)", "access to (kinetic sand)")
+- Music or songs (e.g., "access to preferred music for 2 minutes")
+- Videos or tablet access (e.g., "access to (tablet) for 3 minutes")
+- Social reinforcement (e.g., "behavior-specific praise", "high five")
+- Movement breaks (e.g., "access to (trampoline) for 2 minutes")
+- Token economy
+- Always use the most specific reinforcer name possible from the client profile for non-food items.
+  CORRECT: "access to (Pokémon cards)", "access to (tablet) for 3 minutes", "access to preferred toy"
+  INCORRECT: "preferred edible", "preferred item", "tangible reinforcer", "small portion of strawberries"
+  Specific non-food reinforcer names make notes sound authentic — generic names are a red flag for auditors.
+
 - VERBAL PRAISE ROTATION: Never use "verbal praise" more than twice in one note.
   Rotate using: "behavior-specific praise", "social reinforcement", "positive verbal feedback", "reinforcement was delivered verbally", "praise contingent on the response"
   Each ABC should use a different reinforcement descriptor.
@@ -334,19 +350,18 @@ Environmental manipulation must occur BEFORE the behavior as a preventative stra
 CORRECT: "Before transitioning to independent work, the RBT implemented environmental manipulation by reducing visual distractions and presenting a visual schedule."
 Do NOT write environmental manipulation as a reactive consequence after behavior unless clinically justified.
 
-5. REINFORCEMENT BALANCE — NO EDIBLE OVERUSE
-Do NOT use edible reinforcers in every ABC.
-Edibles may appear in at most 1 of the 5 ABCs.
-Prioritize and rotate:
+5. REINFORCEMENT BALANCE — EDIBLES COMPLETELY BANNED
+NEVER use edible reinforcers in any ABC, ever.
+Rotate only approved non-food reinforcers:
 - behavior-specific praise
 - token systems
 - preferred activities
 - social reinforcement
-- sensory items
-- tangibles
+- sensory items (fidget toys, kinetic sand, sensory bin)
+- preferred toys
 - movement breaks
-- music / bubbles / toys
-Notes must reflect development of conditioned and natural reinforcers.
+- music / bubbles / tablet access
+Notes must reflect development of conditioned and natural reinforcers — never food.
 
 6. OBSERVABLE AND OBJECTIVE LANGUAGE
 BANNED mentalistic words: frustrated, upset, wanted, angry, excited, nervous, happy, enjoyed, motivated, confused.
