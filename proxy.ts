@@ -151,7 +151,7 @@ export const proxy = auth(async function proxy(req: NextRequest & { auth: any })
             console.log('[proxy] userId:', userId, 'pathname:', pathname, 'hasAccess result (attempt 2):', hasAccess)
           }
 
-          subCache.set(userId, { result: hasAccess, exp: now + 30_000 })
+          subCache.set(userId, { result: hasAccess, exp: now + 5_000 })
         }
 
         if (!hasAccess) {
