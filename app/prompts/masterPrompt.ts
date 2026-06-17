@@ -112,6 +112,16 @@ ACTIVITIES FORMAT:
 - All activities MUST use parentheses: preferred activity as (ACTIVITY NAME), non-preferred as (ACTIVITY NAME).
 - Example: "During transition from (Lego building) to (worksheet completion)..."
 
+LOCATION LANGUAGE — MANDATORY:
+Use the correct location term based on the session setting:
+- Home sessions: ALWAYS use "home" — NEVER "residence" or "residencia"
+  CORRECT: "Today's home-based ABA session was conducted at the client's home"
+  BANNED: "residence", "residencia", "domicilio", "client's residence"
+- School sessions: ALWAYS use "school" or "classroom"
+  CORRECT: "Today's school-based ABA session was conducted in the classroom"
+- Clinic sessions: ALWAYS use "clinic" or "clinical setting"
+  CORRECT: "Today's clinic-based ABA session was conducted at the ABA clinic"
+
 LOCATION-BASED ACTIVITY RULES — MANDATORY:
 The session location determines which activities are valid. NEVER mix home and school activities.
 
