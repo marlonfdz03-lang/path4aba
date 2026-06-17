@@ -198,6 +198,7 @@ export default function ClientProfilePage() {
     skills: string[];
     interventions: string[];
   } | null>(null);
+  const sessionSummaryRef = useRef<{ behaviors: string[]; skills: string[]; interventions: string[] } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [status, setStatus] = useState("");
   const [similarityWarning, setSimilarityWarning] = useState(false);
@@ -493,6 +494,11 @@ export default function ClientProfilePage() {
           skills: selectedSkills,
           interventions: extractInterventionsFromNote(fullText),
         });
+        sessionSummaryRef.current = {
+          behaviors: selectedBehaviors,
+          skills: selectedSkills,
+          interventions: extractInterventionsFromNote(fullText),
+        };
       }
     } catch {
       setStatus("Network error. Please try again.");
@@ -507,6 +513,9 @@ export default function ClientProfilePage() {
     const today = new Date();
     const backupNote = { id: crypto.randomUUID(), clientId: client.id, date: date || today.toLocaleDateString(), note: generatedNote };
     saveNote(backupNote);
+    console.log('[save] sessionSummary:', sessionSummary);
+    console.log('[save] selectedBehaviors:', selectedBehaviors);
+    console.log('[save] selectedSkills:', selectedSkills);
     const res = await fetch("/api/session-notes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -514,9 +523,9 @@ export default function ClientProfilePage() {
         clientId: client.id,
         noteText: generatedNote,
         sessionDate: date || today.toISOString().split("T")[0],
-        behaviorsAddressed: sessionSummary?.behaviors || selectedBehaviors,
-        skillsAddressed: sessionSummary?.skills || selectedSkills,
-        interventionsUsed: sessionSummary?.interventions || [],
+        behaviorsAddressed: sessionSummaryRef.current?.behaviors || selectedBehaviors,
+        skillsAddressed: sessionSummaryRef.current?.skills || selectedSkills,
+        interventionsUsed: sessionSummaryRef.current?.interventions || [],
       }),
     });
     if (res.ok) {
