@@ -325,10 +325,10 @@ export default function OnboardingPage() {
     }
   }
 
-  const SECTIONS: { key: Section; label: string }[] = [
+  const SECTIONS: { key: Section; label: string; comingSoon?: boolean }[] = [
     { key: "rbt", label: "RBT" },
-    { key: "bcba", label: "BCBA / BCaBA" },
-    { key: "students", label: "BCBA Students" },
+    { key: "bcba", label: "BCBA / BCaBA", comingSoon: true },
+    { key: "students", label: "BCBA Students", comingSoon: true },
   ];
 
   const plans = activeSection === "rbt" ? RBT_PLANS : activeSection === "bcba" ? BCBA_PLANS : STUDENT_PLANS;
@@ -396,18 +396,25 @@ export default function OnboardingPage() {
 
       {/* Section tabs */}
       <div className="flex justify-center gap-2 px-6 mb-6">
-        {SECTIONS.map(({ key, label }) => (
+        {SECTIONS.map(({ key, label, comingSoon }) => (
           <button
             key={key}
-            onClick={() => setActiveSection(key)}
-            className="px-5 py-2 rounded-xl text-[13px] font-semibold border transition-colors"
+            onClick={() => !comingSoon && setActiveSection(key)}
+            disabled={comingSoon}
+            className="relative px-4 py-2 rounded-lg text-[13px] font-medium transition-colors"
             style={{
-              background: activeSection === key ? "var(--teal)" : "white",
-              borderColor: activeSection === key ? "var(--teal)" : "var(--border)",
-              color: activeSection === key ? "white" : "var(--text2)",
+              background: activeSection === key ? "var(--primary, #2563EB)" : "transparent",
+              color: activeSection === key ? "white" : comingSoon ? "var(--text3)" : "var(--text2)",
+              cursor: comingSoon ? "not-allowed" : "pointer",
+              opacity: comingSoon ? 0.6 : 1,
             }}
           >
             {label}
+            {comingSoon && (
+              <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: "#F1F5F9", color: "#64748B" }}>
+                Soon
+              </span>
+            )}
           </button>
         ))}
       </div>

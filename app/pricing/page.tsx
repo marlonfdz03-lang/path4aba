@@ -372,10 +372,10 @@ function PricingContent() {
     }
   }
 
-  const PROFESSIONS: { key: Profession; label: string }[] = [
+  const PROFESSIONS: { key: Profession; label: string; comingSoon?: boolean }[] = [
     { key: "rbt", label: "RBT" },
-    { key: "bcba", label: "BCBA / BCaBA" },
-    { key: "student", label: "BCBA / BCaBA Student" },
+    { key: "bcba", label: "BCBA / BCaBA", comingSoon: true },
+    { key: "student", label: "BCBA / BCaBA Student", comingSoon: true },
   ];
 
   const standalonePrice = interval === "month" ? 19.99 : 199;
@@ -406,7 +406,7 @@ function PricingContent() {
 
         {/* Profession selector */}
         <div className="flex justify-center gap-2 flex-wrap mb-6">
-          {PROFESSIONS.map(({ key, label }) => (
+          {PROFESSIONS.map(({ key, label, comingSoon }) => (
             <button
               key={key}
               onClick={() => setProfession(key)}
@@ -418,6 +418,11 @@ function PricingContent() {
               }}
             >
               {label}
+              {comingSoon && (
+                <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: profession === key ? "rgba(255,255,255,0.25)" : "#F1F5F9", color: profession === key ? "white" : "#64748B" }}>
+                  Soon
+                </span>
+              )}
             </button>
           ))}
         </div>
