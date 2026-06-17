@@ -232,7 +232,8 @@ function LoginContent() {
       const result = await signIn("credentials", { email, password, redirect: false });
       setLoading(false);
       if (result?.error) { setError("Invalid email or password. Please try again."); return; }
-      router.push("/dashboard");
+      const redirectTo = searchParams.get("redirect") || "/dashboard";
+      router.push(redirectTo);
 
     } else if (mode === "signup") {
       if (password !== confirmPassword) { setError("Passwords do not match."); setLoading(false); return; }
@@ -254,7 +255,8 @@ function LoginContent() {
       }
       await signIn("credentials", { email, password, redirect: false });
       setLoading(false);
-      router.push("/pricing");
+      const redirectTo2 = searchParams.get("redirect") || "/pricing";
+      router.push(redirectTo2);
       return;
 
     } else {
