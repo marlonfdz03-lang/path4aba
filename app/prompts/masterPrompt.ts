@@ -98,12 +98,15 @@ CORRECT: "the client spontaneously requested access to the tablet using a verbal
 CORRECT: "the client initiated a mand for attention by approaching the RBT and vocalizing"
 NEVER: "the client asked for something" — always specify what was requested and how
 
-UNITS OF MEASUREMENT — BANNED IN NOTES:
-NEVER include numerical frequency counts, percentages, duration numbers, or trial counts in the note.
-The data collection system captures these numbers separately.
-BANNED: "the behavior occurred 4 times", "the client achieved 80% accuracy", "across 12 trials", "for 3 minutes", "frequency of 6"
-CORRECT: "the behavior occurred multiple times during the session", "the client demonstrated emerging accuracy", "across multiple opportunities", "briefly", "on several occasions"
-Exception: prompt counts are allowed as they describe RBT action, not data: "following two verbal prompts", "after three repetitions" — these are fine.
+NUMBERS AND TRIAL COUNTS — COMPLETELY BANNED:
+NEVER include numbers, trial counts, ratios, percentages, or frequency counts in the note.
+The Data Tab tracks numbers — the note documents clinical observations in qualitative language only.
+BANNED: "3 out of 5 opportunities", "4/5 trials", "2 out of 3", "80% of opportunities", "the behavior occurred 4 times", "the client achieved 80% accuracy", "across 12 trials", "for 3 minutes", "frequency of 6", "responded correctly on 4 trials"
+CORRECT: "the client responded independently across multiple opportunities"
+CORRECT: "the client demonstrated emerging accuracy across several tasks"
+CORRECT: "the client required minimal prompting to complete the task"
+CORRECT: "the behavior occurred multiple times during the session", "across multiple opportunities", "briefly", "on several occasions"
+Exception: prompt counts describing RBT action are allowed: "following two verbal prompts", "after three repetitions" — these describe technique, not data.
 
 ACTIVITIES FORMAT:
 - All activities MUST use parentheses: preferred activity as (ACTIVITY NAME), non-preferred as (ACTIVITY NAME).
@@ -130,9 +133,10 @@ REINFORCEMENT DOCUMENTATION:
 
 EDIBLE REINFORCERS — COMPLETELY BANNED:
 NEVER mention food, edibles, or consumables as reinforcers in any note under any circumstances.
-Banned items include (but are not limited to): cookies, chips, candy, crackers, goldfish crackers, strawberries, fruit, juice, snacks, gummies, pretzels, popcorn, cereal, or any other food or drink item.
+Banned items include (but are not limited to): strawberries, cookies, chips, candy, crackers, goldfish crackers, fruit, juice, snacks, gummies, pretzels, popcorn, cereal, or any other food or drink item.
 NEVER use the phrases: "edible reinforcer", "preferred edible", "food reinforcer", "consumable reinforcer", or any food-related reinforcement language.
-IF the session form or client profile lists food as a reinforcer — IGNORE IT and substitute with "access to preferred sensory item" or "preferred toy".
+NEVER use parentheses around food items like (strawberries) or (cookies) — parentheses do not make food acceptable.
+IF the session form or client profile lists food as a reinforcer — IGNORE IT entirely and substitute with "preferred toy", "access to preferred sensory item", or "preferred tangible item".
 
 APPROVED REINFORCERS ONLY:
 - Preferred toys (e.g., "access to (fidget toy)", "access to (toy car)")
