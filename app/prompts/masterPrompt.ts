@@ -121,6 +121,9 @@ Use the correct location term based on the session setting:
   CORRECT: "Today's school-based ABA session was conducted in the classroom"
 - Clinic sessions: ALWAYS use "clinic" or "clinical setting"
   CORRECT: "Today's clinic-based ABA session was conducted at the ABA clinic"
+- Other/Community sessions: use the specific setting name provided
+  CORRECT: "Today's ABA session was conducted at [setting name]"
+  Examples: "after-school program", "summer camp", "community center"
 
 LOCATION-BASED ACTIVITY RULES — MANDATORY:
 The session location determines which activities are valid. NEVER mix home and school activities.

@@ -14,6 +14,7 @@ const LOCATION_OPTIONS = [
   { label: "Home", value: "home" },
   { label: "School", value: "school" },
   { label: "Clinic", value: "clinic" },
+  { label: "Other Place of Service", value: "other" },
 ];
 
 const FIXED_PRESENT = ["Caregiver", "Teacher"];
@@ -179,6 +180,7 @@ export default function ClientProfilePage() {
   // Generate Note state
   const [date, setDate] = useState("");
   const [location, setLocation] = useState("");
+  const [otherLocation, setOtherLocation] = useState("");
   const [selectedPresent, setSelectedPresent] = useState<string[]>([]);
   const [savedPresent, setSavedPresent] = useState<string[]>([]);
   const [customPresent, setCustomPresent] = useState("");
@@ -426,7 +428,7 @@ export default function ClientProfilePage() {
       })),
       clientProfile: {
         diagnosis: client.diagnosis || [],
-        setting: location,
+        setting: location === "other" ? (otherLocation || "community setting") : location,
         approvedInterventions: client.clinicalProfile?.interventions?.map((i: any) => typeof i === "string" ? i : i.name) || [],
         prohibitedInterventions: ["Punishment", "ResponseCost", "Restraint", "StandaloneExtinction", "TimeOut", "Overcorrection", "Aversive"],
         reinforcers: {
@@ -1210,7 +1212,7 @@ export default function ClientProfilePage() {
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
                   <label className="block text-[12px] font-semibold mb-1.5" style={{ color: "var(--text3)" }}>LOCATION</label>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     {LOCATION_OPTIONS.map((opt) => (
                       <button
                         key={opt.value}
@@ -1226,6 +1228,16 @@ export default function ClientProfilePage() {
                       </button>
                     ))}
                   </div>
+                  {location === "other" && (
+                    <input
+                      type="text"
+                      placeholder="e.g. After school program, Summer camp..."
+                      value={otherLocation}
+                      onChange={e => setOtherLocation(e.target.value)}
+                      className="mt-2 w-full border rounded-lg px-3 py-2 text-[13px]"
+                      style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                    />
+                  )}
                 </div>
 
                 <div>
