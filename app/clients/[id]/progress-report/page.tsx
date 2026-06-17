@@ -370,6 +370,12 @@ export default function ProgressReportPage() {
             </div>
 
             {/* Maladaptive Behaviors Table */}
+            {Object.keys(behaviorWeeklyTable).length === 0 && hasData && (
+              <div className="bg-white rounded-xl border p-6 text-center" style={{ borderColor: "var(--border)" }}>
+                <p className="text-[14px] font-semibold mb-1" style={{ color: "var(--text1)" }}>No behavior data yet</p>
+                <p className="text-[12px]" style={{ color: "var(--text3)" }}>Data will appear here as you log sessions in the Data tab.</p>
+              </div>
+            )}
             {Object.keys(behaviorWeeklyTable).length > 0 && (
               <div className="bg-white rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
                 <div className="px-5 py-3 border-b" style={{ borderColor: "var(--border)", background: "#FEF2F2" }}>
@@ -406,6 +412,12 @@ export default function ProgressReportPage() {
             )}
 
             {/* Replacement Skills Table */}
+            {Object.keys(skillWeeklyTable).length === 0 && hasData && (
+              <div className="bg-white rounded-xl border p-6 text-center" style={{ borderColor: "var(--border)" }}>
+                <p className="text-[14px] font-semibold mb-1" style={{ color: "var(--text1)" }}>No skill data yet</p>
+                <p className="text-[12px]" style={{ color: "var(--text3)" }}>Data will appear here as you log sessions in the Data tab.</p>
+              </div>
+            )}
             {Object.keys(skillWeeklyTable).length > 0 && (
               <div className="bg-white rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
                 <div className="px-5 py-3 border-b" style={{ borderColor: "var(--border)", background: "#F0FDF4" }}>
