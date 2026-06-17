@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   // Step 1: Look up the access code
   const accessCode = await prisma.client_access_codes.findFirst({
     where: { code: normalizedCode },
-    select: { id: true, client_id: true, rbt_id: true, used: true, expires_at: true },
+    select: { id: true, client_id: true, rbt_id: true, used: true, expires_at: true, created_by: true },
   })
 
   console.log('[connect-with-code] STEP 1 — code lookup:', { found: !!accessCode })
@@ -48,14 +48,27 @@ export async function POST(request: Request) {
 
   const connectedAt = new Date()
 
-  // Step 2: Upsert bcba_clients
-  console.log('[connect-with-code] STEP 2 — upserting bcba_clients')
+  // Step 2: Connect client — direction depends on who generated the code
+  console.log('[connect-with-code] STEP 2 — connecting, created_by:', accessCode.created_by)
   try {
-    await prisma.bcba_clients.upsert({
-      where: { bcba_id_client_id: { bcba_id: userId, client_id: accessCode.client_id } },
-      update: { rbt_id: accessCode.rbt_id, connected_at: connectedAt },
-      create: { bcba_id: userId, client_id: accessCode.client_id, rbt_id: accessCode.rbt_id, connected_at: connectedAt },
-    })
+    if (accessCode.created_by === 'bcba') {
+      // RBT is claiming a client created by a BCBA
+      await prisma.bcba_clients.updateMany({
+        where: { client_id: accessCode.client_id, rbt_id: null },
+        data: { rbt_id: userId, connected_at: connectedAt },
+      })
+      await prisma.clients.updateMany({
+        where: { id: accessCode.client_id, rbt_id: null },
+        data: { rbt_id: userId },
+      })
+    } else {
+      // BCBA is connecting to a client via RBT-generated code
+      await prisma.bcba_clients.upsert({
+        where: { bcba_id_client_id: { bcba_id: userId, client_id: accessCode.client_id } },
+        update: { rbt_id: accessCode.rbt_id, connected_at: connectedAt },
+        create: { bcba_id: userId, client_id: accessCode.client_id, rbt_id: accessCode.rbt_id, connected_at: connectedAt },
+      })
+    }
     console.log('[connect-with-code] STEP 2 OK')
   } catch (e: any) {
     console.error('[connect-with-code] STEP 2 FAILED:', e.message)
@@ -81,12 +94,14 @@ export async function POST(request: Request) {
 
   console.log('[connect-with-code] STEP 4 — client fetch:', { found: !!clientRow })
 
+  const effectiveRbtId = accessCode.created_by === 'bcba' ? userId : accessCode.rbt_id
+
   const client = clientRow ? {
     id: clientRow.id,
     client_name: (clientRow.clinical_profile as any)?.name || clientRow.internal_code || 'Unknown Client',
     diagnosis: (clientRow.clinical_profile as any)?.diagnosis || [],
     connected_at: connectedAt.toISOString(),
-    rbt_id: accessCode.rbt_id,
+    rbt_id: effectiveRbtId,
   } : null
 
   console.log('[connect-with-code] === SUCCESS === returning client:', client?.id)

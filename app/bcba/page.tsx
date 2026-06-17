@@ -13,11 +13,11 @@ interface BCBAClient {
   client_name: string;
   diagnosis: string[];
   connected_at: string;
-  rbt_id: string;
+  rbt_id: string | null;
   anomalyCount?: number;
 }
 
-function Topbar({ onConnect }: { onConnect: () => void }) {
+function Topbar({ onConnect, onCreate }: { onConnect: () => void; onCreate: () => void }) {
   return (
     <div className="flex items-center justify-between px-8 h-14 bg-white" style={{ borderBottom: "1px solid var(--border)" }}>
       <div className="flex items-center gap-2 text-[13px]">
@@ -35,15 +35,121 @@ function Topbar({ onConnect }: { onConnect: () => void }) {
           Add Client
         </Link>
         <button
+          onClick={onCreate}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold border hover:opacity-80 transition-opacity"
+          style={{ borderColor: "var(--teal)", color: "var(--teal)", background: "white" }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          New Client
+        </button>
+        <button
           onClick={onConnect}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold text-white hover:opacity-90 transition-opacity"
           style={{ background: "var(--teal)" }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            <path d="M9 12l2 2 4-4"/><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>
           </svg>
           Connect Client
         </button>
+      </div>
+    </div>
+  );
+}
+
+function CreateClientModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [clientName, setClientName] = useState('');
+  const [primarySetting, setPrimarySetting] = useState('home');
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!clientName.trim()) { setError('Client name is required.'); return; }
+    setLoading(true);
+    setError('');
+    const form = new FormData();
+    form.append('clientName', clientName.trim());
+    form.append('primarySetting', primarySetting);
+    if (pdfFile) form.append('pdfFile', pdfFile);
+    try {
+      const res = await fetch('/api/bcba/clients/create', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || 'Failed to create client'); setLoading(false); return; }
+      onCreated();
+    } catch {
+      setError('Network error. Please try again.');
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.4)" }}>
+      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4">
+        <div className="flex items-center justify-between mb-5">
+          <p className="text-[16px] font-semibold" style={{ color: "var(--text1)" }}>New Client</p>
+          <button onClick={onClose} className="text-[20px] leading-none hover:opacity-60" style={{ color: "var(--text3)" }}>×</button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-[12px] font-medium mb-1" style={{ color: "var(--text2)" }}>Client Nickname *</label>
+            <input
+              type="text"
+              value={clientName}
+              onChange={e => setClientName(e.target.value)}
+              placeholder="e.g. Jordan S."
+              className="w-full px-3 py-2 rounded-lg text-[13px] border outline-none"
+              style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+            />
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium mb-1" style={{ color: "var(--text2)" }}>Primary Setting</label>
+            <select
+              value={primarySetting}
+              onChange={e => setPrimarySetting(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg text-[13px] border outline-none"
+              style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+            >
+              <option value="home">Home</option>
+              <option value="school">School</option>
+              <option value="clinic">Clinic</option>
+              <option value="community">Community</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium mb-1" style={{ color: "var(--text2)" }}>Assessment PDF (optional)</label>
+            <input
+              type="file"
+              accept=".pdf"
+              onChange={e => setPdfFile(e.target.files?.[0] ?? null)}
+              className="w-full text-[13px]"
+              style={{ color: "var(--text2)" }}
+            />
+            <p className="text-[11px] mt-1" style={{ color: "var(--text3)" }}>Upload a functional behavior assessment to auto-populate the clinical profile.</p>
+          </div>
+          {error && <p className="text-[12px]" style={{ color: "#EF4444" }}>{error}</p>}
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold border hover:bg-gray-50 transition-colors"
+              style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold text-white disabled:opacity-60 hover:opacity-90 transition-opacity"
+              style={{ background: "var(--teal)" }}
+            >
+              {loading ? "Creating…" : "Create Client"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -99,9 +205,15 @@ function ClientCard({ client, index }: { client: BCBAClient; index: number }) {
               <p className="text-[14px] font-semibold truncate" style={{ color: "var(--text1)" }}>{client.client_name}</p>
               <p className="text-[11px] font-mono mt-0.5" style={{ color: "var(--text3)" }}>#{client.id.slice(0, 8).toUpperCase()}</p>
             </div>
+            {client.rbt_id ? (
             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: "#E6F9F5", color: "#0D8A6A" }}>
               Connected
             </span>
+          ) : (
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: "#FEF3C7", color: "#92400E" }}>
+              Pending RBT
+            </span>
+          )}
           </div>
           <p className="text-[12px] mb-2" style={{ color: "var(--text3)" }}>
             {client.diagnosis?.length > 0 ? client.diagnosis.join(", ") : "No diagnosis on file"}
@@ -119,6 +231,7 @@ export default function BCBADashboard() {
   const [clients, setClients] = useState<BCBAClient[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -150,7 +263,7 @@ export default function BCBADashboard() {
 
   return (
     <main className="min-h-screen" style={{ background: "var(--bg)", fontFamily: "var(--font-dm-sans, sans-serif)" }}>
-      <Topbar onConnect={() => setShowModal(true)} />
+      <Topbar onConnect={() => setShowModal(true)} onCreate={() => setShowCreateModal(true)} />
 
       <div className="px-8 py-8 max-w-5xl">
         {loading ? (
@@ -185,6 +298,12 @@ export default function BCBADashboard() {
 
       {showModal && (
         <ConnectModal onClose={() => setShowModal(false)} onConnected={handleConnected} />
+      )}
+      {showCreateModal && (
+        <CreateClientModal
+          onClose={() => setShowCreateModal(false)}
+          onCreated={() => { setShowCreateModal(false); fetchClients(); }}
+        />
       )}
     </main>
   );

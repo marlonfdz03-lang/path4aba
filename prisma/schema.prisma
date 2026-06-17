@@ -143,11 +143,12 @@ model fieldwork_profiles {
 model client_access_codes {
   id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   client_id  String    @db.Uuid
-  rbt_id     String
+  rbt_id     String?
   code       String    @unique
   expires_at DateTime? @db.Timestamptz(6)
   used       Boolean   @default(false)
   used_by    String?
+  created_by String?
   created_at DateTime? @default(now()) @db.Timestamptz(6)
   client     clients   @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }

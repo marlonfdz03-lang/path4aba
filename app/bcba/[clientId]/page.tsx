@@ -187,6 +187,13 @@ export default function BCBAClientPage() {
   const [treatmentMapApproved, setTreatmentMapApproved] = useState(false);
   const [savingTreatmentMap, setSavingTreatmentMap] = useState(false);
 
+  // Invite RBT flow
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [inviteExpiresAt, setInviteExpiresAt] = useState<string | null>(null);
+  const [generatingInvite, setGeneratingInvite] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
+
   useEffect(() => {
     if (status === "loading") return;
     if (!session?.user) { router.push("/login"); return; }
@@ -224,6 +231,26 @@ export default function BCBAClientPage() {
     if (tmRes.ok) { const d = await tmRes.json(); setTreatmentMapApproved(!!d.treatmentMapApproved); }
 
     setLoading(false);
+  }
+
+  async function handleGenerateInvite() {
+    setGeneratingInvite(true);
+    try {
+      const res = await fetch('/api/bcba/clients/generate-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setInviteCode(data.code);
+        setInviteExpiresAt(data.expiresAt);
+        setShowInviteModal(true);
+      }
+    } catch (err) {
+      console.error('[bcba] generate invite error:', err);
+    }
+    setGeneratingInvite(false);
   }
 
   function enterEditMode() {
@@ -413,12 +440,25 @@ export default function BCBAClientPage() {
           >
             {(client?.client_name || client?.internal_code || "?")[0].toUpperCase()}
           </div>
-          <div>
+          <div className="flex-1">
             <p className="text-[16px] font-semibold" style={{ color: "var(--text1)" }}>{client?.client_name || client?.internal_code}</p>
             <p className="text-[13px]" style={{ color: "var(--text3)" }}>
               {cp.diagnosis?.join(", ") || ""}
             </p>
           </div>
+          {!client?.rbt_id && (
+            <button
+              onClick={handleGenerateInvite}
+              disabled={generatingInvite}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold text-white disabled:opacity-60 hover:opacity-90 transition-opacity"
+              style={{ background: "var(--teal)" }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>
+              </svg>
+              {generatingInvite ? "Generating…" : "Invite RBT"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -1537,6 +1577,41 @@ export default function BCBAClientPage() {
         )}
 
       </div>
+
+      {/* Invite RBT modal */}
+      {showInviteModal && inviteCode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.4)" }}>
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4">
+            <p className="text-[16px] font-semibold mb-2" style={{ color: "var(--text1)" }}>Invite RBT</p>
+            <p className="text-[13px] mb-5" style={{ color: "var(--text3)" }}>
+              Share this code with your RBT. They can use it to connect to this client.
+            </p>
+            <div className="flex items-center gap-3 p-4 rounded-xl mb-2" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
+              <span className="flex-1 text-[22px] font-mono font-bold tracking-widest text-center" style={{ color: "var(--text1)" }}>
+                {inviteCode}
+              </span>
+              <button
+                onClick={() => { navigator.clipboard.writeText(inviteCode); setCodeCopied(true); setTimeout(() => setCodeCopied(false), 2000); }}
+                className="px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors"
+                style={{ background: codeCopied ? "#E6F9F5" : "var(--teal)", color: codeCopied ? "#0D8A6A" : "white" }}
+              >
+                {codeCopied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+            <p className="text-[11px] mb-6 text-center" style={{ color: "var(--text3)" }}>
+              Expires in 7 days
+              {inviteExpiresAt ? ` · ${new Date(inviteExpiresAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : ""}
+            </p>
+            <button
+              onClick={() => setShowInviteModal(false)}
+              className="w-full py-2.5 rounded-xl text-[13px] font-semibold border hover:bg-gray-50 transition-colors"
+              style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
