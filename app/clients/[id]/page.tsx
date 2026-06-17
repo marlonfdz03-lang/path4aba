@@ -204,6 +204,8 @@ export default function ClientProfilePage() {
   const [generating, setGenerating] = useState(false);
   const [status, setStatus] = useState("");
   const [similarityWarning, setSimilarityWarning] = useState(false);
+  const [noteSaved, setNoteSaved] = useState(false);
+  const [noteDuplicate, setNoteDuplicate] = useState(false);
 
   // Share with BCBA state
   const [shareCode, setShareCode] = useState("");
@@ -528,10 +530,13 @@ export default function ClientProfilePage() {
       }),
     });
     if (res.status === 409) {
-      alert("This note has already been saved.");
+      setNoteDuplicate(true);
+      setTimeout(() => setNoteDuplicate(false), 4000);
       return;
     }
     if (res.ok) {
+      setNoteSaved(true);
+      setTimeout(() => setNoteSaved(false), 3000);
       await loadNotesFromSupabase(client.id);
       setLastSavedNote(generatedNote);
       setSelectedBehaviors([]);
@@ -634,7 +639,7 @@ export default function ClientProfilePage() {
     const res = await fetch("/api/session-notes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientId: client.id, noteText: perfectedNote, sessionDate: today.toISOString().split("T")[0] }),
+      body: JSON.stringify({ clientId: client.id, noteText: perfectedNote, sessionDate: date || today.toISOString().split("T")[0] }),
     });
     if (res.ok) {
       await loadNotesFromSupabase(client.id);
@@ -1536,6 +1541,16 @@ export default function ClientProfilePage() {
                   onCopy={() => navigator.clipboard.writeText(generatedNote)}
                   onSave={handleSaveNote}
                 />
+              )}
+              {noteSaved && (
+                <div className="mt-2 px-4 py-2 rounded-lg text-[13px] font-semibold" style={{ background: "#DCFCE7", color: "#16A34A" }}>
+                  ✓ Note saved successfully
+                </div>
+              )}
+              {noteDuplicate && (
+                <div className="mt-2 px-4 py-2 rounded-lg text-[13px] font-semibold" style={{ background: "#FEF3C7", color: "#D97706" }}>
+                  ⚠ This note has already been saved
+                </div>
               )}
               {sessionSummary && (
                 <div className="mt-4 space-y-3">
