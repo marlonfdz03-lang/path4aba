@@ -132,9 +132,8 @@ export const proxy = auth(async function proxy(req: NextRequest & { auth: any })
         if (cached && cached.exp > now) {
           hasAccess = cached.result
         } else {
-          const host = req.headers.get('host') || ''
-          const protocol = host.startsWith('localhost') ? 'http' : 'https'
-          const subGateUrl = `${protocol}://${host}/api/auth/sub-gate?userId=${encodeURIComponent(userId)}`
+          const internalBase = process.env.NEXTAUTH_URL || `http://localhost:${process.env.PORT || 8080}`
+          const subGateUrl = `${internalBase}/api/auth/sub-gate?userId=${encodeURIComponent(userId)}`
 
           // Retry once after 1500ms — handles Stripe webhook not yet committed.
           const checkAccess = async (): Promise<boolean> => {
