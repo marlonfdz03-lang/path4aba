@@ -88,7 +88,7 @@ function TabBar({ active, onChange, isBCBAPro }: { active: BCBATab; onChange: (t
     { id: "treatment_map",    label: "Treatment Map" },
     { id: "progress_report",  label: "Progress Report" },
     { id: "clinical_timeline", label: "Clinical Timeline" },
-    { id: "reassessment",     label: "Assessment Tools", proOnly: true },
+    { id: "reassessment",     label: "Assessment Tools" },
   ];
   return (
     <div className="flex border-b bg-white px-8 overflow-x-auto" style={{ borderColor: "var(--border)" }}>
