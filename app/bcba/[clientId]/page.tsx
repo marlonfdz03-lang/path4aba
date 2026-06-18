@@ -56,6 +56,38 @@ const XP_NARRATIVE_STYLES = ["Insurance-Friendly","Clinical","Detailed Clinical"
 const XP_SUPERVISION_FOCUS = ["Prompting Procedures","Reinforcement Procedures","Behavior Reduction Procedures","Data Collection","Skill Acquisition Programs","Professional Conduct"];
 
 
+function ConfidenceBadge({ level }: { level?: string }) {
+  const map: Record<string, { bg: string; color: string; label: string }> = {
+    high:     { bg: "#DCFCE7", color: "#16A34A", label: "High Confidence" },
+    moderate: { bg: "#FEF9C3", color: "#854D0E", label: "Moderate" },
+    low:      { bg: "#FEE2E2", color: "#DC2626", label: "Low Confidence" },
+  }
+  const s = map[level ?? ""] ?? { bg: "#F3F4F6", color: "#6B7280", label: "BCBA Review Required" }
+  return (
+    <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: s.bg, color: s.color }}>
+      {s.label}
+    </span>
+  )
+}
+
+function TrendBadge({ trend, type }: { trend: string; type: "behavior" | "skill" }) {
+  const improving = trend === "improving"
+  const worsening = trend === "worsening"
+  const insufficient = trend === "insufficient_data"
+  const bg = improving ? "#DCFCE7" : worsening ? "#FEE2E2" : insufficient ? "#FEF3C7" : "#F3F4F6"
+  const color = improving ? "#16A34A" : worsening ? "#DC2626" : insufficient ? "#92400E" : "#6B7280"
+  const label = improving
+    ? (type === "behavior" ? "↓ Improving" : "↑ Improving")
+    : worsening
+    ? (type === "behavior" ? "↑ Worsening" : "↓ Declining")
+    : insufficient ? "Insufficient Data" : "Stable"
+  return (
+    <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: bg, color }}>
+      {label}
+    </span>
+  )
+}
+
 function SectionHeader({ title }: { title: string }) {
   return (
     <div className="flex items-center gap-3 mb-4">
@@ -232,6 +264,14 @@ export default function BCBAClientPage() {
   const [reassessError, setReassessError] = useState("");
   const [reassessCopied, setReassessCopied] = useState(false);
 
+  // Assessment Builder state
+  const [abPeriodStart, setAbPeriodStart] = useState("");
+  const [abPeriodEnd, setAbPeriodEnd] = useState("");
+  const [abDocType, setAbDocType] = useState<"reassessment" | "assessment_update" | "medical_necessity_letter">("reassessment");
+  const [abLoading, setAbLoading] = useState(false);
+  const [abData, setAbData] = useState<any>(null);
+  const [abError, setAbError] = useState("");
+
   // Clinical Timeline tab state
   const [timelineEntries, setTimelineEntries] = useState<any[]>([]);
   const [timelineFilter, setTimelineFilter] = useState("all");
@@ -345,6 +385,27 @@ export default function BCBAClientPage() {
       setReassessError("Failed to generate reassessment summary. Please try again.");
     } finally {
       setReassessGenerating(false);
+    }
+  }
+
+  async function handleLoadAssessmentBuilder() {
+    if (!abPeriodStart || !abPeriodEnd) return;
+    setAbLoading(true);
+    setAbData(null);
+    setAbError("");
+    try {
+      const res = await fetch("/api/bcba/assessment-builder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId, periodStart: abPeriodStart, periodEnd: abPeriodEnd, documentType: abDocType }),
+      });
+      if (!res.ok) throw new Error("Failed to load data");
+      const json = await res.json();
+      setAbData(json);
+    } catch {
+      setAbError("Failed to load assessment data. Please try again.");
+    } finally {
+      setAbLoading(false);
     }
   }
 
@@ -1977,6 +2038,234 @@ export default function BCBAClientPage() {
                 />
                 {reassessGenerating && (
                   <p style={{ fontSize: 12, color: "var(--text3)", marginTop: 8 }}>Generating clinical summary…</p>
+                )}
+              </div>
+            )}
+
+            {/* ── Assessment Builder ── */}
+            <hr style={{ border: "none", borderTop: "1px solid var(--border)", margin: "32px 0" }} />
+
+            <div style={{ marginBottom: 20 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--text1)" }}>Assessment Builder</h2>
+              <p style={{ fontSize: 12, color: "var(--text3)", marginTop: 4 }}>
+                Aggregate clinical data for reassessment documentation. BCBA review required for all sections.
+              </p>
+            </div>
+
+            {/* Form row */}
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 24 }}>
+              <div>
+                <label style={{ fontSize: 11, color: "var(--text3)", display: "block", marginBottom: 4 }}>Document Type</label>
+                <select
+                  value={abDocType}
+                  onChange={e => setAbDocType(e.target.value as any)}
+                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text1)", fontSize: 13 }}
+                >
+                  <option value="reassessment">Reassessment</option>
+                  <option value="assessment_update">Assessment Update</option>
+                  <option value="medical_necessity_letter">Medical Necessity Letter</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: "var(--text3)", display: "block", marginBottom: 4 }}>Period Start</label>
+                <input type="date" value={abPeriodStart} onChange={e => setAbPeriodStart(e.target.value)}
+                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text1)", fontSize: 13 }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: "var(--text3)", display: "block", marginBottom: 4 }}>Period End</label>
+                <input type="date" value={abPeriodEnd} onChange={e => setAbPeriodEnd(e.target.value)}
+                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text1)", fontSize: 13 }} />
+              </div>
+              <button
+                onClick={handleLoadAssessmentBuilder}
+                disabled={abLoading || !abPeriodStart || !abPeriodEnd}
+                style={{
+                  padding: "8px 20px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  background: abLoading || !abPeriodStart || !abPeriodEnd ? "var(--border)" : "var(--teal)",
+                  color: "white", border: "none", cursor: abLoading ? "wait" : "pointer",
+                }}
+              >
+                {abLoading ? "Loading…" : "Load Data"}
+              </button>
+            </div>
+
+            {abError && <p style={{ color: "#DC2626", fontSize: 13, marginBottom: 16 }}>{abError}</p>}
+
+            {abData && (
+              <div>
+                {/* Documents Available */}
+                <div style={{ marginBottom: 24, background: "var(--card)", borderRadius: 12, padding: 16, border: "1px solid var(--border)" }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text1)", marginBottom: 12 }}>Documents Available</p>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+                    {Object.entries(abData.documentsAvailable || {}).map(([key, available]: [string, any]) => (
+                      <div key={key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                        <span style={{ color: available ? "#16A34A" : "var(--text3)", fontWeight: 700 }}>
+                          {available ? "✓" : "—"}
+                        </span>
+                        <span style={{ color: available ? "var(--text1)" : "var(--text3)" }}>
+                          {key.replace(/([A-Z])/g, " $1").replace(/^./, s => s.toUpperCase())}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Service Utilization */}
+                {abData.serviceUtilization && (
+                  <div style={{ marginBottom: 24, background: "var(--card)", borderRadius: 12, padding: 16, border: "1px solid var(--border)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text1)" }}>Service Utilization</p>
+                      <ConfidenceBadge level={abData.dataConfidence} />
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+                      {[
+                        { label: "Authorized Hours", value: abData.serviceUtilization.authorizedTotal?.toFixed(0) ?? "—" },
+                        { label: "Sessions Delivered", value: abData.serviceUtilization.deliveredSessions ?? "—" },
+                        { label: "Missed Hours", value: abData.serviceUtilization.missedTotal?.toFixed(0) ?? "—" },
+                        { label: "Utilization %", value: abData.serviceUtilization.utilizationPct != null ? `${abData.serviceUtilization.utilizationPct}%` : "—" },
+                      ].map(item => (
+                        <div key={item.label} style={{ textAlign: "center" }}>
+                          <p style={{ fontSize: 20, fontWeight: 700, color: "var(--teal)" }}>{item.value}</p>
+                          <p style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>{item.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                    {abData.clinicalBarriers?.length > 0 && (
+                      <p style={{ fontSize: 12, color: "var(--text3)", marginTop: 12 }}>
+                        Missed reasons: {abData.clinicalBarriers.map((b: any) => b.reason).join(", ")}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Behavior Reduction Summary */}
+                {abData.behaviorFirstLast?.length > 0 && (
+                  <div style={{ marginBottom: 24, background: "var(--card)", borderRadius: 12, padding: 16, border: "1px solid var(--border)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text1)" }}>Behavior Reduction Summary</p>
+                      <ConfidenceBadge level={abData.dataConfidence} />
+                    </div>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                      <thead>
+                        <tr>
+                          {["Behavior", "First", "Last", "Change", "Trend"].map(h => (
+                            <th key={h} style={{ padding: "6px 10px", textAlign: h === "Behavior" ? "left" : "center", color: "var(--text3)", borderBottom: "1px solid var(--border)", fontWeight: 600 }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {abData.behaviorFirstLast.map((b: any) => {
+                          const change = b.lastValue != null && b.firstValue != null ? b.lastValue - b.firstValue : null;
+                          const trend = b.dataPoints < 3 ? "insufficient_data" : change == null ? "insufficient_data" : change < 0 ? "improving" : change > 0 ? "worsening" : "stable";
+                          return (
+                            <tr key={b.behaviorName} style={{ borderBottom: "1px solid var(--border)" }}>
+                              <td style={{ padding: "8px 10px", color: "var(--text1)" }}>{b.behaviorName}</td>
+                              <td style={{ padding: "8px 10px", textAlign: "center", color: "var(--text3)" }}>
+                                {b.firstValue != null ? b.firstValue.toFixed(1) : "—"}
+                              </td>
+                              <td style={{ padding: "8px 10px", textAlign: "center", color: "var(--text3)" }}>
+                                {b.lastValue != null ? b.lastValue.toFixed(1) : "—"}
+                              </td>
+                              <td style={{ padding: "8px 10px", textAlign: "center", color: "var(--text3)" }}>
+                                {change != null ? (change > 0 ? `+${change.toFixed(1)}` : change.toFixed(1)) : "—"}
+                              </td>
+                              <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                                <TrendBadge trend={trend} type="behavior" />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Skill Acquisition Summary */}
+                {abData.skillFirstLast?.length > 0 && (
+                  <div style={{ marginBottom: 24, background: "var(--card)", borderRadius: 12, padding: 16, border: "1px solid var(--border)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text1)" }}>Skill Acquisition Summary</p>
+                      <ConfidenceBadge level={abData.dataConfidence} />
+                    </div>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                      <thead>
+                        <tr>
+                          {["Skill", "First %", "Last %", "Change", "Trend"].map(h => (
+                            <th key={h} style={{ padding: "6px 10px", textAlign: h === "Skill" ? "left" : "center", color: "var(--text3)", borderBottom: "1px solid var(--border)", fontWeight: 600 }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {abData.skillFirstLast.map((s: any) => {
+                          const change = s.lastPct != null && s.firstPct != null ? s.lastPct - s.firstPct : null;
+                          const trend = s.dataPoints < 3 ? "insufficient_data" : change == null ? "insufficient_data" : change > 0 ? "improving" : change < 0 ? "worsening" : "stable";
+                          return (
+                            <tr key={s.skillName} style={{ borderBottom: "1px solid var(--border)" }}>
+                              <td style={{ padding: "8px 10px", color: "var(--text1)" }}>{s.skillName}</td>
+                              <td style={{ padding: "8px 10px", textAlign: "center", color: "var(--text3)" }}>
+                                {s.firstPct != null ? `${s.firstPct.toFixed(1)}%` : "—"}
+                              </td>
+                              <td style={{ padding: "8px 10px", textAlign: "center", color: "var(--text3)" }}>
+                                {s.lastPct != null ? `${s.lastPct.toFixed(1)}%` : "—"}
+                              </td>
+                              <td style={{ padding: "8px 10px", textAlign: "center", color: "var(--text3)" }}>
+                                {change != null ? (change > 0 ? `+${change.toFixed(1)}%` : `${change.toFixed(1)}%`) : "—"}
+                              </td>
+                              <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                                <TrendBadge trend={trend} type="skill" />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* BCBA Documentation Summary */}
+                {abData.bcbaDocumentation && (
+                  <div style={{ marginBottom: 24, background: "var(--card)", borderRadius: 12, padding: 16, border: "1px solid var(--border)" }}>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text1)", marginBottom: 12 }}>BCBA Documentation Summary</p>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+                      {[
+                        { label: "97155 Sessions", value: abData.bcbaDocumentation.supervisionNoteCount ?? 0 },
+                        { label: "97153XP Sessions", value: abData.bcbaDocumentation.supervisionNotes97153xpCount ?? 0 },
+                        { label: "Parent Training", value: abData.bcbaDocumentation.parentTrainingNoteCount ?? 0 },
+                      ].map(item => (
+                        <div key={item.label} style={{ textAlign: "center" }}>
+                          <p style={{ fontSize: 20, fontWeight: 700, color: "var(--text1)" }}>{item.value}</p>
+                          <p style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>{item.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                    {abData.protocolModifications?.length > 0 && (
+                      <p style={{ fontSize: 12, color: "#16A34A", marginTop: 12, fontWeight: 600 }}>
+                        ✓ Protocol modifications documented ({abData.protocolModifications.length})
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Clinical Barriers */}
+                {abData.clinicalBarriers?.length > 0 && (
+                  <div style={{ marginBottom: 24, background: "var(--card)", borderRadius: 12, padding: 16, border: "1px solid var(--border)" }}>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text1)", marginBottom: 12 }}>Clinical Barriers to Service</p>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {abData.clinicalBarriers.map((b: any, i: number) => (
+                        <span key={i} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 12, background: "#FEF3C7", color: "#92400E" }}>
+                          {b.reason} ({b.count}×)
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {abData.behaviorFirstLast?.length === 0 && abData.skillFirstLast?.length === 0 && (
+                  <div style={{ textAlign: "center", padding: 32, color: "var(--text3)", fontSize: 13 }}>
+                    No behavior or skill data available for this period.
+                    Data will appear after weekly data has been entered for this client.
+                  </div>
                 )}
               </div>
             )}
