@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   try {
     const [replRows, maladRows] = await Promise.all([
       prisma.replacement_data.findMany({
-        where: { client_id: clientId, is_anomaly: true, anomaly_reviewed: false },
+        where: { client_id: clientId, is_anomaly: true, anomaly_reviewed: true, autofill_completed: false },
         select: {
           id: true,
           replacement_skill: true,
@@ -24,12 +24,13 @@ export async function GET(req: Request) {
           observed_percentage: true,
           original_value: true,
           anomaly_justification: true,
+          total_trials: true,
         },
         orderBy: { session_date: 'desc' },
         take: 50,
       }),
       prisma.maladaptive_data.findMany({
-        where: { client_id: clientId, is_anomaly: true, anomaly_reviewed: false },
+        where: { client_id: clientId, is_anomaly: true, anomaly_reviewed: true, autofill_completed: false },
         select: {
           id: true,
           behavior_name: true,
@@ -54,6 +55,7 @@ export async function GET(req: Request) {
         currentValue: r.observed_percentage,
         originalValue: r.original_value,
         justification: r.anomaly_justification,
+        totalTrials: r.total_trials,
       })),
       ...maladRows.map(r => ({
         id: r.id,
@@ -64,6 +66,7 @@ export async function GET(req: Request) {
         currentValue: r.frequency,
         originalValue: r.original_value,
         justification: r.anomaly_justification,
+        totalTrials: null,
       })),
     ].sort((a, b) => (b.sessionDate || '').localeCompare(a.sessionDate || ''))
 
@@ -84,12 +87,12 @@ export async function PATCH(req: Request) {
     if (type === 'replacement') {
       await prisma.replacement_data.update({
         where: { id },
-        data: { anomaly_reviewed: true },
+        data: { autofill_completed: true },
       })
     } else if (type === 'maladaptive') {
       await prisma.maladaptive_data.update({
         where: { id },
-        data: { anomaly_reviewed: true },
+        data: { autofill_completed: true },
       })
     } else {
       return NextResponse.json({ error: 'Invalid type' }, { status: 400 })

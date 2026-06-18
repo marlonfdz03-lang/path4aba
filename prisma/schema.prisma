@@ -307,6 +307,7 @@ model maladaptive_data {
   anomaly_reviewed      Boolean   @default(false)
   is_anomaly            Boolean   @default(false)
   original_value        Float?
+  autofill_completed    Boolean   @default(false)
   client                clients   @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }
 
