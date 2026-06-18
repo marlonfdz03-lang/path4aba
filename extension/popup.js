@@ -1858,7 +1858,7 @@ function applyDataTabGate() {
   const lockedScreen = document.getElementById('dataLockedScreen');
   const content = document.getElementById('dataTabContent');
   if (!lockedScreen) return;
-  if (userRole === 'admin' || dataTabEnabled === true) {
+  if (dataTabEnabled === true) {
     lockedScreen.style.display = 'none';
     if (content) content.style.display = '';
   } else {
