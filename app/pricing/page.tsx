@@ -337,7 +337,7 @@ function PricingContent() {
     setTermsWarning(false);
     setLoadingPlan(planKey);
     const userId = (session?.user as any)?.id;
-    if (!userId) { router.push("/login"); return; }
+    if (!userId) { router.push("/login?redirect=/pricing"); return; }
     try {
       const res = await fetch("/api/stripe/create-checkout", {
         method: "POST",
@@ -357,7 +357,7 @@ function PricingContent() {
     setTermsWarning(false);
     setLoadingPlan("bcba_students_standalone");
     const userId = (session?.user as any)?.id;
-    if (!userId) { router.push("/login"); return; }
+    if (!userId) { router.push("/login?redirect=/pricing"); return; }
     try {
       const res = await fetch("/api/bcba-students/checkout", {
         method: "POST",
@@ -391,7 +391,7 @@ function PricingContent() {
           <span style={{ color: "var(--teal)" }}>4</span>
           <span style={{ color: "var(--text1)" }}>ABA</span>
         </span>
-        <a href="/login" className="text-sm font-medium hover:underline" style={{ color: "var(--teal)" }}>Sign in</a>
+        <a href="/login?redirect=/pricing" className="text-sm font-medium hover:underline" style={{ color: "var(--teal)" }}>Sign in</a>
       </div>
 
       {/* Hero */}
