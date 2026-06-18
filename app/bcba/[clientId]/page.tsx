@@ -271,6 +271,10 @@ export default function BCBAClientPage() {
   const [abLoading, setAbLoading] = useState(false);
   const [abData, setAbData] = useState<any>(null);
   const [abError, setAbError] = useState("");
+  const [abNarrative, setAbNarrative] = useState("");
+  const [abNarrativeGenerating, setAbNarrativeGenerating] = useState(false);
+  const [abNarrativeCopied, setAbNarrativeCopied] = useState(false);
+  const [abNarrativeError, setAbNarrativeError] = useState("");
 
   // Clinical Timeline tab state
   const [timelineEntries, setTimelineEntries] = useState<any[]>([]);
@@ -406,6 +410,41 @@ export default function BCBAClientPage() {
       setAbError("Failed to load assessment data. Please try again.");
     } finally {
       setAbLoading(false);
+    }
+  }
+
+  async function handleGenerateAssessmentNarrative() {
+    if (!abPeriodStart || !abPeriodEnd) return;
+    setAbNarrativeGenerating(true);
+    setAbNarrative("");
+    setAbNarrativeError("");
+    try {
+      const res = await fetch("/api/progress-report/reassessment-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId, periodStart: abPeriodStart, periodEnd: abPeriodEnd }),
+      });
+      if (!res.ok) throw new Error("Failed to generate");
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let full = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        full += chunk;
+        const metaIdx = full.indexOf("__REASSESS_META__");
+        if (metaIdx !== -1) {
+          setAbNarrative(full.slice(0, metaIdx));
+          break;
+        } else {
+          setAbNarrative(full);
+        }
+      }
+    } catch {
+      setAbNarrativeError("Failed to generate narrative. Please try again.");
+    } finally {
+      setAbNarrativeGenerating(false);
     }
   }
 
@@ -2259,6 +2298,81 @@ export default function BCBAClientPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Protocol Modifications */}
+                {abData.protocolModifications?.length > 0 && (
+                  <div style={{ marginBottom: 24, background: "var(--card)", borderRadius: 12, padding: 16, border: "1px solid var(--border)" }}>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text1)", marginBottom: 12 }}>Protocol Modifications</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {abData.protocolModifications.map((mod: any, i: number) => (
+                        <div key={i} style={{ padding: "10px 12px", borderRadius: 8, background: "var(--bg)", border: "1px solid var(--border)", fontSize: 12 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                            <span style={{ fontWeight: 600, color: "var(--text1)" }}>{mod.title}</span>
+                            <span style={{ color: "var(--text3)" }}>{mod.date}</span>
+                          </div>
+                          {mod.summary && (
+                            <p style={{ color: "var(--text3)", marginTop: 4 }}>{mod.summary}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Clinical Narrative & Medical Necessity */}
+                <div style={{ marginBottom: 24, padding: 16, background: "var(--card)", borderRadius: 12, border: "1px solid var(--border)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                    <div>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text1)" }}>Clinical Narrative & Medical Necessity</p>
+                      <p style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}>
+                        AI-generated 6-paragraph narrative using progress reports and clinical data.
+                        BCBA review and editing required before use.
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleGenerateAssessmentNarrative}
+                      disabled={abNarrativeGenerating}
+                      style={{
+                        padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+                        background: abNarrativeGenerating ? "var(--border)" : "var(--teal)",
+                        color: "white", border: "none", cursor: abNarrativeGenerating ? "wait" : "pointer",
+                        whiteSpace: "nowrap", flexShrink: 0, marginLeft: 12,
+                      }}
+                    >
+                      {abNarrativeGenerating ? "Generating…" : "Generate Narrative"}
+                    </button>
+                  </div>
+                  {abNarrativeError && (
+                    <p style={{ color: "#DC2626", fontSize: 13, marginTop: 8 }}>{abNarrativeError}</p>
+                  )}
+                  {(abNarrative || abNarrativeGenerating) && (
+                    <div style={{ marginTop: 12 }}>
+                      {abNarrative && !abNarrativeGenerating && (
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+                          <button
+                            onClick={() => { navigator.clipboard.writeText(abNarrative); setAbNarrativeCopied(true); setTimeout(() => setAbNarrativeCopied(false), 2000); }}
+                            style={{ fontSize: 12, color: "var(--teal)", background: "none", border: "none", cursor: "pointer" }}
+                          >
+                            {abNarrativeCopied ? "✓ Copied" : "Copy"}
+                          </button>
+                        </div>
+                      )}
+                      <textarea
+                        value={abNarrative}
+                        onChange={e => setAbNarrative(e.target.value)}
+                        rows={12}
+                        style={{
+                          width: "100%", padding: 16, borderRadius: 12, border: "1px solid var(--border)",
+                          background: "var(--bg)", color: "var(--text1)", fontSize: 13,
+                          lineHeight: 1.7, resize: "vertical", fontFamily: "inherit",
+                        }}
+                      />
+                      {abNarrativeGenerating && (
+                        <p style={{ fontSize: 12, color: "var(--text3)", marginTop: 8 }}>Generating clinical narrative…</p>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 {/* Empty state */}
                 {abData.behaviorFirstLast?.length === 0 && abData.skillFirstLast?.length === 0 && (
