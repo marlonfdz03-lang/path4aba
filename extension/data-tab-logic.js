@@ -134,13 +134,14 @@ function renderCorrectionsList(corrections) {
 
     items.forEach(c => {
       const row = document.createElement('div');
+      row.dataset.corrId = c.id;
       row.style.cssText = 'padding:6px 8px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:5px;';
 
-      const dateStr  = c.sessionDate || c.weekStart || '—';
-      const oldVal   = c.originalValue !== null && c.originalValue !== undefined ? c.originalValue : '—';
-      const newVal   = c.currentValue  !== null && c.currentValue  !== undefined ? c.currentValue  : '—';
-      const unit     = c.type === 'replacement' ? '%' : 'occ';
-      const reason   = c.justification ? `<div style="font-size:10px;color:#6b7280;margin-top:2px;">${escapeCorrectionsHtml(c.justification)}</div>` : '';
+      const dateStr = c.sessionDate || c.weekStart || '—';
+      const oldVal  = c.originalValue !== null && c.originalValue !== undefined ? c.originalValue : '—';
+      const newVal  = c.currentValue  !== null && c.currentValue  !== undefined ? c.currentValue  : '—';
+      const unit    = c.type === 'replacement' ? '%' : 'occ';
+      const reason  = c.justification ? `<div style="font-size:10px;color:#6b7280;margin-top:2px;">${escapeCorrectionsHtml(c.justification)}</div>` : '';
 
       row.innerHTML = `
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;">
@@ -149,42 +150,108 @@ function renderCorrectionsList(corrections) {
             <div style="font-size:10px;color:#6b7280;margin-top:1px;">${dateStr} · <span style="color:#dc2626;text-decoration:line-through;">${oldVal}${unit}</span> → <span style="color:#16a34a;font-weight:600;">${newVal}${unit}</span></div>
             ${reason}
           </div>
-          <button data-id="${escapeCorrectionsHtml(c.id)}" data-type="${c.type}" class="dismiss-correction-btn" style="flex-shrink:0;font-size:10px;padding:3px 8px;border:1px solid #d1d5db;border-radius:4px;background:#fff;color:#374151;cursor:pointer;white-space:nowrap;">Dismiss</button>
+          <button class="apply-correction-btn" style="flex-shrink:0;font-size:10px;padding:3px 8px;border:1px solid #3b82f6;border-radius:4px;background:#eff6ff;color:#1d4ed8;cursor:pointer;white-space:nowrap;">Apply to OP</button>
         </div>`;
       list.appendChild(row);
+
+      const btn = row.querySelector('.apply-correction-btn');
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.textContent = 'Applying…';
+        const result = await applyCorrectionsToOP([c]);
+        if (!result.ok) {
+          btn.disabled = false;
+          btn.textContent = 'Apply to OP';
+          return;
+        }
+        const succeeded = result.log.some(l => l.startsWith('✓'));
+        if (succeeded) {
+          try {
+            await api('/api/rbt/data-corrections', { method: 'PATCH', body: JSON.stringify({ id: c.id, type: c.type }) });
+          } catch {}
+          btn.textContent = '✓ Applied';
+          btn.style.cssText = 'flex-shrink:0;font-size:10px;padding:3px 8px;border:1px solid #86efac;border-radius:4px;background:#dcfce7;color:#166534;white-space:nowrap;cursor:default;';
+        } else {
+          btn.disabled = false;
+          btn.textContent = 'Apply to OP';
+          const errMsg = result.log.find(l => l.startsWith('❌')) || 'Apply failed.';
+          setCorrectionsStatus(errMsg.replace(/^❌\s*/, ''), true);
+        }
+      });
     });
   }
 
   renderGroup(malad, 'MALADAPTIVES', '#92400e');
   renderGroup(repl,  'REPLACEMENTS', '#065f46');
 
-  list.style.display = '';
-
-  list.querySelectorAll('.dismiss-correction-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id   = btn.dataset.id;
-      const type = btn.dataset.type;
+  // Apply All button
+  const applyAllBtn = document.createElement('button');
+  applyAllBtn.textContent = 'Apply All to OP';
+  applyAllBtn.style.cssText = 'width:100%;margin-top:8px;font-size:11px;padding:6px 0;border:1px solid #3b82f6;border-radius:6px;background:#eff6ff;color:#1d4ed8;cursor:pointer;font-weight:600;';
+  applyAllBtn.addEventListener('click', async () => {
+    applyAllBtn.disabled = true;
+    applyAllBtn.textContent = 'Applying…';
+    const result = await applyCorrectionsToOP(corrections);
+    if (!result.ok) {
+      applyAllBtn.disabled = false;
+      applyAllBtn.textContent = 'Apply All to OP';
+      return;
+    }
+    const log = result.log;
+    const okLines = log.filter(l => l.startsWith('✓'));
+    const applied = corrections.filter(c => okLines.some(l => l.includes(`"${c.name}"`)));
+    await Promise.all(applied.map(c =>
+      api('/api/rbt/data-corrections', { method: 'PATCH', body: JSON.stringify({ id: c.id, type: c.type }) }).catch(() => {})
+    ));
+    applied.forEach(c => {
+      const row = list.querySelector(`[data-corr-id="${c.id}"]`);
+      if (!row) return;
+      const btn = row.querySelector('.apply-correction-btn');
+      if (!btn) return;
+      btn.textContent = '✓ Applied';
       btn.disabled = true;
-      btn.textContent = '…';
-      try {
-        const res = await api('/api/rbt/data-corrections', {
-          method: 'PATCH',
-          body: JSON.stringify({ id, type }),
-        });
-        if (!res.ok) throw new Error('Server error');
-        btn.closest('div[style]').remove();
-        const remaining = list.querySelectorAll('.dismiss-correction-btn').length;
-        if (remaining === 0) {
-          list.innerHTML = '<p style="font-size:11px;color:#6b7280;margin:4px 0;">All corrections dismissed.</p>';
-          setCorrectionsStatus('All corrections reviewed.', false);
-        }
-      } catch {
-        btn.disabled = false;
-        btn.textContent = 'Dismiss';
-        setCorrectionsStatus('Failed to dismiss. Try again.', true);
-      }
+      btn.style.cssText = 'flex-shrink:0;font-size:10px;padding:3px 8px;border:1px solid #86efac;border-radius:4px;background:#dcfce7;color:#166534;white-space:nowrap;cursor:default;';
     });
+    const errCount = corrections.length - applied.length;
+    setCorrectionsStatus(
+      `Applied ${applied.length} of ${corrections.length} correction${corrections.length !== 1 ? 's' : ''}.${errCount ? ` ${errCount} failed — check OP tab.` : ''}`,
+      errCount > 0
+    );
+    applyAllBtn.disabled = false;
+    applyAllBtn.textContent = 'Apply All to OP';
   });
+  list.appendChild(applyAllBtn);
+
+  list.style.display = '';
+}
+
+async function applyCorrectionsToOP(corrections) {
+  try {
+    const tabs = await chrome.tabs.query({ url: '*://*.officepuzzle.com/*' });
+    const tab = tabs[0];
+    if (!tab?.id) {
+      setCorrectionsStatus('No Office Puzzle tab found. Open the datasheet first.', true);
+      return { ok: false };
+    }
+    const tasks = corrections.map(c => ({
+      name: c.name,
+      dayNumber: c.sessionDate ? parseInt(c.sessionDate.split('-')[2], 10) : 1,
+      type: c.type,
+      value: c.currentValue,
+      trials: c.type === 'replacement' ? (c.totalTrials ?? 12) : undefined,
+    }));
+    const result = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: officePuzzleDatasheetAutofiller,
+      args: [tasks],
+      world: 'MAIN',
+    });
+    const log = result?.[0]?.result || [];
+    return { ok: true, log };
+  } catch (err) {
+    setCorrectionsStatus('Error: ' + err.message, true);
+    return { ok: false };
+  }
 }
 
 document.getElementById('loadCorrectionsBtn').addEventListener('click', async () => {
