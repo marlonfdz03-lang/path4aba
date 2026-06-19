@@ -74,23 +74,26 @@
     </div>
   </div>
 
-  <!-- ── Screen: Token Setup ── -->
-  <div id="screen-token" class="screen" style="display:none">
+  <!-- ── Screen: Login ── -->
+  <div id="screen-login" class="screen" style="display:none">
     <div class="auth-card">
-      <div class="auth-icon">🔑</div>
-      <p class="auth-title">Activate Extension</p>
-      <p class="auth-sub">Go to <strong>Path4ABA → Settings → Extension</strong>, generate a token, and paste it below.</p>
-      <textarea
-        id="tokenInput"
-        class="textarea"
-        placeholder="Paste your p4a_… token here"
-        rows="3"
-        style="font-family:monospace;font-size:11px;margin-bottom:8px;"
-      ></textarea>
-      <button id="activateBtn" class="btn-primary full-width">Activate</button>
+      <div style="display:flex;align-items:center;gap:8px;justify-content:center;margin-bottom:6px;">
+        <div class="logo-dot"></div>
+        <span class="logo-text">Path4ABA</span>
+      </div>
+      <p class="auth-title">Sign in to your account</p>
+      <div class="field" style="margin-bottom:8px;text-align:left;">
+        <label class="field-label" style="margin-bottom:4px;">Email</label>
+        <input type="email" id="loginEmail" class="input" placeholder="you@example.com" autocomplete="email">
+      </div>
+      <div class="field" style="margin-bottom:12px;text-align:left;">
+        <label class="field-label" style="margin-bottom:4px;">Password</label>
+        <input type="password" id="loginPassword" class="input" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button id="signInBtn" class="btn-primary full-width">Sign In</button>
       <button id="retryConnectionBtn" class="btn-outline full-width" style="margin-top:6px;display:none">Retry Connection</button>
-      <button id="openSettingsBtn" class="btn-outline full-width" style="margin-top:6px">Open Path4ABA Settings</button>
-      <p id="tokenError" class="error-msg" style="display:none;margin-top:8px"></p>
+      <p id="loginError" class="error-msg" style="display:none;margin-top:8px"></p>
+      <p style="font-size:11px;color:#9ca3af;margin-top:10px;">Don't have an account? <a id="visitSiteBtn" href="#" style="color:#2563EB;text-decoration:none;">Visit path4aba.app</a></p>
     </div>
   </div>
 
@@ -430,7 +433,7 @@
     </div>
 
     <div style="text-align:center;padding:8px 0 2px;">
-      <button id="disconnectBtn" style="background:none;border:none;font-size:11px;color:#9ca3af;cursor:pointer;text-decoration:underline;padding:2px 4px;">Disconnect</button>
+      <button id="disconnectBtn" style="background:none;border:none;font-size:11px;color:#9ca3af;cursor:pointer;text-decoration:underline;padding:2px 4px;">Sign Out</button>
     </div>
 
   </div>

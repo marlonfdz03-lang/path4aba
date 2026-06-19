@@ -123,14 +123,14 @@ async function api(path, options = {}) {
       const onMain = mainEl && mainEl.style.display !== 'none';
       if (onMain) {
         chrome.storage.local.remove('extensionToken');
-        console.warn('[Path4ABA] api: 401 mid-session on', path, '— token revoked, clearing storage and showing activation screen');
-        const errEl = document.getElementById('tokenError');
+        console.warn('[Path4ABA] api: 401 mid-session on', path, '— token expired, clearing storage and showing login screen');
+        const errEl = document.getElementById('loginError');
         if (errEl) {
-          errEl.textContent = 'Your session expired. Please generate a new token in Path4ABA Settings → Extension and paste it here.';
+          errEl.textContent = 'Session expired. Please sign in again.';
           errEl.style.display = '';
         }
         showRetryButton(false);
-        showScreen('token');
+        showScreen('login');
       } else {
         console.warn('[Path4ABA] api: 401 on', path, '(not on main screen — skipping handler)');
       }
@@ -167,7 +167,7 @@ async function api(path, options = {}) {
 
 // ── Screen management ──────────────────────
 function showScreen(name) {
-  ['loading', 'token', 'auth', 'no-clients', 'main'].forEach(id => {
+  ['loading', 'login', 'auth', 'no-clients', 'main'].forEach(id => {
     const el = document.getElementById(`screen-${id}`);
     if (el) el.style.display = id === name ? '' : 'none';
   });
@@ -241,9 +241,9 @@ async function attemptConnect() {
     // No stored token — user must activate for the first time
     setConnectionStatus('disconnected');
     showRetryButton(false);
-    const errEl = document.getElementById('tokenError');
+    const errEl = document.getElementById('loginError');
     if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
-    showScreen('token');
+    showScreen('login');
     _reconnecting = false;
     return;
   }
@@ -332,17 +332,17 @@ async function handleConnectFailure(reason) {
     return attemptConnect();
   }
 
-  // All retries exhausted — show activation screen with retry button
-  console.error('[Path4ABA] All', MAX_RECONNECT, 'reconnect attempts failed. Showing activation screen.');
+  // All retries exhausted — show login screen with retry button
+  console.error('[Path4ABA] All', MAX_RECONNECT, 'reconnect attempts failed. Showing login screen.');
   setConnectionStatus('disconnected');
   _reconnecting = false;
-  const errEl = document.getElementById('tokenError');
+  const errEl = document.getElementById('loginError');
   if (errEl) {
-    errEl.textContent = 'Could not connect to Path4ABA. Make sure you are logged in at path4aba.app, then click Retry.';
+    errEl.textContent = 'Could not connect to Path4ABA. Check your network and try again.';
     errEl.style.display = '';
   }
   showRetryButton(true);
-  showScreen('token');
+  showScreen('login');
 }
 
 // ── Main screen setup ──────────────────────
@@ -1213,8 +1213,6 @@ document.getElementById('openAppBtn')?.addEventListener('click', () => {
 });
 
 document.getElementById('logoutBtn').addEventListener('click', async () => {
-  await api('/api/auth/signout', { method: 'POST' }).catch(() => {});
-  // Explicit logout — only place where storage is cleared
   console.log('[Path4ABA] logout: explicit user action — removing token from storage + memory');
   extensionToken = null;
   _reconnecting = false;
@@ -1222,9 +1220,9 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
   await chrome.storage.local.remove('extensionToken');
   setConnectionStatus('disconnected');
   showRetryButton(false);
-  const errEl = document.getElementById('tokenError');
+  const errEl = document.getElementById('loginError');
   if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
-  showScreen('token');
+  showScreen('login');
 });
 
 document.getElementById('disconnectBtn').addEventListener('click', async () => {
@@ -1234,94 +1232,69 @@ document.getElementById('disconnectBtn').addEventListener('click', async () => {
   await chrome.storage.local.remove('extensionToken');
   setConnectionStatus('disconnected');
   showRetryButton(false);
-  const errEl = document.getElementById('tokenError');
+  const errEl = document.getElementById('loginError');
   if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
-  showScreen('token');
+  showScreen('login');
 });
 
 document.getElementById('retryConnectionBtn').addEventListener('click', () => {
-  const errEl = document.getElementById('tokenError');
+  const errEl = document.getElementById('loginError');
   if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
   showRetryButton(false);
   init();
 });
 
-// ── Token setup screen ─────────────────────
-document.getElementById('activateBtn').addEventListener('click', async () => {
-  const input = document.getElementById('tokenInput');
-  const errEl = document.getElementById('tokenError');
-  const raw = (input?.value || '').trim();
+// ── Login screen ───────────────────────────
+document.getElementById('signInBtn').addEventListener('click', async () => {
+  const email    = (document.getElementById('loginEmail')?.value    || '').trim();
+  const password = (document.getElementById('loginPassword')?.value || '');
+  const errEl    = document.getElementById('loginError');
+  const btn      = document.getElementById('signInBtn');
 
-  errEl.style.display = 'none';
+  if (errEl) errEl.style.display = 'none';
 
-  if (!raw.startsWith('p4a_') || raw.length < 20) {
-    errEl.textContent = 'Invalid token format. Make sure you copied the full token from Path4ABA Settings.';
-    errEl.style.display = '';
+  if (!email || !password) {
+    if (errEl) { errEl.textContent = 'Please enter your email and password.'; errEl.style.display = ''; }
     return;
   }
 
-  const btn = document.getElementById('activateBtn');
   btn.disabled = true;
-  btn.textContent = 'Verifying…';
+  btn.textContent = 'Signing in…';
 
   try {
-    // Set token temporarily so api() / apiWithTimeout() send the Bearer header
-    console.log('[Path4ABA] activateBtn: testing token (in-memory only until verified):', raw.slice(0, 12) + '…');
+    const res = await api('/api/extension/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    const json = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      if (errEl) { errEl.textContent = json.error || 'Invalid email or password.'; errEl.style.display = ''; }
+      return;
+    }
+
+    const raw = json.token;
+    if (!raw) {
+      if (errEl) { errEl.textContent = 'Login failed — no token returned.'; errEl.style.display = ''; }
+      return;
+    }
+
     extensionToken = raw;
-
-    // Use apiWithTimeout — waits indefinitely for background sendResponse
-    const [bcbaResult, rbtResult] = await Promise.allSettled([
-      apiWithTimeout(`/api/bcba/clients`, INIT_TIMEOUT_MS),
-      apiWithTimeout('/api/rbt/clients',  INIT_TIMEOUT_MS),
-    ]);
-
-    const responses = [bcbaResult, rbtResult]
-      .filter(r => r.status === 'fulfilled')
-      .map(r => r.value);
-
-    if (responses.length === 0) {
-      // Both timed out or had a network error
-      console.warn('[Path4ABA] activateBtn: network failure — clearing in-memory token (storage unchanged)');
-      extensionToken = null;
-      const rejectedResult = bcbaResult.status === 'rejected' ? bcbaResult : rbtResult;
-      const err = rejectedResult.reason;
-      const isTimeout = err?.name === 'AbortError';
-      const msg = isTimeout
-        ? 'Request timed out. Check your network and try again.'
-        : `Connection failed: ${err?.message || String(err)}`;
-      console.error('[Path4ABA] activateBtn network error:', err);
-      errEl.textContent = msg;
-      errEl.style.display = '';
-      return;
-    }
-
-    const allUnauthorized = responses.every(r => r.status === 401);
-    if (allUnauthorized) {
-      console.warn('[Path4ABA] activateBtn: token rejected by server — clearing in-memory token (storage unchanged)');
-      extensionToken = null;
-      errEl.textContent = 'Token not recognized. Regenerate a new one in Path4ABA Settings → Extension.';
-      errEl.style.display = '';
-      return;
-    }
-
-    // Token valid — persist and boot normally
-    console.log('[Path4ABA] activateBtn: token verified — saving to storage:', raw.slice(0, 12) + '…');
     await chrome.storage.local.set({ extensionToken: raw });
-    if (input) input.value = '';
+    if (document.getElementById('loginEmail'))    document.getElementById('loginEmail').value    = '';
+    if (document.getElementById('loginPassword')) document.getElementById('loginPassword').value = '';
     await init();
   } catch (err) {
-    console.warn('[Path4ABA] activateBtn: caught error — clearing in-memory token (storage unchanged):', err);
-    extensionToken = null;
-    errEl.textContent = 'Network error. Check your connection and try again.';
-    errEl.style.display = '';
+    if (errEl) { errEl.textContent = 'Network error. Check your connection and try again.'; errEl.style.display = ''; }
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Activate';
+    btn.textContent = 'Sign In';
   }
 });
 
-document.getElementById('openSettingsBtn').addEventListener('click', () => {
-  chrome.tabs.create({ url: 'https://path4aba.app/settings' });
+document.getElementById('visitSiteBtn').addEventListener('click', (e) => {
+  e.preventDefault();
+  chrome.tabs.create({ url: 'https://path4aba.app' });
 });
 
 // ─────────────────────────────────────────────
