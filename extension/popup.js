@@ -2523,82 +2523,80 @@ async function officePuzzleDatasheetAutofiller(tasks) {
     return null;
   }
 
-  // ── Step 1: Intercept OP's page-load GETs to capture item IDs + existing records ──
+  // ── Step 1: Fetch item data directly from OP API ─────────────────────────────
   // behaviorName → { itemId: string, records: [{id, date, value, recordings, labels, hours, initials}] }
   const opDataMap = {};
-  let opApiBase = null;   // full URL prefix up to and including 'service_plan_item_data'
-  let opViewMonth = null; // 'YYYY-MM' of the month currently shown on the OP page
 
-  const origOpen = XMLHttpRequest.prototype.open;
-  const origSend = XMLHttpRequest.prototype.send;
+  // Extract businessUnitId from URL path (e.g. /client/{24-char-hex-id}/data/sheets)
+  const buId = window.location.pathname.match(/\/([a-f0-9]{24})\//)?.[1];
+  if (!buId) {
+    return ['❌ Could not find business unit ID in URL. Make sure you are on the OP datasheet page.'];
+  }
 
-  XMLHttpRequest.prototype.open = function(method, url) {
-    this._opUrl = url;
-    this._opMethod = method;
-    return origOpen.apply(this, arguments);
-  };
+  const opApiBase = `https://api.officepuzzle.com/v1/business_units/${buId}/service_plan_item_data`;
 
-  XMLHttpRequest.prototype.send = function(body) {
-    if (this._opUrl && this._opUrl.includes('service_plan_item_data') && this._opMethod === 'GET') {
-      if (!opApiBase) {
-        const m = this._opUrl.match(/(https?:\/\/.+?service_plan_item_data)/);
-        if (m) opApiBase = m[1];
-      }
-      if (!opViewMonth) {
-        const m = this._opUrl.match(/date\.ge=(\d{4}-\d{2})-\d{2}/);
-        if (m) opViewMonth = m[1];
-      }
-      this.addEventListener('load', () => {
-        try {
-          const records = JSON.parse(this.responseText);
-          if (!Array.isArray(records)) return;
-          records.forEach(r => {
-            const name = r.item?.name?.trim();
-            if (!name) return;
-            if (!opDataMap[name]) opDataMap[name] = { itemId: r.item.id, records: [] };
-            opDataMap[name].records.push({
-              id: r.id, date: r.date, value: r.value,
-              recordings: r.recordings, labels: r.labels,
-              hours: r.hours, initials: r.initials,
-            });
+  // Extract month from URL params (?month=2026-06) or hash, fall back to current month
+  const _urlMonthParam = new URLSearchParams(window.location.search).get('month')
+    || window.location.hash.match(/month=(\d{4}-\d{2})/)?.[1]
+    || null;
+  const _now = new Date();
+  const opViewMonth = (_urlMonthParam && /^\d{4}-\d{2}$/.test(_urlMonthParam))
+    ? _urlMonthParam
+    : `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}`;
+
+  // Fetch all item data for this month from the OP API
+  try {
+    const sheetsUrl = `https://api.officepuzzle.com/v1/business_units/${buId}/service_plan_item_data_sheets?month=${opViewMonth}`;
+    const sheetsRes = await fetch(sheetsUrl, { credentials: 'include' });
+    if (!sheetsRes.ok) {
+      return [`❌ OP API returned ${sheetsRes.status}. Make sure you are logged in to Office Puzzle.`];
+    }
+    const sheetsData = await sheetsRes.json();
+
+    // Parse response — handles both array-of-records and array-of-sheets shapes
+    const entries = Array.isArray(sheetsData) ? sheetsData : (sheetsData.data || sheetsData.records || []);
+    entries.forEach(entry => {
+      if (entry.item?.name) {
+        // Shape: flat record — { item: { id, name }, id, date, value, recordings, ... }
+        const name = entry.item.name.trim();
+        if (!opDataMap[name]) opDataMap[name] = { itemId: entry.item.id, records: [] };
+        if (entry.id) {
+          opDataMap[name].records.push({
+            id: entry.id, date: entry.date, value: entry.value,
+            recordings: entry.recordings, labels: entry.labels,
+            hours: entry.hours, initials: entry.initials,
           });
-        } catch(e) {}
-      });
-    }
-    return origSend.apply(this, arguments);
-  };
-
-  // Wait for OP's own GETs to fire and populate the map
-  await delay(2000);
-
-  // Restore XHR prototypes
-  XMLHttpRequest.prototype.open = origOpen;
-  XMLHttpRequest.prototype.send = origSend;
-
-  // ── Step 2: Validate captured context ────────────────────────────────────────
-  if (!opApiBase) {
-    // Fallback: construct from page URL if OP made no GET requests during our window
-    const buId = window.location.pathname.match(/\/([a-f0-9]{24})\//)?.[1];
-    if (buId) {
-      opApiBase = `https://api.officepuzzle.com/v1/business_units/${buId}/service_plan_item_data`;
-    } else {
-      return ['❌ Could not capture OP API URL. Open the datasheet page fully before running autofill.'];
-    }
+        }
+      } else if (entry.item_id) {
+        // Shape: sheet wrapper — { item_id, item_name/name, data/records: [...] }
+        const name = (entry.item_name || entry.name || '').trim();
+        if (!name) return;
+        if (!opDataMap[name]) opDataMap[name] = { itemId: entry.item_id, records: [] };
+        (entry.data || entry.records || []).forEach(r => {
+          opDataMap[name].records.push({
+            id: r.id, date: r.date, value: r.value,
+            recordings: r.recordings, labels: r.labels,
+            hours: r.hours, initials: r.initials,
+          });
+        });
+      }
+    });
+  } catch(err) {
+    return [`❌ Failed to fetch OP data: ${err.message}`];
   }
 
-  if (!opViewMonth) {
-    const now = new Date();
-    opViewMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  if (!Object.keys(opDataMap).length) {
+    return ['❌ No item data returned by OP for this month. Make sure you are on the correct datasheet page and logged in.'];
   }
 
-  // ── Step 3: Group tasks by unique name ───────────────────────────────────────
+  // ── Step 2: Group tasks by unique name ───────────────────────────────────────
   const tasksByName = new Map();
   for (const task of tasks) {
     if (!tasksByName.has(task.name)) tasksByName.set(task.name, []);
     tasksByName.get(task.name).push(task);
   }
 
-  // ── Step 4: POST each task directly to OP API ────────────────────────────────
+  // ── Step 3: POST each task directly to OP API ────────────────────────────────
   const log = [];
 
   for (const [name, nameTasks] of tasksByName) {

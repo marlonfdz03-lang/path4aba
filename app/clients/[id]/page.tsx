@@ -120,12 +120,14 @@ function NoteOutput({
   onCopy,
   onSave,
   saved,
+  generating,
 }: {
   note: string;
   onChange: (v: string) => void;
   onCopy: () => void;
   onSave?: () => void;
   saved?: boolean;
+  generating?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
@@ -140,10 +142,11 @@ function NoteOutput({
         <div className="flex gap-2">
           <button
             onClick={handleCopy}
-            className="px-3 py-1.5 rounded-lg text-[13px] font-medium border transition-colors"
+            disabled={generating}
+            className="px-3 py-1.5 rounded-lg text-[13px] font-medium border transition-colors disabled:opacity-40"
             style={{ borderColor: copied ? "#16A34A" : "var(--border)", color: copied ? "#16A34A" : "var(--text2)" }}
           >
-            {copied ? "✓ Copied" : "Copy"}
+            {generating ? "Generating..." : copied ? "✓ Copied" : "Copy"}
           </button>
           {onSave && (
             <button
@@ -1540,6 +1543,7 @@ export default function ClientProfilePage() {
                   onChange={setGeneratedNote}
                   onCopy={() => navigator.clipboard.writeText(generatedNote)}
                   onSave={handleSaveNote}
+                  generating={generating}
                 />
               )}
               {noteSaved && (
