@@ -186,6 +186,16 @@ function ConfirmWeekModal({
             >
               {isEdit ? "CORRECTED VALUE" : "ACTUAL VALUE"}
             </p>
+            {!isEdit && (
+              <button
+                type="button"
+                onClick={() => setValue(String(projectedValue))}
+                className="text-[11px] font-medium px-2.5 py-0.5 rounded-full mb-2 inline-flex items-center gap-1"
+                style={{ background: "#DCFCE7", color: "#16A34A", border: "1px solid #BBF7D0", cursor: "pointer" }}
+              >
+                ✓ Recommended: {projectedValue}{unit || " occurrences/wk"}
+              </button>
+            )}
             <div className="flex items-center gap-3">
               <input
                 type="number"
@@ -201,11 +211,6 @@ function ConfirmWeekModal({
               <span className="text-[13px]" style={{ color: "var(--text2)" }}>
                 {unit || "occurrences/wk"}
               </span>
-              {!isEdit && (
-                <span className="text-[11px] ml-auto flex-shrink-0" style={{ color: "var(--text3)" }}>
-                  Projected: {projectedValue}{unit}
-                </span>
-              )}
             </div>
           </div>
           <button
