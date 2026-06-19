@@ -568,6 +568,7 @@ export default function ClientProfilePage() {
     const body = {
       originalNote: pastedNote,
       clientId: client.id,
+      nextAppointmentDate: nextApptDate || "",
       clientProfile: {
         approvedInterventions: client.clinicalProfile?.interventions?.map((i: any) => typeof i === "string" ? i : i.name) || [],
         prohibitedInterventions: ["Punishment", "ResponseCost", "Restraint", "StandaloneExtinction", "TimeOut", "Overcorrection", "Aversive"],
@@ -1602,6 +1603,16 @@ export default function ClientProfilePage() {
               <p className="text-[13px] mb-5" style={{ color: "var(--text3)" }}>
                 Paste a note from ABA Matrix or any other system. Path4ABA will elevate it to audit-ready quality without changing the clinical facts.
               </p>
+              <div className="mb-4">
+                <label className="text-[12px] font-semibold uppercase tracking-wide mb-1 block" style={{ color: "var(--text3)" }}>Next Appointment Date</label>
+                <input
+                  type="date"
+                  value={nextApptDate}
+                  onChange={e => setNextApptDate(e.target.value)}
+                  className="border rounded-lg px-3 py-2 text-[13px]"
+                  style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                />
+              </div>
               <textarea
                 value={pastedNote}
                 onChange={(e) => setPastedNote(e.target.value)}
@@ -1630,6 +1641,7 @@ export default function ClientProfilePage() {
                   onCopy={() => navigator.clipboard.writeText(perfectedNote)}
                   onSave={handleSaveRefinedNote}
                   saved={refinedNoteSaved}
+                  generating={perfectingNote}
                 />
               )}
             </div>
