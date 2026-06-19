@@ -22,7 +22,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'FETCH') {
     console.log('[Path4ABA] FETCH received:', message.payload?.method, message.payload?.url);
     const { url, method, headers, body, credentials } = message.payload;
-    console.log('[Path4ABA] FETCH starting:', method, url);
+
+    // Ensure body is a string — callers in popup.js already JSON.stringify, but
+    // guard here in case a caller ever passes a raw object/array.
+    let fetchBody = body || undefined;
+    if (fetchBody !== undefined && typeof fetchBody !== 'string') {
+      console.warn('[Path4ABA] FETCH: body was not a string — stringifying now. type:', typeof fetchBody);
+      fetchBody = JSON.stringify(fetchBody);
+    }
+
+    // Ensure Content-Type is present for requests with a body.
+    const fetchHeaders = { ...headers };
+    if (fetchBody !== undefined && !fetchHeaders['Content-Type'] && !fetchHeaders['content-type']) {
+      fetchHeaders['Content-Type'] = 'application/json';
+    }
+
+    console.log('[Path4ABA] FETCH starting:', method, url,
+      '| body type:', typeof fetchBody,
+      '| body preview:', fetchBody ? String(fetchBody).slice(0, 200) : '(none)');
 
     // Ping chrome.storage.local every 5 s so the service worker is not garbage-
     // collected while awaiting a slow network response from path4aba.app.
@@ -30,8 +47,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     fetch(url, {
       method,
-      headers,
-      body: body || undefined,
+      headers: fetchHeaders,
+      body: fetchBody,
       credentials: credentials || 'omit',
       keepalive: true,
     })
