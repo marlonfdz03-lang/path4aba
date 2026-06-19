@@ -50,7 +50,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       headers: fetchHeaders,
       body: fetchBody,
       credentials: credentials || 'omit',
-      keepalive: true,
     })
       .then(async (res) => {
         console.log('[Path4ABA] FETCH complete:', res.ok, res.status);
