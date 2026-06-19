@@ -122,10 +122,17 @@ async function api(path, options = {}) {
       const mainEl = document.getElementById('screen-main');
       const onMain = mainEl && mainEl.style.display !== 'none';
       if (onMain) {
-        console.warn('[Path4ABA] api: 401 mid-session on', path, '— scheduling reconnect');
-        scheduleReconnect();
+        chrome.storage.local.remove('extensionToken');
+        console.warn('[Path4ABA] api: 401 mid-session on', path, '— token revoked, clearing storage and showing activation screen');
+        const errEl = document.getElementById('tokenError');
+        if (errEl) {
+          errEl.textContent = 'Your session expired. Please generate a new token in Path4ABA Settings → Extension and paste it here.';
+          errEl.style.display = '';
+        }
+        showRetryButton(false);
+        showScreen('token');
       } else {
-        console.warn('[Path4ABA] api: 401 on', path, '(not on main screen — skipping reconnect trigger)');
+        console.warn('[Path4ABA] api: 401 on', path, '(not on main screen — skipping handler)');
       }
     }
 
@@ -1209,6 +1216,18 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
   await api('/api/auth/signout', { method: 'POST' }).catch(() => {});
   // Explicit logout — only place where storage is cleared
   console.log('[Path4ABA] logout: explicit user action — removing token from storage + memory');
+  extensionToken = null;
+  _reconnecting = false;
+  _reconnectAttempts = 0;
+  await chrome.storage.local.remove('extensionToken');
+  setConnectionStatus('disconnected');
+  showRetryButton(false);
+  const errEl = document.getElementById('tokenError');
+  if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+  showScreen('token');
+});
+
+document.getElementById('disconnectBtn').addEventListener('click', async () => {
   extensionToken = null;
   _reconnecting = false;
   _reconnectAttempts = 0;
