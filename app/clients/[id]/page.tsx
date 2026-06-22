@@ -929,6 +929,30 @@ export default function ClientProfilePage() {
                     <span className="text-[12px] font-semibold" style={{ color: "var(--text1)" }}>hrs/wk</span>
                   </div>
                 </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px]" style={{ color: "var(--text3)" }}>Client Gender</span>
+                  <select
+                    value={client.clinicalProfile?.gender || ""}
+                    onChange={async (e) => {
+                      const gender = e.target.value;
+                      await fetch(`/api/clients/${client.id}/profile`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ gender }),
+                      });
+                      setClient((prev: any) => ({
+                        ...prev,
+                        clinicalProfile: { ...prev.clinicalProfile, gender }
+                      }));
+                    }}
+                    className="border rounded-lg px-2 py-1 text-[12px]"
+                    style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                  >
+                    <option value="">Not specified</option>
+                    <option value="male">Male (he/him)</option>
+                    <option value="female">Female (she/her)</option>
+                  </select>
+                </div>
                   {[
                     { label: "Maladaptive Behaviors", value: client.clinicalProfile?.maladaptiveBehaviors?.length || 0 },
                     { label: "Approved Interventions", value: client.clinicalProfile?.interventions?.length || 0 },
