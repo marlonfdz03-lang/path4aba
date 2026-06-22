@@ -433,6 +433,8 @@ export default function ClientProfilePage() {
       })),
       clientProfile: {
         diagnosis: client.diagnosis || [],
+        gender: client.clinicalProfile?.gender || client.gender || "",
+        pronouns: client.clinicalProfile?.pronouns || "",
         setting: location === "other" ? (otherLocation || "community setting") : location,
         approvedInterventions: client.clinicalProfile?.interventions?.map((i: any) => typeof i === "string" ? i : i.name) || [],
         prohibitedInterventions: ["Punishment", "ResponseCost", "Restraint", "StandaloneExtinction", "TimeOut", "Overcorrection", "Aversive"],

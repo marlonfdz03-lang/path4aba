@@ -27,6 +27,8 @@ export interface SessionInput {
     rbtName?: string;
   };
   clientId: string;
+  gender?: string;
+  pronouns?: string;
   behaviorsObserved: {
     name: string;
     topography: string;
@@ -191,6 +193,15 @@ function buildContextualFactors(input: SessionInput): string {
   }
 
   if (blocks.length === 0) return '';
+
+  // CLIENT PRONOUNS: guidance for the note generator
+  if (input.gender || input.pronouns) {
+    blocks.push(
+      `CLIENT PRONOUNS: Use ${input.pronouns || (input.gender === 'male' ? 'he/him/his' : input.gender === 'female' ? 'she/her/hers' : '"the client"')} consistently throughout the note.`
+    );
+  } else {
+    blocks.push(`CLIENT PRONOUNS: Gender not specified — use "the client" instead of any pronouns.`);
+  }
 
   return (
     `\n\n═══════════════════════════════════════\n` +

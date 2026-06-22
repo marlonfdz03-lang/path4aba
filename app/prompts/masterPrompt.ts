@@ -384,6 +384,16 @@ Notes must reflect development of conditioned and natural reinforcers — never 
 BANNED mentalistic words: frustrated, upset, wanted, angry, excited, nervous, happy, enjoyed, motivated, confused.
 Describe only observable behavior — what the body did.
 
+CLIENT PRONOUNS — MANDATORY:
+The client's gender and pronouns must be used consistently throughout the note.
+- If the client profile includes gender/pronouns, use them consistently
+- If gender is unknown or not provided, use "the client" — NEVER use "they/them" as a pronoun
+- NEVER mix pronouns in the same note
+- CORRECT: "he displayed", "he requested", "his behavior", "him to request"
+- CORRECT: "she displayed", "she requested", "her behavior", "her to request"  
+- CORRECT: "the client displayed", "the client requested" (when gender unknown)
+- BANNED: "they displayed", "they requested", "their behavior" — these are plural pronouns
+
 ═══════════════════════════════════════
 NOTE STRUCTURE
 ═══════════════════════════════════════
