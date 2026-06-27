@@ -77,21 +77,47 @@ function simpleHash(str) {
 function distributeMaladaptiveAcrossDays(total, numDays) {
   if (numDays <= 0) return [];
   if (numDays === 1) return [total];
-  const base = Math.floor(total / numDays);
-  let remaining = total;
+  if (total <= 0) return Array(numDays).fill(0); // rule 1: zeros only when total is 0
+
+  const shuffle = (arr) => {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  };
+
+  // Not enough to give every day ≥1 — spread single counts across `total` random
+  // days (zeros are mathematically unavoidable here).
+  if (total < numDays) {
+    const vals = Array(numDays).fill(0);
+    for (let i = 0; i < total; i++) vals[i] = 1;
+    return shuffle(vals);
+  }
+
+  const avg = total / numDays;
+  const base = Math.floor(avg);
+  // Max per-day deviation: ±40% of base, at least 1, capped at 3 when the base is small (rule 4).
+  let maxDev = Math.max(1, Math.round(avg * 0.4));
+  if (avg < 8) maxDev = Math.min(3, maxDev);
+
   const vals = [];
+  let remaining = total;
   for (let i = 0; i < numDays - 1; i++) {
-    const delta = Math.random() > 0.5 ? 1 : -1;
-    const v = Math.max(0, base + delta);
+    const daysAfter = numDays - 1 - i; // days still to fill after this one (incl. remainder day)
+    const dev = Math.floor(Math.random() * (2 * maxDev + 1)) - maxDev;
+    let v = base + dev;
+    if (v < 1) v = 1;                      // rule 1: never 0
+    if (v > total) v = total;              // rule 2: never exceed total
+    const maxAllowed = remaining - daysAfter; // leave ≥1 for every later day (incl. remainder)
+    if (v > maxAllowed) v = maxAllowed;
+    if (v < 1) v = 1;
     vals.push(v);
     remaining -= v;
   }
-  vals.push(Math.max(0, remaining));
-  for (let i = vals.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [vals[i], vals[j]] = [vals[j], vals[i]];
-  }
-  return vals;
+  vals.push(remaining); // rule 5: last day is the exact remainder (≥1, ≤total, sum is exact)
+
+  return shuffle(vals); // rule 6: randomize which day holds the remainder
 }
 
 // ── Legacy save helper (kept for compatibility) ───────────────────────────────
