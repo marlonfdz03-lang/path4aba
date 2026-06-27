@@ -1307,6 +1307,9 @@ let workedDayDates  = [];   // ['YYYY-MM-DD', …] dates RBT worked this week
 let absentDayReasons = {};  // { 'YYYY-MM-DD': 'vacation'|'medical'|'other' }
 let currentWeekForData = null;
 let currentClientForData = null;
+// Trials per session — set by the RBT via the inline Replacements prompt (Section 3).
+// Global so both Single Day and Full Week fill/save paths (and data-tab-logic.js) can read it.
+let trialsPerSession = 10;
 
 // ── Date helpers ────────────────────────────
 function calcWeekEndDate(startStr) {
@@ -1394,6 +1397,72 @@ async function loadProjectedValues(weekStart) {
   } catch { return null; }
 }
 
+// ── Inline trials prompt (Section 3 · Replacements only) ─────────────────────
+// Shown below the [Replacements] toggle before the replacement section opens, so
+// the RBT sets trials/session up front. Stores the value in `trialsPerSession`.
+let _trialsPromptEl = null;
+
+function removeTrialsPrompt() {
+  if (_trialsPromptEl) { _trialsPromptEl.remove(); _trialsPromptEl = null; }
+}
+
+function showTrialsPrompt(anchorBtn, onContinue) {
+  removeTrialsPrompt();
+
+  const card = document.createElement('div');
+  card.className = 'skill-card';
+  card.style.marginTop = '8px';
+
+  const label = document.createElement('label');
+  label.className = 'field-label';
+  label.textContent = 'How many trials per session?';
+  card.appendChild(label);
+
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.className = 'input';
+  input.min = '1';
+  input.max = '50';
+  input.value = String(trialsPerSession || 10);
+  input.style.fontFamily = 'monospace';
+  card.appendChild(input);
+
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:8px;margin-top:8px;';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn-outline';
+  cancelBtn.style.flex = '1';
+  cancelBtn.textContent = 'Cancel';
+
+  const continueBtn = document.createElement('button');
+  continueBtn.className = 'btn-primary';
+  continueBtn.style.flex = '1';
+  continueBtn.textContent = 'Continue →';
+
+  row.appendChild(cancelBtn);
+  row.appendChild(continueBtn);
+  card.appendChild(row);
+
+  cancelBtn.addEventListener('click', removeTrialsPrompt);
+  continueBtn.addEventListener('click', () => {
+    let v = parseInt(input.value, 10);
+    if (isNaN(v)) v = 10;
+    v = Math.max(1, Math.min(50, v));
+    trialsPerSession = v;
+    removeTrialsPrompt();
+    onContinue();
+  });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') continueBtn.click(); });
+
+  // Insert below the full button row (the [Replacements] toggle's flex container),
+  // so the card spans full width rather than squeezing into the button row.
+  (anchorBtn.parentElement || anchorBtn).insertAdjacentElement('afterend', card);
+  _trialsPromptEl = card;
+  input.focus();
+  input.select();
+}
+
 // ══════════════════════════════════════════════
 //  SINGLE DAY MODE
 // ══════════════════════════════════════════════
@@ -1476,11 +1545,20 @@ document.getElementById('showSingleMaladBtn')?.addEventListener('click', () => {
   sec.style.display = open ? '' : 'none';
   if (open) renderSingleMaladList();
 });
-document.getElementById('showSingleReplBtn')?.addEventListener('click', () => {
+document.getElementById('showSingleReplBtn')?.addEventListener('click', (e) => {
   const sec = document.getElementById('singleReplSection');
-  const open = sec.style.display === 'none';
-  sec.style.display = open ? '' : 'none';
-  if (open) renderSingleReplList();
+  const opening = sec.style.display === 'none';
+  if (!opening) {
+    // Toggling closed — just hide, and clear any open trials prompt.
+    sec.style.display = 'none';
+    removeTrialsPrompt();
+    return;
+  }
+  // Opening — ask for trials/session first, then reveal the replacement section.
+  showTrialsPrompt(e.currentTarget, () => {
+    sec.style.display = '';
+    renderSingleReplList();
+  });
 });
 
 async function runSingleAutofill(type) {
@@ -1492,10 +1570,24 @@ async function runSingleAutofill(type) {
   const items = adjustedItems.filter(i => i.type === type);
   if (!items.length) { setStatus(statusId, `No ${type} data.`, true); return; }
 
-  const tasks = items.map(item => ({
-    name: item.name, dayNumber: day, type,
-    value: type === 'maladaptive' ? (item.dailyValue ?? Math.round((item.projectedValue || 0) / 5)) : item.projectedValue,
-  }));
+  // Deterministic seed per skill+date for the single session date.
+  const month   = parseInt(document.getElementById('singleMonth').value);
+  const year    = new Date().getFullYear();
+  const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+
+  const tasks = items.map(item => {
+    if (type === 'maladaptive') {
+      return {
+        name: item.name, dayNumber: day, type,
+        value: item.dailyValue ?? Math.round((item.projectedValue || 0) / 5),
+      };
+    }
+    // Replacement: use projectedValue directly, one varied sequence per skill.
+    const pct      = item.projectedValue;
+    const correct  = Math.min(trialsPerSession, Math.max(0, Math.round((pct || 0) / 100 * trialsPerSession)));
+    const sequence = generateVariedSequence(correct, trialsPerSession - correct, simpleHash(item.name + dateStr));
+    return { name: item.name, dayNumber: day, type, value: pct, trials: trialsPerSession, sequence };
+  });
 
   const btn = document.getElementById(btnId);
   btn.disabled = true; btn.textContent = 'Filling…';
@@ -1528,7 +1620,7 @@ async function saveSingleData(userInitiated) {
 
   const replRecs  = projectedItems.filter(i => i.type === 'replacement').map(item => ({
     clientId: selectedClientId, replacementSkill: item.name, weekStart, weekEnd, sessionDate: dateStr,
-    dailyPercentage: item.projectedValue, trials: 12, userConfirmed: true, autofillCompleted: true, platformSource: 'extension',
+    dailyPercentage: item.projectedValue, trials: trialsPerSession, userConfirmed: true, autofillCompleted: true, platformSource: 'extension',
   }));
   const maladRecs = projectedItems.filter(i => i.type === 'maladaptive').map(item => ({
     clientId: selectedClientId, behaviorName: item.name, weekStart, weekEnd, sessionDate: dateStr,
@@ -1677,11 +1769,20 @@ document.getElementById('showWeekMaladBtn')?.addEventListener('click', () => {
   sec.style.display = open ? '' : 'none';
   if (open) renderWeekMaladList();
 });
-document.getElementById('showWeekReplBtn')?.addEventListener('click', () => {
+document.getElementById('showWeekReplBtn')?.addEventListener('click', (e) => {
   const sec = document.getElementById('weekReplSection');
-  const open = sec.style.display === 'none';
-  sec.style.display = open ? '' : 'none';
-  if (open) renderWeekReplList();
+  const opening = sec.style.display === 'none';
+  if (!opening) {
+    // Toggling closed — just hide, and clear any open trials prompt.
+    sec.style.display = 'none';
+    removeTrialsPrompt();
+    return;
+  }
+  // Opening — ask for trials/session first, then reveal the replacement section.
+  showTrialsPrompt(e.currentTarget, () => {
+    sec.style.display = '';
+    renderWeekReplList();
+  });
 });
 
 document.getElementById('weekStartDate').addEventListener('change', (e) => {
@@ -1762,13 +1863,28 @@ async function runWeekAutofill(type) {
 
   const workedCount = workedDayDates.length;
   const tasks = [];
-  workedDayDates.forEach(dateStr => {
-    const dayNum = new Date(dateStr + 'T00:00:00').getDate();
+  if (type === 'replacement') {
+    // Spread each skill's weekly average across worked days with natural variation,
+    // and generate a deterministic varied sequence per skill+date.
     items.forEach(item => {
-      tasks.push({ name: item.name, dayNumber: dayNum, type,
-        value: type === 'maladaptive' ? Math.round(item.projectedValue / workedCount) : item.projectedValue });
+      const dailyPcts = generateDailyPercentages(item.projectedValue, workedCount);
+      workedDayDates.forEach((dateStr, idx) => {
+        const dayNum   = new Date(dateStr + 'T00:00:00').getDate();
+        const dailyPct = dailyPcts[idx];
+        const correct  = Math.min(trialsPerSession, Math.max(0, Math.round((dailyPct || 0) / 100 * trialsPerSession)));
+        const sequence = generateVariedSequence(correct, trialsPerSession - correct, simpleHash(item.name + dateStr));
+        tasks.push({ name: item.name, dayNumber: dayNum, type: 'replacement', value: dailyPct, trials: trialsPerSession, sequence });
+      });
     });
-  });
+  } else {
+    workedDayDates.forEach(dateStr => {
+      const dayNum = new Date(dateStr + 'T00:00:00').getDate();
+      items.forEach(item => {
+        tasks.push({ name: item.name, dayNumber: dayNum, type,
+          value: Math.round(item.projectedValue / workedCount) });
+      });
+    });
+  }
 
   const btn = document.getElementById(btnId);
   btn.disabled = true; btn.textContent = 'Filling…';
@@ -1800,7 +1916,7 @@ async function saveWeekData(userInitiated) {
   workedDayDates.forEach(sessionDate => {
     qualityAdjusted.filter(i => i.type === 'replacement').forEach(item => {
       replRecs.push({ clientId: selectedClientId, replacementSkill: item.name, weekStart, weekEnd, sessionDate,
-        dailyPercentage: item.projectedValue, trials: 12, userConfirmed: true, autofillCompleted: true, platformSource: 'extension' });
+        dailyPercentage: item.projectedValue, trials: trialsPerSession, userConfirmed: true, autofillCompleted: true, platformSource: 'extension' });
     });
     qualityAdjusted.filter(i => i.type === 'maladaptive').forEach(item => {
       maladRecs.push({ clientId: selectedClientId, behaviorName: item.name, weekStart, weekEnd, sessionDate,
@@ -2267,20 +2383,67 @@ document.getElementById('extractChartsBtn').addEventListener('click', async () =
 
     function resolveChartName(chartName, isReplacement) {
       const pool = isReplacement ? profileSkills : profileBehaviors;
-      const lower = chartName.toLowerCase().trim();
-      const exact = pool.find(n => n.toLowerCase().trim() === lower);
-      if (exact) return { resolvedName: exact, matched: true };
+      function norm(s) {
+        return s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+      }
+      const cn = norm(chartName);
+
+      // Exact (normalized) match — strips punctuation so "SIB" === "sib"
+      const exact = pool.find(n => norm(n) === cn);
+      if (exact) {
+        const winner = exact.length >= chartName.length ? exact : chartName;
+        return { resolvedName: winner, matched: true };
+      }
+
+      // Substring match — both directions
       const partial = pool.find(n => {
-        const nl = n.toLowerCase().trim();
-        return nl.includes(lower) || lower.includes(nl);
+        const nl = norm(n);
+        return nl.includes(cn) || cn.includes(nl);
       });
-      return { resolvedName: partial || chartName, matched: !!partial };
+      if (partial) {
+        const winner = partial.length >= chartName.length ? partial : chartName;
+        return { resolvedName: winner, matched: true };
+      }
+
+      // Shared meaningful word match (words longer than 2 chars)
+      const cnWords = cn.split(' ').filter(w => w.length > 2);
+      const wordMatch = pool.find(n => {
+        const nWords = new Set(norm(n).split(' ').filter(w => w.length > 2));
+        return cnWords.some(w => nWords.has(w));
+      });
+      if (wordMatch) {
+        const winner = wordMatch.length >= chartName.length ? wordMatch : chartName;
+        return { resolvedName: winner, matched: true };
+      }
+
+      return { resolvedName: chartName, matched: false };
     }
 
     extractedCharts = rawCharts.map(c => {
       const { resolvedName, matched } = resolveChartName(c.name, c.category === 'replacement');
       return { ...c, resolvedName, matched };
     });
+
+    // Deduplicate by resolvedName — when two OP charts fuzzy-match to the same profile target
+    // (e.g. "SIB" and "Self-Injurious Behavior"), merge their data points into one entry.
+    {
+      const chartsByName = new Map();
+      for (const c of extractedCharts) {
+        const key = c.resolvedName.toLowerCase().trim();
+        if (chartsByName.has(key)) {
+          chartsByName.get(key).dataPoints = chartsByName.get(key).dataPoints.concat(c.dataPoints);
+        } else {
+          chartsByName.set(key, { ...c, dataPoints: [...c.dataPoints] });
+        }
+      }
+      extractedCharts = Array.from(chartsByName.values()).map(c => {
+        const seen = new Set();
+        const dedupedPoints = c.dataPoints
+          .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0)
+          .filter(pt => { if (seen.has(pt.date)) return false; seen.add(pt.date); return true; });
+        return { ...c, dataPoints: dedupedPoints };
+      });
+    }
 
     const totalPts       = extractedCharts.reduce((s, c) => s + c.dataPoints.length, 0);
     const chartsWithData = extractedCharts.filter(c => c.dataPoints.length > 0);

@@ -7,8 +7,8 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceArea,
   ReferenceLine,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -32,6 +32,18 @@ interface WeekPoint {
 
 const ANOMALY_THRESHOLD = 5;
 
+function normName(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function fuzzyNamesMatch(a: string, b: string): boolean {
+  const al = normName(a), bl = normName(b);
+  if (al === bl) return true;
+  if (al.includes(bl) || bl.includes(al)) return true;
+  const aWords = al.split(" ").filter((w) => w.length > 2);
+  const bWords = new Set(bl.split(" ").filter((w) => w.length > 2));
+  return aWords.some((w) => bWords.has(w));
+}
 
 function fmtWeek(week: string): string {
   if (!week || week === "?") return "";
@@ -474,20 +486,20 @@ function AnomalyModal({
 function ProgressChart({
   histData,
   projValues,
-  isRising,
   unit,
   yMax,
   anomalies,
+  weeksWithData,
   onSelectProjected,
   onSelectActual,
   onSelectAnomaly,
 }: {
   histData: WeekPoint[];
   projValues: number[];
-  isRising: boolean;
   unit: string;
   yMax: number;
   anomalies?: Map<string, { reviewed: boolean; justification: string | null }>;
+  weeksWithData?: Set<string>;
   onSelectProjected?: (week: string, value: number) => void;
   onSelectActual?: (week: string, value: number) => void;
   onSelectAnomaly?: (week: string) => void;
@@ -495,25 +507,60 @@ function ProgressChart({
   const lastHistWeek = histData.length > 0 ? histData[histData.length - 1].week : null;
   const today = todayWeekStr();
   const baseWeek = lastHistWeek || today;
-  const projWeeks = projValues.map((_, i) => addWeeksToDate(baseWeek, i + 1));
 
-  const chartData: any[] = [
-    ...histData.map((d) => ({ week: d.week, actual: d.avg, projected: null })),
-  ];
+  // Cap projection to 4 weeks ahead
+  const displayProjValues = projValues.slice(0, 4);
+  const projWeeks = displayProjValues.map((_, i) => addWeeksToDate(baseWeek, i + 1));
 
-  if (histData.length > 0 && projValues.length > 0) {
-    chartData[chartData.length - 1] = {
-      ...chartData[chartData.length - 1],
-      projected: histData[histData.length - 1].avg,
-    };
+  const chartData: any[] = [];
+  for (let i = 0; i < histData.length; i++) {
+    const d = histData[i];
+    chartData.push({
+      week: d.week,
+      actual: (!weeksWithData || weeksWithData.has(d.week)) ? d.avg : null,
+      projected: null,
+    });
+    if (i < histData.length - 1) {
+      const nextExpected = addWeeksToDate(d.week, 1);
+      if (nextExpected < histData[i + 1].week) {
+        chartData.push({ week: nextExpected, actual: null, projected: null, isGap: true });
+      }
+    }
   }
 
-  projValues.forEach((v, i) => {
+  if (histData.length > 0 && displayProjValues.length > 0) {
+    let lastRealIdx = chartData.length - 1;
+    while (lastRealIdx >= 0 && chartData[lastRealIdx].isGap) lastRealIdx--;
+    if (lastRealIdx >= 0) {
+      chartData[lastRealIdx] = {
+        ...chartData[lastRealIdx],
+        projected: histData[histData.length - 1].avg,
+      };
+    }
+  }
+
+  displayProjValues.forEach((v, i) => {
     chartData.push({ week: projWeeks[i], actual: null, projected: v, isProjected: true });
   });
 
-  const todayRefWeek =
-    chartData.find((d) => d.week >= today && d.projected != null)?.week || null;
+  const gapRanges: Array<{ start: string; end: string }> = [];
+  {
+    let gapStart: string | null = null;
+    for (const d of chartData) {
+      if (d.isProjected) break;
+      if (d.actual === null) {
+        if (!gapStart) gapStart = d.week;
+      } else if (gapStart) {
+        gapRanges.push({ start: gapStart, end: d.week });
+        gapStart = null;
+      }
+    }
+  }
+
+  // Today marker: first chart week on or after today
+  const todayRefWeek = chartData.find((d) => d.week >= today)?.week || null;
+
+  const chartWidth = Math.max(600, chartData.length * 52);
 
   const CustomActualDot = (props: any) => {
     const { cx, cy, payload } = props;
@@ -525,7 +572,7 @@ function ProgressChart({
           cx={cx}
           cy={cy}
           r={4}
-          fill="#111827"
+          fill="#0f172a"
           stroke="white"
           strokeWidth={1.5}
           style={{ cursor: "pointer" }}
@@ -556,7 +603,7 @@ function ProgressChart({
         cx={cx}
         cy={cy}
         r={4}
-        fill="#16A34A"
+        fill="#2563EB"
         stroke="white"
         strokeWidth={1.5}
         style={{ cursor: "pointer" }}
@@ -566,56 +613,76 @@ function ProgressChart({
   };
 
   return (
-    <ResponsiveContainer width="100%" height={160}>
-      <LineChart data={chartData} margin={{ top: 16, right: 16, bottom: 24, left: 28 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-        <XAxis
-          dataKey="week"
-          tickFormatter={fmtWeek}
-          tick={{ fontSize: 9, fill: "#9ca3af" }}
-          interval="preserveStartEnd"
-        />
-        <YAxis
-          tick={{ fontSize: 9, fill: "#9ca3af" }}
-          tickFormatter={(v) => `${v}${unit}`}
-          domain={[0, yMax]}
-          width={28}
-        />
-        <Tooltip
-          formatter={(value: any, name: any) => [
-            `${value}${unit}`,
-            name === "actual" ? "Actual" : "Projected",
-          ]}
-          labelFormatter={(l) => fmtWeek(String(l))}
-          contentStyle={{ fontSize: 11 }}
-        />
-        {todayRefWeek && (
-          <ReferenceLine
-            x={todayRefWeek}
-            stroke="#9ca3af"
-            strokeDasharray="4 3"
-            label={{ value: "Today", position: "insideTopLeft", fontSize: 9, fill: "#9ca3af" }}
+    <div style={{ overflowX: "auto" }}>
+      <div style={{ minWidth: chartWidth }}>
+        <LineChart
+          width={chartWidth}
+          height={160}
+          data={chartData}
+          margin={{ top: 16, right: 16, bottom: 24, left: 28 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+          <XAxis
+            dataKey="week"
+            tickFormatter={fmtWeek}
+            tick={{ fontSize: 9, fill: "#9ca3af" }}
+            interval="preserveStartEnd"
           />
-        )}
-        <Line
-          dataKey="actual"
-          stroke="#111827"
-          strokeWidth={2}
-          dot={<CustomActualDot />}
-          connectNulls={false}
-          isAnimationActive={false}
-        />
-        <Line
-          dataKey="projected"
-          stroke="#16A34A"
-          strokeWidth={2}
-          strokeDasharray="5 3"
-          dot={<CustomProjDot />}
-          connectNulls={false}
-          isAnimationActive={false}
-        />
-      </LineChart>
-    </ResponsiveContainer>
+          <YAxis
+            tick={{ fontSize: 9, fill: "#9ca3af" }}
+            tickFormatter={(v) => `${v}${unit}`}
+            domain={[0, yMax]}
+            width={28}
+          />
+          <Tooltip
+            formatter={(value: any, name: any) => [
+              `${value}${unit}`,
+              name === "actual" ? "Actual" : "Projected",
+            ]}
+            labelFormatter={(l) => fmtWeek(String(l))}
+            contentStyle={{ fontSize: 11 }}
+          />
+          {todayRefWeek && (
+            <ReferenceLine
+              x={todayRefWeek}
+              stroke="#e5e7eb"
+              strokeDasharray="2 3"
+              strokeWidth={1}
+              label={{ value: "Today", position: "insideTopLeft", fontSize: 9, fill: "#9ca3af" }}
+            />
+          )}
+          {gapRanges.flatMap(({ start, end }) => [
+            <ReferenceArea
+              key={`gap-area-${start}`}
+              x1={start}
+              x2={end}
+              fill="#f3f4f6"
+              fillOpacity={0.7}
+              stroke="none"
+            />,
+            <ReferenceLine key={`gap-s-${start}`} x={start} stroke="#9ca3af" strokeDasharray="4 3" strokeWidth={1.5} />,
+            <ReferenceLine key={`gap-e-${end}`} x={end} stroke="#9ca3af" strokeDasharray="4 3" strokeWidth={1.5} />,
+          ])}
+          <Line
+            dataKey="actual"
+            stroke="#0f172a"
+            strokeWidth={2}
+            dot={<CustomActualDot />}
+            connectNulls={false}
+            isAnimationActive={false}
+          />
+          <Line
+            dataKey="projected"
+            stroke="#2563EB"
+            strokeWidth={2}
+            strokeDasharray="5 3"
+            dot={<CustomProjDot />}
+            connectNulls={false}
+            isAnimationActive={false}
+          />
+        </LineChart>
+      </div>
+    </div>
   );
 }
 
@@ -645,6 +712,18 @@ function TargetCard({
     () => weeklyAvgs(records, valueKey, isRising ? "avg" : "sum"),
     [records, valueKey, isRising],
   );
+
+  // Set of weeks that have actual records — used by ProgressChart to detect true gaps
+  const weeksWithData = useMemo(() => {
+    const set = new Set<string>();
+    records.forEach((r) => {
+      const rawDate = r.week_start || r.session_date;
+      if (!rawDate) return;
+      const dateStr = String(rawDate).replace(/T.*$/, "");
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) set.add(dateStr);
+    });
+    return set;
+  }, [records]);
   const currentValue = histData.length > 0 ? histData[histData.length - 1].avg : null;
   const prevValue = histData.length > 1 ? histData[histData.length - 2].avg : null;
   const delta =
@@ -762,10 +841,10 @@ function TargetCard({
           <ProgressChart
             histData={histData}
             projValues={projValues}
-            isRising={isRising}
             unit={unit}
             yMax={yMax}
             anomalies={anomalyMap}
+            weeksWithData={weeksWithData}
             onSelectProjected={(week, value) => setPendingConfirm({ week, value })}
             onSelectActual={(week, value) => setEditingActual({ week, value })}
             onSelectAnomaly={handleSelectAnomaly}
@@ -775,7 +854,7 @@ function TargetCard({
         {/* Action hint */}
         {histData.length > 0 && (
           <p className="text-[10px] mt-1" style={{ color: "var(--text3)" }}>
-            Click a black dot to edit · green dot to confirm projection · red/yellow triangle to review anomaly
+            Click a black dot to edit · blue dot to confirm projection · red/yellow triangle to review anomaly
           </p>
         )}
       </div>
@@ -866,28 +945,64 @@ export function DataTab({ client, complianceLevel = "typical", missedHours = 0 }
   useEffect(() => { loadData(); }, [loadData]);
 
   const repBySkill = useMemo(() => {
-    const map: Record<string, any[]> = {};
+    const raw: Record<string, any[]> = {};
     replacementData.forEach((r) => {
-      (map[r.replacement_skill] = map[r.replacement_skill] || []).push(r);
+      const n = r.replacement_skill;
+      (raw[n] = raw[n] || []).push(r);
     });
-    return map;
+    const merged: Record<string, any[]> = {};
+    for (const [name, recs] of Object.entries(raw)) {
+      const existingKey = Object.keys(merged).find((k) => fuzzyNamesMatch(k, name));
+      if (existingKey) {
+        const winner = existingKey.length >= name.length ? existingKey : name;
+        const existing = merged[existingKey];
+        delete merged[existingKey];
+        merged[winner] = [...existing, ...recs];
+      } else {
+        merged[name] = [...recs];
+      }
+    }
+    return merged;
   }, [replacementData]);
 
   const maladByBehavior = useMemo(() => {
-    const map: Record<string, any[]> = {};
+    const raw: Record<string, any[]> = {};
     maladaptiveData.forEach((r) => {
-      (map[r.behavior_name] = map[r.behavior_name] || []).push(r);
+      const n = r.behavior_name;
+      (raw[n] = raw[n] || []).push(r);
     });
-    return map;
+    const merged: Record<string, any[]> = {};
+    for (const [name, recs] of Object.entries(raw)) {
+      const existingKey = Object.keys(merged).find((k) => fuzzyNamesMatch(k, name));
+      if (existingKey) {
+        const winner = existingKey.length >= name.length ? existingKey : name;
+        const existing = merged[existingKey];
+        delete merged[existingKey];
+        merged[winner] = [...existing, ...recs];
+      } else {
+        merged[name] = [...recs];
+      }
+    }
+    return merged;
   }, [maladaptiveData]);
 
   const behaviorNames: string[] = useMemo(() => {
     const profileNames = (client.clinicalProfile?.maladaptiveBehaviors || [])
       .map((b: any) => (typeof b === "string" ? b : b.name))
       .filter(Boolean) as string[];
-    const profileSet = new Set(profileNames);
-    const dbExtra = Object.keys(maladByBehavior).filter((n) => !profileSet.has(n));
-    return [...profileNames, ...dbExtra];
+    const usedKeys = new Set<string>();
+    const result: string[] = [];
+    for (const pName of profileNames) {
+      const matchKey = Object.keys(maladByBehavior).find((k) => fuzzyNamesMatch(k, pName));
+      const key = matchKey ?? pName;
+      if (!usedKeys.has(key)) { usedKeys.add(key); result.push(key); }
+    }
+    for (const k of Object.keys(maladByBehavior)) {
+      if (!usedKeys.has(k) && !profileNames.some((p) => fuzzyNamesMatch(p, k))) {
+        result.push(k); usedKeys.add(k);
+      }
+    }
+    return result;
   }, [maladByBehavior, client.clinicalProfile]);
 
   const skillNames: string[] = useMemo(() => {
@@ -898,13 +1013,20 @@ export function DataTab({ client, complianceLevel = "typical", missedHours = 0 }
       .map((s: any) => (typeof s === "string" ? s : s.name))
       .filter(Boolean) as string[];
     const seen = new Set<string>();
-    const profileNames = raw.filter((n) => {
-      if (seen.has(n)) return false;
-      seen.add(n);
-      return true;
-    });
-    const dbExtra = Object.keys(repBySkill).filter((n) => !seen.has(n));
-    return [...profileNames, ...dbExtra];
+    const profileNames = raw.filter((n) => { if (seen.has(n)) return false; seen.add(n); return true; });
+    const usedKeys = new Set<string>();
+    const result: string[] = [];
+    for (const pName of profileNames) {
+      const matchKey = Object.keys(repBySkill).find((k) => fuzzyNamesMatch(k, pName));
+      const key = matchKey ?? pName;
+      if (!usedKeys.has(key)) { usedKeys.add(key); result.push(key); }
+    }
+    for (const k of Object.keys(repBySkill)) {
+      if (!usedKeys.has(k) && !profileNames.some((p) => fuzzyNamesMatch(p, k))) {
+        result.push(k); usedKeys.add(k);
+      }
+    }
+    return result;
   }, [repBySkill, client.clinicalProfile]);
 
   if (loading) {

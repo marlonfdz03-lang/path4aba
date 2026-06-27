@@ -63,6 +63,16 @@ function mulberry32(a) {
   };
 }
 
+// Deterministic 32-bit hash — used to seed generateVariedSequence per skill+date,
+// so the same skill on the same date always produces the same sequence.
+function simpleHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
 // ── Distribute maladaptive total across days with natural variation ────────────
 function distributeMaladaptiveAcrossDays(total, numDays) {
   if (numDays <= 0) return [];
@@ -100,7 +110,7 @@ async function saveReplacementData(autofillCompleted) {
     weekStart,
     weekEnd,
     dailyPercentage: item.projectedValue,
-    trials: 12,
+    trials: trialsPerSession,
     userConfirmed: true,
     autofillCompleted,
     platformSource: 'extension',
@@ -474,7 +484,7 @@ async function applyWeekToOP(corrections, workedDayDates) {
           dayNumber: new Date(dateStr + 'T00:00:00').getDate(),
           type: 'replacement',
           value: c.currentValue,
-          trials: c.totalTrials ?? 12,
+          trials: c.totalTrials ?? trialsPerSession,
         });
       });
     }
