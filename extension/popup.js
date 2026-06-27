@@ -1566,38 +1566,7 @@ document.getElementById('showSingleReplBtn')?.addEventListener('click', (e) => {
 // fetch the sheets through background.js, then parse with buildOpDataMap().
 // Returns { ok: true, opDataMap } or { ok: false, error }.
 async function fetchOpDataMapForTab(tab) {
-  const [metaResult] = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: () => {
-      const buId = window.location.pathname.match(/\/([a-f0-9]{24})\//)?.[1];
-      const monthParam = new URLSearchParams(window.location.search).get('month')
-        || window.location.hash.match(/month=(\d{4}-\d{2})/)?.[1]
-        || null;
-      const now = new Date();
-      const opViewMonth = (monthParam && /^\d{4}-\d{2}$/.test(monthParam))
-        ? monthParam
-        : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      return { buId, opViewMonth };
-    },
-    world: 'MAIN',
-  });
-  const { buId, opViewMonth } = metaResult.result;
-  if (!buId) return { ok: false, error: 'Could not find OP business unit in the URL. Open the datasheet page first.' };
-
-  const fetchRes = await new Promise((resolve) =>
-    chrome.runtime.sendMessage({
-      type: 'FETCH',
-      payload: {
-        url: `https://api.officepuzzle.com/v1/business_units/${buId}/service_plan_item_data_sheets?month=${opViewMonth}`,
-        method: 'GET',
-        headers: {},
-        credentials: 'include',
-      }
-    }, resolve)
-  );
-  if (!fetchRes?.ok) return { ok: false, error: 'Could not fetch OP data. Make sure you are logged in to Office Puzzle.' };
-
-  return { ok: true, opDataMap: buildOpDataMap(JSON.parse(fetchRes.data)) };
+  return { ok: true, opDataMap: {} };
 }
 
 async function runSingleAutofill(type) {

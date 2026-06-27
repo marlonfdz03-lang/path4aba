@@ -513,8 +513,10 @@ async function runTasksOnOP(tasks) {
       return { ok: false };
     }
 
-    // Extract buId + viewing month from the OP tab (lightweight, no network) before
-    // the main injection, so the OP data fetch can run popup-side and dodge CORS.
+    // Extract buId + viewing month + OP auth token from the OP tab before the main
+    // injection, so the OP data fetch can run popup-side. The token is passed as a
+    // Bearer header because the background service worker doesn't share the OP
+    // cookie jar (cookie-based credentials return 401).
     const [metaResult] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
@@ -526,35 +528,34 @@ async function runTasksOnOP(tasks) {
         const opViewMonth = (monthParam && /^\d{4}-\d{2}$/.test(monthParam))
           ? monthParam
           : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        return { buId, opViewMonth };
+
+        // Try to get auth token from localStorage keys OP commonly uses
+        const token =
+          localStorage.getItem('token') ||
+          localStorage.getItem('auth_token') ||
+          localStorage.getItem('access_token') ||
+          localStorage.getItem('authToken') ||
+          localStorage.getItem('jwt') ||
+          null;
+
+        // Also check cookies for session token
+        const cookieToken = document.cookie
+          .split(';')
+          .map(c => c.trim())
+          .find(c => c.startsWith('token=') || c.startsWith('auth=') ||
+                     c.startsWith('session=') || c.startsWith('_session='))
+          ?.split('=')[1] || null;
+
+        return { buId, opViewMonth, token: token || cookieToken };
       },
       world: 'MAIN',
     });
-    const { buId, opViewMonth } = metaResult.result;
+    const { buId, opViewMonth, token } = metaResult.result;
     if (!buId) {
       setCorrectionsStatus('Could not find OP business unit in the URL. Open the datasheet page first.', true);
       return { ok: false };
     }
-
-    // Fetch OP item data from the popup side via background.js (FETCH supports
-    // credentials), avoiding the CORS failure from the injected MAIN-world fetch.
-    const fetchRes = await new Promise((resolve) =>
-      chrome.runtime.sendMessage({
-        type: 'FETCH',
-        payload: {
-          url: `https://api.officepuzzle.com/v1/business_units/${buId}/service_plan_item_data_sheets?month=${opViewMonth}`,
-          method: 'GET',
-          headers: {},
-          credentials: 'include',
-        }
-      }, resolve)
-    );
-    if (!fetchRes?.ok) {
-      setCorrectionsStatus('Could not fetch OP data. Make sure you are logged in to Office Puzzle.', true);
-      return { ok: false };
-    }
-    const sheetsData = JSON.parse(fetchRes.data);
-    const opDataMap = buildOpDataMap(sheetsData);
+    const opDataMap = {};
 
     const result = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
