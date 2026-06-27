@@ -1561,6 +1561,45 @@ document.getElementById('showSingleReplBtn')?.addEventListener('click', (e) => {
   });
 });
 
+// ── Fetch + build the OP item-data map popup-side (CORS-safe via background.js) ──
+// Same preliminary pattern as runTasksOnOP: extract buId + month from the OP tab,
+// fetch the sheets through background.js, then parse with buildOpDataMap().
+// Returns { ok: true, opDataMap } or { ok: false, error }.
+async function fetchOpDataMapForTab(tab) {
+  const [metaResult] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: () => {
+      const buId = window.location.pathname.match(/\/([a-f0-9]{24})\//)?.[1];
+      const monthParam = new URLSearchParams(window.location.search).get('month')
+        || window.location.hash.match(/month=(\d{4}-\d{2})/)?.[1]
+        || null;
+      const now = new Date();
+      const opViewMonth = (monthParam && /^\d{4}-\d{2}$/.test(monthParam))
+        ? monthParam
+        : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      return { buId, opViewMonth };
+    },
+    world: 'MAIN',
+  });
+  const { buId, opViewMonth } = metaResult.result;
+  if (!buId) return { ok: false, error: 'Could not find OP business unit in the URL. Open the datasheet page first.' };
+
+  const fetchRes = await new Promise((resolve) =>
+    chrome.runtime.sendMessage({
+      type: 'FETCH',
+      payload: {
+        url: `https://api.officepuzzle.com/v1/business_units/${buId}/service_plan_item_data_sheets?month=${opViewMonth}`,
+        method: 'GET',
+        headers: {},
+        credentials: 'include',
+      }
+    }, resolve)
+  );
+  if (!fetchRes?.ok) return { ok: false, error: 'Could not fetch OP data. Make sure you are logged in to Office Puzzle.' };
+
+  return { ok: true, opDataMap: buildOpDataMap(JSON.parse(fetchRes.data)) };
+}
+
 async function runSingleAutofill(type) {
   const day      = parseInt(document.getElementById('singleDay').value);
   const statusId = type === 'maladaptive' ? 'singleMaladStatus' : 'singleReplStatus';
@@ -1595,7 +1634,9 @@ async function runSingleAutofill(type) {
     const tabs = await chrome.tabs.query({ url: '*://*.officepuzzle.com/*' });
     const tab = tabs[0];
     if (!tab?.id) { setStatus(statusId, 'No Office Puzzle tab found. Open the datasheet first.', true); return; }
-    const result = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: officePuzzleDatasheetAutofiller, args: [tasks], world: 'MAIN' });
+    const opData = await fetchOpDataMapForTab(tab);
+    if (!opData.ok) { setStatus(statusId, opData.error, true); return; }
+    const result = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: officePuzzleDatasheetAutofiller, args: [tasks, opData.opDataMap], world: 'MAIN' });
     const log  = result?.[0]?.result || [];
     const ok   = log.filter(l => l.startsWith('✓'));
     const errs = log.filter(l => l.startsWith('❌'));
@@ -1892,7 +1933,9 @@ async function runWeekAutofill(type) {
     const tabs = await chrome.tabs.query({ url: '*://*.officepuzzle.com/*' });
     const tab = tabs[0];
     if (!tab?.id) { setStatus(statusId, 'No Office Puzzle tab found. Open the datasheet first.', true); return; }
-    const result = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: officePuzzleDatasheetAutofiller, args: [tasks], world: 'MAIN' });
+    const opData = await fetchOpDataMapForTab(tab);
+    if (!opData.ok) { setStatus(statusId, opData.error, true); return; }
+    const result = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: officePuzzleDatasheetAutofiller, args: [tasks, opData.opDataMap], world: 'MAIN' });
     const log  = result?.[0]?.result || [];
     const ok   = log.filter(l => l.startsWith('✓'));
     const errs = log.filter(l => l.startsWith('❌'));
@@ -2589,7 +2632,7 @@ document.getElementById('saveChartsBtn').addEventListener('click', async () => {
 // Injected into the Office Puzzle datasheet page — must be fully self-contained.
 // Intercepts OP's own page-load GETs to capture item IDs + existing records, then
 // POSTs complete trial patterns directly to the OP API — no DOM clicks needed.
-async function officePuzzleDatasheetAutofiller(tasks) {
+async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
   // ── Helpers ──────────────────────────────────────────────────────────────────
   function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
 
@@ -2686,9 +2729,12 @@ async function officePuzzleDatasheetAutofiller(tasks) {
     return null;
   }
 
-  // ── Step 1: Fetch item data directly from OP API ─────────────────────────────
+  // ── Step 1: Item data map (built popup-side, passed in to avoid CORS) ─────────
   // behaviorName → { itemId: string, records: [{id, date, value, recordings, labels, hours, initials}] }
-  const opDataMap = {};
+  // The map is fetched + parsed in the popup context (via background.js) and passed
+  // in as the second argument — the OP API fetch is no longer done from this
+  // injected MAIN-world context, where it was CORS-blocked.
+  const opDataMap = prebuiltOpDataMap || {};
 
   // Extract businessUnitId from URL path (e.g. /client/{24-char-hex-id}/data/sheets)
   const buId = window.location.pathname.match(/\/([a-f0-9]{24})\//)?.[1];
@@ -2706,47 +2752,6 @@ async function officePuzzleDatasheetAutofiller(tasks) {
   const opViewMonth = (_urlMonthParam && /^\d{4}-\d{2}$/.test(_urlMonthParam))
     ? _urlMonthParam
     : `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}`;
-
-  // Fetch all item data for this month from the OP API
-  try {
-    const sheetsUrl = `https://api.officepuzzle.com/v1/business_units/${buId}/service_plan_item_data_sheets?month=${opViewMonth}`;
-    const sheetsRes = await fetch(sheetsUrl, { credentials: 'include' });
-    if (!sheetsRes.ok) {
-      return [`❌ OP API returned ${sheetsRes.status}. Make sure you are logged in to Office Puzzle.`];
-    }
-    const sheetsData = await sheetsRes.json();
-
-    // Parse response — handles both array-of-records and array-of-sheets shapes
-    const entries = Array.isArray(sheetsData) ? sheetsData : (sheetsData.data || sheetsData.records || []);
-    entries.forEach(entry => {
-      if (entry.item?.name) {
-        // Shape: flat record — { item: { id, name }, id, date, value, recordings, ... }
-        const name = entry.item.name.trim();
-        if (!opDataMap[name]) opDataMap[name] = { itemId: entry.item.id, records: [] };
-        if (entry.id) {
-          opDataMap[name].records.push({
-            id: entry.id, date: entry.date, value: entry.value,
-            recordings: entry.recordings, labels: entry.labels,
-            hours: entry.hours, initials: entry.initials,
-          });
-        }
-      } else if (entry.item_id) {
-        // Shape: sheet wrapper — { item_id, item_name/name, data/records: [...] }
-        const name = (entry.item_name || entry.name || '').trim();
-        if (!name) return;
-        if (!opDataMap[name]) opDataMap[name] = { itemId: entry.item_id, records: [] };
-        (entry.data || entry.records || []).forEach(r => {
-          opDataMap[name].records.push({
-            id: r.id, date: r.date, value: r.value,
-            recordings: r.recordings, labels: r.labels,
-            hours: r.hours, initials: r.initials,
-          });
-        });
-      }
-    });
-  } catch(err) {
-    return [`❌ Failed to fetch OP data: ${err.message}`];
-  }
 
   if (!Object.keys(opDataMap).length) {
     return ['❌ No item data returned by OP for this month. Make sure you are on the correct datasheet page and logged in.'];

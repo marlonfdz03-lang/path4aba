@@ -440,6 +440,43 @@ function renderCorrectionsList(corrections) {
   list.style.display = '';
 }
 
+// ── Build OP item-data map from a service_plan_item_data_sheets response ────────
+// Mirrors the parsing in officePuzzleDatasheetAutofiller, but runs popup-side so the
+// resulting map can be passed into the injected function (avoids the CORS-blocked
+// fetch from the injected MAIN-world context). Handles both array-of-records and
+// array-of-sheets response shapes.
+function buildOpDataMap(sheetsData) {
+  const opDataMap = {};
+  const entries = Array.isArray(sheetsData) ? sheetsData : (sheetsData.data || sheetsData.records || []);
+  entries.forEach(entry => {
+    if (entry.item?.name) {
+      // Shape: flat record — { item: { id, name }, id, date, value, recordings, ... }
+      const name = entry.item.name.trim();
+      if (!opDataMap[name]) opDataMap[name] = { itemId: entry.item.id, records: [] };
+      if (entry.id) {
+        opDataMap[name].records.push({
+          id: entry.id, date: entry.date, value: entry.value,
+          recordings: entry.recordings, labels: entry.labels,
+          hours: entry.hours, initials: entry.initials,
+        });
+      }
+    } else if (entry.item_id) {
+      // Shape: sheet wrapper — { item_id, item_name/name, data/records: [...] }
+      const name = (entry.item_name || entry.name || '').trim();
+      if (!name) return;
+      if (!opDataMap[name]) opDataMap[name] = { itemId: entry.item_id, records: [] };
+      (entry.data || entry.records || []).forEach(r => {
+        opDataMap[name].records.push({
+          id: r.id, date: r.date, value: r.value,
+          recordings: r.recordings, labels: r.labels,
+          hours: r.hours, initials: r.initials,
+        });
+      });
+    }
+  });
+  return opDataMap;
+}
+
 // ── Core OP task runner ───────────────────────────────────────────────────────
 async function runTasksOnOP(tasks) {
   try {
@@ -449,10 +486,54 @@ async function runTasksOnOP(tasks) {
       setCorrectionsStatus('No Office Puzzle tab found. Open the datasheet first.', true);
       return { ok: false };
     }
+
+    // Extract buId + viewing month from the OP tab (lightweight, no network) before
+    // the main injection, so the OP data fetch can run popup-side and dodge CORS.
+    const [metaResult] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        const buId = window.location.pathname.match(/\/([a-f0-9]{24})\//)?.[1];
+        const monthParam = new URLSearchParams(window.location.search).get('month')
+          || window.location.hash.match(/month=(\d{4}-\d{2})/)?.[1]
+          || null;
+        const now = new Date();
+        const opViewMonth = (monthParam && /^\d{4}-\d{2}$/.test(monthParam))
+          ? monthParam
+          : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        return { buId, opViewMonth };
+      },
+      world: 'MAIN',
+    });
+    const { buId, opViewMonth } = metaResult.result;
+    if (!buId) {
+      setCorrectionsStatus('Could not find OP business unit in the URL. Open the datasheet page first.', true);
+      return { ok: false };
+    }
+
+    // Fetch OP item data from the popup side via background.js (FETCH supports
+    // credentials), avoiding the CORS failure from the injected MAIN-world fetch.
+    const fetchRes = await new Promise((resolve) =>
+      chrome.runtime.sendMessage({
+        type: 'FETCH',
+        payload: {
+          url: `https://api.officepuzzle.com/v1/business_units/${buId}/service_plan_item_data_sheets?month=${opViewMonth}`,
+          method: 'GET',
+          headers: {},
+          credentials: 'include',
+        }
+      }, resolve)
+    );
+    if (!fetchRes?.ok) {
+      setCorrectionsStatus('Could not fetch OP data. Make sure you are logged in to Office Puzzle.', true);
+      return { ok: false };
+    }
+    const sheetsData = JSON.parse(fetchRes.data);
+    const opDataMap = buildOpDataMap(sheetsData);
+
     const result = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: officePuzzleDatasheetAutofiller,
-      args: [tasks],
+      args: [tasks, opDataMap],
       world: 'MAIN',
     });
     const log = result?.[0]?.result || [];
