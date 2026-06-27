@@ -2785,20 +2785,78 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
       };
 
       try {
-        const res = await fetch(opApiBase, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify(postBody),
-        });
-        if (res.ok) {
-          filledDays.push(task.dayNumber);
-        } else {
-          const errText = await res.text().catch(() => '');
-          log.push(`❌ "${name}" day ${task.dayNumber} — POST ${res.status}: ${errText.slice(0, 120)}`);
+        // DOM click approach — find the table for this behavior and click cells
+        const orderedElements = Array.from(document.querySelectorAll('h4, table'));
+        const h4Els = orderedElements.filter(el => el.tagName === 'H4');
+        const h4El = h4Els.find(h => namesMatch(h.innerText.trim(), name));
+        if (!h4El) {
+          log.push(`❌ "${name}" day ${task.dayNumber} — h4 not found in DOM`);
+          await delay(300);
+          continue;
         }
+        // Make behavior visible if hidden
+        const behaviorContainer = h4El.parentElement;
+        const wasHidden = behaviorContainer.classList.contains('d-none');
+        if (wasHidden) behaviorContainer.classList.remove('d-none');
+        await delay(200);
+
+        const table = findTableForH4(h4El, orderedElements);
+        if (!table) {
+          if (wasHidden) behaviorContainer.classList.add('d-none');
+          log.push(`❌ "${name}" day ${task.dayNumber} — table not found`);
+          await delay(300);
+          continue;
+        }
+
+        const colIdx = findDayColumn(table, task.dayNumber);
+        if (colIdx < 0) {
+          if (wasHidden) behaviorContainer.classList.add('d-none');
+          log.push(`❌ "${name}" day ${task.dayNumber} — day column not found`);
+          await delay(300);
+          continue;
+        }
+
+        const rows = Array.from(table.querySelectorAll('tr'));
+        // Rows are ordered 20 down to 1, then Days, totals etc.
+        // Find frequency rows (those whose first cell is a number 1-20)
+        const freqRows = rows.filter(r => {
+          const first = r.querySelector('td,th');
+          return first && /^\d+$/.test(first.innerText.trim());
+        }).sort((a, b) => {
+          const aVal = parseInt(a.querySelector('td,th').innerText.trim());
+          const bVal = parseInt(b.querySelector('td,th').innerText.trim());
+          return aVal - bVal; // sort ascending: row for 1 first, row for 20 last
+        });
+
+        const freq = Math.round(task.value);
+        let clickCount = 0;
+        for (let i = 0; i < freqRows.length; i++) {
+          const rowFreq = i + 1; // row index 0 = frequency 1
+          const cells = Array.from(freqRows[i].querySelectorAll('td'));
+          const cell = cells[colIdx - 1]; // colIdx is 1-based from Days row
+          if (!cell) continue;
+          const hasX = cell.innerText.trim() === 'X' || cell.classList.contains('filled') || cell.style.backgroundColor;
+          const shouldHaveX = rowFreq <= freq;
+          if (shouldHaveX && !hasX) {
+            cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            await delay(80);
+            cell.click();
+            clickCount++;
+            await delay(80);
+          } else if (!shouldHaveX && hasX) {
+            cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            await delay(80);
+            cell.click();
+            clickCount++;
+            await delay(80);
+          }
+        }
+
+        if (wasHidden) behaviorContainer.classList.add('d-none');
+        filledDays.push(task.dayNumber);
+        log.push(`✓ "${name}" day ${task.dayNumber} — ${clickCount} cells clicked (freq: ${freq})`);
       } catch(e) {
-        log.push(`❌ "${name}" day ${task.dayNumber} — fetch error: ${e.message}`);
+        log.push(`❌ "${name}" day ${task.dayNumber} — error: ${e.message}`);
       }
 
       await delay(300);
