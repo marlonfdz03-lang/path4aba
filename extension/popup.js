@@ -2722,10 +2722,6 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
     ? _urlMonthParam
     : `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}`;
 
-  if (!Object.keys(opDataMap).length) {
-    return ['❌ No item data returned by OP for this month. Make sure you are on the correct datasheet page and logged in.'];
-  }
-
   // ── Step 2: Group tasks by unique name ───────────────────────────────────────
   const tasksByName = new Map();
   for (const task of tasks) {
