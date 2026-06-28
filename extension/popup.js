@@ -2733,53 +2733,9 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
   const log = [];
 
   for (const [name, nameTasks] of tasksByName) {
-    const opKey = Object.keys(opDataMap).find(k => namesMatch(name, k));
-    if (!opKey) {
-      const captured = Object.keys(opDataMap).map(k => `"${k}"`).join(', ') || 'none captured';
-      log.push(`❌ "${name}" — not found in OP data map. Captured: ${captured}`);
-      continue;
-    }
-    const { itemId, records } = opDataMap[opKey];
     const filledDays = [];
 
     for (const task of nameTasks) {
-      const targetDate = `${opViewMonth}-${String(task.dayNumber).padStart(2, '0')}`;
-      const existing = records.find(r => r.date && r.date.startsWith(targetDate));
-
-      let recordings, labels, value;
-      if (task.type === 'replacement') {
-        const totalTrials = task.trials ?? 12;
-        const correct = Math.min(totalTrials, Math.max(0, Math.round(task.value / 100 * totalTrials)));
-        const seq = Array.isArray(task.sequence) && task.sequence.length === totalTrials
-          ? task.sequence
-          : generateSequence(correct, totalTrials);
-        recordings = seq.map(s => s === '+' ? 1 : -1);
-        labels = seq.slice();
-        value = task.value; // percentage
-      } else {
-        const freq = Math.round(task.value);
-        const totalTrials = 20; // maladaptive default — no DOM to read
-        const safeFilled = Math.min(freq, totalTrials);
-        recordings = [...Array(safeFilled).fill(1), ...Array(totalTrials - safeFilled).fill(-1)];
-        labels = [...Array(safeFilled).fill('X'), ...Array(totalTrials - safeFilled).fill('')];
-        value = freq;
-      }
-
-      const postBody = {
-        date: targetDate,
-        value,
-        recordings,
-        labels,
-        hours: existing?.hours ?? 5,
-        userHours: existing?.hours ?? 5,
-        initials: existing?.initials ?? '',
-        isBaseline: false,
-        isActive: true,
-        period: 'day',
-        id: existing?.id ?? null,
-        item: { id: itemId },
-      };
-
       try {
         // DOM click approach — find the table for this behavior and click cells
         const orderedElements = Array.from(document.querySelectorAll('h4, table'));
