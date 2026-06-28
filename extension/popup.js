@@ -2787,7 +2787,9 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
           const cells = Array.from(freqRows[i].querySelectorAll('td'));
           const cell = cells[colIdx - 1]; // colIdx is 1-based from Days row
           if (!cell) continue;
-          const hasX = cell.innerText.trim() === 'X' || cell.classList.contains('filled') || cell.style.backgroundColor;
+          const span = cell.querySelector('span');
+          const hasX = span?.classList.contains('bold') ||
+                       (span?.innerText.trim() === 'X');
           const shouldHaveX = rowFreq <= freq;
           if (shouldHaveX && !hasX) {
             cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
