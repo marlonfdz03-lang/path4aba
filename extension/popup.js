@@ -2752,6 +2752,102 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
         if (wasHidden) behaviorContainer.classList.remove('d-none');
         await delay(200);
 
+        // ── Replacement branch: per-skill trial table, min-diff toggle ──────────
+        // Each replacement skill has its own table of "Trial N" rows. Convert the
+        // target percentage into a correct-trial count, then toggle the minimum
+        // number of cells in the day's column to reach it (fullwidth ＋ = correct).
+        if (task.type === 'replacement') {
+          // Find the first trial table after this skill's h4 (skips non-trial tables).
+          const table = (() => {
+            const orderedEls = Array.from(document.querySelectorAll('h4, table'));
+            let pastH4 = false;
+            for (const el of orderedEls) {
+              if (el.tagName === 'H4' && namesMatch(el.innerText.trim(), name)) {
+                pastH4 = true; continue;
+              }
+              if (pastH4 && el.tagName === 'TABLE' &&
+                  el.innerText.includes('Trial 1') &&
+                  el.querySelectorAll('tr').length >= 10) return el;
+            }
+            return null;
+          })();
+          if (!table) {
+            if (wasHidden) behaviorContainer.classList.add('d-none');
+            log.push(`❌ "${name}" day ${task.dayNumber} — trial table not found`);
+            await delay(300);
+            continue;
+          }
+
+          // Trial rows: those whose first cell label starts with "Trial".
+          const trialRows = Array.from(table.querySelectorAll('tr'))
+            .filter(r => r.querySelector('td')?.innerText.trim().startsWith('Trial'));
+
+          // Days row is identical to maladaptives, so findDayColumn works unchanged.
+          const colIdx = findDayColumn(table, task.dayNumber);
+          if (colIdx < 0) {
+            if (wasHidden) behaviorContainer.classList.add('d-none');
+            log.push(`❌ "${name}" day ${task.dayNumber} — day column not found`);
+            await delay(300);
+            continue;
+          }
+
+          const totalTrials   = task.trials || trialRows.length;
+          const targetCorrect = Math.round(task.value / 100 * totalTrials);
+
+          // This day's cell in each trial row (cells[colIdx] — same offset as Days row).
+          const trialCells = trialRows.slice(0, totalTrials).map(r => {
+            const cells = Array.from(r.querySelectorAll('td'));
+            return cells[colIdx];
+          });
+
+          // Count how many cells are already marked correct (＋).
+          let currentCorrect = 0;
+          trialCells.forEach(cell => {
+            const span = cell?.querySelector('span.bold span');
+            if (span?.innerText.includes('＋')) currentCorrect++;
+          });
+
+          const diff = targetCorrect - currentCorrect;
+          let clickCount = 0;
+          if (diff > 0) {
+            // Need more ＋ — click non-＋ cells until target reached.
+            let toAdd = diff;
+            for (const cell of trialCells) {
+              if (toAdd <= 0) break;
+              const span = cell?.querySelector('span.bold span');
+              if (!span?.innerText.includes('＋')) {
+                cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                await delay(80);
+                cell.click();
+                clickCount++;
+                toAdd--;
+                await delay(80);
+              }
+            }
+          } else if (diff < 0) {
+            // Too many ＋ — toggle ＋ cells from the bottom up until target reached.
+            let toRemove = Math.abs(diff);
+            for (const cell of trialCells.slice().reverse()) {
+              if (toRemove <= 0) break;
+              const span = cell?.querySelector('span.bold span');
+              if (span?.innerText.includes('＋')) {
+                cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                await delay(80);
+                cell.click();
+                clickCount++;
+                toRemove--;
+                await delay(80);
+              }
+            }
+          }
+
+          if (wasHidden) behaviorContainer.classList.add('d-none');
+          filledDays.push(task.dayNumber);
+          log.push(`✓ "${name}" day ${task.dayNumber} — ${Math.abs(diff)} cells changed (${currentCorrect}→${targetCorrect} correct of ${totalTrials})`);
+          await delay(300);
+          continue;
+        }
+
         const table = findTableForH4(h4El, orderedElements);
         if (!table) {
           if (wasHidden) behaviorContainer.classList.add('d-none');
@@ -2780,7 +2876,9 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
           return aVal - bVal; // sort ascending: row for 1 first, row for 20 last
         });
 
-        const freq = Math.round(task.value);
+        const freq = task.type === 'replacement'
+          ? Math.round(task.value / 100 * freqRows.length)
+          : Math.round(task.value);
         let clickCount = 0;
         for (let i = 0; i < freqRows.length; i++) {
           const rowFreq = i + 1; // row index 0 = frequency 1
