@@ -399,6 +399,50 @@ function buildWeekCard(weekStart, items) {
         api('/api/rbt/data-corrections', { method: 'PATCH', body: JSON.stringify({ id: c.id, type: c.type }) }).catch(() => {})
       ));
 
+      // Persist the corrected values to Path4ABA so the charts update. Fire-and-forget
+      // with errors swallowed, so a failed save never blocks the corrections UI flow.
+      // weekStart comes from the correction (falling back to the worked week's Monday).
+      // For maladaptives, dailyVals is computed once per correction — same as applyWeekToOP —
+      // so the saved per-day frequencies form one consistent distribution summing to the total.
+      applied.forEach(c => {
+        const corrWeekStart = c.weekStart || getMondayOfDate(workedDays[0]) || workedDays[0];
+        if (c.type === 'replacement') {
+          workedDays.forEach(dateStr => {
+            api('/api/replacement-data', {
+              method: 'POST',
+              body: JSON.stringify([{
+                clientId: selectedClientId,
+                replacementSkill: c.name,
+                weekStart: corrWeekStart,
+                sessionDate: dateStr,
+                observedPercentage: c.currentValue,
+                totalTrials: c.totalTrials ?? trialsPerSession ?? 10,
+                userConfirmed: true,
+                autofillCompleted: true,
+                platformSource: 'extension',
+              }]),
+            }).catch(() => {});
+          });
+        } else {
+          const dailyVals = distributeMaladaptiveAcrossDays(c.currentValue ?? 0, workedDays.length);
+          workedDays.forEach((dateStr, idx) => {
+            api('/api/maladaptive-data', {
+              method: 'POST',
+              body: JSON.stringify([{
+                clientId: selectedClientId,
+                behaviorName: c.name,
+                weekStart: corrWeekStart,
+                sessionDate: dateStr,
+                frequency: dailyVals[idx] ?? 0,
+                userConfirmed: true,
+                autofillCompleted: true,
+                platformSource: 'extension',
+              }]),
+            }).catch(() => {});
+          });
+        }
+      });
+
       showWeekStatus(statusEl,
         `✓ Applied ${applied.length} of ${items.length}${errCount ? ` (${errCount} failed — check OP)` : ''}`,
         errCount > 0
