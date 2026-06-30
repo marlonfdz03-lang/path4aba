@@ -2417,11 +2417,14 @@ document.getElementById('extractChartsBtn').addEventListener('click', async () =
         return { resolvedName: winner, matched: true };
       }
 
-      // Shared meaningful word match (words longer than 2 chars)
+      // Shared meaningful word match — require AT LEAST 2 shared words (words longer
+      // than 2 chars) so two unrelated behaviors sharing a single word (e.g. "routines"
+      // or "play") don't falsely match and get merged.
       const cnWords = cn.split(' ').filter(w => w.length > 2);
       const wordMatch = pool.find(n => {
         const nWords = new Set(norm(n).split(' ').filter(w => w.length > 2));
-        return cnWords.some(w => nWords.has(w));
+        const sharedCount = cnWords.filter(w => nWords.has(w)).length;
+        return sharedCount >= 2;
       });
       if (wordMatch) {
         const winner = wordMatch.length >= chartName.length ? wordMatch : chartName;
@@ -2441,7 +2444,7 @@ document.getElementById('extractChartsBtn').addEventListener('click', async () =
     {
       const chartsByName = new Map();
       for (const c of extractedCharts) {
-        const key = c.resolvedName.toLowerCase().trim();
+        const key = `${c.category}::${c.resolvedName.toLowerCase().trim()}`;
         if (chartsByName.has(key)) {
           chartsByName.get(key).dataPoints = chartsByName.get(key).dataPoints.concat(c.dataPoints);
         } else {
@@ -2449,10 +2452,22 @@ document.getElementById('extractChartsBtn').addEventListener('click', async () =
         }
       }
       extractedCharts = Array.from(chartsByName.values()).map(c => {
-        const seen = new Set();
+        // Track value per date (Map, not Set) so we can warn when two points share a
+        // date but disagree. Keep the existing "first wins" behavior either way.
+        const seenMap = new Map();
         const dedupedPoints = c.dataPoints
           .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0)
-          .filter(pt => { if (seen.has(pt.date)) return false; seen.add(pt.date); return true; });
+          .filter(pt => {
+            if (seenMap.has(pt.date)) {
+              const existingVal = seenMap.get(pt.date);
+              if (existingVal !== pt.value) {
+                console.warn(`[Extract Charts] Conflicting values for ${pt.date}: kept ${existingVal}, discarded ${pt.value}`);
+              }
+              return false;
+            }
+            seenMap.set(pt.date, pt.value);
+            return true;
+          });
         return { ...c, dataPoints: dedupedPoints };
       });
     }
