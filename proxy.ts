@@ -37,8 +37,17 @@ const CORS_ALLOWED_ORIGINS = new Set([
 ])
 
 function corsHeaders(origin: string | null): Record<string, string> {
-  const allowed =
-    origin && CORS_ALLOWED_ORIGINS.has(origin) ? origin : 'https://path4aba.app'
+  // Safari Web Extensions request from `safari-web-extension://<UUID>`, where the
+  // UUID is generated per-install and can't be allowlisted ahead of time — so we
+  // reflect any extension-scheme origin. Only an installed extension can present
+  // such an Origin (a website can't forge it), and the Bearer token in
+  // lib/extensionAuth remains the real auth gate. Chrome's stable IDs stay in
+  // CORS_ALLOWED_ORIGINS. Without this, Safari's origin falls back to
+  // 'https://path4aba.app', which (with credentials) the browser rejects.
+  const isAllowed =
+    !!origin &&
+    (CORS_ALLOWED_ORIGINS.has(origin) || origin.startsWith('safari-web-extension://'))
+  const allowed = isAllowed ? (origin as string) : 'https://path4aba.app'
   return {
     'Access-Control-Allow-Origin': allowed,
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
