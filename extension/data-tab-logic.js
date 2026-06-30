@@ -395,69 +395,87 @@ function buildWeekCard(weekStart, items) {
         return;
       }
 
-      await Promise.all(applied.map(c =>
-        api('/api/rbt/data-corrections', { method: 'PATCH', body: JSON.stringify({ id: c.id, type: c.type }) }).catch(() => {})
-      ));
-
-      // Persist the corrected values to Path4ABA so the charts update. Fire-and-forget
-      // with errors swallowed, so a failed save never blocks the corrections UI flow.
-      // weekStart comes from the correction (falling back to the worked week's Monday).
-      // For maladaptives, dailyVals is computed once per correction — same as applyWeekToOP —
-      // so the saved per-day frequencies form one consistent distribution summing to the total.
-      applied.forEach(c => {
-        const corrWeekStart = c.weekStart || getMondayOfDate(workedDays[0]) || workedDays[0];
-        if (c.type === 'replacement') {
-          workedDays.forEach(dateStr => {
-            api('/api/replacement-data', {
-              method: 'POST',
-              body: JSON.stringify([{
-                clientId: selectedClientId,
-                replacementSkill: c.name,
-                weekStart: corrWeekStart,
-                sessionDate: dateStr,
-                observedPercentage: c.currentValue,
-                totalTrials: c.totalTrials ?? trialsPerSession ?? 10,
-                userConfirmed: true,
-                autofillCompleted: true,
-                platformSource: 'extension',
-              }]),
-            }).catch(() => {});
-          });
-        } else {
-          const dailyVals = distributeMaladaptiveAcrossDays(c.currentValue ?? 0, workedDays.length);
-          workedDays.forEach((dateStr, idx) => {
-            api('/api/maladaptive-data', {
-              method: 'POST',
-              body: JSON.stringify([{
-                clientId: selectedClientId,
-                behaviorName: c.name,
-                weekStart: corrWeekStart,
-                sessionDate: dateStr,
-                frequency: dailyVals[idx] ?? 0,
-                userConfirmed: true,
-                autofillCompleted: true,
-                platformSource: 'extension',
-              }]),
-            }).catch(() => {});
-          });
-        }
-      });
-
+      // Applied to OP — but do NOT resolve the corrections or save to Path4ABA yet.
+      // Let the RBT verify the result in OP first, then commit via "Mark as Done".
       showWeekStatus(statusEl,
-        `✓ Applied ${applied.length} of ${items.length}${errCount ? ` (${errCount} failed — check OP)` : ''}`,
+        `✓ Applied ${applied.length} of ${items.length}${errCount ? ` (${errCount} failed — check OP)` : ''} — verify in OP, then mark done.`,
         errCount > 0
       );
 
       daySelector.style.display = 'none';
       applyBtn.style.display = 'none';
 
-      if (applied.length === items.length) {
-        setTimeout(() => {
-          card.style.opacity = '0';
-          card.style.transition = 'opacity .3s';
-          setTimeout(() => card.remove(), 310);
-        }, 1500);
-      }
+      // Two-phase confirm: show a green button so the RBT can verify the autofill in OP
+      // before anything is committed. Only on click do we save the corrected values to
+      // Path4ABA, mark the corrections resolved, and fade the card.
+      const doneBtn = document.createElement('button');
+      doneBtn.textContent = '✓ Looks correct in OP — Mark as Done';
+      doneBtn.style.cssText = 'width:100%;margin-top:8px;font-size:11px;padding:7px 0;border:1px solid #16a34a;border-radius:6px;background:#16a34a;color:#fff;cursor:pointer;font-weight:600;';
+      body.appendChild(doneBtn);
+
+      doneBtn.addEventListener('click', async () => {
+        doneBtn.disabled = true;
+        doneBtn.textContent = 'Saving…';
+
+        // Persist the corrected values to Path4ABA so the charts update. Fire-and-forget
+        // with errors swallowed. For maladaptives, dailyVals is computed once per correction
+        // — same as applyWeekToOP — so the saved per-day frequencies form one consistent
+        // distribution summing to the total.
+        applied.forEach(c => {
+          const corrWeekStart = c.weekStart || getMondayOfDate(workedDays[0]) || workedDays[0];
+          if (c.type === 'replacement') {
+            workedDays.forEach(dateStr => {
+              api('/api/replacement-data', {
+                method: 'POST',
+                body: JSON.stringify([{
+                  clientId: selectedClientId,
+                  replacementSkill: c.name,
+                  weekStart: corrWeekStart,
+                  sessionDate: dateStr,
+                  observedPercentage: c.currentValue,
+                  totalTrials: c.totalTrials ?? trialsPerSession ?? 10,
+                  userConfirmed: true,
+                  autofillCompleted: true,
+                  platformSource: 'extension',
+                }]),
+              }).catch(() => {});
+            });
+          } else {
+            const dailyVals = distributeMaladaptiveAcrossDays(c.currentValue ?? 0, workedDays.length);
+            workedDays.forEach((dateStr, idx) => {
+              api('/api/maladaptive-data', {
+                method: 'POST',
+                body: JSON.stringify([{
+                  clientId: selectedClientId,
+                  behaviorName: c.name,
+                  weekStart: corrWeekStart,
+                  sessionDate: dateStr,
+                  frequency: dailyVals[idx] ?? 0,
+                  userConfirmed: true,
+                  autofillCompleted: true,
+                  platformSource: 'extension',
+                }]),
+              }).catch(() => {});
+            });
+          }
+        });
+
+        // Mark the applied corrections resolved (only now that the RBT confirmed OP looks right).
+        await Promise.all(applied.map(c =>
+          api('/api/rbt/data-corrections', { method: 'PATCH', body: JSON.stringify({ id: c.id, type: c.type }) }).catch(() => {})
+        ));
+
+        showWeekStatus(statusEl, 'Applied and confirmed', false);
+        doneBtn.textContent = '✓ Done';
+
+        if (applied.length === items.length) {
+          setTimeout(() => {
+            card.style.opacity = '0';
+            card.style.transition = 'opacity .3s';
+            setTimeout(() => card.remove(), 310);
+          }, 1500);
+        }
+      });
     });
 
     actionsRow.appendChild(cancelBtn);

@@ -81,7 +81,7 @@ function weeklyAvgs(records: any[], valueKey: string, mode: "avg" | "sum" = "avg
   return Object.entries(map)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([week, recs]) => {
-      const confirmed = recs.filter((r) => r.user_confirmed);
+      const confirmed = recs;
       const primary = confirmed.length > 0 ? confirmed[0] : recs[0];
       let avg: number;
       if (mode === "sum") {

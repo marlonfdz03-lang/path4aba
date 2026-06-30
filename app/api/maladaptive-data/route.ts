@@ -17,11 +17,7 @@ export async function GET(req: Request) {
   if (!clientId) return NextResponse.json({ error: 'clientId required' }, { status: 400 })
 
   const where: any = { client_id: clientId }
-  const dateFrom = searchParams.get('dateFrom')
-  const dateTo   = searchParams.get('dateTo')
   const behavior = searchParams.get('behavior')
-  if (dateFrom) where.week_start = { ...(where.week_start ?? {}), gte: dateFrom }
-  if (dateTo)   where.week_start = { ...(where.week_start ?? {}), lte: dateTo }
   if (behavior) where.behavior_name = { contains: behavior, mode: 'insensitive' }
 
   try {

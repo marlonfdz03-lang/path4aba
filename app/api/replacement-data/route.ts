@@ -16,17 +16,10 @@ export async function GET(req: Request) {
   const clientId = searchParams.get('clientId')
   if (!clientId) return NextResponse.json({ error: 'clientId required' }, { status: 400 })
 
-  const dateFrom = searchParams.get('dateFrom') || undefined
-  const dateTo = searchParams.get('dateTo') || undefined
   const skill = searchParams.get('skill') || undefined
   const location = searchParams.get('location') || undefined
 
   const where: any = { client_id: clientId }
-  if (dateFrom || dateTo) {
-    where.session_date = {}
-    if (dateFrom) where.session_date.gte = dateFrom
-    if (dateTo) where.session_date.lte = dateTo
-  }
   if (skill) where.replacement_skill = { contains: skill, mode: 'insensitive' }
   if (location) where.location = location
 
