@@ -375,6 +375,8 @@ function setupMainScreen() {
 
   // Show Extract Charts section if on Office Puzzle charts page
   checkOfficePuzzlePage();
+  // Show Fill ABA Matrix button if on an ABA Matrix session page
+  checkABAMatrixPage();
 }
 
 // ── Client selection ───────────────────────
@@ -2000,6 +2002,16 @@ async function checkOfficePuzzlePage() {
     const chartsEl = document.getElementById('extractChartsSection');
     if (chartsEl) chartsEl.style.display = isOPCharts ? '' : 'none';
   } catch { /* ignore — happens in non-tab contexts */ }
+}
+
+function checkABAMatrixPage() {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const url = tabs[0]?.url || '';
+    if (url.includes('app.abamatrix.com/session')) {
+      const fillBtn = document.getElementById('fillABAMatrixBtn');
+      if (fillBtn) fillBtn.style.display = 'block';
+    }
+  });
 }
 
 // ── ABA Matrix detection + autofill ─────────────────────────────────────────
