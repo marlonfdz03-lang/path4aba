@@ -130,6 +130,33 @@ For preferredActivities: extract all activities listed as preferred or high-pref
 For nonPreferredActivities: extract all activities listed as non-preferred, low-preference, or avoided.
 For caregivers: extract names of caregivers, parents, or guardians mentioned in the document.
 
+INTERVENTION EXTRACTION — CRITICAL:
+Search the ENTIRE document for ABA interventions. Do NOT limit to a specific section.
+
+Step 1: If the document has a section titled "Intervention Procedures", "Treatment Procedures", or "Behavior Intervention Plan" — extract EVERY intervention listed there.
+
+Step 2: Regardless of Step 1, also scan ALL sections of the document including:
+- Medical Necessity
+- Behavior Reduction Plan
+- Replacement Programs
+- Caregiver Training
+- Treatment Recommendations
+- Protocol Modifications
+- Narrative paragraphs
+
+Step 3: Also search for these ABA intervention terms anywhere in the document:
+DRA, DRI, DRO, DRL, FCT, Prompting, Prompt Fading, Errorless Teaching, Behavior Momentum,
+Activity Schedule, Visual Schedule, Token Economy, Premack Principle, Planned Ignoring,
+Extinction, Escape Extinction, Attention Extinction, Redirection, Response Block,
+Response Interruption, Environmental Manipulation, Antecedent Manipulation, Choice Making,
+Incidental Teaching, Natural Environment Teaching, NET, DTT, Modeling, Differential Reinforcement,
+Hand Over Hand, Prompt Hierarchy, Chaining, Task Analysis, Reinforcement, Behavior Momentum,
+Structured Antecedent Strategies, Systematic Prompting, Reinforcement Systems
+
+Step 4: Normalize duplicates — if you find "systematic prompting" and "prompt fading" and "prompting hierarchy", normalize to "Prompting / Prompt Fading". Remove exact duplicates.
+
+Step 5: Return ALL unique interventions found. Do NOT limit to 3, 5, or any fixed number. If the document has 20 interventions, return 20.
+
 Return this exact JSON structure:
 {
   "clientCode": "generated internal code like initials-DOB-001",
