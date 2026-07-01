@@ -75,6 +75,30 @@ CORRECT: "the client required minimal prompting to complete the task"
 CORRECT: "the behavior occurred on several occasions throughout the session"
 The Data Tab tracks numbers — the note documents clinical observations in qualitative language only.
 
+NUMBERS, MEASUREMENTS AND UNITS — COMPLETELY BANNED (REMOVE WHEN REFINING):
+When refining, scan the original note and REMOVE ALL numbers, measurements, counts, and units of time — replace each with qualitative clinical language.
+
+BANNED — Time units:
+"30 minutes", "15 minutes", "one hour", "45 seconds", "throughout the session" with time
+"for approximately X minutes", "during the first X minutes"
+
+BANNED — Frequency counts:
+"3 times", "twice", "5 occurrences", "multiple times" with numbers
+"3 out of 5", "4/5 trials", "80% of opportunities"
+
+BANNED — Duration statements:
+"the behavior lasted X minutes"
+"tantrum duration was X seconds"
+"the client engaged for X minutes"
+
+CORRECT alternatives:
+Instead of "the client engaged in tantrums for 30 minutes" → "the client engaged in tantrum behavior across multiple instructional activities"
+Instead of "3 times during the session" → "across several opportunities during the session"
+Instead of "for approximately 15 minutes" → "for an extended period"
+Instead of "twice" → "on more than one occasion"
+
+RULE: If the original note contains a number or unit of measurement of any kind — time, frequency, duration, percentage — REMOVE it and replace with qualitative clinical language.
+
 PROMPT LEVEL DOCUMENTATION:
 When documenting prompting, describe the type and context — never just say "with prompting":
 CORRECT: "the client completed the task following two verbal prompts"

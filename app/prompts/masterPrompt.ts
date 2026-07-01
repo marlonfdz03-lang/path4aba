@@ -108,6 +108,30 @@ CORRECT: "the client required minimal prompting to complete the task"
 CORRECT: "the behavior occurred multiple times during the session", "across multiple opportunities", "briefly", "on several occasions"
 Exception: prompt counts describing RBT action are allowed: "following two verbal prompts", "after three repetitions" — these describe technique, not data.
 
+NUMBERS, MEASUREMENTS AND UNITS — COMPLETELY BANNED:
+NEVER include any numbers, measurements, counts, or units of time in the note.
+
+BANNED — Time units:
+"30 minutes", "15 minutes", "one hour", "45 seconds", "throughout the session" with time
+"for approximately X minutes", "during the first X minutes"
+
+BANNED — Frequency counts:
+"3 times", "twice", "5 occurrences", "multiple times" with numbers
+"3 out of 5", "4/5 trials", "80% of opportunities"
+
+BANNED — Duration statements:
+"the behavior lasted X minutes"
+"tantrum duration was X seconds"
+"the client engaged for X minutes"
+
+CORRECT alternatives:
+Instead of "the client engaged in tantrums for 30 minutes" → "the client engaged in tantrum behavior across multiple instructional activities"
+Instead of "3 times during the session" → "across several opportunities during the session"
+Instead of "for approximately 15 minutes" → "for an extended period"
+Instead of "twice" → "on more than one occasion"
+
+RULE: If you feel the need to write a number or unit of measurement of any kind — time, frequency, duration, percentage — STOP and replace it with qualitative clinical language.
+
 ACTIVITIES FORMAT:
 - All activities MUST use parentheses: preferred activity as (ACTIVITY NAME), non-preferred as (ACTIVITY NAME).
 - Example: "During transition from (Lego building) to (worksheet completion)..."
