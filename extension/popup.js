@@ -585,93 +585,126 @@ function renderSkills() {
 }
 
 // ── Who Was Present grid ───────────────────
+// Selections persist per client in chrome.storage.local (`present_<clientId>`), so they
+// survive popup close/reopen. renderPresent() restores from storage on entry, so every
+// mutation (toggle/add/remove) MUST persist BEFORE re-rendering — otherwise the restore
+// would clobber the change just made.
+function persistPresent() {
+  if (selectedClientId) {
+    chrome.storage.local.set({ [`present_${selectedClientId}`]: selectedPresent });
+  }
+}
+
 function renderPresent() {
   const grid = document.getElementById('presentGrid');
   if (!grid) return;
 
-  const names = ['Caregiver', 'Teacher', ...(selectedProfile?.whoWasPresent || [])];
-  const unique = [...new Set(names)];
+  const doRender = () => {
+    const names = ['Caregiver', 'Teacher', ...(selectedProfile?.whoWasPresent || [])];
+    const unique = [...new Set(names)];
 
-  grid.innerHTML = '';
-  unique.forEach(name => {
-    const item = document.createElement('div');
-    item.className = 'check-item';
-    item.dataset.name = name;
-    const isCustom = !(name === 'Caregiver' || name === 'Teacher');
-    item.innerHTML = `
-      <div class="check-box">
-        <svg width="10" height="10" viewBox="0 0 12 12" fill="white">
-          <path d="M10 3L5 8.5 2 5.5 1 6.5l4 4 6-7z"/>
-        </svg>
-      </div>
-      <span>${name}</span>
-      ${isCustom ? `<button class="remove-present-btn" data-name="${name}" title="Remove">×</button>` : ''}
-    `;
-    item.addEventListener('click', () => {
-      if (item.classList.contains('checked')) {
-        item.classList.remove('checked');
-        selectedPresent = selectedPresent.filter(n => n !== name);
-      } else {
-        item.classList.add('checked');
-        selectedPresent.push(name);
+    grid.innerHTML = '';
+    unique.forEach(name => {
+      const item = document.createElement('div');
+      item.className = 'check-item';
+      item.dataset.name = name;
+      const isCustom = !(name === 'Caregiver' || name === 'Teacher');
+      item.innerHTML = `
+        <div class="check-box">
+          <svg width="10" height="10" viewBox="0 0 12 12" fill="white">
+            <path d="M10 3L5 8.5 2 5.5 1 6.5l4 4 6-7z"/>
+          </svg>
+        </div>
+        <span>${name}</span>
+        ${isCustom ? `<button class="remove-present-btn" data-name="${name}" title="Remove">×</button>` : ''}
+      `;
+      // Restore checked state on (re-)render.
+      if (selectedPresent.includes(name)) item.classList.add('checked');
+      item.addEventListener('click', () => {
+        if (item.classList.contains('checked')) {
+          item.classList.remove('checked');
+          selectedPresent = selectedPresent.filter(n => n !== name);
+        } else {
+          item.classList.add('checked');
+          selectedPresent.push(name);
+        }
+        persistPresent();
+        updateGenerateBtn();
+      });
+      grid.appendChild(item);
+      if (isCustom) {
+        item.querySelector('.remove-present-btn')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (selectedProfile) {
+            selectedProfile.whoWasPresent = (selectedProfile.whoWasPresent || []).filter(n => n !== name);
+            selectedProfile.caregivers = (selectedProfile.caregivers || []).filter(c => c !== name);
+          }
+          selectedPresent = selectedPresent.filter(n => n !== name);
+          persistPresent();
+          renderPresent();
+        });
       }
+    });
+
+    // ── Add New person inline form ──
+    const addBtn = document.createElement('button');
+    addBtn.textContent = '+ Add New';
+    addBtn.style.cssText = 'font-size:11px;color:#2563EB;background:none;border:none;cursor:pointer;padding:4px 0;margin-top:2px;';
+
+    const addForm = document.createElement('div');
+    addForm.style.cssText = 'display:none;margin-top:4px;gap:4px;align-items:center;';
+
+    const addInput = document.createElement('input');
+    addInput.type = 'text';
+    addInput.placeholder = 'Name…';
+    addInput.style.cssText = 'flex:1;font-size:12px;border:1px solid #e5e7eb;border-radius:6px;padding:5px 8px;outline:none;min-width:0;';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = 'Save';
+    saveBtn.style.cssText = 'font-size:11px;padding:5px 10px;background:#2563EB;color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap;';
+
+    addForm.appendChild(addInput);
+    addForm.appendChild(saveBtn);
+    grid.appendChild(addBtn);
+    grid.appendChild(addForm);
+
+    addBtn.addEventListener('click', () => {
+      addForm.style.display = addForm.style.display === 'none' ? 'flex' : 'none';
+      if (addForm.style.display !== 'none') addInput.focus();
+    });
+
+    saveBtn.addEventListener('click', () => {
+      const name = addInput.value.trim();
+      if (!name) return;
+      if (!selectedProfile) selectedProfile = {};
+      if (!selectedProfile.whoWasPresent) selectedProfile.whoWasPresent = [];
+      if (!selectedProfile.whoWasPresent.includes(name)) selectedProfile.whoWasPresent.push(name);
+      // A newly added custom person is also a caregiver name, and is auto-selected.
+      if (!selectedProfile.caregivers) selectedProfile.caregivers = [];
+      if (!selectedProfile.caregivers.includes(name)) selectedProfile.caregivers.push(name);
+      if (!selectedPresent.includes(name)) selectedPresent.push(name);
+      persistPresent();
+      if (selectedClientId) {
+        api(`/api/rbt/clients/${selectedClientId}/who-was-present`, {
+          method: 'POST',
+          body: JSON.stringify({ name }),
+        }).catch(() => {});
+      }
+      renderPresent();
       updateGenerateBtn();
     });
-    grid.appendChild(item);
-    if (isCustom) {
-      item.querySelector('.remove-present-btn')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (selectedProfile) {
-          selectedProfile.whoWasPresent = (selectedProfile.whoWasPresent || []).filter(n => n !== name);
-          selectedProfile.caregivers = (selectedProfile.caregivers || []).filter(c => c !== name);
-        }
-        selectedPresent = selectedPresent.filter(n => n !== name);
-        renderPresent();
-      });
-    }
-  });
+  };
 
-  // ── Add New person inline form ──
-  const addBtn = document.createElement('button');
-  addBtn.textContent = '+ Add New';
-  addBtn.style.cssText = 'font-size:11px;color:#2563EB;background:none;border:none;cursor:pointer;padding:4px 0;margin-top:2px;';
-
-  const addForm = document.createElement('div');
-  addForm.style.cssText = 'display:none;margin-top:4px;gap:4px;align-items:center;';
-
-  const addInput = document.createElement('input');
-  addInput.type = 'text';
-  addInput.placeholder = 'Name…';
-  addInput.style.cssText = 'flex:1;font-size:12px;border:1px solid #e5e7eb;border-radius:6px;padding:5px 8px;outline:none;min-width:0;';
-
-  const saveBtn = document.createElement('button');
-  saveBtn.textContent = 'Save';
-  saveBtn.style.cssText = 'font-size:11px;padding:5px 10px;background:#2563EB;color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap;';
-
-  addForm.appendChild(addInput);
-  addForm.appendChild(saveBtn);
-  grid.appendChild(addBtn);
-  grid.appendChild(addForm);
-
-  addBtn.addEventListener('click', () => {
-    addForm.style.display = addForm.style.display === 'none' ? 'flex' : 'none';
-    if (addForm.style.display !== 'none') addInput.focus();
-  });
-
-  saveBtn.addEventListener('click', () => {
-    const name = addInput.value.trim();
-    if (!name) return;
-    if (!selectedProfile) selectedProfile = {};
-    if (!selectedProfile.whoWasPresent) selectedProfile.whoWasPresent = [];
-    if (!selectedProfile.whoWasPresent.includes(name)) selectedProfile.whoWasPresent.push(name);
-    if (selectedClientId) {
-      api(`/api/rbt/clients/${selectedClientId}/who-was-present`, {
-        method: 'POST',
-        body: JSON.stringify({ name }),
-      }).catch(() => {});
-    }
-    renderPresent();
-  });
+  // Restore this client's saved selection first, THEN render (so checked state is right).
+  if (selectedClientId) {
+    chrome.storage.local.get([`present_${selectedClientId}`], (result) => {
+      const saved = result[`present_${selectedClientId}`];
+      if (Array.isArray(saved)) selectedPresent = saved;
+      doRender();
+    });
+  } else {
+    doRender();
+  }
 }
 
 // ── Reset session conditions ───────────────
