@@ -131,31 +131,40 @@ For nonPreferredActivities: extract all activities listed as non-preferred, low-
 For caregivers: extract names of caregivers, parents, or guardians mentioned in the document.
 
 INTERVENTION EXTRACTION — CRITICAL:
-Search the ENTIRE document for ABA interventions. Do NOT limit to a specific section.
+Extract every ABA intervention, teaching procedure, behavior reduction procedure, antecedent strategy, consequence strategy, prompting procedure, reinforcement procedure, or clinical protocol explicitly described or mentioned anywhere in this assessment. An intervention does not need to match a predefined list — if a BCBA describes a clinical procedure, extract it.
 
-Step 1: If the document has a section titled "Intervention Procedures", "Treatment Procedures", or "Behavior Intervention Plan" — extract EVERY intervention listed there.
+PRIORITY 1 — Dedicated sections:
+If the document contains a section titled "Intervention Procedures", "Treatment Procedures", "Behavior Intervention Plan", "Protocol", or similar — extract EVERY intervention listed there first.
 
-Step 2: Regardless of Step 1, also scan ALL sections of the document including:
-- Medical Necessity
+PRIORITY 2 — Full document scan:
+Search every remaining section of the document for additional interventions not already captured, including:
+- Medical Necessity narrative
 - Behavior Reduction Plan
-- Replacement Programs
-- Caregiver Training
+- Replacement Programs sections
+- Caregiver Training sections
 - Treatment Recommendations
 - Protocol Modifications
-- Narrative paragraphs
+- Changes Made to Behavioral Program
+- Any narrative paragraph that describes a clinical procedure
 
-Step 3: Also search for these ABA intervention terms anywhere in the document:
-DRA, DRI, DRO, DRL, FCT, Prompting, Prompt Fading, Errorless Teaching, Behavior Momentum,
-Activity Schedule, Visual Schedule, Token Economy, Premack Principle, Planned Ignoring,
-Extinction, Escape Extinction, Attention Extinction, Redirection, Response Block,
-Response Interruption, Environmental Manipulation, Antecedent Manipulation, Choice Making,
-Incidental Teaching, Natural Environment Teaching, NET, DTT, Modeling, Differential Reinforcement,
-Hand Over Hand, Prompt Hierarchy, Chaining, Task Analysis, Reinforcement, Behavior Momentum,
-Structured Antecedent Strategies, Systematic Prompting, Reinforcement Systems
+CRITICAL RULE: If an intervention is described inside a narrative paragraph instead of a bullet list or table, it MUST still be extracted. Do not require interventions to appear under a heading such as "Intervention Procedures."
 
-Step 4: Normalize duplicates — if you find "systematic prompting" and "prompt fading" and "prompting hierarchy", normalize to "Prompting / Prompt Fading". Remove exact duplicates.
+PRIORITY 3 — Merge exact duplicates only:
+Remove only exact duplicate names (case-insensitive). Do NOT merge or normalize similar-but-distinct procedures — "Prompting", "Prompt Hierarchy", and "Prompt Fading" may be three separate procedures and should remain separate.
 
-Step 5: Return ALL unique interventions found. Do NOT limit to 3, 5, or any fixed number. If the document has 20 interventions, return 20.
+RETURN ALL interventions found. Do NOT limit to any fixed number. If the assessment describes 20 procedures, return 20. Preserve the exact wording used in the assessment whenever possible. Do not paraphrase, rename, simplify, or combine intervention names unless they are exact duplicates differing only by capitalization or spacing.
+
+Examples of interventions to look for (this list is NOT exhaustive — extract any clinical procedure found):
+DRA, DRI, DRO, DRL, FCT, Prompting, Prompt Fading, Prompt Hierarchy, Errorless Teaching,
+Behavior Momentum, High Probability Request Sequence, Activity Schedule, Visual Schedule,
+Visual Supports, Token Economy, Premack Principle, Planned Ignoring, Extinction,
+Escape Extinction, Attention Extinction, Redirection, Response Block, Response Interruption,
+Response Delay, Environmental Manipulation, Antecedent Manipulation, Antecedent Strategies,
+Choice Making, Incidental Teaching, Natural Environment Teaching, NET, DTT, Modeling,
+Differential Reinforcement, Hand Over Hand, Chaining, Task Analysis, Reinforcement Systems,
+Stimulus Fading, NCR, Noncontingent Reinforcement, Behavioral Skills Training, BST,
+Structured Antecedent Strategies, Systematic Prompting, Reinforcement Schedules,
+Guided Practice, Caregiver Training Procedures
 
 Return this exact JSON structure:
 {
