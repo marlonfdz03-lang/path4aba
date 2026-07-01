@@ -2002,6 +2002,35 @@ async function checkOfficePuzzlePage() {
   } catch { /* ignore — happens in non-tab contexts */ }
 }
 
+// ── ABA Matrix detection + autofill ─────────────────────────────────────────
+// abamatrix-autofill.js (declared content script) posts { action: 'onABAMatrix' }
+// on page load. NOTE: the popup only receives this while it is open, so the button
+// appears only if the popup was open when the ABA Matrix page loaded.
+let onABAMatrix = false;
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.action === 'onABAMatrix') {
+    onABAMatrix = true;
+    const fillBtn = document.getElementById('fillABAMatrixBtn');
+    if (fillBtn) fillBtn.style.display = 'block';
+  }
+});
+
+document.getElementById('fillABAMatrixBtn')?.addEventListener('click', () => {
+  const noteData = {
+    // The generated note lives in the #outputNote textarea (there is no `generatedNote` global).
+    fullNote: document.getElementById('outputNote')?.value || '',
+    // selectedBehaviors/selectedSkills hold name strings — abamatrix-autofill.js reads `.name`.
+    behaviors: selectedBehaviors.map(name => ({ name })),
+    skills: selectedSkills.map(name => ({ name })),
+    clientPresentStart: 'The client presented as cooperative and ready to engage in structured activities.',
+    clientPresentEnd: 'The client demonstrated appropriate disengagement and responded to closing routines.',
+    participation: 'The client demonstrated active participation throughout the session.',
+  };
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0]?.id) chrome.tabs.sendMessage(tabs[0].id, { action: 'fillABAMatrix', data: noteData });
+  });
+});
+
 // Runs inside the Office Puzzle page — must be fully self-contained (no outer scope refs).
 async function officePuzzleExtractor() {
   // Scroll incrementally to force lazy-rendered charts to mount, then wait for them.
