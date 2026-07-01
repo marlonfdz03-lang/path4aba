@@ -217,20 +217,46 @@ export async function POST(req: Request) {
       case 'invoice.paid': {
         const invoice = event.data.object as Stripe.Invoice
         const subscriptionId = (invoice as any).subscription as string
+        const customerId = (invoice as any).customer as string
         if (!subscriptionId) break
 
         const periodEnd = (invoice as any).lines?.data?.[0]?.period?.end
-        const currentPeriodEnd = periodEnd ? new Date(periodEnd * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        const currentPeriodEnd = periodEnd
+          ? new Date(periodEnd * 1000)
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
 
-        await prisma.subscriptions.updateMany({
+        // Try by stripe_subscription_id first
+        const existingSub = await prisma.subscriptions.findFirst({
           where: { stripe_subscription_id: subscriptionId },
-          data: {
-            status: 'active',
-            current_period_ends_at: currentPeriodEnd,
-          },
-        }).catch(err => console.error('[webhook] invoice.paid error:', err))
+          select: { id: true, user_id: true },
+        })
 
-        console.log('[webhook] invoice.paid — marked active for subscription:', subscriptionId)
+        if (existingSub) {
+          await prisma.subscriptions.update({
+            where: { id: existingSub.id },
+            data: { status: 'active', current_period_ends_at: currentPeriodEnd },
+          })
+          console.log('[webhook] invoice.paid — marked active by subscription_id:', subscriptionId)
+        } else {
+          // Fallback: try by stripe_customer_id
+          const byCustomer = await prisma.subscriptions.findFirst({
+            where: { stripe_customer_id: customerId },
+            select: { id: true, user_id: true },
+          })
+          if (byCustomer) {
+            await prisma.subscriptions.update({
+              where: { id: byCustomer.id },
+              data: {
+                status: 'active',
+                current_period_ends_at: currentPeriodEnd,
+                stripe_subscription_id: subscriptionId,
+              },
+            })
+            console.log('[webhook] invoice.paid — marked active by customer_id:', customerId)
+          } else {
+            console.error('[webhook] invoice.paid — no subscription found for:', subscriptionId, customerId)
+          }
+        }
         break
       }
 
