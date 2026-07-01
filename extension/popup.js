@@ -2063,8 +2063,8 @@ chrome.runtime.onMessage.addListener((message) => {
 document.getElementById('fillABAMatrixBtn')?.addEventListener('click', () => {
   const noteData = {
     fullNote: document.getElementById('outputNote')?.value || '',
-    behaviors: selectedBehaviors || [],
-    skills: selectedSkills || [],
+    behaviors: (selectedBehaviors || []).map(b => typeof b === 'string' ? { name: b } : b),
+    skills: (selectedSkills || []).map(s => typeof s === 'string' ? { name: s } : s),
     clientPresentStart: 'The client presented as cooperative and ready to engage in structured activities.',
     clientPresentEnd: 'The client demonstrated appropriate disengagement and responded to closing routines.',
     participation: 'The client demonstrated active participation throughout the session.',

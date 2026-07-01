@@ -25,12 +25,5 @@
   },
   "background": {
     "service_worker": "background.js"
-  },
-  "content_scripts": [
-    {
-      "matches": ["https://app.abamatrix.com/*"],
-      "js": ["abamatrix-autofill.js"],
-      "run_at": "document_idle"
-    }
-  ]
+  }
 }
