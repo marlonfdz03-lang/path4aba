@@ -2005,9 +2005,9 @@ async function checkOfficePuzzlePage() {
 }
 
 function checkABAMatrixPage() {
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const url = tabs[0]?.url || '';
-    if (url.includes('app.abamatrix.com/session')) {
+  chrome.tabs.query({ active: true }, (tabs) => {
+    const abaTab = tabs.find(t => t.url && t.url.includes('app.abamatrix.com/session'));
+    if (abaTab) {
       const fillBtn = document.getElementById('fillABAMatrixBtn');
       if (fillBtn) fillBtn.style.display = 'block';
     }
