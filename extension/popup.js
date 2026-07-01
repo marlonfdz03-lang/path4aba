@@ -2062,17 +2062,35 @@ chrome.runtime.onMessage.addListener((message) => {
 
 document.getElementById('fillABAMatrixBtn')?.addEventListener('click', () => {
   const noteData = {
-    // The generated note lives in the #outputNote textarea (there is no `generatedNote` global).
     fullNote: document.getElementById('outputNote')?.value || '',
-    // selectedBehaviors/selectedSkills hold name strings — abamatrix-autofill.js reads `.name`.
-    behaviors: selectedBehaviors.map(name => ({ name })),
-    skills: selectedSkills.map(name => ({ name })),
+    behaviors: selectedBehaviors || [],
+    skills: selectedSkills || [],
     clientPresentStart: 'The client presented as cooperative and ready to engage in structured activities.',
     clientPresentEnd: 'The client demonstrated appropriate disengagement and responded to closing routines.',
     participation: 'The client demonstrated active participation throughout the session.',
   };
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    if (tabs[0]?.id) chrome.tabs.sendMessage(tabs[0].id, { action: 'fillABAMatrix', data: noteData });
+
+  chrome.tabs.query({ active: true }, (tabs) => {
+    const abaTab = tabs.find(t => t.url?.includes('app.abamatrix.com/session'));
+    if (!abaTab) {
+      alert('Please open ABA Matrix session page first.');
+      return;
+    }
+    // First inject the content script, then send message
+    chrome.scripting.executeScript({
+      target: { tabId: abaTab.id },
+      files: ['abamatrix-autofill.js']
+    }, () => {
+      setTimeout(() => {
+        chrome.tabs.sendMessage(abaTab.id, { action: 'fillABAMatrix', data: noteData }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.error('Fill error:', chrome.runtime.lastError.message);
+          } else {
+            console.log('Fill response:', response);
+          }
+        });
+      }, 500);
+    });
   });
 });
 
