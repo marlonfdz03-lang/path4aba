@@ -162,7 +162,7 @@ if (window.__abaMatrixLoaded) {
             questions.push(`Goal Implementation #${i+1} - What was the teaching procedure used?`);
             questions.push(`Goal Implementation #${i+1} - Did you use any prompts? (Yes or No)`);
             questions.push(`Goal Implementation #${i+1} - What reinforcers were used?`);
-            questions.push(`Goal Implementation #${i+1} - What was the schedule of reinforcement used?`);
+            questions.push(`Goal Implementation #${i+1} - What was the schedule of reinforcement used? Answer with ONLY one of these exact options based on the client's assessment: Fixed Ratio, Variable Ratio, Fixed Interval, Variable Interval, DRO, DRS, Continuous Reinforcement. If not specified in the note, answer: Continuous Reinforcement`);
           });
 
           // Route the AI call through the background service worker (Bearer token, CORS-exempt).
@@ -356,6 +356,15 @@ if (window.__abaMatrixLoaded) {
             setMatInput(updatedInputs[chipBase + 2], answers[String(gIdx + 5)] || '');
             await waitMs(200);
             updatedInputs[chipBase + 2].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+            await waitMs(200);
+          }
+
+          // Schedule of reinforcement → textarea
+          const scheduleTextareas = document.querySelectorAll('textarea');
+          const scheduleBase = 4 + (behaviors.length * 3) + skills.length + skills.length;
+          const scheduleTextarea = scheduleTextareas[scheduleBase + i];
+          if (scheduleTextarea) {
+            setMatInput(scheduleTextarea, answers[String(gIdx + 6)] || 'Continuous Reinforcement');
             await waitMs(200);
           }
 
