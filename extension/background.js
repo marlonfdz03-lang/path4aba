@@ -253,6 +253,55 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep channel open for async sendResponse
   }
 
+  // ── Phase 4 prep: expand the form — add one Behavior/Goal section per extracted fact ──
+  // Runs in the MAIN world (button clicks drive the Angular app). Must run BEFORE getFormSchema
+  // so the scan sees the newly-rendered sections and their fields.
+  if (message.action === 'expandFormSections') {
+    chrome.tabs.query({ active: true }, (tabs) => {
+      const abaTab = (tabs || []).find(t => t.url && t.url.includes('app.abamatrix.com')) || (tabs || [])[0];
+      if (!abaTab) { sendResponse({ error: 'ABA Matrix tab not found' }); return; }
+      chrome.scripting.executeScript(
+        {
+          target: { tabId: abaTab.id },
+          world: 'MAIN',
+          func: async (behaviorsCount, skillsCount) => {
+            async function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+            // Click Add Behavior Reduction button N times
+            for (let i = 0; i < behaviorsCount; i++) {
+              const addBtns = Array.from(document.querySelectorAll('button'))
+                .filter(b => b.innerText?.trim().includes('Add Behavior') && b.offsetParent !== null);
+              if (addBtns.length > 0) {
+                addBtns[0].click();
+                await wait(800);
+              }
+            }
+
+            // Click Add Goal Implementation button N times
+            for (let i = 0; i < skillsCount; i++) {
+              const addBtns = Array.from(document.querySelectorAll('button'))
+                .filter(b => b.innerText?.trim().includes('Add Goal') && b.offsetParent !== null);
+              if (addBtns.length > 0) {
+                addBtns[0].click();
+                await wait(800);
+              }
+            }
+
+            // Wait for Angular to render all sections
+            await wait(1000);
+            return { behaviors: behaviorsCount, skills: skillsCount };
+          },
+          args: [message.behaviorsCount || 0, message.skillsCount || 0],
+        },
+        (results) => {
+          if (chrome.runtime.lastError) { sendResponse({ error: chrome.runtime.lastError.message }); return; }
+          sendResponse({ ok: true, expanded: results && results[0] ? results[0].result : null });
+        }
+      );
+    });
+    return true; // keep channel open for async sendResponse
+  }
+
   // ── Phase 3: MAIN<->ISOLATED bridge — run the scan in the ABA Matrix tab's MAIN world ──
   // The engine (Scanner/Normalizer/Adapter) lives in the MAIN world. Inject it (idempotent)
   // and run scan+normalize there, returning the plain NormalizedForm to the ISOLATED caller.

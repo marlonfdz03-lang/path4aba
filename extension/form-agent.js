@@ -54,6 +54,24 @@
     });
   }
 
+  // Expand the form (add one Behavior/Goal section per fact) in the MAIN world, before scanning.
+  function expandFormSections(behaviorsCount, skillsCount) {
+    return new Promise(function (resolve) {
+      chrome.runtime.sendMessage(
+        { action: 'expandFormSections', behaviorsCount: behaviorsCount, skillsCount: skillsCount },
+        function (response) {
+          if (chrome.runtime.lastError) {
+            console.error('[Path4ABA] expandFormSections error:', chrome.runtime.lastError.message);
+            resolve(null);
+            return;
+          }
+          if (response && response.error) console.error('[Path4ABA] expandFormSections error:', response.error);
+          resolve((response && response.expanded) || null);
+        }
+      );
+    });
+  }
+
   // Get the NormalizedForm. The scan runs in the MAIN world (the engine's world) via the
   // background bridge, so this ISOLATED module receives the plain object back.
   function getFormSchema() {
@@ -118,6 +136,11 @@
     const nB = (clinicalFacts.behaviors || []).length;
     const nS = (clinicalFacts.skills || []).length;
     sendStatus('✅ Clinical facts extracted (' + nB + ' behaviors, ' + nS + ' skills).');
+
+    // ── Expand the form: add a Behavior/Goal section per fact BEFORE scanning ──
+    sendStatus('➕ Expanding form sections…');
+    await expandFormSections(nB, nS);
+    sendStatus('Form expanded: ' + nB + ' behaviors, ' + nS + ' goals', 'info');
 
     // ── Phase 3a: NormalizedForm via the MAIN-world scan (background bridge) ──
     sendStatus('🔍 Scanning the form…');
