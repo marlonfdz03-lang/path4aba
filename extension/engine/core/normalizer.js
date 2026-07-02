@@ -19,7 +19,9 @@
  */
 (function () {
   'use strict';
-  if (window.FormEngineNormalizer) return; // idempotent
+  // Always overwrite on (re)injection — no idempotency guard — so a fresh injection
+  // during calibration installs the latest code instead of keeping a stale definition.
+  window.__FormEngine_v = (window.__FormEngine_v || 0) + 1;
 
   const SECTION_PREFIX = {
     DailyLog: 'DL',

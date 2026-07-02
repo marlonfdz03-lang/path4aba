@@ -18,7 +18,9 @@
  */
 (function () {
   'use strict';
-  if (window.FormEngineScanner) return; // idempotent — defines only, no side effects
+  // Always overwrite on (re)injection — no idempotency guard — so a fresh injection
+  // during calibration installs the latest code instead of keeping a stale definition.
+  window.__FormEngine_v = (window.__FormEngine_v || 0) + 1;
 
   const SECTION_SELECTOR = 'mat-card';
 
@@ -182,13 +184,15 @@
 
   // Extract every field in one section.
   //   synthetic = true  -> sectionEl is the <form> (Daily Log): include only form-level
-  //                        fields NOT inside any mat-card.
+  //                        fields, filtered in JS with !el.closest('mat-card') (a CSS
+  //                        :not() selector proved unreliable).
   //   synthetic = false -> sectionEl is a mat-card: include only fields belonging to THIS
   //                        card (not a nested one).
   function extractFields(sectionEl, sectionTitle, synthetic) {
     const fields = [];
     const counted = new Set();
 
+    // Daily Log (synthetic): JS filter excludes anything inside a mat-card.
     const inScope = function (el) {
       return synthetic ? !el.closest('mat-card') : (el.closest(SECTION_SELECTOR) === sectionEl);
     };

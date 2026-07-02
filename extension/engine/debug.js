@@ -14,7 +14,9 @@
  */
 (function () {
   'use strict';
-  if (window.debugFormEngine) return; // idempotent
+  // Always overwrite on (re)injection — no idempotency guard — so a fresh injection
+  // during calibration installs the latest code instead of keeping a stale definition.
+  window.__FormEngine_v = (window.__FormEngine_v || 0) + 1;
 
   function summarize(normalized) {
     const byType = {};
@@ -45,7 +47,7 @@
     const summary = summarize(normalized);
 
     console.group('%c[Path4ABA] Form Engine — NormalizedForm', 'font-weight:bold;color:#2563eb;font-size:13px');
-    console.log('URL:', normalized.url, '| platform:', normalized.platform);
+    console.log('URL:', normalized.url, '| platform:', normalized.platform, '| engine v:', window.__FormEngine_v);
     console.log('Sections:', normalized.sections.length, '| Fields:', totalFields, '| Unidentified:', normalized.unidentified.length);
 
     console.groupCollapsed('Full NormalizedForm (JSON)');

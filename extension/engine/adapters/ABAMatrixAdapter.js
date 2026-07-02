@@ -14,7 +14,9 @@
  */
 (function () {
   'use strict';
-  if (window.ABAMatrixAdapter) return; // idempotent
+  // Always overwrite on (re)injection — no idempotency guard — so a fresh injection
+  // during calibration installs the latest code instead of keeping a stale definition.
+  window.__FormEngine_v = (window.__FormEngine_v || 0) + 1;
 
   const SECTION_SELECTOR = 'mat-card';
 
@@ -30,7 +32,9 @@
       // Daily Log — the real <form> element, marked synthetic.
       const form = document.querySelector('form');
       if (form) {
-        const hasDailyLogFields = form.querySelector('mat-form-field:not(mat-card mat-form-field), mat-radio-group:not(mat-card mat-radio-group)');
+        // JS filter, not a CSS :not() selector (the latter proved unreliable here).
+        const allFields = Array.from(form.querySelectorAll('mat-form-field, mat-radio-group'));
+        const hasDailyLogFields = allFields.some(el => !el.closest('mat-card'));
         if (hasDailyLogFields) {
           sections.push({ element: form, type: 'DailyLog', title: 'Daily Log', synthetic: true });
         }
