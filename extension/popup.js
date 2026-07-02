@@ -2043,6 +2043,8 @@ function checkABAMatrixPage() {
     if (abaTab) {
       const fillBtn = document.getElementById('fillABAMatrixBtn');
       if (fillBtn) fillBtn.style.display = 'block';
+      const aiBtn = document.getElementById('aiFillBetaBtn');
+      if (aiBtn) aiBtn.style.display = 'block';
     }
   });
 }
@@ -2057,6 +2059,17 @@ chrome.runtime.onMessage.addListener((message) => {
     onABAMatrix = true;
     const fillBtn = document.getElementById('fillABAMatrixBtn');
     if (fillBtn) fillBtn.style.display = 'block';
+    const aiBtn = document.getElementById('aiFillBetaBtn');
+    if (aiBtn) aiBtn.style.display = 'block';
+  }
+  // Live progress from the Form Agent (Phase 2). Content-script runtime messages reach the
+  // open popup directly, so we render them here with no background relay needed.
+  if (message.action === 'agentStatus') {
+    const statusDiv = document.getElementById('aiFillStatus');
+    if (statusDiv) {
+      statusDiv.style.display = 'block';
+      statusDiv.textContent = message.text || '';
+    }
   }
 });
 
@@ -2077,6 +2090,36 @@ document.getElementById('fillABAMatrixBtn')?.addEventListener('click', () => {
       console.error('Fill error:', chrome.runtime.lastError.message);
     } else {
       console.log('Fill response:', response);
+    }
+  });
+});
+
+// ── AI Fill (Beta): Phase 2 Form Agent (ClinicalExtractor) ──────────────────
+// Builds the same noteData as the fill flow (plus clientName) and hands it to the
+// background, which runs window.runFormAgent(noteData) in the ABA Matrix tab.
+document.getElementById('aiFillBetaBtn')?.addEventListener('click', () => {
+  const clientOpt = document.getElementById('clientSelect')?.selectedOptions[0];
+  const noteData = {
+    fullNote: document.getElementById('outputNote')?.value || '',
+    behaviors: (selectedBehaviors || []).map(b => typeof b === 'string' ? { name: b } : b),
+    skills: (selectedSkills || []).map(s => typeof s === 'string' ? { name: s } : s),
+    caregivers: selectedPresent || [],
+    clientName: (clientOpt && clientOpt.value) ? clientOpt.textContent : 'the client',
+  };
+
+  const statusDiv = document.getElementById('aiFillStatus');
+  if (statusDiv) { statusDiv.style.display = 'block'; statusDiv.textContent = 'Starting AI Fill…'; }
+  console.log('[Path4ABA] AI Fill (Beta) → runFormAgent:', noteData);
+
+  chrome.runtime.sendMessage({ action: 'runFormAgent', noteData }, (response) => {
+    if (chrome.runtime.lastError) {
+      console.error('[Path4ABA] runFormAgent error:', chrome.runtime.lastError.message);
+      if (statusDiv) statusDiv.textContent = 'Error: ' + chrome.runtime.lastError.message;
+    } else {
+      console.log('[Path4ABA] runFormAgent response:', response);
+      if (response && response.ok === false && statusDiv) {
+        statusDiv.textContent = 'Error: ' + (response.error || 'agent did not start (reload the ABA Matrix page)');
+      }
     }
   });
 });

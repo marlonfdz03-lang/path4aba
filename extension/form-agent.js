@@ -20,6 +20,13 @@
   // Always overwrite on (re)injection — no idempotency guard (matches the engine modules).
   window.__FormEngine_v = (window.__FormEngine_v || 0) + 1;
 
+  // Progress helper — surfaces to the popup's status div (and the console). The background has
+  // an agentStatus listener, so there's always a receiver (no "no receiver" rejection).
+  function sendStatus(text) {
+    console.log('[Path4ABA]', text);
+    try { chrome.runtime.sendMessage({ action: 'agentStatus', text: text }); } catch (e) { /* noop */ }
+  }
+
   // Extract ClinicalFacts once per session via the background proxy (Bearer, CORS-exempt).
   function extractClinicalFacts(noteData) {
     return new Promise(function (resolve) {
@@ -51,9 +58,17 @@
     noteData = noteData || {};
 
     // ── Phase 2: ClinicalExtractor — ONE AI call, before any scanning ──
+    sendStatus('🧠 Extracting clinical facts from the note…');
     const clinicalFacts = await extractClinicalFacts(noteData);
     console.log('[Path4ABA] ClinicalFacts:', clinicalFacts);
     window.__p4ClinicalFacts = clinicalFacts; // stored for Phase 3 (Planner)
+    if (!clinicalFacts) {
+      sendStatus('⚠️ Fact extraction failed — see console.');
+      return { clinicalFacts: null, normalizedForm: null };
+    }
+    const nB = (clinicalFacts.behaviors || []).length;
+    const nS = (clinicalFacts.skills || []).length;
+    sendStatus('✅ Clinical facts extracted (' + nB + ' behaviors, ' + nS + ' skills).');
 
     // ── Continue to scan ──
     // Scanner/Normalizer run in the MAIN world. If they're reachable from this context, run
@@ -62,15 +77,17 @@
     // Phase 3. Either way Phase 2 only STORES facts — nothing is filled.
     let normalizedForm = null;
     if (window.FormEngineScanner && window.FormEngineNormalizer) {
+      sendStatus('🔍 Scanning the form…');
       const adapter = window.ABAMatrixAdapter || null;
       const raw = window.FormEngineScanner.scan(adapter);
       normalizedForm = window.FormEngineNormalizer.normalize(raw, adapter);
       window.__p4NormalizedForm = normalizedForm;
       console.log('[Path4ABA] NormalizedForm (Phase 1 scan):', normalizedForm);
     } else {
-      console.log('[Path4ABA] Scan engine not in this world — run window.debugFormEngine() in the page (MAIN world). Facts stored; Planner is Phase 3.');
+      console.log('[Path4ABA] Scan engine not in this world (ISOLATED) — run window.debugFormEngine() in the page (MAIN world) for the scan.');
     }
 
+    sendStatus('Done — facts stored. Planner is Phase 3; nothing filled yet.');
     return { clinicalFacts: clinicalFacts, normalizedForm: normalizedForm };
   }
 

@@ -217,4 +217,47 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     return true; // keep channel open for async sendResponse
   }
+
+  // ── Phase 2 live test: run the Form Agent (ClinicalExtractor) in the ABA Matrix tab ──
+  // form-agent.js is a declared content script in the ISOLATED world, so window.runFormAgent
+  // lives there. executeScript with a func and NO `world` runs in that same ISOLATED world,
+  // so it sees runFormAgent (which needs chrome.runtime for the extract-facts proxy).
+  if (message.action === 'runFormAgent') {
+    chrome.tabs.query({ active: true }, (tabs) => {
+      const abaTab = (tabs || []).find(t => t.url && t.url.includes('app.abamatrix.com')) || (tabs || [])[0];
+      if (!abaTab) { sendResponse({ ok: false, error: 'ABA Matrix tab not found' }); return; }
+      // Ensure form-agent.js is present (idempotent — it overwrites, no guard), then run it.
+      chrome.scripting.executeScript(
+        { target: { tabId: abaTab.id }, files: ['form-agent.js'] },
+        () => {
+          if (chrome.runtime.lastError) { sendResponse({ ok: false, error: chrome.runtime.lastError.message }); return; }
+          chrome.scripting.executeScript(
+            {
+              target: { tabId: abaTab.id },
+              func: (noteData) => {
+                if (typeof window.runFormAgent === 'function') { window.runFormAgent(noteData); return true; }
+                return false;
+              },
+              args: [message.noteData],
+              // default world = ISOLATED (same world as the form-agent.js content script)
+            },
+            (results) => {
+              if (chrome.runtime.lastError) { sendResponse({ ok: false, error: chrome.runtime.lastError.message }); return; }
+              const ran = results && results[0] ? results[0].result : false;
+              sendResponse({ ok: ran !== false, ran });
+            }
+          );
+        }
+      );
+    });
+    return true; // keep channel open for async sendResponse
+  }
+
+  // Progress from the Form Agent. The open popup receives this runtime message directly
+  // (content-script messages reach open extension views), so we only log it here — a
+  // re-broadcast would duplicate the status line in the popup.
+  if (message.action === 'agentStatus') {
+    console.log('[Path4ABA] agentStatus:', message.text);
+    return false;
+  }
 });
