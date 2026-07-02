@@ -20,6 +20,23 @@ if (window.__abaMatrixLoaded) {
       el.blur();
     }
 
+    async function selectMatOption(selectEl, value) {
+      if (!selectEl || !value) return;
+      selectEl.click();
+      await waitMs(400);
+      const options = document.querySelectorAll('mat-option');
+      const match = Array.from(options).find(opt =>
+        opt.innerText?.trim().toLowerCase().includes(value.toLowerCase()) ||
+        value.toLowerCase().includes(opt.innerText?.trim().toLowerCase())
+      );
+      if (match) {
+        match.click();
+      } else if (options.length > 0) {
+        options[0].click();
+      }
+      await waitMs(300);
+    }
+
     function clickRadioByGroupIndex(groupIndex, value) {
       const groups = document.querySelectorAll('mat-radio-group');
       if (!groups[groupIndex]) return;
@@ -129,52 +146,75 @@ if (window.__abaMatrixLoaded) {
 
         await waitMs(1000);
 
-        // Step 6: Fill behavior fields with correct indices
-        // DOM map (after all + clicks):
-        // textarea 4 = Behavior #1 Evidenced By
-        // textarea 5 = Behavior #1 Function
-        // textarea 6 = Behavior #1 Antecedent
-        // textarea 7 = Behavior #2 Evidenced By
-        // (pattern: 3 textareas per behavior starting at index 4)
-        // input 2-6 = Interventions chips (one per behavior)
+        // Step 6: Fill behavior fields
+        // Per behavior (11 fields each):
+        // mat-select = Behavior name (dropdown from assessment)
+        // textarea = Evidenced By
+        // mat-select = Function (Attention/Escape/Tangible/Automatic)
+        // textarea = Antecedent
+        // radio Yes = Antecedent Interventions
+        // chip input = Interventions
+        // mat-select = Main focus
+        // textarea = Result
+        // radio No = STO information
         const updatedTextareas = document.querySelectorAll('textarea');
         const updatedInputs = document.querySelectorAll('input.mat-input-element, input[class*="mat-chip"]');
+        const matSelects = document.querySelectorAll('mat-select');
+
+        const functionMap = {
+          'attention': 'Attention',
+          'escape': 'Escape',
+          'tangible': 'Tangible',
+          'automatic': 'Automatic',
+          'sensory': 'Automatic',
+        };
 
         let qIdx = 7;
         for (let i = 0; i < behaviors.length; i++) {
           const tBase = 4 + (i * 3);
+          const selectBase = i * 4;
           const interventionInput = updatedInputs[2 + i];
 
-          // Evidenced By
+          // Behavior name → mat-select (dropdown has client's behaviors from assessment)
+          const behaviorName = behaviors[i].name || behaviors[i];
+          await selectMatOption(matSelects[selectBase], behaviorName);
+
+          // Evidenced By → textarea
           setMatInput(updatedTextareas[tBase], answers[String(qIdx + 1)] || '');
-          // Function of behavior
-          setMatInput(updatedTextareas[tBase + 1], answers[String(qIdx + 2)] || '');
-          // Antecedent
-          setMatInput(updatedTextareas[tBase + 2], answers[String(qIdx + 3)] || '');
-          // Antecedent Interventions radio → Yes
+          await waitMs(200);
+
+          // Function → mat-select
+          const functionAnswer = (answers[String(qIdx + 2)] || '').toLowerCase();
+          const functionKey = Object.keys(functionMap).find(k => functionAnswer.includes(k)) || 'escape';
+          await selectMatOption(matSelects[selectBase + 1], functionMap[functionKey]);
+
+          // Antecedent → textarea
+          setMatInput(updatedTextareas[tBase + 1], answers[String(qIdx + 3)] || '');
+          await waitMs(200);
+
+          // Antecedent Interventions → Yes radio
           clickRadioByGroupIndex(3 + (i * 3), 'Yes');
+          await waitMs(200);
+
           // Interventions chip
           if (interventionInput) {
             setMatInput(interventionInput, answers[String(qIdx + 5)] || '');
             await waitMs(200);
             interventionInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
           }
-          // Main focus
-          setMatInput(updatedTextareas[tBase], answers[String(qIdx + 6)] || '');
-          // Result
-          setMatInput(updatedTextareas[tBase + 1], answers[String(qIdx + 7)] || '');
+          await waitMs(200);
+
+          // Main focus → mat-select
+          await selectMatOption(matSelects[selectBase + 2], answers[String(qIdx + 6)] || '');
+
+          // Result → textarea
+          setMatInput(updatedTextareas[tBase + 2], answers[String(qIdx + 7)] || '');
 
           qIdx += 8;
-          await waitMs(300);
+          await waitMs(400);
         }
 
         // Step 7: Fill goal fields
-        // DOM map:
-        // textarea 19 = Goal #1 field 1 (Goal name/implementation)
-        // textarea 20 = Goal #1 field 2 (Medical barriers)
-        // textarea 21 = Goal #2 field 1
-        // (pattern: 2 textareas per goal starting at index 19)
-        // inputs 7-9 = Goal #1 chips (activities, teaching procedure, reinforcers)
         let gIdx = 7 + (behaviors.length * 8);
         for (let i = 0; i < skills.length; i++) {
           const tBase = 19 + (i * 2);
@@ -182,21 +222,20 @@ if (window.__abaMatrixLoaded) {
 
           setMatInput(updatedTextareas[tBase], answers[String(gIdx)] || (skills[i].name || skills[i]));
           setMatInput(updatedTextareas[tBase + 1], answers[String(gIdx + 1)] || '');
-          // Activities chip
+
           if (updatedInputs[chipBase]) {
             setMatInput(updatedInputs[chipBase], answers[String(gIdx + 2)] || '');
             await waitMs(200);
             updatedInputs[chipBase].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
           }
-          // Teaching procedure chip
           if (updatedInputs[chipBase + 1]) {
             setMatInput(updatedInputs[chipBase + 1], answers[String(gIdx + 3)] || '');
             await waitMs(200);
             updatedInputs[chipBase + 1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
           }
-          // Prompts radio → Yes
+
           clickRadioByGroupIndex(3 + (behaviors.length * 3) + (i * 2), 'Yes');
-          // Reinforcers chip
+
           if (updatedInputs[chipBase + 2]) {
             setMatInput(updatedInputs[chipBase + 2], answers[String(gIdx + 5)] || '');
             await waitMs(200);
