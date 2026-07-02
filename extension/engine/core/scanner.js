@@ -37,12 +37,6 @@
     return (el && (el.innerText || el.textContent) || '').replace(/\s+/g, ' ').trim();
   }
 
-  function looksLikeQuestion(t) {
-    const s = (t || '').trim();
-    if (s.length < 3 || s.length > 240) return false;
-    return /[a-zA-Z]/.test(s);
-  }
-
   function isVisible(el) {
     if (!el) return false;
     if (el.offsetParent !== null) return true;
@@ -117,58 +111,38 @@
       || formField.querySelector('input:not([type="hidden"])');
   }
 
-  // Question for a mat-radio-group: the nearest preceding <strong>/<p> (or label), by proximity.
-  function findRadioQuestion(rg) {
-    const LABELISH = 'strong, b, p, label, mat-label';
-    let node = rg;
-    for (let depth = 0; depth < 5 && node && node !== document.body; depth++) {
-      let sib = node.previousElementSibling;
-      let guard = 0;
-      while (sib && guard++ < 8) {
-        if (sib.matches && sib.matches(LABELISH)) {
-          const t = text(sib);
-          if (looksLikeQuestion(t)) return t;
-        }
-        const inner = sib.querySelector && sib.querySelector(LABELISH);
-        if (inner) {
-          const t = text(inner);
-          if (looksLikeQuestion(t)) return t;
-        }
-        sib = sib.previousElementSibling;
-      }
-      node = node.parentElement;
-    }
-    return '';
-  }
+  // Question text for any field element. ABA Matrix places it in several spots:
+  //   Try 1) a <mat-label> inside the field (mat-form-field)
+  //   Try 2) a previous-sibling <div>/<p>/<strong> (radio groups, app-select, some inputs)
+  //   Try 3) the parent's previous sibling
+  // Skipping mat-radio-group / mat-chip-list / mat-chip-grid siblings prevents grabbing a
+  // neighbouring field's content as this field's question.
+  function getQuestionText(fieldEl) {
+    // Try 1: mat-label inside the field
+    const matLabel = fieldEl.querySelector('mat-label');
+    if (matLabel?.innerText?.trim()) return matLabel.innerText.trim();
 
-  // Proximity question finder for straggler controls (not in a form-field / radio group).
-  function findQuestionText(control) {
-    const ff = control.closest('mat-form-field');
-    if (ff) {
-      const t = text(ff.querySelector('mat-label, label, .mat-form-field-label'));
-      if (looksLikeQuestion(t)) return t;
-    }
-    const LABELISH = 'mat-label, label, .mat-form-field-label, strong, b, p';
-    let node = control;
-    for (let depth = 0; depth < 6 && node && node !== document.body; depth++) {
-      let sib = node.previousElementSibling;
-      let guard = 0;
-      while (sib && guard++ < 8) {
-        if (sib.matches && sib.matches(LABELISH)) {
-          const t = text(sib);
-          if (looksLikeQuestion(t)) return t;
-        }
-        const inner = sib.querySelector && sib.querySelector(LABELISH);
-        if (inner) {
-          const t = text(inner);
-          if (looksLikeQuestion(t)) return t;
-        }
-        sib = sib.previousElementSibling;
+    // Try 2: previousElementSibling text
+    let prev = fieldEl.previousElementSibling;
+    let depth = 0;
+    while (prev && depth < 3) {
+      const text = prev.innerText?.trim();
+      if (text && text.length > 3 && !prev.matches('mat-radio-group, mat-chip-list, mat-chip-grid')) {
+        const firstLine = text.split('\n')[0]?.trim();
+        if (firstLine && firstLine.length > 3) return firstLine;
       }
-      node = node.parentElement;
+      prev = prev.previousElementSibling;
+      depth++;
     }
-    const aria = (control.getAttribute && (control.getAttribute('aria-label') || control.getAttribute('placeholder'))) || '';
-    return looksLikeQuestion(aria) ? aria.trim() : '';
+
+    // Try 3: parent's previous sibling
+    const parentPrev = fieldEl.parentElement?.previousElementSibling;
+    if (parentPrev) {
+      const text = parentPrev.innerText?.trim().split('\n')[0]?.trim();
+      if (text && text.length > 3) return text;
+    }
+
+    return '';
   }
 
   function buildField(questionText, type, control, sectionTitle) {
@@ -197,20 +171,20 @@
       return synthetic ? !el.closest('mat-card') : (el.closest(SECTION_SELECTOR) === sectionEl);
     };
 
-    // 1) mat-form-field: mat-label is the question; inner control gives the type.
+    // 1) mat-form-field: getQuestionText resolves the label; inner control gives the type.
     for (const ff of sectionEl.querySelectorAll('mat-form-field')) {
       if (!inScope(ff)) continue;
       const control = controlOf(ff);
       const type = control ? detectFieldType(control) : 'unknown';
       if (control) counted.add(control);
-      fields.push(buildField(text(ff.querySelector('mat-label')), type, control, sectionTitle));
+      fields.push(buildField(getQuestionText(ff), type, control, sectionTitle));
     }
 
-    // 2) mat-radio-group: question is a preceding strong/p.
+    // 2) mat-radio-group: question comes from a previous sibling via getQuestionText.
     for (const rg of sectionEl.querySelectorAll('mat-radio-group')) {
       if (!inScope(rg)) continue;
       counted.add(rg);
-      fields.push(buildField(findRadioQuestion(rg), 'radio', rg, sectionTitle));
+      fields.push(buildField(getQuestionText(rg), 'radio', rg, sectionTitle));
     }
 
     // 3) Stragglers (mat-checkbox / bare inputs not inside a form-field or radio group).
@@ -218,7 +192,7 @@
       if (!inScope(control)) continue;
       if (counted.has(control)) continue;
       if (control.closest('mat-form-field') || control.closest('mat-radio-group')) continue;
-      fields.push(buildField(findQuestionText(control), detectFieldType(control), control, sectionTitle));
+      fields.push(buildField(getQuestionText(control), detectFieldType(control), control, sectionTitle));
     }
 
     return fields;
