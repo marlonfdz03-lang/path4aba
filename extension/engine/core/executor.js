@@ -178,8 +178,10 @@ window.FormEngineExecutor = {
       return false;
     }
 
-    const el = this.resolveLocator(fieldData.locator, sectionEl, action.fieldType);
-    if (!el) {
+    const resolvedEl = this.resolveLocator(fieldData.locator, sectionEl, action.fieldType);
+    // Chips can be conditional (they render after a "Yes" radio) — let them retry below
+    // instead of failing here. All other types require the element up front.
+    if (!resolvedEl && action.fieldType !== 'chip') {
       console.warn('[Path4ABA Executor] DOM element not found for:', action.fieldId, fieldData.questionText);
       return false;
     }
@@ -188,20 +190,22 @@ window.FormEngineExecutor = {
       case 'textarea':
       case 'input':
       case 'text':
-        window.setMatInput(el, action.value);
+        window.setMatInput(resolvedEl, action.value);
         return true;
 
       case 'select':
-        await window.selectMatOption(el, action.value);
+        await window.selectMatOption(resolvedEl, action.value);
         return true;
 
       case 'radio': {
-        const group = el.closest('mat-radio-group') || el;
+        const group = resolvedEl.closest('mat-radio-group') || resolvedEl;
         const buttons = group.querySelectorAll('mat-radio-button');
         for (const btn of buttons) {
           if (btn.innerText?.trim() === action.value) {
             btn.click();
-            await this.wait(600);
+            // Wait for Angular to render any conditional field this choice reveals
+            // (e.g. the AntecedentInterventions chip that appears after "Yes").
+            await this.wait(1200);
             return true;
           }
         }
@@ -209,11 +213,22 @@ window.FormEngineExecutor = {
         return false;
       }
 
-      case 'chip':
+      case 'chip': {
+        let el = resolvedEl;
+        if (!el) {
+          // Retry once after a delay — a conditional chip may appear after a radio click.
+          await this.wait(500);
+          el = this.resolveLocator(fieldData.locator, sectionEl, action.fieldType);
+        }
+        if (!el) {
+          console.warn('[Path4ABA Executor] Chip not found (after retry):', action.fieldId, fieldData.questionText);
+          return false;
+        }
         window.setMatInput(el, action.value);
         await this.wait(150);
         el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
         return true;
+      }
 
       default:
         return false;
