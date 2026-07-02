@@ -69,14 +69,12 @@ if (window.__abaMatrixLoaded) {
       // Step 2: Get AI answers from Path4ABA API
       let answers = {};
       try {
-        const res = await fetch(`${API_BASE}/api/extension/fill-aba-matrix`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ note: noteData.fullNote, questions }),
+        answers = await new Promise((resolve) => {
+          chrome.runtime.sendMessage(
+            { action: 'getABAMatrixAnswers', note: noteData.fullNote, questions },
+            (response) => resolve(response?.answers || {})
+          );
         });
-        const data = await res.json();
-        answers = data.answers || {};
         console.log('[Path4ABA] AI answers:', answers);
       } catch (err) {
         console.error('[Path4ABA] Failed to get AI answers:', err);

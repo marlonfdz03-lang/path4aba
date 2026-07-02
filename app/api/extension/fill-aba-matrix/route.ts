@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/auth'
+import { getExtensionAuth } from '@/lib/extensionAuth'
 import OpenAI from 'openai'
 
 const client = new OpenAI({
@@ -10,8 +10,10 @@ const client = new OpenAI({
 })
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Bearer-token auth (extension). getExtensionAuth hashes the token and looks it up
+  // by token_hash — the extension_tokens table stores a sha256 hash, not the raw token.
+  const user = await getExtensionAuth()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { note, questions } = await req.json()
   if (!note || !questions?.length) return NextResponse.json({ error: 'Missing note or questions' }, { status: 400 })

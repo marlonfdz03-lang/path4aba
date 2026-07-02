@@ -95,4 +95,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true; // Keep channel open for async response
   }
+
+  if (message.action === 'getABAMatrixAnswers') {
+    // Fetch AI answers from path4aba.app with the stored Bearer token. Runs in the
+    // background (not the content script) so it's exempt from CORS, and can read the
+    // token from chrome.storage. NOTE: the storage key is `extensionToken` (set by the
+    // popup at login) — not `authToken`. Callback-form storage.get keeps this listener
+    // synchronous so `return true` reliably holds the channel open.
+    chrome.storage.local.get(['extensionToken'], (stored) => {
+      const token = stored.extensionToken;
+      if (!token) { sendResponse({ error: 'Not authenticated' }); return; }
+      fetch('https://path4aba.app/api/extension/fill-aba-matrix', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ note: message.note, questions: message.questions }),
+      })
+        .then(r => r.json())
+        .then(data => sendResponse({ answers: data.answers || {} }))
+        .catch(err => sendResponse({ error: err.message }));
+    });
+    return true; // keep channel open for async sendResponse
+  }
 });
