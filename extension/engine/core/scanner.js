@@ -284,8 +284,26 @@
     const outSections = [];
     const seen = new Set();
     for (const desc of descriptors) {
-      const el = desc && desc.element;
-      if (!el || seen.has(el)) continue;
+      if (!desc || !desc.element) continue;
+
+      // Daily Log: an ARRAY of single-question <form> elements, bundled into one section.
+      if (desc.multiForm && Array.isArray(desc.element)) {
+        const title = desc.title || 'Daily Log';
+        const fields = [];
+        for (const form of desc.element) {
+          if (seen.has(form)) continue;
+          seen.add(form);
+          const formFields = extractFields(form, title, true); // synthetic -> extractDailyLogFields
+          for (const f of formFields) fields.push(f);
+        }
+        if (fields.length > 0) {
+          outSections.push({ title: title, type: desc.type || 'DailyLog', fields: fields });
+        }
+        continue;
+      }
+
+      const el = desc.element;
+      if (seen.has(el)) continue;
       seen.add(el);
       const type = desc.type || defaultSectionType(el);
       const title = desc.title || getSectionTitle(el);

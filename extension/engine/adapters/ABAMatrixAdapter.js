@@ -23,21 +23,27 @@
   const ABAMatrixAdapter = {
     platform: 'abamatrix',
 
-    // Daily Log fields are form-level (NOT inside a mat-card); Behavior/Goal sections
-    // ARE mat-cards. Returns descriptors { element, type, title, synthetic? } — the
-    // synthetic Daily Log points at the <form>, scanned with a mat-card exclusion filter.
+    // ABA Matrix renders ~21 separate <form> elements: each Daily Log question is its own
+    // <form>, while Behavior/Goal live in mat-cards (inside their own forms). Returns
+    // descriptors { element, type, title, synthetic?, multiForm? }; the Daily Log descriptor
+    // carries an ARRAY of forms (multiForm) bundled into one section.
     detectSections: function () {
       const sections = [];
+      const allForms = Array.from(document.querySelectorAll('form'));
 
-      // Daily Log — the real <form> element, marked synthetic.
-      const form = document.querySelector('form');
-      if (form) {
-        // JS filter, not a CSS :not() selector (the latter proved unreliable here).
-        const allFields = Array.from(form.querySelectorAll('mat-form-field, mat-radio-group'));
-        const hasDailyLogFields = allFields.some(el => !el.closest('mat-card'));
-        if (hasDailyLogFields) {
-          sections.push({ element: form, type: 'DailyLog', title: 'Daily Log', synthetic: true });
-        }
+      // Daily Log — every form with controls NOT inside a mat-card, bundled as one section.
+      const dailyLogForms = allForms.filter(function (f) {
+        const controls = f.querySelectorAll('mat-form-field, mat-radio-group');
+        return Array.from(controls).some(function (el) { return !el.closest('mat-card'); });
+      });
+      if (dailyLogForms.length > 0) {
+        sections.push({
+          element: dailyLogForms,   // array of forms
+          type: 'DailyLog',
+          title: 'Daily Log',
+          synthetic: true,
+          multiForm: true
+        });
       }
 
       // Behavior Reduction / Goal Implementation — visible mat-cards.
