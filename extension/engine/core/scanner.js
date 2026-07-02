@@ -156,7 +156,7 @@
   function chipInputOf(control) {
     if (!control) return null;
     if (control.tagName === 'INPUT') return control;
-    return control.querySelector('input[class*="mat-chip-list-input"]')
+    return control.querySelector('input[class*="mat-chip-input"]')
       || control.querySelector('input:not([type="hidden"])');
   }
 
@@ -180,7 +180,7 @@
       // Calculate index among empty-placeholder chips in same mat-card or form
       const scope = chipInput.closest('mat-card') || chipInput.closest('form');
       if (scope) {
-        const allEmptyChips = Array.from(scope.querySelectorAll('input[class*="mat-chip-list-input"]'))
+        const allEmptyChips = Array.from(scope.querySelectorAll('input[class*="mat-chip-input"]'))
           .filter(c => !c.placeholder);
         const idx = allEmptyChips.indexOf(chipInput);
         if (idx >= 0) {

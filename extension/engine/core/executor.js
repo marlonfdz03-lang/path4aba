@@ -76,7 +76,7 @@ window.FormEngineExecutor = {
       case 'chip-index': {
         const els = Array.isArray(sectionEl) ? sectionEl : [sectionEl];
         for (const el of els) {
-          const chips = Array.from(el.querySelectorAll('input[class*="mat-chip-list-input"]'))
+          const chips = Array.from(el.querySelectorAll('input[class*="mat-chip-input"]'))
             .filter(c => !c.placeholder || c.placeholder === '');
           if (chips[locator.chipIndex]) return chips[locator.chipIndex];
         }
@@ -92,7 +92,7 @@ window.FormEngineExecutor = {
     const selector =
       fieldType === 'select' ? 'mat-select' :
       fieldType === 'radio' ? 'mat-radio-group' :
-      fieldType === 'chip' ? 'input[class*="mat-chip-list-input"]' :
+      fieldType === 'chip' ? 'input[class*="mat-chip-input"]' :
       'textarea, input.mat-input-element';
 
     const elements = Array.isArray(sectionEl) ? sectionEl : [sectionEl];
@@ -124,7 +124,7 @@ window.FormEngineExecutor = {
       // For Daily Log chips: sectionEl is an ARRAY of forms outside mat-card.
       if (Array.isArray(sectionEl)) {
         for (const form of sectionEl) {
-          const chips = form.querySelectorAll('input[class*="mat-chip-list-input"]');
+          const chips = form.querySelectorAll('input[class*="mat-chip-input"]');
           for (const chip of chips) {
             const nearby = chip.closest('mat-form-field') || chip.parentElement?.parentElement;
             const labelText = nearby?.querySelector('mat-label, strong, p')?.innerText?.trim() || '';
@@ -135,12 +135,12 @@ window.FormEngineExecutor = {
         }
         // Fallback: return first chip in Daily Log forms
         for (const form of sectionEl) {
-          const chip = form.querySelector('input[class*="mat-chip-list-input"]');
+          const chip = form.querySelector('input[class*="mat-chip-input"]');
           if (chip) return chip;
         }
       } else {
         // For BR/Goal sections: search all chip inputs in the section
-        const chips = sectionEl.querySelectorAll('input[class*="mat-chip-list-input"]');
+        const chips = sectionEl.querySelectorAll('input[class*="mat-chip-input"]');
         for (const chip of chips) {
           const nearby = chip.closest('mat-form-field') || chip.parentElement?.parentElement;
           const prevText = nearby?.previousElementSibling?.innerText?.trim() ||
