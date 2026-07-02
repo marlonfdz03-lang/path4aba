@@ -344,8 +344,16 @@ if (window.__abaMatrixLoaded) {
           }
 
           gIdx += 7;
-          await waitMs(400);
+          await waitMs(800);
         }
+
+        // Force close ALL open dropdowns before filling Daily Log
+        await waitMs(500);
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
+        await waitMs(200);
+        // Click far from any dropdown
+        document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 0, clientY: 0 }));
+        await waitMs(500);
 
         // Step 8: Fill Daily Log textareas AFTER all dropdowns to prevent Angular clearing them
         const finalTextareas = document.querySelectorAll('textarea');
