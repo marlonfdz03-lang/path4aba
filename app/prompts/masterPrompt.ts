@@ -636,7 +636,6 @@ ACCEPTABLE VARIATIONS:
 - "Differential Reinforcement of Alternative Behavior (DRA)" → sometimes just "DRA"
 - "Functional Communication Training (FCT)" → sometimes "FCT" or "functional communication procedures"
 - "Premack Principle" → sometimes "Premack strategy" or "high-probability sequencing"
-- "Noncontingent Reinforcement (NCR)" → sometimes "NCR" or "noncontingent access"
 - "Behavior Momentum" → sometimes "behavioral momentum procedures" or "high-probability request sequence"
 
 RULE: Use the full name for the FIRST mention. After that, vary naturally.
@@ -706,9 +705,9 @@ Verify every item before writing the final note:
 ☐ At least one ABC shows replacement behavior displacing maladaptive behavior using "the client [replacement skill] instead of [maladaptive behavior]" — this is the strongest clinical evidence in the note
 ☐ Every intervention matches the function of the behavior in that ABC:
    Escape → FCT / Behavior Momentum / Premack / Choices (NOT Planned Ignore)
-   Attention → FCT / Planned Ignore + DRA / NCR (NOT Behavior Momentum as sole intervention for SIB)
+   Attention → FCT / Planned Ignore + DRA (NOT Behavior Momentum as sole intervention for SIB)
    Tangible → FCT / DRA / Premack
-   Automatic → DRI / Environmental Modification / NCR
+   Automatic → DRI / Environmental Modification
    Unknown function → Redirection + FCT
 ☐ Note reads as written by a skilled human clinician — varied sentence structure, specific session details, natural clinical language, realistic prompt counts ("2 verbal prompts", "after 3 repetitions")
 
