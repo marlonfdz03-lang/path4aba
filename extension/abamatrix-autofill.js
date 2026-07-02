@@ -145,6 +145,7 @@ if (window.__abaMatrixLoaded) {
         const textareas = document.querySelectorAll('textarea');
         setMatInput(textareas[0], answers['0'] || 'The client presented as cooperative and ready to engage in structured activities.');
         setMatInput(textareas[1], answers['2'] || 'The client demonstrated appropriate disengagement and responded to closing routines.');
+        setMatInput(textareas[2], answers['2'] || 'The client demonstrated appropriate disengagement and responded to closing routines.');
         setMatInput(textareas[3], answers['4'] || 'The client demonstrated active participation throughout the session with consistent engagement across targeted activities.');
 
         // Fill Evidenced by (input fields)
@@ -243,31 +244,35 @@ if (window.__abaMatrixLoaded) {
 
         // Step 7: Fill goal fields
         let gIdx = 7 + (behaviors.length * 8);
+        const goalSelectBase = behaviors.length * 3;
         for (let i = 0; i < skills.length; i++) {
-          const tBase = 19 + (i * 2);
-          const chipBase = 7 + (i * 3);
+          const chipBase = 8 + (i * 3);
 
-          // Goal implementation description
-          setMatInput(updatedTextareas[tBase], answers[String(gIdx)] || (skills[i].name || skills[i]));
-          await waitMs(200);
+          // Goal name → mat-select (from assessment dropdown)
+          await selectMatOption(matSelects[goalSelectBase + i], skills[i].name || skills[i]);
+          await waitMs(500);
 
-          // Medical barriers
-          setMatInput(updatedTextareas[tBase + 1], answers[String(gIdx + 1)] || '');
-          await waitMs(200);
-
-          // Activities chip
+          // Medical barriers → chip input (free text)
           if (updatedInputs[chipBase]) {
-            setMatInput(updatedInputs[chipBase], answers[String(gIdx + 2)] || '');
+            setMatInput(updatedInputs[chipBase], answers[String(gIdx + 1)] || '');
             await waitMs(200);
             updatedInputs[chipBase].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
             await waitMs(200);
           }
 
-          // Teaching procedure chip
+          // Activities chip
           if (updatedInputs[chipBase + 1]) {
-            setMatInput(updatedInputs[chipBase + 1], answers[String(gIdx + 3)] || '');
+            setMatInput(updatedInputs[chipBase + 1], answers[String(gIdx + 2)] || '');
             await waitMs(200);
             updatedInputs[chipBase + 1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+            await waitMs(200);
+          }
+
+          // Teaching procedure chip
+          if (updatedInputs[chipBase + 2]) {
+            setMatInput(updatedInputs[chipBase + 2], answers[String(gIdx + 3)] || '');
+            await waitMs(200);
+            updatedInputs[chipBase + 2].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
             await waitMs(200);
           }
 
@@ -276,15 +281,15 @@ if (window.__abaMatrixLoaded) {
           await waitMs(200);
 
           // Reinforcers chip
-          if (updatedInputs[chipBase + 2]) {
-            setMatInput(updatedInputs[chipBase + 2], answers[String(gIdx + 5)] || '');
+          if (updatedInputs[chipBase + 3]) {
+            setMatInput(updatedInputs[chipBase + 3], answers[String(gIdx + 5)] || '');
             await waitMs(200);
-            updatedInputs[chipBase + 2].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+            updatedInputs[chipBase + 3].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
             await waitMs(200);
           }
 
           gIdx += 7;
-          await waitMs(300);
+          await waitMs(400);
         }
 
         // Step 8: Leave Relevant Information / Comments EMPTY
