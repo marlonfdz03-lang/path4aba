@@ -78,8 +78,10 @@ if (window.__abaMatrixLoaded) {
     }
 
     function clickAddButton(index) {
+      // ABA Matrix has duplicate add buttons — use only first 2 (behavior and goal)
       const addButtons = document.querySelectorAll('.add-event-button');
-      if (addButtons[index]) addButtons[index].click();
+      // First 2 are the real ones, last 2 are duplicates from second form section
+      if (index < 2 && addButtons[index]) addButtons[index].click();
     }
 
     async function doFill() {
@@ -203,7 +205,11 @@ if (window.__abaMatrixLoaded) {
         // radio No = STO information
         const updatedTextareas = document.querySelectorAll('textarea');
         const updatedInputs = document.querySelectorAll('input.mat-input-element, input[class*="mat-chip"]');
-        const matSelects = document.querySelectorAll('mat-select');
+        // Only query mat-selects in the first/active form section (not duplicates)
+        const allMatSelects = document.querySelectorAll('mat-select');
+        const totalSelects = allMatSelects.length;
+        // ABA Matrix duplicates the form — use only first half
+        const matSelects = Array.from(allMatSelects).slice(0, Math.ceil(totalSelects / 2));
 
         const functionMap = {
           'attention': 'Attention',
