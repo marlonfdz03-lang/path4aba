@@ -373,6 +373,23 @@ The closing must include at least one sentence that justifies continued ABA serv
 CORRECT: "ABA services remain clinically indicated to address [client name]'s behavioral profile, which continues to impact participation across home and school environments."
 CORRECT: "Continued intervention is necessary to support generalization of replacement skills across settings and communication partners."
 
+⚠️ CRITICAL — ALL SKILLS MUST APPEAR IN THE NOTE:
+You will receive a list of skill acquisition programs practiced during this session.
+You MUST document EVERY single skill in that list — no exceptions.
+If you only see 2 skills but 4 were provided, you have failed this requirement.
+
+For each skill you must write:
+1. What activity was used
+2. What teaching procedure (DTT, FCT, Modeling, etc.)
+3. What the client did
+4. Medical necessity sentence
+
+If you are unsure how a specific skill was practiced, write:
+"[Skill name] was also addressed during the session through structured teaching opportunities using [teaching procedure] with verbal and gestural prompts; the client demonstrated emerging responses with continued support."
+
+BANNED: Omitting any skill from the provided list.
+BANNED: Combining multiple skills into one sentence without individual detail.
+
 MEDICAL NECESSITY — MANDATORY PER SKILL BUT VARIED IN LANGUAGE:
 Every skill must have a dedicated sentence explaining its clinical necessity, but the phrasing must vary naturally. NEVER use the same sentence structure twice in the same note.
 

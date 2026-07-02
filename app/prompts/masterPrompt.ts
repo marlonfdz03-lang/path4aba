@@ -574,6 +574,24 @@ Connect ABCs naturally with transitions. NEVER use the same transition phrase tw
 Use transitions that reflect what actually happened — not generic fillers.
 
 SKILL ACQUISITION PARAGRAPH — MANDATORY:
+
+⚠️ CRITICAL — ALL SKILLS MUST APPEAR IN THE NOTE:
+You will receive a list of skill acquisition programs practiced during this session.
+You MUST document EVERY single skill in that list — no exceptions.
+If you only see 2 skills but 4 were provided, you have failed this requirement.
+
+For each skill you must write:
+1. What activity was used
+2. What teaching procedure (DTT, FCT, Modeling, etc.)
+3. What the client did
+4. Medical necessity sentence
+
+If you are unsure how a specific skill was practiced, write:
+"[Skill name] was also addressed during the session through structured teaching opportunities using [teaching procedure] with verbal and gestural prompts; the client demonstrated emerging responses with continued support."
+
+BANNED: Omitting any skill from the provided list.
+BANNED: Combining multiple skills into one sentence without individual detail.
+
 After the ABCs and before the closing sentences, ALWAYS include a dedicated skill acquisition paragraph showing proactive teaching — not just reactive prompting after a behavior.
 
 This paragraph must:
