@@ -255,31 +255,11 @@
     const inScope = function (el) { return el.closest(SECTION_SELECTOR) === card; };
 
     // 1) mat-form-field: getQuestionText resolves the label; inner control gives the type.
-    // DEBUG: raw pass — log EVERY mat-form-field (including out-of-scope) before any filtering.
-    const formFields = card.querySelectorAll('mat-form-field');
-    formFields.forEach((ff, i) => {
-      console.log('[SCAN-RAW]', 'mat-form-field', i,
-        'inScope=' + inScope(ff),
-        'hasTextarea=' + !!ff.querySelector('textarea'),
-        'hasSelect=' + !!ff.querySelector('mat-select'),
-        'outerHTML_start=' + ff.outerHTML.slice(0, 80)
-      );
-    });
-
-    let mffIndex = -1; // DEBUG: index among the card's mat-form-fields
     for (const ff of card.querySelectorAll('mat-form-field')) {
-      mffIndex++;
-      if (!inScope(ff)) {
-        console.log('[SCAN] SKIPPED mat-form-field', mffIndex, 'reason:', 'out-of-scope');
-        continue;
-      }
+      if (!inScope(ff)) continue;
       const control = controlOf(ff);
       const fieldType = control ? detectFieldType(control) : 'unknown';
       const questionText = getQuestionText(ff);
-      console.log('[SCAN]', 'processing mat-form-field', mffIndex, 'fieldType=' + fieldType, 'questionText="' + questionText + '"', ff.querySelector('textarea') ? 'HAS_TEXTAREA' : 'NO_TEXTAREA');
-      if (!control || !questionText) {
-        console.log('[SCAN] SKIPPED mat-form-field', mffIndex, 'reason:', !control ? 'no-field-type' : 'empty-questionText');
-      }
       if (control) counted.add(control);
       fields.push(buildField(questionText, fieldType, control, sectionTitle));
     }
@@ -296,7 +276,6 @@
       if (!hasEvidenced && allFF[1]) {
         const ta = allFF[1].querySelector('textarea');
         if (ta) {
-          console.log('[SCAN] explicit EvidencedBy at mat-form-field index 1');
           fields.push(buildField('Evidenced By:', 'textarea', ta, sectionTitle));
         }
       }
@@ -390,19 +369,8 @@
 
     const outSections = [];
     const seen = new Set();
-    // DEBUG: descriptors come straight from adapter.detectSections() — no filter/slice between.
-    console.log('[SCAN-LOOP] total descriptors from detectSections():', descriptors.length);
-    let loopIdx = -1;
     for (const desc of descriptors) {
       if (!desc || !desc.element) continue;
-      loopIdx++;
-      console.log('[SCAN-LOOP]', loopIdx, desc.type, desc.title, 'element:', Array.isArray(desc.element) ? 'array' : desc.element?.tagName);
-
-      // DEBUG: every section reaches this dispatch. BehaviorReduction and GoalImplementation
-      // both go to extractCardFields; only Daily Log (synthetic/multiForm) goes elsewhere.
-      console.log('[SCAN-DISPATCH]', 'type=' + desc.type, 'multiForm=' + !!desc.multiForm, 'synthetic=' + !!desc.synthetic,
-        '-> ' + (desc.multiForm && Array.isArray(desc.element) ? 'extractDailyLogFields (per form)'
-          : desc.synthetic ? 'extractDailyLogFields' : 'extractCardFields'));
 
       // Daily Log: an ARRAY of single-question <form> elements, bundled into one section.
       if (desc.multiForm && Array.isArray(desc.element)) {
