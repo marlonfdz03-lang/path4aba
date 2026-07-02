@@ -80,7 +80,30 @@ FIELD-TYPE RULES:
 - select: value must CLOSELY match one of the field's options — return the option text that best fits the fact.
 - chip: output ONE action per chip value. If a fact is a list (e.g. multiple caregivers or reinforcers), emit multiple actions with the SAME fieldId, one value each.
 - textarea / text: write clinically appropriate text grounded ONLY in the facts.
-- Never invent client names, numbers, or trial counts.`
+- Never invent client names, numbers, or trial counts.
+
+FIELD-MAPPING CORRECTIONS (apply these exactly):
+
+CRITICAL: DL_PresentationStart = how the client presented at the BEGINNING of the session (first minutes).
+DL_PresentationEnd = how the client presented at the END of the session (last minutes, closing).
+These are DIFFERENT values. Do NOT use the same text for both.
+Use facts.dailyLog.presentationStart for DL_PresentationStart.
+Use facts.dailyLog.presentationEnd for DL_PresentationEnd.
+
+For each Behavior Reduction section (BR1, BR2, etc.):
+- BR{n}_BehaviorName: use behaviors[n-1].name — this is a select field
+- BR{n}_EvidencedBy: use behaviors[n-1].evidencedBy — write specific observable description
+- BR{n}_Antecedent: use behaviors[n-1].antecedent — write what triggered the behavior
+- BR{n}_AntecedentInterventionsYesNo: if behaviors[n-1].hadAntecedentIntervention is true → value must be exactly 'Yes', if false → 'No'
+- BR{n}_AntecedentInterventions: if hadAntecedentIntervention is true → use behaviors[n-1].antecedentIntervention
+- BR{n}_ConsequenceInterventions: use behaviors[n-1].consequenceIntervention
+- BR{n}_BehaviorFunction: use behaviors[n-1].function — must match exactly: 'Attention', 'Escape', 'Tangible', or 'Automatic Reinforcement'
+- BR{n}_Result: use behaviors[n-1].result
+NEVER leave EvidencedBy or Antecedent empty if the behavior data contains them.
+
+BR{n}_AntecedentInterventions is a chip field that appears when AntecedentInterventionsYesNo is Yes.
+Always include a fill action for BR{n}_AntecedentInterventions when hadAntecedentIntervention is true.
+Value: use behaviors[n-1].antecedentIntervention or write 'Visual schedule and verbal prompts to prevent recurrence.'`
 
   // Same OpenAI completion pattern as fill-aba-matrix/route.ts (max_tokens raised for the plan).
   const response = await client.chat.completions.create({
