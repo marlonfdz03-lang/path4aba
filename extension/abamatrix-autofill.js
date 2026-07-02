@@ -34,7 +34,12 @@ if (window.__abaMatrixLoaded) {
       selectEl.click();
       await waitMs(500);
       const options = document.querySelectorAll('mat-option');
-      if (!options.length) return;
+      if (!options.length) {
+        // Close by pressing Escape
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        await waitMs(200);
+        return;
+      }
 
       const valueLower = value.toLowerCase().trim();
 
@@ -51,22 +56,26 @@ if (window.__abaMatrixLoaded) {
         );
       }
 
-      // Try word-by-word match (e.g. "Manding Attention" matches "Manding for Attention Response")
+      // Try word-by-word match
       if (!match) {
         const words = valueLower.split(' ').filter(w => w.length > 3);
         match = Array.from(options).find(opt => {
           const optLower = opt.innerText?.trim().toLowerCase();
-          return words.every(w => optLower.includes(w));
+          return words.length > 0 && words.every(w => optLower.includes(w));
         });
       }
 
       if (match) {
         match.click();
       } else {
-        // Close dropdown without selecting
-        document.body.click();
+        // Close without selecting using Escape
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       }
-      await waitMs(300);
+      await waitMs(400);
+
+      // Safety close — click body to dismiss any remaining overlay
+      document.body.click();
+      await waitMs(200);
     }
 
     function clickRadioByGroupIndex(groupIndex, value) {
