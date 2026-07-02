@@ -27,6 +27,8 @@
     try { chrome.runtime.sendMessage({ action: 'agentStatus', text: text, level: level || 'info' }); } catch (e) { /* noop */ }
   }
 
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
   // Extract ClinicalFacts once per session via the background proxy (Bearer, CORS-exempt).
   function extractClinicalFacts(noteData) {
     return new Promise(function (resolve) {
@@ -141,6 +143,9 @@
     sendStatus('➕ Expanding form sections…');
     await expandFormSections(nB, nS);
     sendStatus('Form expanded: ' + nB + ' behaviors, ' + nS + ' goals', 'info');
+
+    // Give Angular time to finish rendering all the new mat-cards before scanning.
+    await wait(2000);
 
     // ── Phase 3a: NormalizedForm via the MAIN-world scan (background bridge) ──
     sendStatus('🔍 Scanning the form…');
