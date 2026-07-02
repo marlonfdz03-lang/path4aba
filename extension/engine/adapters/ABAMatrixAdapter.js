@@ -21,11 +21,30 @@
   const ABAMatrixAdapter = {
     platform: 'abamatrix',
 
-    // ABA Matrix sections are <mat-card> only (no mat-expansion-panel). Skip hidden cards.
+    // Daily Log fields are form-level (NOT inside a mat-card); Behavior/Goal sections
+    // ARE mat-cards. Returns descriptors { element, type, title, synthetic? } — the
+    // synthetic Daily Log points at the <form>, scanned with a mat-card exclusion filter.
     detectSections: function () {
-      return Array.from(document.querySelectorAll(SECTION_SELECTOR)).filter(function (el) {
-        return el.offsetParent !== null;
+      const sections = [];
+
+      // Daily Log — the real <form> element, marked synthetic.
+      const form = document.querySelector('form');
+      if (form) {
+        const hasDailyLogFields = form.querySelector('mat-form-field:not(mat-card mat-form-field), mat-radio-group:not(mat-card mat-radio-group)');
+        if (hasDailyLogFields) {
+          sections.push({ element: form, type: 'DailyLog', title: 'Daily Log', synthetic: true });
+        }
+      }
+
+      // Behavior Reduction / Goal Implementation — visible mat-cards.
+      document.querySelectorAll(SECTION_SELECTOR).forEach((card, i) => {
+        if (card.offsetParent === null) return;
+        const type = this.getSectionType(card);
+        const title = (card.innerText && card.innerText.split('\n')[0].trim()) || ('Section ' + i);
+        sections.push({ element: card, type: type, title: title });
       });
+
+      return sections;
     },
 
     // Buttons whose visible label reads "Add Behavior" or "Add Goal".

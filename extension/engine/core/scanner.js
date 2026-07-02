@@ -180,14 +180,22 @@
     };
   }
 
-  // Extract every field in one section, scoped so nested cards don't steal each other's fields.
-  function extractFields(sectionEl, sectionTitle) {
+  // Extract every field in one section.
+  //   synthetic = true  -> sectionEl is the <form> (Daily Log): include only form-level
+  //                        fields NOT inside any mat-card.
+  //   synthetic = false -> sectionEl is a mat-card: include only fields belonging to THIS
+  //                        card (not a nested one).
+  function extractFields(sectionEl, sectionTitle, synthetic) {
     const fields = [];
     const counted = new Set();
 
+    const inScope = function (el) {
+      return synthetic ? !el.closest('mat-card') : (el.closest(SECTION_SELECTOR) === sectionEl);
+    };
+
     // 1) mat-form-field: mat-label is the question; inner control gives the type.
     for (const ff of sectionEl.querySelectorAll('mat-form-field')) {
-      if (ff.closest(SECTION_SELECTOR) !== sectionEl) continue; // belongs to a nested card
+      if (!inScope(ff)) continue;
       const control = controlOf(ff);
       const type = control ? detectFieldType(control) : 'unknown';
       if (control) counted.add(control);
@@ -196,14 +204,14 @@
 
     // 2) mat-radio-group: question is a preceding strong/p.
     for (const rg of sectionEl.querySelectorAll('mat-radio-group')) {
-      if (rg.closest(SECTION_SELECTOR) !== sectionEl) continue;
+      if (!inScope(rg)) continue;
       counted.add(rg);
       fields.push(buildField(findRadioQuestion(rg), 'radio', rg, sectionTitle));
     }
 
     // 3) Stragglers (mat-checkbox / bare inputs not inside a form-field or radio group).
     for (const control of sectionEl.querySelectorAll(CONTROL_SELECTOR)) {
-      if (control.closest(SECTION_SELECTOR) !== sectionEl) continue;
+      if (!inScope(control)) continue;
       if (counted.has(control)) continue;
       if (control.closest('mat-form-field') || control.closest('mat-radio-group')) continue;
       fields.push(buildField(findQuestionText(control), detectFieldType(control), control, sectionTitle));
@@ -229,30 +237,31 @@
   }
 
   function scan(adapter) {
-    let sectionEls = [];
+    // detectSections() returns descriptors: { element, type, title, synthetic? }.
+    let descriptors = [];
     if (adapter && typeof adapter.detectSections === 'function') {
-      try { sectionEls = adapter.detectSections() || []; } catch (e) { sectionEls = []; }
+      try { descriptors = adapter.detectSections() || []; } catch (e) { descriptors = []; }
     }
-    let sections = Array.from(sectionEls);
-    if (!sections.length) sections = Array.from(document.querySelectorAll(SECTION_SELECTOR));
 
-    const getType = function (el) {
-      if (adapter && typeof adapter.getSectionType === 'function') {
-        try { return adapter.getSectionType(el) || 'Other'; } catch (e) { return defaultSectionType(el); }
-      }
-      return defaultSectionType(el);
-    };
+    // Fallback (no adapter): treat each visible mat-card as a section descriptor.
+    if (!descriptors.length) {
+      descriptors = Array.from(document.querySelectorAll(SECTION_SELECTOR))
+        .filter(function (el) { return el.offsetParent !== null; })
+        .map(function (el) { return { element: el, type: defaultSectionType(el), title: getSectionTitle(el) }; });
+    }
 
     const outSections = [];
     const seen = new Set();
-    for (const el of sections) {
-      if (seen.has(el)) continue;
+    for (const desc of descriptors) {
+      const el = desc && desc.element;
+      if (!el || seen.has(el)) continue;
       seen.add(el);
-      const title = getSectionTitle(el);
-      const fields = extractFields(el, title);
-      // Drop empty/wrapper cards; a real section always has fields.
+      const type = desc.type || defaultSectionType(el);
+      const title = desc.title || getSectionTitle(el);
+      const fields = extractFields(el, title, !!desc.synthetic);
+      // Drop empty/wrapper sections; a real section always has fields.
       if (fields.length > 0) {
-        outSections.push({ title: title, type: getType(el), fields: fields });
+        outSections.push({ title: title, type: type, fields: fields });
       }
     }
 
