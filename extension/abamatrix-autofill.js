@@ -190,16 +190,16 @@ if (window.__abaMatrixLoaded) {
           const behaviorName = behaviors[i].name || behaviors[i];
           await selectMatOption(matSelects[selectBase], behaviorName);
 
-          // Evidenced By → textarea
+          // Evidenced By → textarea (tBase)
           setMatInput(updatedTextareas[tBase], answers[String(qIdx + 1)] || '');
           await waitMs(200);
 
-          // Function → mat-select
+          // Function → mat-select (selectBase + 1)
           const functionAnswer = (answers[String(qIdx + 2)] || '').toLowerCase();
           const functionKey = Object.keys(functionMap).find(k => functionAnswer.includes(k)) || 'escape';
           await selectMatOption(matSelects[selectBase + 1], functionMap[functionKey]);
 
-          // Antecedent → textarea
+          // Antecedent → textarea (tBase + 1)
           setMatInput(updatedTextareas[tBase + 1], answers[String(qIdx + 3)] || '');
           await waitMs(200);
 
@@ -215,11 +215,12 @@ if (window.__abaMatrixLoaded) {
           }
           await waitMs(200);
 
-          // Main focus → mat-select
+          // Main focus → mat-select (selectBase + 2)
           await selectMatOption(matSelects[selectBase + 2], answers[String(qIdx + 6)] || '');
 
-          // Result → textarea
+          // Result → textarea (tBase + 2)
           setMatInput(updatedTextareas[tBase + 2], answers[String(qIdx + 7)] || '');
+          await waitMs(200);
 
           qIdx += 8;
           await waitMs(400);
@@ -231,26 +232,40 @@ if (window.__abaMatrixLoaded) {
           const tBase = 19 + (i * 2);
           const chipBase = 7 + (i * 3);
 
+          // Goal implementation description
           setMatInput(updatedTextareas[tBase], answers[String(gIdx)] || (skills[i].name || skills[i]));
-          setMatInput(updatedTextareas[tBase + 1], answers[String(gIdx + 1)] || '');
+          await waitMs(200);
 
+          // Medical barriers
+          setMatInput(updatedTextareas[tBase + 1], answers[String(gIdx + 1)] || '');
+          await waitMs(200);
+
+          // Activities chip
           if (updatedInputs[chipBase]) {
             setMatInput(updatedInputs[chipBase], answers[String(gIdx + 2)] || '');
             await waitMs(200);
             updatedInputs[chipBase].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+            await waitMs(200);
           }
+
+          // Teaching procedure chip
           if (updatedInputs[chipBase + 1]) {
             setMatInput(updatedInputs[chipBase + 1], answers[String(gIdx + 3)] || '');
             await waitMs(200);
             updatedInputs[chipBase + 1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+            await waitMs(200);
           }
 
+          // Prompts radio → Yes
           clickRadioByGroupIndex(3 + (behaviors.length * 3) + (i * 2), 'Yes');
+          await waitMs(200);
 
+          // Reinforcers chip
           if (updatedInputs[chipBase + 2]) {
             setMatInput(updatedInputs[chipBase + 2], answers[String(gIdx + 5)] || '');
             await waitMs(200);
             updatedInputs[chipBase + 2].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+            await waitMs(200);
           }
 
           gIdx += 7;
