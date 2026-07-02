@@ -1,6 +1,6 @@
 # Universal Clinical Form Engine — Technical Architecture
 
-> Status: **APPROVED (with adjustments) — implementing in phases.** Phase 1 (Scanner + Normalizer + Adapter skeleton + debug) landed; later phases gated on review.
+> Status: **Phase 1 COMPLETE & calibrated on ABA Matrix** (Scanner + Normalizer + ABAMatrixAdapter + debug). Live result: **28 fields detected, 0 unidentified** — DailyLog (11), BehaviorReduction (9), GoalImplementation (8). Phase 2 (`ClinicalExtractor`) is next, awaiting instructions.
 > Relationship to legacy: `extension/abamatrix-autofill.js` is **retained as the fallback** behind the existing **Fill** button; the new engine runs only when `FORM_ENGINE_BETA` is enabled.
 
 ---
@@ -12,6 +12,37 @@
 3. **No PHI persistence.** `ClinicalFacts` and all derived data live **in memory for the duration of a single fill only**. Nothing is written to `chrome.storage`, `localStorage`, IndexedDB, or disk. When the fill ends (or the popup/page unloads), the facts are gone.
 4. **Legacy autofill stays as the fallback.** `abamatrix-autofill.js` remains wired to the existing **Fill** button and is the default path. It is only bypassed when the new engine is explicitly enabled, and it is the automatic fallback if the engine errors.
 5. **Feature flag `FORM_ENGINE_BETA`.** A boolean (default **false** in production) gates the entire new engine. `FORM_ENGINE_BETA = true` routes the Fill button through the new engine; `false` uses the legacy autofill. The flag is the single on/off switch for the whole Phase 2+ pipeline.
+
+---
+
+## Phase 1 Calibration Findings (ABA Matrix)
+
+Empirical facts about the live ABA Matrix DOM (`app.abamatrix.com/session`), discovered by iterating `window.debugFormEngine()` against the real form. These drove the Scanner/Adapter/Normalizer implementation and are the ground truth Phase 2+ builds on. **Final result: 28 fields, 0 unidentified** — DailyLog (11), BehaviorReduction (9), GoalImplementation (8).
+
+### DOM structure
+- **The page has ~21 separate `<form>` elements**, not one form. **Each Daily Log question is its own `<form class="w-100-p px-8">`** — Daily Log is *not* card-based and *not* a single form. The adapter bundles every form whose controls are **not** inside a `mat-card` into one synthetic `DailyLog` section (`multiForm: true`, `element` = an **array** of forms).
+- **Behavior Reduction and Goal Implementation are `mat-card` based.** In the calibration sample, Behavior was one form containing a card with ~10 controls and Goal a form with ~8 controls, all controls **inside** the `mat-card`. These cards are detected by scanning inner text (the cards carry **no title element**), typed by `getSectionType(cardEl)`.
+- **`mat-card`s carry no title node** — section type is inferred from the questions rendered inside the card (e.g. `Behavior:` + `Evidenced By:` ⇒ BehaviorReduction; `Goal Implementation:` + `medical barriers` ⇒ GoalImplementation; `How did the client present` / `Who was present` / `significant changes` ⇒ DailyLog).
+
+### Field-label (question) patterns — three shapes
+The Scanner's `getQuestionText(fieldEl)` resolves the question in priority order:
+1. **`mat-label` inside a `mat-form-field`** — the common Angular Material case.
+2. **`previousElementSibling` text** — a `<div>`/`<p>`/`<strong>` sibling holds the question (radio groups, `app-select`, some inputs). Search walks up to 3 previous siblings, then the parent's previous sibling.
+3. **`app-select` / custom-component fields** — value-bearing containers. **Skip `app-select` and any element containing a `mat-select` while searching for question text**, because those hold the *selected value*, not the question. Field types also extend beyond native Material: `app-select` ⇒ `select`, `mat-chip-list`/`mat-chip-grid`/`app-chip-input` ⇒ `chip`.
+
+### Scanning rules that proved necessary
+- **`seenControls` dedup (adapter).** Forms can nest / repeat, so the same control surfaces under multiple `<form>` elements. Each control is claimed by the **first** form that owns it; later forms sharing an already-claimed control are dropped. Without this, Daily Log fields are scanned multiple times.
+- **Hidden forms/cards are skipped** via `offsetParent === null`.
+- **JS filter, not CSS `:not()`.** `!el.closest('mat-card')` is used to separate form-level Daily Log controls from card controls; the equivalent CSS `:not(mat-card mat-form-field)` selector proved unreliable in this DOM.
+- **Section-title elements are skipped in the Scanner.** A field whose question resolves to a header like `Behavior Reduction #1` / `Goal Implementation #2` is dropped (regex in the dispatcher) rather than mapped — the header is not a real field. This is deliberately handled in the Scanner, **not** added to the Normalizer's `FIELD_KEY_MAP`.
+- **Nested field dedup (Daily Log).** When a custom wrapper (e.g. `app-select`) contains a native control (e.g. `mat-select`), only the **outermost** candidate is kept, so one logical field is not counted twice.
+
+### Debug / reinjection
+- **No idempotency guards.** The four engine modules must **always overwrite** their `window.*` exports on (re)injection — no `if (window.X) return;` early return. During calibration, the guard kept stale code alive after an extension reload; overwriting guarantees the latest code runs. A `window.__FormEngine_v` counter increments on each injection so a reinjection can be confirmed in the console.
+- **`world: 'MAIN'`.** The pure-DOM modules load in the MAIN world so `window.debugFormEngine()` is callable from the default DevTools console context. On-demand injection (the **🧪 Debug Form** dev button → `background.js`) coexists with the `content_scripts` load path.
+
+### Status of the core modules
+- **Scanner, ABAMatrixAdapter, Normalizer are calibrated: 0 unidentified fields** across all three sections. The `FIELD_KEY_MAP` covers every visible ABA Matrix question (Daily Log presentation/evidence/participation/present/incidents/medical/environment/relevant-info; Behavior name/evidenced/function/antecedent/interventions/consequence/main-focus/result/STO; Goal name/barriers/activities/teaching/prompts/reinforcers/schedule). This is the stable foundation for Phase 2.
 
 ---
 
