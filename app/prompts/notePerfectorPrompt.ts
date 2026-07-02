@@ -373,34 +373,22 @@ The closing must include at least one sentence that justifies continued ABA serv
 CORRECT: "ABA services remain clinically indicated to address [client name]'s behavioral profile, which continues to impact participation across home and school environments."
 CORRECT: "Continued intervention is necessary to support generalization of replacement skills across settings and communication partners."
 
-MEDICAL NECESSITY — MANDATORY DEDICATED SENTENCE PER SKILL:
-After describing EACH skill acquisition target, you MUST include a dedicated medical necessity sentence.
-This sentence MUST follow this structure:
-"[Skill name] was addressed to [reduce/prevent] [specific maladaptive behavior] and provide the client with [functional alternative], which is medically necessary to support [functional outcome] in [natural/educational/home] environments."
+MEDICAL NECESSITY — MANDATORY PER SKILL BUT VARIED IN LANGUAGE:
+Every skill must have a dedicated sentence explaining its clinical necessity, but the phrasing must vary naturally. NEVER use the same sentence structure twice in the same note.
 
-EXAMPLES — use these exact patterns:
-- "Appropriate Object Request Response was addressed to reduce tangible-motivated impulsive behavior and provide the client with a functional communication alternative to reaching and grabbing, which is medically necessary to support safe access to preferred items and prevent physical escalation in natural environments."
-- "Delay Tolerance Response Chain was addressed to reduce escape-motivated problem behavior during transitions and teach the client to tolerate brief delays in reinforcement, which is medically necessary to support participation in structured activities and prevent behavioral escalation."
-- "Manding for Attention Response was addressed to reduce attention-maintained interrupting and provide the client with an appropriate communication alternative, which is medically necessary to support social interaction and prevent maladaptive attention-seeking in home and community environments."
-- "Following Instructions Response Chain was addressed to reduce escape-motivated non-compliance and teach the client to follow directives with minimal prompting, which is medically necessary to support daily living skills and participation in therapeutic programming."
+Use these varied patterns — rotate between them:
+- "[Skill] targets [function]-maintained behavior and provides the client with a functional alternative to [maladaptive behavior], supporting safe participation in [context]."
+- "Addressing [Skill] directly reduces [specific problem] and builds the client's capacity to [functional outcome] across natural environments."
+- "[Skill] was prioritized to address [clinical need], as the client's [maladaptive behavior] interferes with [daily function]."
+- "Without [Skill], the client's [maladaptive behavior] would continue to impede [functional outcome]; this program directly targets that barrier."
+- "The clinical rationale for [Skill] includes reducing [behavior] and establishing [replacement] as a functional and socially appropriate alternative."
+- "Continued practice of [Skill] is essential to reduce [problem behavior] and support [functional goal] in home and community settings."
 
-RULE: Every skill mentioned must have its own dedicated medical necessity sentence — not implied, not combined with another skill, not embedded in the ABC.
-BANNED: Writing about a skill without following it with a medical necessity sentence.
-BANNED: "The session targeted [skill]" without a following medical necessity sentence.
-
-CRITICAL: The medical necessity sentence must appear IMMEDIATELY AFTER each individual skill description — NOT combined at the end for all skills together.
-
-BANNED:
-"These replacement skills were introduced to reduce maladaptive behaviors and provide functional alternatives..."
-"The above skills were addressed to support..."
-"All skills targeted during this session were medically necessary..."
-
-CORRECT — each skill gets its own dedicated sentence immediately after its description:
-"Delay Tolerance Response Chain was addressed [description of how it was practiced]; [client response]. Delay Tolerance Response Chain is medically necessary to reduce escape-motivated problem behavior during transitions and support the client's ability to tolerate brief delays without behavioral escalation."
-
-"Following Instructions Response Chain was targeted [description]; [client response]. Following Instructions Response Chain is medically necessary to reduce non-compliance and support participation in structured therapeutic and daily living activities."
-
-RULE: Write skill → write medical necessity for THAT skill → move to next skill. Never group them.
+RULES:
+- Never use "is medically necessary" twice in the same note
+- Never use identical sentence structure for two skills
+- The clinical justification must still be specific to the skill and its function
+- Must still appear immediately after each skill description
 
 TEACHING PROCEDURE — MANDATORY PER SKILL:
 For each skill acquisition target, you MUST explicitly mention the teaching procedure used.
