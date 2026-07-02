@@ -569,6 +569,21 @@ BANNED: Skills appearing ONLY as consequences of behavior episodes.
 BANNED: Skills listed only in the closing sentence without narrative description.
 REQUIRED: At least one proactive skill acquisition teaching moment described in the narrative.
 
+MEDICAL NECESSITY — MANDATORY DEDICATED SENTENCE PER SKILL:
+After describing EACH skill acquisition target, you MUST include a dedicated medical necessity sentence.
+This sentence MUST follow this structure:
+"[Skill name] was addressed to [reduce/prevent] [specific maladaptive behavior] and provide the client with [functional alternative], which is medically necessary to support [functional outcome] in [natural/educational/home] environments."
+
+EXAMPLES — use these exact patterns:
+- "Appropriate Object Request Response was addressed to reduce tangible-motivated impulsive behavior and provide the client with a functional communication alternative to reaching and grabbing, which is medically necessary to support safe access to preferred items and prevent physical escalation in natural environments."
+- "Delay Tolerance Response Chain was addressed to reduce escape-motivated problem behavior during transitions and teach the client to tolerate brief delays in reinforcement, which is medically necessary to support participation in structured activities and prevent behavioral escalation."
+- "Manding for Attention Response was addressed to reduce attention-maintained interrupting and provide the client with an appropriate communication alternative, which is medically necessary to support social interaction and prevent maladaptive attention-seeking in home and community environments."
+- "Following Instructions Response Chain was addressed to reduce escape-motivated non-compliance and teach the client to follow directives with minimal prompting, which is medically necessary to support daily living skills and participation in therapeutic programming."
+
+RULE: Every skill mentioned must have its own dedicated medical necessity sentence — not implied, not combined with another skill, not embedded in the ABC.
+BANNED: Writing about a skill without following it with a medical necessity sentence.
+BANNED: "The session targeted [skill]" without a following medical necessity sentence.
+
 CLOSING — VARY THE STRUCTURE (2-3 sentences):
 Do NOT always end with the same sentence pattern. Rotate between these closing styles:
 Style A: 'Reinforcement included [items]. Replacement programs addressed included [skills with HOW each was practiced]. The client required [prompt level] during [context].'
