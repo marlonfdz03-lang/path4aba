@@ -335,20 +335,23 @@ if (window.__abaMatrixLoaded) {
             await waitMs(200);
           }
 
-          // Teaching procedure → textarea (it's a free-text textarea, not a mat-select)
-          // Teaching textareas come after the behavior textareas in the DOM
-          // Re-query to get fresh textarea list
-          const teachingTextareas = document.querySelectorAll('textarea');
-          // Teaching procedure textareas start after behavior textareas (4 + behaviors*3) + goal pairs (goals*2)
-          const teachingBase = 4 + (behaviors.length * 3) + skills.length;
-          const teachingTextarea = teachingTextareas[teachingBase + i];
-          if (teachingTextarea) {
-            setMatInput(teachingTextarea, answers[String(gIdx + 3)] || '');
-            await waitMs(200);
+          // Teaching procedure → mat-select (each goal has its own options)
+          // Find the mat-select within this goal's card
+          const goalCards = document.querySelectorAll('mat-card');
+          // Goal cards come after behavior cards: offset = 1 (daily log) + behaviors.length + i
+          const goalCardOffset = 1 + behaviors.length + i;
+          const goalCard = goalCards[goalCardOffset];
+          if (goalCard) {
+            const teachingSelect = goalCard.querySelector('mat-select');
+            if (teachingSelect) {
+              await selectMatOption(teachingSelect, answers[String(gIdx + 3)] || '');
+              await waitMs(400);
+            }
           }
 
           // Prompts radio → Yes
-          clickRadioByGroupIndex(3 + (behaviors.length * 3) + (i * 2), 'Yes');
+          // Radio groups: 1 (environment) + 1 (incidents) + 1 (medical) + behaviors*2 (antecedent+STO per behavior) + i*1
+          clickRadioByGroupIndex(3 + (behaviors.length * 2) + i, 'Yes');
           await waitMs(200);
 
           // Reinforcers chip
