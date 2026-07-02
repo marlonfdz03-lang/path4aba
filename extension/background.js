@@ -120,6 +120,35 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep channel open for async sendResponse
   }
 
+  // ── Phase 2 ClinicalExtractor: fetch structured ClinicalFacts from a session note ──
+  // Same CORS-exempt Bearer proxy as getABAMatrixAnswers: runs in the background (not the
+  // content script) so it's exempt from CORS and can read the token from chrome.storage.
+  // Called ONCE per session.
+  if (message.action === 'getClinicalFacts') {
+    chrome.storage.local.get(['extensionToken'], (stored) => {
+      const token = stored.extensionToken;
+      if (!token) { sendResponse({ error: 'Not authenticated' }); return; }
+      fetch('https://path4aba.app/api/extension/extract-facts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          note: message.note,
+          behaviors: message.behaviors,
+          skills: message.skills,
+          caregivers: message.caregivers,
+          clientName: message.clientName,
+        }),
+      })
+        .then(r => r.json())
+        .then(data => sendResponse({ facts: data.facts || null, error: data.error }))
+        .catch(err => sendResponse({ error: err.message }));
+    });
+    return true; // keep channel open for async sendResponse
+  }
+
   // ── DEV (Phase 1 calibration): inject the Form Engine on demand, then debug ──
   // Injects the engine modules into the target tab's MAIN world (so
   // window.debugFormEngine is reachable) and runs it immediately. This is an
