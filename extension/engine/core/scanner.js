@@ -152,6 +152,38 @@
     return '';
   }
 
+  // Resolve a chip field's actual <input> (the control may be the input or its container).
+  function chipInputOf(control) {
+    if (!control) return null;
+    if (control.tagName === 'INPUT') return control;
+    return control.querySelector('input[class*="mat-chip-list-input"]')
+      || control.querySelector('input:not([type="hidden"])');
+  }
+
+  // A locator the Executor can resolve WITHOUT re-discovering the element by proximity:
+  //   chip w/ placeholder -> { strategy:'placeholder', placeholder }
+  //   chip w/o placeholder -> { strategy:'chip-index', chipIndex } (index among empty-
+  //                           placeholder chip inputs in the nearest section: card or form)
+  //   everything else      -> { strategy:'proximity', questionText }
+  // chip-index scope uses closest('mat-card') || closest('form') to match the Executor's scope.
+  function makeLocator(control, type, questionText) {
+    if (type === 'chip') {
+      const chipInput = chipInputOf(control);
+      const placeholder = chipInput ? (chipInput.placeholder || '') : '';
+      if (placeholder) return { strategy: 'placeholder', placeholder: placeholder };
+      const scope = chipInput ? (chipInput.closest('mat-card') || chipInput.closest('form')) : null;
+      let chipIndex = 0;
+      if (scope) {
+        const chips = Array.from(scope.querySelectorAll('input[class*="mat-chip-list-input"]'))
+          .filter(function (c) { return !c.placeholder; });
+        const idx = chips.indexOf(chipInput);
+        chipIndex = idx >= 0 ? idx : 0;
+      }
+      return { strategy: 'chip-index', chipIndex: chipIndex };
+    }
+    return { strategy: 'proximity', questionText: questionText || '' };
+  }
+
   function buildField(questionText, type, control, sectionTitle) {
     return {
       questionText: questionText || '',
@@ -159,7 +191,8 @@
       currentValue: control ? getCurrentValue(control, type) : null,
       options: control ? getOptions(control, type) : undefined,
       visible: control ? isVisible(control) : false,
-      sectionTitle: sectionTitle || ''
+      sectionTitle: sectionTitle || '',
+      locator: makeLocator(control, type, questionText || '')
     };
   }
 

@@ -59,6 +59,35 @@ window.FormEngineExecutor = {
     return null;
   },
 
+  // Resolve a field's DOM element from the locator the SCANNER saved — no re-discovery.
+  // Chips resolve by placeholder / chip-index; everything else falls back to proximity.
+  resolveLocator(locator, sectionEl, fieldType) {
+    if (!locator) return null;
+
+    switch (locator.strategy) {
+      case 'placeholder': {
+        const els = Array.isArray(sectionEl) ? sectionEl : [sectionEl];
+        for (const el of els) {
+          const found = el.querySelector(`input[placeholder="${locator.placeholder}"]`);
+          if (found) return found;
+        }
+        return null;
+      }
+      case 'chip-index': {
+        const els = Array.isArray(sectionEl) ? sectionEl : [sectionEl];
+        for (const el of els) {
+          const chips = Array.from(el.querySelectorAll('input[class*="mat-chip-list-input"]'))
+            .filter(c => !c.placeholder || c.placeholder === '');
+          if (chips[locator.chipIndex]) return chips[locator.chipIndex];
+        }
+        return null;
+      }
+      case 'proximity':
+      default:
+        return this.findFieldElement(sectionEl, locator.questionText, fieldType);
+    }
+  },
+
   findFieldElement(sectionEl, questionText, fieldType) {
     const selector =
       fieldType === 'select' ? 'mat-select' :
@@ -149,7 +178,7 @@ window.FormEngineExecutor = {
       return false;
     }
 
-    const el = this.findFieldElement(sectionEl, fieldData.questionText, action.fieldType);
+    const el = this.resolveLocator(fieldData.locator, sectionEl, action.fieldType);
     if (!el) {
       console.warn('[Path4ABA Executor] DOM element not found for:', action.fieldId, fieldData.questionText);
       return false;

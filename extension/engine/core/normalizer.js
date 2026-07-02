@@ -142,7 +142,7 @@
           options: rawField.options,
           visible: rawField.visible,
           identified: identified,
-          locator: { questionText: rawField.questionText, sectionTitle: rawSection.title }
+          locator: rawField.locator || { strategy: 'proximity', questionText: rawField.questionText }
         };
         fields.push(field);
         fieldIndex[id] = field;
