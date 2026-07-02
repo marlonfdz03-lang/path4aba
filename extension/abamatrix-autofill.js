@@ -283,13 +283,13 @@ if (window.__abaMatrixLoaded) {
         let gIdx = 7 + (behaviors.length * 8);
         const goalSelectBase = behaviors.length * 3;
         for (let i = 0; i < skills.length; i++) {
-          const chipBase = 8 + (i * 4);
+          const chipBase = 7 + (i * 3);
 
           // Goal name → mat-select (from assessment dropdown)
           await selectMatOption(matSelects[goalSelectBase + i], skills[i].name || skills[i]);
           await waitMs(500);
 
-          // Medical barriers → chip input (free text)
+          // Medical barriers chip
           if (updatedInputs[chipBase]) {
             setMatInput(updatedInputs[chipBase], answers[String(gIdx + 1)] || '');
             await waitMs(200);
@@ -305,23 +305,20 @@ if (window.__abaMatrixLoaded) {
             await waitMs(200);
           }
 
-          // Teaching procedure chip
-          if (updatedInputs[chipBase + 2]) {
-            setMatInput(updatedInputs[chipBase + 2], answers[String(gIdx + 3)] || '');
-            await waitMs(200);
-            updatedInputs[chipBase + 2].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-            await waitMs(200);
-          }
+          // Teaching procedure → mat-select
+          const teachingSelectIdx = goalSelectBase + skills.length + i;
+          await selectMatOption(matSelects[teachingSelectIdx], answers[String(gIdx + 3)] || '');
+          await waitMs(400);
 
           // Prompts radio → Yes
           clickRadioByGroupIndex(3 + (behaviors.length * 3) + (i * 2), 'Yes');
           await waitMs(200);
 
           // Reinforcers chip
-          if (updatedInputs[chipBase + 3]) {
-            setMatInput(updatedInputs[chipBase + 3], answers[String(gIdx + 5)] || '');
+          if (updatedInputs[chipBase + 2]) {
+            setMatInput(updatedInputs[chipBase + 2], answers[String(gIdx + 5)] || '');
             await waitMs(200);
-            updatedInputs[chipBase + 3].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+            updatedInputs[chipBase + 2].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
             await waitMs(200);
           }
 
