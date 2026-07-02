@@ -36,6 +36,8 @@
     'evidenced by:': 'EvidencedBy',
     'interventions:': 'Interventions',
     'antecedent interventions:': 'AntecedentInterventions',
+    'after the behavior occurred': 'ConsequenceInterventions',
+    'consequence interventions': 'ConsequenceInterventions',
     'goal implementation:': 'GoalName',
     'what medical barriers': 'MedicalBarriers',
     'what activities were used': 'Activities',
@@ -56,7 +58,8 @@
     'what was the result': 'Result',
     'once the antecedent was presented': 'AntecedentInterventionsYesNo',
     'would you like to add current sto': 'STO',
-    'did you use any prompts': 'PromptsUsed'
+    'did you use any prompts': 'PromptsUsed',
+    'what prompts were used': 'PromptsDetail'
   };
 
   // Sorted longest-first so the most specific fragment matches before a shorter substring.

@@ -46,10 +46,11 @@
 
   function detectFieldType(el) {
     const tag = el.tagName.toLowerCase();
-    if (tag === 'mat-select') return 'select';
+    if (tag === 'mat-select' || tag === 'app-select') return 'select';
     if (tag === 'mat-radio-group') return 'radio';
     if (tag === 'mat-checkbox') return 'checkbox';
     if (tag === 'textarea') return 'textarea';
+    if (tag === 'mat-chip-list' || tag === 'mat-chip-grid' || tag === 'app-chip-input') return 'chip';
     if (tag === 'input') {
       const cls = el.className || '';
       if (/mat-chip/i.test(cls) || el.closest('mat-chip-list, mat-chip-grid, mat-chip-list-input')) return 'chip';
@@ -126,6 +127,12 @@
     let prev = fieldEl.previousElementSibling;
     let depth = 0;
     while (prev && depth < 3) {
+      // Skip app-select / mat-select containers — they hold selected values, not questions.
+      if (prev.matches('app-select') || prev.querySelector('mat-select')) {
+        prev = prev.previousElementSibling;
+        depth++;
+        continue;
+      }
       const text = prev.innerText?.trim();
       if (text && text.length > 3 && !prev.matches('mat-radio-group, mat-chip-list, mat-chip-grid')) {
         const firstLine = text.split('\n')[0]?.trim();
@@ -156,23 +163,31 @@
     };
   }
 
+  // Field-bearing elements to look for at Daily Log (form) level, beyond mat-form-field.
+  const DAILY_LOG_FIELDS = [
+    'mat-radio-group', 'textarea', 'mat-select',
+    'mat-chip-list', 'mat-chip-grid', 'app-select', 'app-chip-input',
+    'input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"])'
+  ].join(', ');
+
   // Extract every field in one section.
-  //   synthetic = true  -> sectionEl is the <form> (Daily Log): include only form-level
-  //                        fields, filtered in JS with !el.closest('mat-card') (a CSS
-  //                        :not() selector proved unreliable).
-  //   synthetic = false -> sectionEl is a mat-card: include only fields belonging to THIS
-  //                        card (not a nested one).
+  //   synthetic = true  -> sectionEl is the <form> (Daily Log): form-level fields, which are
+  //                        often NOT wrapped in mat-form-field (bare selects/chips/etc.).
+  //   synthetic = false -> sectionEl is a mat-card (Behavior/Goal): fields of THIS card only.
   function extractFields(sectionEl, sectionTitle, synthetic) {
+    return synthetic
+      ? extractDailyLogFields(sectionEl, sectionTitle)
+      : extractCardFields(sectionEl, sectionTitle);
+  }
+
+  // A Behavior/Goal mat-card: include only fields belonging to THIS card (not a nested one).
+  function extractCardFields(card, sectionTitle) {
     const fields = [];
     const counted = new Set();
-
-    // Daily Log (synthetic): JS filter excludes anything inside a mat-card.
-    const inScope = function (el) {
-      return synthetic ? !el.closest('mat-card') : (el.closest(SECTION_SELECTOR) === sectionEl);
-    };
+    const inScope = function (el) { return el.closest(SECTION_SELECTOR) === card; };
 
     // 1) mat-form-field: getQuestionText resolves the label; inner control gives the type.
-    for (const ff of sectionEl.querySelectorAll('mat-form-field')) {
+    for (const ff of card.querySelectorAll('mat-form-field')) {
       if (!inScope(ff)) continue;
       const control = controlOf(ff);
       const type = control ? detectFieldType(control) : 'unknown';
@@ -181,18 +196,56 @@
     }
 
     // 2) mat-radio-group: question comes from a previous sibling via getQuestionText.
-    for (const rg of sectionEl.querySelectorAll('mat-radio-group')) {
+    for (const rg of card.querySelectorAll('mat-radio-group')) {
       if (!inScope(rg)) continue;
       counted.add(rg);
       fields.push(buildField(getQuestionText(rg), 'radio', rg, sectionTitle));
     }
 
     // 3) Stragglers (mat-checkbox / bare inputs not inside a form-field or radio group).
-    for (const control of sectionEl.querySelectorAll(CONTROL_SELECTOR)) {
+    for (const control of card.querySelectorAll(CONTROL_SELECTOR)) {
       if (!inScope(control)) continue;
       if (counted.has(control)) continue;
       if (control.closest('mat-form-field') || control.closest('mat-radio-group')) continue;
       fields.push(buildField(getQuestionText(control), detectFieldType(control), control, sectionTitle));
+    }
+
+    return fields;
+  }
+
+  // Daily Log lives at <form> level (outside any mat-card). Its fields are often NOT wrapped
+  // in mat-form-field — they can be bare textarea / mat-select / mat-chip-list / app-select /
+  // app-chip-input / mat-radio-group. Scan mat-form-field units first, then bare form-level
+  // controls, deduping controls nested inside another candidate (e.g. a mat-select inside an
+  // app-select) so one logical field is not counted twice.
+  function extractDailyLogFields(form, sectionTitle) {
+    const fields = [];
+    const seen = new Set();
+    const outsideCard = function (el) { return !el.closest('mat-card'); };
+
+    // 1) mat-form-field units at form level.
+    for (const ff of form.querySelectorAll('mat-form-field')) {
+      if (!outsideCard(ff)) continue;
+      const control = controlOf(ff);
+      const type = control ? detectFieldType(control) : 'unknown';
+      if (control) seen.add(control);
+      seen.add(ff);
+      fields.push(buildField(getQuestionText(ff), type, control, sectionTitle));
+    }
+
+    // 2) Bare form-level field elements not wrapped in a mat-form-field.
+    const candidates = Array.from(form.querySelectorAll(DAILY_LOG_FIELDS))
+      .filter(function (el) { return outsideCard(el) && !el.closest('mat-form-field'); });
+    const candSet = new Set(candidates);
+    for (const el of candidates) {
+      if (seen.has(el)) continue;
+      // Keep only the outermost field element — skip a control nested inside another candidate.
+      let nested = false;
+      let p = el.parentElement;
+      while (p && p !== form) { if (candSet.has(p)) { nested = true; break; } p = p.parentElement; }
+      if (nested) continue;
+      seen.add(el);
+      fields.push(buildField(getQuestionText(el), detectFieldType(el), el, sectionTitle));
     }
 
     return fields;
