@@ -27,19 +27,30 @@ This sets the clinical picture immediately for any auditor or reviewer.
 The last sentence before "The next scheduled session is on [date]" must describe how the client presented at the end of the session and their overall participation level.
 CORRECT: "By the close of the session, the client demonstrated [improved/maintained/reduced] behavioral regulation, responding to [prompts/reinforcement/structure] with [describe observable outcome], and overall participation was [consistent/variable/emerging] across targeted programming."
 
-3. BEHAVIOR FUNCTION — INTEGRATED IN EVERY ABC:
-Every ABC must include the behavioral function naturally integrated in the narrative.
-CORRECT: "...consistent with escape-motivated behavior..." or "...in a pattern consistent with attention-seeking function..." or "...suggesting tangible-motivated behavior..."
-BANNED: Stating the function without connecting it to the observable behavior.
+3. BEHAVIOR FUNCTION — MANDATORY IN EVERY SINGLE ABC — NO EXCEPTIONS:
+Every ABC without exception must explicitly state the behavioral function.
+This is NOT optional — if a note has 5 ABCs, all 5 must mention the function.
+CORRECT examples:
+- "...consistent with escape-motivated behavior, as the behavior occurred when demands were presented..."
+- "...suggesting attention-seeking function, as the behavior increased when adult attention was directed elsewhere..."
+- "...consistent with tangible-motivated behavior, as the behavior occurred when access to preferred items was restricted..."
+- "...consistent with automatic reinforcement, as the behavior occurred across all conditions regardless of social consequences..."
+BANNED: Any ABC that does not explicitly state attention/escape/tangible/automatic function.
+RULE: Write the function BEFORE describing the intervention — it justifies WHY that specific intervention was chosen.
 
 4. INTERVENTION RESULT — MANDATORY AFTER EVERY ABC:
 Every ABC must end with a clear observable result of the intervention.
 CORRECT: "...the client then requested a break using words and transitioned to the next activity with minimal prompting."
 BANNED: Ending an ABC with the intervention without stating what the client did afterward.
 
-5. MEDICAL NECESSITY — PER SKILL:
-For every replacement skill or skill acquisition target addressed, include one sentence connecting the skill to a functional or medical barrier.
-CORRECT: "Manding for attention was addressed to reduce escape-maintained problem behavior and support the client's ability to access social interaction through appropriate communication, which is necessary to prevent behavioral escalation in natural environments."
+5. MEDICAL NECESSITY — MANDATORY EXPLICIT STATEMENT PER SKILL:
+For EVERY replacement skill or skill acquisition target, include an explicit medical necessity statement.
+This is NOT optional — it must be a dedicated sentence per skill, not implied.
+CORRECT examples:
+- "Manding for attention was addressed during this session to reduce attention-maintained problem behavior and support the client's ability to access social interaction through appropriate communication, which is essential to prevent escalation in natural and educational environments."
+- "Help Request Response was targeted to reduce escape-motivated problem behavior and provide the client with a functional alternative to task refusal, directly supporting participation in therapeutic and daily activities."
+- "Manding for Tangibles Response was practiced to reduce tangible-motivated problem behavior and teach the client to access preferred items through appropriate communication, which is medically necessary to reduce physical aggression and property destruction."
+BANNED: Any skill section that does not include an explicit medical necessity sentence.
 
 1. STRUCTURE:
 - Rewrite as ONE continuous paragraph
