@@ -187,22 +187,6 @@ if (window.__abaMatrixLoaded) {
           }
         }
 
-        // Step 3: Fill Daily Log textareas by exact index
-        // textarea 0 = How did client present at START
-        // textarea 1 = How did client present at END
-        // textarea 2 = end session (duplicate section)
-        // textarea 3 = participation
-        const textareas = document.querySelectorAll('textarea');
-        setMatInput(textareas[0], answers['0'] || 'The client presented as cooperative and ready to engage in structured activities.');
-        setMatInput(textareas[1], answers['2'] || 'The client demonstrated appropriate disengagement and responded to closing routines.');
-        setMatInput(textareas[2], answers['2'] || 'The client demonstrated appropriate disengagement and responded to closing routines.');
-        setMatInput(textareas[3], answers['4'] || 'The client demonstrated active participation throughout the session with consistent engagement across targeted activities.');
-
-        // Fill Evidenced by (input fields)
-        const inputs = document.querySelectorAll('input.mat-input-element');
-        setMatInput(inputs[1], answers['1'] || 'Verbal responses, eye contact, and engagement with materials.');
-        await waitMs(300);
-
         // Step 4: Click + for each behavior
         for (let i = 0; i < behaviors.length; i++) {
           clickAddButton(0);
@@ -354,7 +338,20 @@ if (window.__abaMatrixLoaded) {
           await waitMs(400);
         }
 
-        // Step 8: Leave Relevant Information / Comments EMPTY
+        // Step 8: Fill Daily Log textareas AFTER all dropdowns to prevent Angular clearing them
+        const finalTextareas = document.querySelectorAll('textarea');
+        setMatInput(finalTextareas[0], answers['0'] || 'The client presented as cooperative and ready to engage in structured activities.');
+        setMatInput(finalTextareas[1], answers['2'] || 'The client demonstrated appropriate disengagement and responded to closing routines.');
+        setMatInput(finalTextareas[2], answers['2'] || 'The client demonstrated appropriate disengagement and responded to closing routines.');
+        setMatInput(finalTextareas[3], answers['4'] || 'The client demonstrated active participation throughout the session.');
+
+        // Fill Evidenced by (input field)
+        const finalInputs = document.querySelectorAll('input.mat-input-element, input[class*="mat-chip"]');
+        setMatInput(finalInputs[1], answers['1'] || 'Verbal responses, eye contact, and engagement with materials.');
+
+        await waitMs(500);
+
+        // Note: Leave Relevant Information / Comments EMPTY
         // (The full note should NOT go here)
 
         console.log('[Path4ABA] ABA Matrix form filled successfully');
