@@ -12,8 +12,20 @@ if (window.__abaMatrixLoaded) {
 
     function setMatInput(el, value) {
       if (!el) return;
-      el.focus();
-      // Use native setter to bypass Angular's value tracking
+      // Try Angular's onChange accessor first (most reliable for Angular Material)
+      const ctx = el.__ngContext__;
+      if (ctx && Array.isArray(ctx)) {
+        for (let i = 0; i < ctx.length; i++) {
+          const item = ctx[i];
+          if (item && typeof item === 'object' && typeof item.onChange === 'function' && item._elementRef) {
+            el.value = value;
+            item.onChange(value);
+            if (typeof item.onTouched === 'function') item.onTouched();
+            return;
+          }
+        }
+      }
+      // Fallback: native setter + events
       const nativeSetter = Object.getOwnPropertyDescriptor(
         el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
         'value'
@@ -23,11 +35,9 @@ if (window.__abaMatrixLoaded) {
       } else {
         el.value = value;
       }
-      // Dispatch events Angular listens to
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
       el.dispatchEvent(new Event('blur', { bubbles: true }));
-      el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
     }
 
     async function selectMatOption(selectEl, value) {
