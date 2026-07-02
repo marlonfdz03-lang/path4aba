@@ -253,6 +253,63 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep channel open for async sendResponse
   }
 
+  // ── Phase 3: MAIN<->ISOLATED bridge — run the scan in the ABA Matrix tab's MAIN world ──
+  // The engine (Scanner/Normalizer/Adapter) lives in the MAIN world. Inject it (idempotent)
+  // and run scan+normalize there, returning the plain NormalizedForm to the ISOLATED caller.
+  if (message.action === 'getFormSchema') {
+    chrome.tabs.query({ active: true }, (tabs) => {
+      const abaTab = (tabs || []).find(t => t.url && t.url.includes('app.abamatrix.com')) || (tabs || [])[0];
+      if (!abaTab) { sendResponse({ error: 'ABA Matrix tab not found' }); return; }
+      chrome.scripting.executeScript(
+        {
+          target: { tabId: abaTab.id },
+          world: 'MAIN',
+          files: ['engine/adapters/ABAMatrixAdapter.js', 'engine/core/scanner.js', 'engine/core/normalizer.js'],
+        },
+        () => {
+          if (chrome.runtime.lastError) { sendResponse({ error: chrome.runtime.lastError.message }); return; }
+          chrome.scripting.executeScript(
+            {
+              target: { tabId: abaTab.id },
+              world: 'MAIN',
+              func: () => {
+                if (!window.FormEngineScanner || !window.FormEngineNormalizer) return null;
+                const raw = window.FormEngineScanner.scan(window.ABAMatrixAdapter || null);
+                return window.FormEngineNormalizer.normalize(raw, window.ABAMatrixAdapter || null);
+              },
+            },
+            (results) => {
+              if (chrome.runtime.lastError) { sendResponse({ error: chrome.runtime.lastError.message }); return; }
+              sendResponse({ normalizedForm: results && results[0] ? results[0].result : null });
+            }
+          );
+        }
+      );
+    });
+    return true; // keep channel open for async sendResponse
+  }
+
+  // ── Phase 3: Planner — fetch the FillPlan (facts + normalizedForm -> actions) ──
+  // Same CORS-exempt Bearer proxy as getClinicalFacts.
+  if (message.action === 'getPlanFill') {
+    chrome.storage.local.get(['extensionToken'], (stored) => {
+      const token = stored.extensionToken;
+      if (!token) { sendResponse({ error: 'Not authenticated' }); return; }
+      fetch('https://path4aba.app/api/extension/plan-fill', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ facts: message.facts, normalizedForm: message.normalizedForm }),
+      })
+        .then(r => r.json())
+        .then(data => sendResponse({ plan: data.plan || [], error: data.error }))
+        .catch(err => sendResponse({ error: err.message }));
+    });
+    return true; // keep channel open for async sendResponse
+  }
+
   // Progress from the Form Agent. The open popup receives this runtime message directly
   // (content-script messages reach open extension views), so we only log it here — a
   // re-broadcast would duplicate the status line in the popup.

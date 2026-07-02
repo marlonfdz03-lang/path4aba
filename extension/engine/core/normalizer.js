@@ -74,6 +74,14 @@
     return (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
   }
 
+  // A field is "empty" when it has no current value (null, blank, or empty list). Used by
+  // the Planner to build the list of fields that still need filling.
+  function isBlank(v) {
+    if (v === null || v === undefined) return true;
+    if (Array.isArray(v)) return v.length === 0;
+    return String(v).trim() === '';
+  }
+
   function detectFieldKey(questionText) {
     const q = normForMap(questionText);
     if (!q) return null;
@@ -130,6 +138,7 @@
           questionText: rawField.questionText,
           fieldType: rawField.fieldType,
           currentValue: rawField.currentValue,
+          isEmpty: isBlank(rawField.currentValue),
           options: rawField.options,
           visible: rawField.visible,
           identified: identified,

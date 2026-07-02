@@ -22,9 +22,9 @@
 
   // Progress helper — surfaces to the popup's status div (and the console). The background has
   // an agentStatus listener, so there's always a receiver (no "no receiver" rejection).
-  function sendStatus(text) {
+  function sendStatus(text, level) {
     console.log('[Path4ABA]', text);
-    try { chrome.runtime.sendMessage({ action: 'agentStatus', text: text }); } catch (e) { /* noop */ }
+    try { chrome.runtime.sendMessage({ action: 'agentStatus', text: text, level: level || 'info' }); } catch (e) { /* noop */ }
   }
 
   // Extract ClinicalFacts once per session via the background proxy (Bearer, CORS-exempt).
@@ -54,6 +54,40 @@
     });
   }
 
+  // Get the NormalizedForm. The scan runs in the MAIN world (the engine's world) via the
+  // background bridge, so this ISOLATED module receives the plain object back.
+  function getFormSchema() {
+    return new Promise(function (resolve) {
+      chrome.runtime.sendMessage({ action: 'getFormSchema' }, function (response) {
+        if (chrome.runtime.lastError) {
+          console.error('[Path4ABA] getFormSchema error:', chrome.runtime.lastError.message);
+          resolve(null);
+          return;
+        }
+        if (response && response.error) console.error('[Path4ABA] getFormSchema error:', response.error);
+        resolve((response && response.normalizedForm) || null);
+      });
+    });
+  }
+
+  // Get the FillPlan from the Planner endpoint (via the background proxy).
+  function getPlanFill(facts, normalizedForm) {
+    return new Promise(function (resolve) {
+      chrome.runtime.sendMessage(
+        { action: 'getPlanFill', facts: facts, normalizedForm: normalizedForm },
+        function (response) {
+          if (chrome.runtime.lastError) {
+            console.error('[Path4ABA] getPlanFill error:', chrome.runtime.lastError.message);
+            resolve([]);
+            return;
+          }
+          if (response && response.error) console.error('[Path4ABA] getPlanFill error:', response.error);
+          resolve((response && response.plan) || []);
+        }
+      );
+    });
+  }
+
   async function runFormAgent(noteData) {
     noteData = noteData || {};
 
@@ -70,25 +104,27 @@
     const nS = (clinicalFacts.skills || []).length;
     sendStatus('✅ Clinical facts extracted (' + nB + ' behaviors, ' + nS + ' skills).');
 
-    // ── Continue to scan ──
-    // Scanner/Normalizer run in the MAIN world. If they're reachable from this context, run
-    // them and store the NormalizedForm; otherwise the scan is produced by the MAIN-world
-    // engine (run window.debugFormEngine() in the page) and wired to the orchestrator in
-    // Phase 3. Either way Phase 2 only STORES facts — nothing is filled.
-    let normalizedForm = null;
-    if (window.FormEngineScanner && window.FormEngineNormalizer) {
-      sendStatus('🔍 Scanning the form…');
-      const adapter = window.ABAMatrixAdapter || null;
-      const raw = window.FormEngineScanner.scan(adapter);
-      normalizedForm = window.FormEngineNormalizer.normalize(raw, adapter);
-      window.__p4NormalizedForm = normalizedForm;
-      console.log('[Path4ABA] NormalizedForm (Phase 1 scan):', normalizedForm);
-    } else {
-      console.log('[Path4ABA] Scan engine not in this world (ISOLATED) — run window.debugFormEngine() in the page (MAIN world) for the scan.');
+    // ── Phase 3a: NormalizedForm via the MAIN-world scan (background bridge) ──
+    sendStatus('🔍 Scanning the form…');
+    const normalizedForm = await getFormSchema();
+    window.__p4NormalizedForm = normalizedForm;
+    console.log('[Path4ABA] NormalizedForm:', normalizedForm);
+    if (!normalizedForm) {
+      sendStatus('⚠️ Form scan failed — see console.');
+      return { clinicalFacts: clinicalFacts, normalizedForm: null, plan: null };
     }
+    const nFields = (normalizedForm.sections || []).reduce(function (n, s) { return n + (s.fields || []).length; }, 0);
+    sendStatus('✅ Form scanned (' + nFields + ' fields).');
 
-    sendStatus('Done — facts stored. Planner is Phase 3; nothing filled yet.');
-    return { clinicalFacts: clinicalFacts, normalizedForm: normalizedForm };
+    // ── Phase 3b: Planner — facts + NormalizedForm -> FillPlan ──
+    sendStatus('🗺️ Planning fill actions…');
+    const plan = await getPlanFill(clinicalFacts, normalizedForm);
+    window.__p4FillPlan = plan; // stored for Phase 4 (Executor)
+    console.log('[Path4ABA] FillPlan:', plan);
+    sendStatus('Plan created: ' + (plan ? plan.length : 0) + ' actions', 'info');
+
+    // Phase 4 (Executor) is not implemented — do NOT fill anything yet.
+    return { clinicalFacts: clinicalFacts, normalizedForm: normalizedForm, plan: plan };
   }
 
   window.runFormAgent = runFormAgent;
