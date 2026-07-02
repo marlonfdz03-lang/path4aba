@@ -284,6 +284,24 @@
       fields.push(buildField(questionText, fieldType, control, sectionTitle));
     }
 
+    // 1b) Explicit EvidencedBy fallback for BehaviorReduction cards. In behavior cards the
+    // "Evidenced By" label often isn't a mat-label inside the mat-form-field, so getQuestionText
+    // can miss it. If no collected field mentions "evidenced", grab the textarea at
+    // mat-form-field index 1 (the EvidencedBy slot) and add it explicitly with the right label.
+    if (defaultSectionType(card) === 'BehaviorReduction') {
+      const hasEvidenced = fields.some(function (f) {
+        return (f.questionText || '').toLowerCase().includes('evidenced');
+      });
+      const allFF = card.querySelectorAll('mat-form-field');
+      if (!hasEvidenced && allFF[1]) {
+        const ta = allFF[1].querySelector('textarea');
+        if (ta) {
+          console.log('[SCAN] explicit EvidencedBy at mat-form-field index 1');
+          fields.push(buildField('Evidenced By:', 'textarea', ta, sectionTitle));
+        }
+      }
+    }
+
     // 2) mat-radio-group: question comes from a previous sibling via getQuestionText.
     for (const rg of card.querySelectorAll('mat-radio-group')) {
       if (!inScope(rg)) continue;
