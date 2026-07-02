@@ -88,7 +88,7 @@ if (window.__abaMatrixLoaded) {
             questions.push(`Behavior Reduction #${i+1} - Evidenced By (observable description):`);
             questions.push(`Behavior Reduction #${i+1} - What was the function of the behavior?`);
             questions.push(`Behavior Reduction #${i+1} - What prompted the behavior? (Antecedent)`);
-            questions.push(`Behavior Reduction #${i+1} - Antecedent Interventions used (Yes or No)?`);
+            questions.push(`Behavior Reduction #${i+1} - What antecedent interventions were implemented to prevent the behavior?`);
             questions.push(`Behavior Reduction #${i+1} - After the behavior, what interventions were implemented?`);
             questions.push(`Behavior Reduction #${i+1} - What was the main focus of the applied interventions?`);
             questions.push(`Behavior Reduction #${i+1} - What was the result of the implemented interventions?`);
@@ -216,6 +216,20 @@ if (window.__abaMatrixLoaded) {
           // Antecedent Interventions → Yes radio
           clickRadioByGroupIndex(3 + (i * 3), 'Yes');
           await waitMs(200);
+
+          // Antecedent Interventions chip (appears after clicking Yes)
+          await waitMs(500); // Wait for chip input to appear
+          const antecedentChips = document.querySelectorAll('input[placeholder*="Antecedent"], input[class*="mat-chip"][id*="antecedent"]');
+          // Re-query all chip inputs after Yes is clicked
+          const allChipsNow = document.querySelectorAll('input[class*="mat-chip-list-input"]');
+          // Antecedent interventions chip is at index 2 + i (one per behavior)
+          const antecedentChip = allChipsNow[2 + i];
+          if (antecedentChip) {
+            setMatInput(antecedentChip, answers[String(qIdx + 4)] || 'Antecedent strategies implemented to prevent recurrence.');
+            await waitMs(200);
+            antecedentChip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+            await waitMs(200);
+          }
 
           // Interventions chip
           if (interventionInput) {
