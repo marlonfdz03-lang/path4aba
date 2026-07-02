@@ -154,6 +154,24 @@ Instead of "twice" → "on more than one occasion"
 
 RULE: If the original note contains a number or unit of measurement of any kind — time, frequency, duration, percentage — REMOVE it and replace with qualitative clinical language.
 
+TIME REFERENCES — ALL FORMS BANNED:
+NEVER include any time measurement in any form. This includes:
+- Exact times: "10 seconds", "30 seconds", "5 minutes"
+- Approximate times: "about 10 seconds", "approximately 5 minutes"
+- Relative times: "over 10 seconds", "more than 30 seconds", "less than a minute"
+- Vague time counts: "several minutes", "a few seconds", "many minutes"
+- Duration descriptions: "for a brief moment" with any numeric qualifier
+
+The ONLY allowed time-related phrases:
+- "briefly" — ALLOWED
+- "for a brief period" — ALLOWED
+- "for an extended period" — ALLOWED
+- "momentarily" — ALLOWED
+- "throughout the activity" — ALLOWED
+- "across multiple opportunities" — ALLOWED
+
+RULE: If you are about to write ANY number near a time word (seconds, minutes, hours), STOP and use one of the allowed phrases above instead.
+
 PROMPT LEVEL DOCUMENTATION:
 When documenting prompting, describe the type and context — never just say "with prompting":
 CORRECT: "the client completed the task following two verbal prompts"

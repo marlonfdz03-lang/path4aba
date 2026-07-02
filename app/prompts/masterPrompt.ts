@@ -132,19 +132,23 @@ Instead of "twice" → "on more than one occasion"
 
 RULE: If you feel the need to write a number or unit of measurement of any kind — time, frequency, duration, percentage — STOP and replace it with qualitative clinical language.
 
-Time references in transitions are also banned:
-BANNED: "within 10 seconds", "after 5 seconds", "for 30 seconds"
-CORRECT: "within a brief period", "after a short delay", "following a brief pause"
+TIME REFERENCES — ALL FORMS BANNED:
+NEVER include any time measurement in any form. This includes:
+- Exact times: "10 seconds", "30 seconds", "5 minutes"
+- Approximate times: "about 10 seconds", "approximately 5 minutes"
+- Relative times: "over 10 seconds", "more than 30 seconds", "less than a minute"
+- Vague time counts: "several minutes", "a few seconds", "many minutes"
+- Duration descriptions: "for a brief moment" with any numeric qualifier
 
-BANNED time phrases (all of these):
-- "for several minutes", "for a few minutes", "for many minutes"
-- "for several seconds", "for a few seconds"
-- "for an extended period of time" when used with a specific activity
-- "throughout the session" combined with time estimates
-- "briefly" is ALLOWED when not combined with time units
-- "for a brief period" is ALLOWED
-- "for several minutes" → CORRECT: "for an extended period"
-- "for a few seconds" → CORRECT: "for a brief moment"
+The ONLY allowed time-related phrases:
+- "briefly" — ALLOWED
+- "for a brief period" — ALLOWED
+- "for an extended period" — ALLOWED
+- "momentarily" — ALLOWED
+- "throughout the activity" — ALLOWED
+- "across multiple opportunities" — ALLOWED
+
+RULE: If you are about to write ANY number near a time word (seconds, minutes, hours), STOP and use one of the allowed phrases above instead.
 
 ACTIVITIES FORMAT:
 - All activities MUST use parentheses: preferred activity as (ACTIVITY NAME), non-preferred as (ACTIVITY NAME).
