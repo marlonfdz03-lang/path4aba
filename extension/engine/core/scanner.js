@@ -165,23 +165,32 @@
   //   chip w/o placeholder -> { strategy:'chip-index', chipIndex } (index among empty-
   //                           placeholder chip inputs in the nearest section: card or form)
   //   everything else      -> { strategy:'proximity', questionText }
-  // chip-index scope uses closest('mat-card') || closest('form') to match the Executor's scope.
+  // On any chip failure (no input / not found in scope) fall back to proximity — never to a
+  // misleading chipIndex 0, which would make every unmatched chip resolve to the first chip.
   function makeLocator(control, type, questionText) {
     if (type === 'chip') {
       const chipInput = chipInputOf(control);
-      const placeholder = chipInput ? (chipInput.placeholder || '') : '';
-      if (placeholder) return { strategy: 'placeholder', placeholder: placeholder };
-      const scope = chipInput ? (chipInput.closest('mat-card') || chipInput.closest('form')) : null;
-      let chipIndex = 0;
-      if (scope) {
-        const chips = Array.from(scope.querySelectorAll('input[class*="mat-chip-list-input"]'))
-          .filter(function (c) { return !c.placeholder; });
-        const idx = chips.indexOf(chipInput);
-        chipIndex = idx >= 0 ? idx : 0;
+      if (!chipInput) return { strategy: 'proximity', questionText };
+
+      const placeholder = chipInput.placeholder || '';
+      if (placeholder) {
+        return { strategy: 'placeholder', placeholder };
       }
-      return { strategy: 'chip-index', chipIndex: chipIndex };
+
+      // Calculate index among empty-placeholder chips in same mat-card or form
+      const scope = chipInput.closest('mat-card') || chipInput.closest('form');
+      if (scope) {
+        const allEmptyChips = Array.from(scope.querySelectorAll('input[class*="mat-chip-list-input"]'))
+          .filter(c => !c.placeholder);
+        const idx = allEmptyChips.indexOf(chipInput);
+        if (idx >= 0) {
+          return { strategy: 'chip-index', chipIndex: idx };
+        }
+      }
+
+      return { strategy: 'proximity', questionText };
     }
-    return { strategy: 'proximity', questionText: questionText || '' };
+    return { strategy: 'proximity', questionText };
   }
 
   function buildField(questionText, type, control, sectionTitle) {
