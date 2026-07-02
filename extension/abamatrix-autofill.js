@@ -12,12 +12,21 @@ if (window.__abaMatrixLoaded) {
     function setMatInput(el, value) {
       if (!el) return;
       el.focus();
-      el.value = '';
-      document.execCommand('insertText', false, value);
+      // Use native setter to bypass Angular's value tracking
+      const nativeSetter = Object.getOwnPropertyDescriptor(
+        el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
+        'value'
+      )?.set;
+      if (nativeSetter) {
+        nativeSetter.call(el, value);
+      } else {
+        el.value = value;
+      }
+      // Dispatch events Angular listens to
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
+      el.dispatchEvent(new Event('blur', { bubbles: true }));
       el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
-      el.blur();
     }
 
     async function selectMatOption(selectEl, value) {
