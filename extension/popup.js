@@ -2095,9 +2095,11 @@ document.getElementById('fillABAMatrixBtn')?.addEventListener('click', () => {
     'padding:3px 7px;border:1px dashed #94a3b8;border-radius:5px;background:#f8fafc;' +
     'color:#475569;cursor:pointer;opacity:0.85;';
   btn.addEventListener('click', () => {
+    console.log('[Path4ABA Debug] Button clicked');
     chrome.tabs.query({ active: true }, (tabs) => {
       const tab = (tabs || []).find(t => t.url && t.url.includes('app.abamatrix.com')) || (tabs || [])[0];
       if (!tab) { console.warn('[Path4ABA] Debug Form: no active tab found'); return; }
+      console.log('[Path4ABA Debug] Sending injectFormEngine to tabId:', tab.id);
       chrome.runtime.sendMessage({ action: 'injectFormEngine', tabId: tab.id }, (response) => {
         if (chrome.runtime.lastError) {
           console.error('[Path4ABA] Debug Form error:', chrome.runtime.lastError.message);

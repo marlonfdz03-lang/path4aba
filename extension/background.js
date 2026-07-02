@@ -127,49 +127,64 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // modules' idempotency guards make the double-injection a harmless no-op. The
   // NormalizedForm is logged in the TARGET TAB's console, not here.
   if (message.action === 'injectFormEngine') {
-    const engineFiles = [
-      'engine/adapters/ABAMatrixAdapter.js',
-      'engine/core/scanner.js',
-      'engine/core/normalizer.js',
-      'engine/debug.js',
-    ];
+    console.log('[Path4ABA Debug] injectFormEngine received, tabId:', message.tabId);
+    try {
+      const engineFiles = [
+        'engine/adapters/ABAMatrixAdapter.js',
+        'engine/core/scanner.js',
+        'engine/core/normalizer.js',
+        'engine/debug.js',
+      ];
 
-    const runDebug = (tabId) => {
-      if (!tabId) { sendResponse({ ok: false, error: 'No target tab' }); return; }
-      chrome.scripting.executeScript(
-        { target: { tabId }, files: engineFiles, world: 'MAIN' },
-        () => {
-          if (chrome.runtime.lastError) {
-            sendResponse({ ok: false, error: chrome.runtime.lastError.message });
-            return;
-          }
-          // Second call MUST also target MAIN world, or it won't see window.debugFormEngine.
-          chrome.scripting.executeScript(
-            {
-              target: { tabId },
-              world: 'MAIN',
-              func: () => (typeof window.debugFormEngine === 'function' ? !!window.debugFormEngine() : false),
-            },
-            (results) => {
-              if (chrome.runtime.lastError) {
-                sendResponse({ ok: false, error: chrome.runtime.lastError.message });
-                return;
-              }
-              sendResponse({ ok: true, ran: results && results[0] ? results[0].result : null });
-            }
-          );
+      const runDebug = (tabId) => {
+        if (!tabId) {
+          console.error('[Path4ABA Debug] No target tab id');
+          sendResponse({ ok: false, error: 'No target tab' });
+          return;
         }
-      );
-    };
+        chrome.scripting.executeScript(
+          { target: { tabId }, files: engineFiles, world: 'MAIN' },
+          () => {
+            if (chrome.runtime.lastError) {
+              console.error('[Path4ABA Debug] inject files error:', chrome.runtime.lastError.message);
+              sendResponse({ ok: false, error: chrome.runtime.lastError.message });
+              return;
+            }
+            console.log('[Path4ABA Debug] Scripts injected');
+            // Second call MUST also target MAIN world, or it won't see window.debugFormEngine.
+            chrome.scripting.executeScript(
+              {
+                target: { tabId },
+                world: 'MAIN',
+                func: () => (typeof window.debugFormEngine === 'function' ? !!window.debugFormEngine() : false),
+              },
+              (results) => {
+                if (chrome.runtime.lastError) {
+                  console.error('[Path4ABA Debug] run debugFormEngine error:', chrome.runtime.lastError.message);
+                  sendResponse({ ok: false, error: chrome.runtime.lastError.message });
+                  return;
+                }
+                console.log('[Path4ABA Debug] debugFormEngine called');
+                sendResponse({ ok: true, ran: results && results[0] ? results[0].result : null });
+              }
+            );
+          }
+        );
+      };
 
-    if (message.tabId) {
-      runDebug(message.tabId);
-    } else {
-      // Fallback: locate the ABA Matrix tab when no tabId was passed.
-      chrome.tabs.query({ active: true }, (tabs) => {
-        const tab = (tabs || []).find(t => t.url && t.url.includes('app.abamatrix.com')) || (tabs || [])[0];
-        runDebug(tab && tab.id);
-      });
+      if (message.tabId) {
+        runDebug(message.tabId);
+      } else {
+        // Fallback: locate the ABA Matrix tab when no tabId was passed.
+        chrome.tabs.query({ active: true }, (tabs) => {
+          const tab = (tabs || []).find(t => t.url && t.url.includes('app.abamatrix.com')) || (tabs || [])[0];
+          console.log('[Path4ABA Debug] Fallback resolved tabId:', tab && tab.id);
+          runDebug(tab && tab.id);
+        });
+      }
+    } catch (err) {
+      console.error('[Path4ABA Debug] injectFormEngine error:', err);
+      sendResponse({ ok: false, error: err.message });
     }
     return true; // keep channel open for async sendResponse
   }
