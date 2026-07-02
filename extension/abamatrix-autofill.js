@@ -246,7 +246,7 @@ if (window.__abaMatrixLoaded) {
         let gIdx = 7 + (behaviors.length * 8);
         const goalSelectBase = behaviors.length * 3;
         for (let i = 0; i < skills.length; i++) {
-          const chipBase = 8 + (i * 3);
+          const chipBase = 8 + (i * 4);
 
           // Goal name → mat-select (from assessment dropdown)
           await selectMatOption(matSelects[goalSelectBase + i], skills[i].name || skills[i]);
