@@ -31,10 +31,18 @@
       const sections = [];
       const allForms = Array.from(document.querySelectorAll('form'));
 
-      // Daily Log — every form with controls NOT inside a mat-card, bundled as one section.
-      const dailyLogForms = allForms.filter(function (f) {
-        const controls = f.querySelectorAll('mat-form-field, mat-radio-group');
-        return Array.from(controls).some(function (el) { return !el.closest('mat-card'); });
+      // Daily Log — every visible form with controls NOT inside a mat-card, bundled as one
+      // section. seenControls dedups nested/duplicate forms: each control is claimed by the
+      // first form that owns it, so a wrapping form can't re-emit a child form's controls.
+      const seenControls = new Set();
+      const dailyLogForms = allForms.filter(f => {
+        if (f.offsetParent === null) return false;
+        const controls = Array.from(f.querySelectorAll('mat-form-field, mat-radio-group'))
+          .filter(el => !el.closest('mat-card'));
+        if (controls.length === 0) return false;
+        if (seenControls.has(controls[0])) return false;
+        controls.forEach(el => seenControls.add(el));
+        return true;
       });
       if (dailyLogForms.length > 0) {
         sections.push({

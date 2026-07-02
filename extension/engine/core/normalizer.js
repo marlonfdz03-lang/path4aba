@@ -59,7 +59,9 @@
     'once the antecedent was presented': 'AntecedentInterventionsYesNo',
     'would you like to add current sto': 'STO',
     'did you use any prompts': 'PromptsUsed',
-    'what prompts were used': 'PromptsDetail'
+    'what prompts were used': 'PromptsDetail',
+    'relevant information': 'RelevantInformation',
+    'comments:': 'RelevantInformation'
   };
 
   // Sorted longest-first so the most specific fragment matches before a shorter substring.

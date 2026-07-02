@@ -174,10 +174,18 @@
   //   synthetic = true  -> sectionEl is the <form> (Daily Log): form-level fields, which are
   //                        often NOT wrapped in mat-form-field (bare selects/chips/etc.).
   //   synthetic = false -> sectionEl is a mat-card (Behavior/Goal): fields of THIS card only.
+  // A field whose question resolved to a section header (e.g. "Behavior Reduction #1",
+  // "Goal Implementation #2") is not a real field — getQuestionText grabbed the card title.
+  function isSectionTitle(q) {
+    return /^(behavior reduction|goal implementation)\s*#\d+/i.test(q || '');
+  }
+
   function extractFields(sectionEl, sectionTitle, synthetic) {
-    return synthetic
+    const fields = synthetic
       ? extractDailyLogFields(sectionEl, sectionTitle)
       : extractCardFields(sectionEl, sectionTitle);
+    // Skip section-title elements picked up as fields.
+    return fields.filter(function (f) { return !isSectionTitle(f.questionText); });
   }
 
   // A Behavior/Goal mat-card: include only fields belonging to THIS card (not a nested one).
