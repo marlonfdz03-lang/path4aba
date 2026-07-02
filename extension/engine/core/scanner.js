@@ -255,6 +255,17 @@
     const inScope = function (el) { return el.closest(SECTION_SELECTOR) === card; };
 
     // 1) mat-form-field: getQuestionText resolves the label; inner control gives the type.
+    // DEBUG: raw pass — log EVERY mat-form-field (including out-of-scope) before any filtering.
+    const formFields = card.querySelectorAll('mat-form-field');
+    formFields.forEach((ff, i) => {
+      console.log('[SCAN-RAW]', 'mat-form-field', i,
+        'inScope=' + inScope(ff),
+        'hasTextarea=' + !!ff.querySelector('textarea'),
+        'hasSelect=' + !!ff.querySelector('mat-select'),
+        'outerHTML_start=' + ff.outerHTML.slice(0, 80)
+      );
+    });
+
     let mffIndex = -1; // DEBUG: index among the card's mat-form-fields
     for (const ff of card.querySelectorAll('mat-form-field')) {
       mffIndex++;
