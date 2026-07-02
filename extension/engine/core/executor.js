@@ -88,6 +88,45 @@ window.FormEngineExecutor = {
         }
       }
     }
+
+    // Chip inputs have no nearby label (they live inside mat-chip-list containers), so the
+    // proximity search above misses them. Special-case chips.
+    if (fieldType === 'chip') {
+      // For Daily Log chips: sectionEl is an ARRAY of forms outside mat-card.
+      if (Array.isArray(sectionEl)) {
+        for (const form of sectionEl) {
+          const chips = form.querySelectorAll('input[class*="mat-chip-list-input"]');
+          for (const chip of chips) {
+            const nearby = chip.closest('mat-form-field') || chip.parentElement?.parentElement;
+            const labelText = nearby?.querySelector('mat-label, strong, p')?.innerText?.trim() || '';
+            if (labelText.toLowerCase().includes(questionText.toLowerCase().slice(0, 20))) {
+              return chip;
+            }
+          }
+        }
+        // Fallback: return first chip in Daily Log forms
+        for (const form of sectionEl) {
+          const chip = form.querySelector('input[class*="mat-chip-list-input"]');
+          if (chip) return chip;
+        }
+      } else {
+        // For BR/Goal sections: search all chip inputs in the section
+        const chips = sectionEl.querySelectorAll('input[class*="mat-chip-list-input"]');
+        for (const chip of chips) {
+          const nearby = chip.closest('mat-form-field') || chip.parentElement?.parentElement;
+          const prevText = nearby?.previousElementSibling?.innerText?.trim() ||
+                           chip.parentElement?.parentElement?.previousElementSibling?.innerText?.trim() || '';
+          if (prevText.toLowerCase().includes(questionText.toLowerCase().slice(0, 20))) {
+            return chip;
+          }
+        }
+        // Last resort: return first unfilled chip in section
+        for (const chip of chips) {
+          if (!chip.value) return chip;
+        }
+      }
+    }
+
     return null;
   },
 
