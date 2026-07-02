@@ -268,7 +268,7 @@ If not specified → Continuous Reinforcement.`);
           await waitMs(200);
 
           // Antecedent Interventions → Yes radio
-          clickRadioByGroupIndex(3 + (i * 3), 'Yes');
+          clickRadioByGroupIndex(3 + (i * 2), 'Yes');
           await waitMs(200);
 
           // Antecedent Interventions — find chip within this behavior's card
