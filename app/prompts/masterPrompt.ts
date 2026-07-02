@@ -132,6 +132,10 @@ Instead of "twice" → "on more than one occasion"
 
 RULE: If you feel the need to write a number or unit of measurement of any kind — time, frequency, duration, percentage — STOP and replace it with qualitative clinical language.
 
+Time references in transitions are also banned:
+BANNED: "within 10 seconds", "after 5 seconds", "for 30 seconds"
+CORRECT: "within a brief period", "after a short delay", "following a brief pause"
+
 ACTIVITIES FORMAT:
 - All activities MUST use parentheses: preferred activity as (ACTIVITY NAME), non-preferred as (ACTIVITY NAME).
 - Example: "During transition from (Lego building) to (worksheet completion)..."
@@ -198,6 +202,14 @@ INTERVENTIONS:
 - Every behavior MUST have an intervention. Behavior without intervention = clinically incomplete, reject and rewrite.
 - Replacement skills must be functionally incompatible with the maladaptive behavior — the client cannot perform both simultaneously.
 - NEVER use "Escape Extinction" — it is a prohibited intervention. For escape-maintained behaviors use FCT, DRA, or offering choices instead.
+
+NCR (Noncontingent Reinforcement) — COMPLETELY BANNED:
+NEVER use NCR or Noncontingent Reinforcement in any note.
+NCR is not clinically appropriate for Path4ABA documentation.
+If the RBT provided regular attention or praise during a task, document it as:
+- Behavior-specific praise delivered contingent on appropriate behavior
+- DRA reinforcing on-task behavior
+- NOT as NCR or noncontingent delivery
 
 CLINICAL WORDING PRECISION:
 1. PROMPTING HIERARCHY — when multiple prompt levels were used, document as:
@@ -292,9 +304,9 @@ ABC SELECTION — choose 4-6 based on:
 4. Include different behavior topographies — never repeat the same behavior twice
 5. Match antecedent → function → intervention → replacement logically:
    - escape-maintained behavior → FCT (request break), DRA (task engagement), Behavior Momentum, Premack
-   - attention-maintained behavior → FCT (request attention), Planned Ignoring + DRA, NCR
+   - attention-maintained behavior → FCT (request attention), Planned Ignoring + DRA
    - tangible-maintained behavior → FCT (request item), DRA, Premack
-   - automatic → DRI, Environmental Modification, NCR
+   - automatic → DRI, Environmental Modification
 6. FUNCTIONAL EQUIVALENCE RULE — CRITICAL:
    When documenting a replacement skill in an ABC, the replacement MUST be functionally equivalent to the maladaptive behavior in that ABC.
    CORRECT: escape-maintained aggression → 'the client requested a break appropriately instead of hitting'
