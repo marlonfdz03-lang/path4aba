@@ -584,6 +584,20 @@ RULE: Every skill mentioned must have its own dedicated medical necessity senten
 BANNED: Writing about a skill without following it with a medical necessity sentence.
 BANNED: "The session targeted [skill]" without a following medical necessity sentence.
 
+CRITICAL: The medical necessity sentence must appear IMMEDIATELY AFTER each individual skill description — NOT combined at the end for all skills together.
+
+BANNED:
+"These replacement skills were introduced to reduce maladaptive behaviors and provide functional alternatives..."
+"The above skills were addressed to support..."
+"All skills targeted during this session were medically necessary..."
+
+CORRECT — each skill gets its own dedicated sentence immediately after its description:
+"Delay Tolerance Response Chain was addressed [description of how it was practiced]; [client response]. Delay Tolerance Response Chain is medically necessary to reduce escape-motivated problem behavior during transitions and support the client's ability to tolerate brief delays without behavioral escalation."
+
+"Following Instructions Response Chain was targeted [description]; [client response]. Following Instructions Response Chain is medically necessary to reduce non-compliance and support participation in structured therapeutic and daily living activities."
+
+RULE: Write skill → write medical necessity for THAT skill → move to next skill. Never group them.
+
 CLOSING — VARY THE STRUCTURE (2-3 sentences):
 Do NOT always end with the same sentence pattern. Rotate between these closing styles:
 Style A: 'Reinforcement included [items]. Replacement programs addressed included [skills with HOW each was practiced]. The client required [prompt level] during [context].'
