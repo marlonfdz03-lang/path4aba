@@ -375,6 +375,12 @@
     for (const desc of descriptors) {
       if (!desc || !desc.element) continue;
 
+      // DEBUG: every section reaches this dispatch. BehaviorReduction and GoalImplementation
+      // both go to extractCardFields; only Daily Log (synthetic/multiForm) goes elsewhere.
+      console.log('[SCAN-DISPATCH]', 'type=' + desc.type, 'multiForm=' + !!desc.multiForm, 'synthetic=' + !!desc.synthetic,
+        '-> ' + (desc.multiForm && Array.isArray(desc.element) ? 'extractDailyLogFields (per form)'
+          : desc.synthetic ? 'extractDailyLogFields' : 'extractCardFields'));
+
       // Daily Log: an ARRAY of single-question <form> elements, bundled into one section.
       if (desc.multiForm && Array.isArray(desc.element)) {
         const title = desc.title || 'Daily Log';
