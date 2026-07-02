@@ -255,12 +255,22 @@
     const inScope = function (el) { return el.closest(SECTION_SELECTOR) === card; };
 
     // 1) mat-form-field: getQuestionText resolves the label; inner control gives the type.
+    let mffIndex = -1; // DEBUG: index among the card's mat-form-fields
     for (const ff of card.querySelectorAll('mat-form-field')) {
-      if (!inScope(ff)) continue;
+      mffIndex++;
+      if (!inScope(ff)) {
+        console.log('[SCAN] SKIPPED mat-form-field', mffIndex, 'reason:', 'out-of-scope');
+        continue;
+      }
       const control = controlOf(ff);
-      const type = control ? detectFieldType(control) : 'unknown';
+      const fieldType = control ? detectFieldType(control) : 'unknown';
+      const questionText = getQuestionText(ff);
+      console.log('[SCAN]', 'processing mat-form-field', mffIndex, 'fieldType=' + fieldType, 'questionText="' + questionText + '"', ff.querySelector('textarea') ? 'HAS_TEXTAREA' : 'NO_TEXTAREA');
+      if (!control || !questionText) {
+        console.log('[SCAN] SKIPPED mat-form-field', mffIndex, 'reason:', !control ? 'no-field-type' : 'empty-questionText');
+      }
       if (control) counted.add(control);
-      fields.push(buildField(getQuestionText(ff), type, control, sectionTitle));
+      fields.push(buildField(questionText, fieldType, control, sectionTitle));
     }
 
     // 2) mat-radio-group: question comes from a previous sibling via getQuestionText.
