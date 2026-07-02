@@ -2,18 +2,20 @@ import { NextResponse } from 'next/server'
 import { getExtensionAuth } from '@/lib/extensionAuth'
 import OpenAI from 'openai'
 
-const client = new OpenAI({
-  apiKey: process.env.AZURE_OPENAI_API_KEY,
-  baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/deployments/gpt-4o`,
-  defaultQuery: { 'api-version': '2025-01-01-preview' },
-  defaultHeaders: { 'api-key': process.env.AZURE_OPENAI_API_KEY },
-})
-
 export async function POST(req: Request) {
   // Bearer-token auth (extension). getExtensionAuth hashes the token and looks it up
   // by token_hash — the extension_tokens table stores a sha256 hash, not the raw token.
   const user = await getExtensionAuth()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Instantiate the Azure OpenAI client per-request (not at module level) so a missing
+  // AZURE_OPENAI_API_KEY at build time can't throw during route collection.
+  const client = new OpenAI({
+    apiKey: process.env.AZURE_OPENAI_API_KEY || '',
+    baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/deployments/gpt-4o`,
+    defaultQuery: { 'api-version': '2025-01-01-preview' },
+    defaultHeaders: { 'api-key': process.env.AZURE_OPENAI_API_KEY || '' },
+  })
 
   const { note, questions } = await req.json()
   if (!note || !questions?.length) return NextResponse.json({ error: 'Missing note or questions' }, { status: 400 })
