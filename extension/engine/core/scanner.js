@@ -372,8 +372,13 @@
 
     const outSections = [];
     const seen = new Set();
+    // DEBUG: descriptors come straight from adapter.detectSections() — no filter/slice between.
+    console.log('[SCAN-LOOP] total descriptors from detectSections():', descriptors.length);
+    let loopIdx = -1;
     for (const desc of descriptors) {
       if (!desc || !desc.element) continue;
+      loopIdx++;
+      console.log('[SCAN-LOOP]', loopIdx, desc.type, desc.title, 'element:', Array.isArray(desc.element) ? 'array' : desc.element?.tagName);
 
       // DEBUG: every section reaches this dispatch. BehaviorReduction and GoalImplementation
       // both go to extractCardFields; only Daily Log (synthetic/multiForm) goes elsewhere.
