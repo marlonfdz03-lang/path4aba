@@ -271,20 +271,17 @@ If not specified → Continuous Reinforcement.`);
           clickRadioByGroupIndex(3 + (i * 2), 'Yes');
           await waitMs(200);
 
-          // Antecedent Interventions — mat-select within this behavior's card
+          // Antecedent Interventions — chip input within this behavior's card
           await waitMs(600);
-          const behaviorCards = document.querySelectorAll('mat-card');
-          const currentBehaviorCard = behaviorCards[i + 1];
+          const behaviorCardsNow = document.querySelectorAll('mat-card');
+          const currentBehaviorCard = behaviorCardsNow[i + 1];
           if (currentBehaviorCard) {
-            // Find the mat-select for antecedent interventions (appears after Yes radio)
-            const antecedentSelect = currentBehaviorCard.querySelector('mat-select[placeholder*="Antecedent"], mat-select');
-            // It's the second mat-select in the card (after behavior name and function)
-            const cardSelects = currentBehaviorCard.querySelectorAll('mat-select');
-            // cardSelects: [0]=behavior name, [1]=function, [2]=antecedent interventions (if Yes), [3]=main focus
-            const antecedentSelectEl = cardSelects[2];
-            if (antecedentSelectEl) {
-              await selectMatOption(antecedentSelectEl, answers[String(qIdx + 4)] || 'Modify task');
-              await waitMs(400);
+            const antecedentChip = currentBehaviorCard.querySelector('input[class*="mat-chip"]');
+            if (antecedentChip) {
+              setMatInput(antecedentChip, answers[String(qIdx + 4)] || 'Visual schedule and verbal prompts.');
+              await waitMs(200);
+              antecedentChip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+              await waitMs(300);
             }
           }
 
@@ -341,17 +338,21 @@ If not specified → Continuous Reinforcement.`);
             await waitMs(200);
           }
 
-          // Teaching procedure → mat-select (each goal has its own options)
-          // Find the mat-select within this goal's card
+          // Teaching procedure → textarea within goal card
           const goalCards = document.querySelectorAll('mat-card');
-          // Goal cards come after behavior cards: offset = 1 (daily log) + behaviors.length + i
           const goalCardOffset = 1 + behaviors.length + i;
           const goalCard = goalCards[goalCardOffset];
           if (goalCard) {
-            const teachingSelect = goalCard.querySelector('mat-select');
-            if (teachingSelect) {
-              await selectMatOption(teachingSelect, answers[String(gIdx + 3)] || '');
-              await waitMs(400);
+            const goalTextareas = goalCard.querySelectorAll('textarea');
+            // First textarea in goal card = teaching procedure
+            if (goalTextareas[0]) {
+              setMatInput(goalTextareas[0], answers[String(gIdx + 3)] || '');
+              await waitMs(200);
+            }
+            // Second textarea in goal card = schedule of reinforcement
+            if (goalTextareas[1]) {
+              setMatInput(goalTextareas[1], answers[String(gIdx + 6)] || 'Continuous Reinforcement');
+              await waitMs(200);
             }
           }
 
@@ -366,17 +367,6 @@ If not specified → Continuous Reinforcement.`);
             await waitMs(200);
             updatedInputs[chipBase + 2].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
             await waitMs(200);
-          }
-
-          // Schedule of reinforcement → mat-select within goal card
-          if (goalCard) {
-            const allGoalSelects = goalCard.querySelectorAll('mat-select');
-            // Second mat-select in goal card is schedule of reinforcement
-            const scheduleSelect = allGoalSelects[1];
-            if (scheduleSelect) {
-              await selectMatOption(scheduleSelect, answers[String(gIdx + 6)] || 'Continuous Reinforcement');
-              await waitMs(400);
-            }
           }
 
           gIdx += 7;
