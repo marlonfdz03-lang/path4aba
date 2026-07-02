@@ -205,11 +205,8 @@ if (window.__abaMatrixLoaded) {
         // radio No = STO information
         const updatedTextareas = document.querySelectorAll('textarea');
         const updatedInputs = document.querySelectorAll('input.mat-input-element, input[class*="mat-chip"]');
-        // Only query mat-selects in the first/active form section (not duplicates)
-        const allMatSelects = document.querySelectorAll('mat-select');
-        const totalSelects = allMatSelects.length;
-        // ABA Matrix duplicates the form — use only first half
-        const matSelects = Array.from(allMatSelects).slice(0, Math.ceil(totalSelects / 2));
+        // Use ALL mat-selects — ABA Matrix does not duplicate these
+        const matSelects = Array.from(document.querySelectorAll('mat-select'));
 
         const functionMap = {
           'attention': 'Attention',
