@@ -11,13 +11,18 @@ if (window.__abaMatrixLoaded) {
   function fillABAMatrix(noteData) {
     // Helper to set Angular Material input value
     function setMatInput(el, value) {
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set
-        || Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-      if (nativeInputValueSetter) {
-        nativeInputValueSetter.call(el, value);
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-      }
+      // Focus the element first
+      el.focus();
+      // Clear existing value
+      el.value = '';
+      // Use execCommand to set value (works with Angular Material)
+      document.execCommand('insertText', false, value);
+      // Dispatch events for Angular to detect the change
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+      // Blur to confirm
+      el.blur();
     }
 
     // Helper to click radio button (Yes/No)
