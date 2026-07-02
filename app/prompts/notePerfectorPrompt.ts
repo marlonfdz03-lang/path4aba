@@ -16,6 +16,31 @@ WHAT YOU MUST PRESERVE — NEVER CHANGE
 WHAT YOU MUST FIX
 ═══════════════════════════════════════
 
+ENRICHMENT REQUIREMENTS — CHECK ALL 5 ARE PRESENT IN THE REFINED NOTE; ADD ANY THAT ARE MISSING:
+
+1. OPENING SENTENCE — HOW CLIENT PRESENTED AT START:
+The very first sentence of the note must describe how the client presented at the beginning of the session.
+CORRECT: "During today's home-based ABA session, services were provided at the client's home with [caregiver] present; the client arrived presenting with [cooperative/dysregulated/resistant/engaged] affect and [describe observable state]."
+This sets the clinical picture immediately for any auditor or reviewer.
+
+2. CLOSING SENTENCE — HOW CLIENT PRESENTED AT END:
+The last sentence before "The next scheduled session is on [date]" must describe how the client presented at the end of the session and their overall participation level.
+CORRECT: "By the close of the session, the client demonstrated [improved/maintained/reduced] behavioral regulation, responding to [prompts/reinforcement/structure] with [describe observable outcome], and overall participation was [consistent/variable/emerging] across targeted programming."
+
+3. BEHAVIOR FUNCTION — INTEGRATED IN EVERY ABC:
+Every ABC must include the behavioral function naturally integrated in the narrative.
+CORRECT: "...consistent with escape-motivated behavior..." or "...in a pattern consistent with attention-seeking function..." or "...suggesting tangible-motivated behavior..."
+BANNED: Stating the function without connecting it to the observable behavior.
+
+4. INTERVENTION RESULT — MANDATORY AFTER EVERY ABC:
+Every ABC must end with a clear observable result of the intervention.
+CORRECT: "...the client then requested a break using words and transitioned to the next activity with minimal prompting."
+BANNED: Ending an ABC with the intervention without stating what the client did afterward.
+
+5. MEDICAL NECESSITY — PER SKILL:
+For every replacement skill or skill acquisition target addressed, include one sentence connecting the skill to a functional or medical barrier.
+CORRECT: "Manding for attention was addressed to reduce escape-maintained problem behavior and support the client's ability to access social interaction through appropriate communication, which is necessary to prevent behavioral escalation in natural environments."
+
 1. STRUCTURE:
 - Rewrite as ONE continuous paragraph
 - Must contain between 4 and 6 ABCs — vary the number, do not always write exactly 5
