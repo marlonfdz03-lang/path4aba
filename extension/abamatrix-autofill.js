@@ -271,19 +271,20 @@ If not specified → Continuous Reinforcement.`);
           clickRadioByGroupIndex(3 + (i * 2), 'Yes');
           await waitMs(200);
 
-          // Antecedent Interventions — find chip within this behavior's card
+          // Antecedent Interventions — mat-select within this behavior's card
           await waitMs(600);
           const behaviorCards = document.querySelectorAll('mat-card');
-          // Behavior cards start after the Daily Log cards
-          // Find the card that contains the current behavior's radio button
-          const currentBehaviorCard = behaviorCards[i + 1]; // offset by 1 for Daily Log card
+          const currentBehaviorCard = behaviorCards[i + 1];
           if (currentBehaviorCard) {
-            const antecedentChipInCard = currentBehaviorCard.querySelector('input[placeholder="Antecedent Interventions:"]');
-            if (antecedentChipInCard) {
-              setMatInput(antecedentChipInCard, answers[String(qIdx + 4)] || 'Visual schedule and verbal prompts to prevent behavior escalation.');
-              await waitMs(200);
-              antecedentChipInCard.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-              await waitMs(300);
+            // Find the mat-select for antecedent interventions (appears after Yes radio)
+            const antecedentSelect = currentBehaviorCard.querySelector('mat-select[placeholder*="Antecedent"], mat-select');
+            // It's the second mat-select in the card (after behavior name and function)
+            const cardSelects = currentBehaviorCard.querySelectorAll('mat-select');
+            // cardSelects: [0]=behavior name, [1]=function, [2]=antecedent interventions (if Yes), [3]=main focus
+            const antecedentSelectEl = cardSelects[2];
+            if (antecedentSelectEl) {
+              await selectMatOption(antecedentSelectEl, answers[String(qIdx + 4)] || 'Modify task');
+              await waitMs(400);
             }
           }
 
