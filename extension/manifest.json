@@ -25,5 +25,18 @@
   },
   "background": {
     "service_worker": "background.js"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://app.abamatrix.com/*"],
+      "js": [
+        "engine/core/scanner.js",
+        "engine/core/normalizer.js",
+        "engine/adapters/ABAMatrixAdapter.js",
+        "engine/debug.js"
+      ],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    }
+  ]
 }

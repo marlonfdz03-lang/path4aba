@@ -1,7 +1,17 @@
 # Universal Clinical Form Engine — Technical Architecture
 
-> Status: **DESIGN — awaiting approval.** No implementation until sign-off.
-> Supersedes: `extension/abamatrix-autofill.js` (single-platform, label/index heuristics).
+> Status: **APPROVED (with adjustments) — implementing in phases.** Phase 1 (Scanner + Normalizer + Adapter skeleton + debug) landed; later phases gated on review.
+> Relationship to legacy: `extension/abamatrix-autofill.js` is **retained as the fallback** behind the existing **Fill** button; the new engine runs only when `FORM_ENGINE_BETA` is enabled.
+
+---
+
+## Approved Decisions
+
+1. **Two-call model is fixed — do not merge.** `ClinicalExtractor` (clinical reasoning) and `Planner` (field matching) stay as two distinct AI calls. They are not combined, and the Planner is not folded into the extractor. Target remains **2 calls**, max **3** (Validator escalation).
+2. **Module name is `Watcher`** (not "MutationObserver"). It internally wraps the browser's native `MutationObserver` API, but the module — file, type, and references — is named `Watcher`.
+3. **No PHI persistence.** `ClinicalFacts` and all derived data live **in memory for the duration of a single fill only**. Nothing is written to `chrome.storage`, `localStorage`, IndexedDB, or disk. When the fill ends (or the popup/page unloads), the facts are gone.
+4. **Legacy autofill stays as the fallback.** `abamatrix-autofill.js` remains wired to the existing **Fill** button and is the default path. It is only bypassed when the new engine is explicitly enabled, and it is the automatic fallback if the engine errors.
+5. **Feature flag `FORM_ENGINE_BETA`.** A boolean (default **false** in production) gates the entire new engine. `FORM_ENGINE_BETA = true` routes the Fill button through the new engine; `false` uses the legacy autofill. The flag is the single on/off switch for the whole Phase 2+ pipeline.
 
 ---
 
@@ -47,7 +57,7 @@ The **core** knows nothing about any specific platform's DOM. All platform knowl
 
 ## 2. Module Definitions and Responsibilities
 
-> Runtime placement: **Scanner, Normalizer, Executor, Watcher, LocalResolver, Validator, Adapters** run in the extension **content script (ISOLATED world)**. **ClinicalExtractor** and the AI portion of **Planner** run **server-side** (Next.js route), reached via the background service worker's Bearer-token fetch (CORS-exempt). This mirrors the existing `getABAMatrixAnswers` proxy pattern.
+> Runtime placement: the **pure-DOM modules (Scanner, Normalizer, Adapters)** touch no `chrome.*` APIs and are world-agnostic. In **Phase 1 they load as `content_scripts` in the MAIN world** so `window.debugFormEngine()` is reachable from the default DevTools console context. The **API-driven modules (Executor, Watcher, LocalResolver, Validator, orchestrator)** need `chrome.runtime`, so in Phase 2+ they run in the **ISOLATED world**, invoking the scan via the shared world (or a small event bridge). **ClinicalExtractor** and the AI portion of **Planner** run **server-side** (Next.js route), reached via the background service worker's Bearer-token fetch (CORS-exempt) — mirroring the existing `getABAMatrixAnswers` proxy pattern.
 
 ### Scanner
 - **Input:** the live DOM of any web-based form (scoped by the active `PlatformAdapter`).
@@ -75,7 +85,7 @@ The **core** knows nothing about any specific platform's DOM. All platform knowl
 - **Cadence:** **once per session.**
 - **Responsibility:** **matching, not clinical reasoning.** For every form field, decide which fact fills it and how: which `mat-option` best matches `skill.reinforcementSchedule`, which dropdown entry matches `behavior.name`, which fact string goes in which textarea. Emits structural actions too (how many times to click "+" before per-row fields exist). Assigns a `confidence` to each match.
 - **Confidence gate:** actions with `confidence < 0.65` are **flagged for human review, not auto-filled** (`requiresHumanReview = true`, routed to `flaggedForReview`). This is the safety valve against confident-but-wrong fills.
-- **1 AI call** — used for *semantic option matching* (fuzzy label→option, free-text→enum) only. Deterministic 1:1 matches (direct fact→field) are resolved locally within the Planner; the AI is consulted only for the ambiguous remainder. (Future optimization: a strong local matcher could drop this to 0 AI calls → whole-form target of **1**.)
+- **1 AI call** — used for *semantic option matching* (fuzzy label→option, free-text→enum) only. Deterministic 1:1 matches (direct fact→field) are resolved locally within the Planner; the AI is consulted only for the ambiguous remainder. Per **Approved Decision 1**, this call stays distinct from the ClinicalExtractor call — the two are never merged, holding the model at **2 calls**.
 
 ### Executor
 - **Input:** `FillPlan` + live DOM.
@@ -83,8 +93,8 @@ The **core** knows nothing about any specific platform's DOM. All platform knowl
 - **Responsibility:** perform each `FillAction` using **Angular-compatible events** — native value setter by element type + `input`/`change`/`blur`, `mat-select`→`mat-option` overlay clicks, chip input + `Enter`, radio input `.click()`. Re-resolves each field from its `FieldLocator` at execution time (never trusts a stale reference). **Idempotent:** skips fields already holding the intended value (safe re-runs; replaces today's crude 3-second debounce).
 - **After each `reveals`-flagged action** (radio/select that can expose conditional fields): notifies the **Watcher** and awaits settling before proceeding, so newly-revealed fields are handled in-order rather than raced.
 
-### Watcher *(MutationObserver-based)*
-- Wraps the browser's native `MutationObserver`. Armed by the Executor around `reveals` actions.
+### Watcher
+- The module is named **`Watcher`**; it internally wraps the browser's native `MutationObserver` API. Armed by the Executor around `reveals` actions.
 - **Monitors** the DOM for fields that appear *after* an Executor action (conditional/dynamic fields).
 - **On new field detected:** hands the field descriptor to **LocalResolver** — **not** back to the AI.
 - **Escalates to Planner only if** LocalResolver returns `null` (cannot resolve locally). This keeps conditional-field handling at 0 AI calls in the common case.
@@ -448,14 +458,14 @@ lib/
 ```
 
 **Placement rationale**
-- **Core + adapters in `extension/engine/`, ISOLATED world.** They touch the DOM but issue **no** cross-origin fetches. Angular expando props (`__ngContext__`) are not visible here, so the Executor relies on native-setter events — an explicit design constraint, not an accident.
+- **Core + adapters in `extension/engine/`.** Pure-DOM modules (Scanner/Normalizer/Adapters) are world-agnostic and load in the **MAIN world** in Phase 1 (console reachability); API-driven modules run **ISOLATED** in Phase 2+. All modules issue **no** cross-origin fetches directly. Angular expando props (`__ngContext__`) are not visible from the ISOLATED world, so the Executor relies on native-setter events — an explicit design constraint, not an accident.
 - **AI work server-side in `app/api/extension/` + `lib/formEngine/`.** Content-script→backend calls go through `background.js` (host-permission fetches are CORS-exempt; content-script fetches are not) with the existing `getExtensionAuth()` Bearer pattern — no new auth surface.
 - **`types.ts` is the single source of truth**, re-declared as `types.d.ts` for the extension so both sides compile against one contract.
 
 ---
 
-## Open Questions (for approval discussion)
-1. **Planner locality:** start with the AI-assisted Planner (target 2 calls), or invest upfront in a deterministic matcher to hit the 1-call target sooner?
-2. **Facts persistence:** keep `ClinicalFacts` in-memory only (current assumption), or cache per-session in `chrome.storage.local` to survive a popup reload? (PHI-in-storage tradeoff.)
-3. **Parity cutover:** run the engine behind a flag alongside `abamatrix-autofill.js` until field-level parity is proven, then delete the legacy script — agreed?
-4. **Confidence threshold:** `0.65` as specified — do we want per-field-type thresholds (e.g. stricter for `select` where a wrong option is worse than an empty text field)?
+## Open Questions (remaining)
+
+The approval resolved the four prior questions — captured in **Approved Decisions** above (2-call model fixed; in-memory-only PHI; legacy stays as fallback; `FORM_ENGINE_BETA` gate). One minor item stays open:
+
+1. **Confidence threshold granularity:** `0.65` is the committed global default. Still open: whether to add per-field-type thresholds (e.g. stricter for `select`, where a wrong option is worse than an empty text field). Deferred until the Planner exists and we have real confidence distributions to tune against.
