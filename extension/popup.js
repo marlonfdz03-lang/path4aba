@@ -2069,6 +2069,7 @@ document.getElementById('fillABAMatrixBtn')?.addEventListener('click', () => {
     clientPresentEnd: 'The client demonstrated appropriate disengagement and responded to closing routines.',
     participation: 'The client demonstrated active participation throughout the session.',
   };
+  console.log('[Path4ABA] Sending to ABA Matrix:', noteData.behaviors.length, 'behaviors:', noteData.behaviors, noteData.skills.length, 'skills:', noteData.skills);
 
   chrome.runtime.sendMessage({ action: 'injectAndFillABAMatrix', data: noteData }, (response) => {
     if (chrome.runtime.lastError) {

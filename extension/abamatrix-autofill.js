@@ -1,7 +1,8 @@
 if (window.__abaMatrixLoaded) {
-  // Already injected
+  // Already injected — just update the listener, don't re-run fill
 } else {
   window.__abaMatrixLoaded = true;
+  window.__abaMatrixFilling = false;
 
   function fillABAMatrix(noteData) {
     const API_BASE = 'https://path4aba.app';
@@ -33,6 +34,9 @@ if (window.__abaMatrixLoaded) {
     }
 
     async function doFill() {
+      if (window.__abaMatrixFilling) return;
+      window.__abaMatrixFilling = true;
+
       const behaviors = noteData.behaviors || [];
       const skills = noteData.skills || [];
       const note = noteData.fullNote || '';
@@ -174,6 +178,7 @@ if (window.__abaMatrixLoaded) {
 
       console.log('[Path4ABA] ABA Matrix form filled successfully');
       alert('✅ ABA Matrix form filled! Please review and adjust before submitting.');
+      window.__abaMatrixFilling = false;
     }
 
     doFill();
