@@ -172,7 +172,7 @@ if (window.__abaMatrixLoaded) {
         let qIdx = 7;
         for (let i = 0; i < behaviors.length; i++) {
           const tBase = 4 + (i * 3);
-          const selectBase = i * 4;
+          const selectBase = i * 3;
           const interventionInput = updatedInputs[2 + i];
 
           // Behavior name → mat-select (dropdown has client's behaviors from assessment)
