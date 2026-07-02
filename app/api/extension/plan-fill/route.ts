@@ -66,9 +66,10 @@ export async function POST(req: Request) {
       { fieldId: 'DL_Participation', fieldType: 'textarea', value: dl.participation || '' },
       { fieldId: 'DL_Incidents', fieldType: 'radio', value: dl.incidents || 'No' },
       { fieldId: 'DL_MedicalConcerns', fieldType: 'radio', value: dl.medicalConcerns || 'No' },
+      { fieldId: 'DL_RelevantInformation', fieldType: 'textarea', value: dl.relevantInformation || '' },
     ]
     dlMappings.forEach((m) => {
-      if (m.value && emptyFields.find((f) => f.fieldId === m.fieldId)) {
+      if (m.value && (m.fieldType === 'radio' || emptyFields.find((f) => f.fieldId === m.fieldId))) {
         deterministicActions.push({ fieldId: m.fieldId, sectionId: 'DL', fieldType: m.fieldType, value: m.value, confidence: 1 })
       }
     })
@@ -77,10 +78,11 @@ export async function POST(req: Request) {
   // Behavior deterministic mappings
   facts.behaviors?.forEach((b: any, i: number) => {
     const n = i + 1
+    const normalizedFunction = b.function === 'Tangibles' ? 'Tangible' : b.function
     const brMappings = [
       { fieldId: `BR${n}_BehaviorName`, fieldType: 'select', value: b.name },
       { fieldId: `BR${n}_EvidencedBy`, fieldType: 'textarea', value: b.evidencedBy },
-      { fieldId: `BR${n}_BehaviorFunction`, fieldType: 'select', value: b.function },
+      { fieldId: `BR${n}_BehaviorFunction`, fieldType: 'select', value: normalizedFunction },
       { fieldId: `BR${n}_Antecedent`, fieldType: 'textarea', value: b.antecedent },
       { fieldId: `BR${n}_AntecedentInterventionsYesNo`, fieldType: 'radio', value: b.hadAntecedentIntervention ? 'Yes' : 'No' },
       { fieldId: `BR${n}_AntecedentInterventions`, fieldType: 'chip', value: b.antecedentIntervention || '' },
@@ -90,7 +92,7 @@ export async function POST(req: Request) {
       { fieldId: `BR${n}_STO`, fieldType: 'radio', value: 'No' },
     ]
     brMappings.forEach((m) => {
-      if (m.value && emptyFields.find((f) => f.fieldId === m.fieldId)) {
+      if (m.value && (m.fieldType === 'radio' || emptyFields.find((f) => f.fieldId === m.fieldId))) {
         deterministicActions.push({ fieldId: m.fieldId, sectionId: `BR${n}`, fieldType: m.fieldType, value: m.value, confidence: 1 })
       }
     })
@@ -109,7 +111,7 @@ export async function POST(req: Request) {
       { fieldId: `Goal${n}_Schedule`, fieldType: 'textarea', value: s.schedule || 'Continuous Reinforcement' },
     ]
     goalMappings.forEach((m) => {
-      if (m.value && emptyFields.find((f) => f.fieldId === m.fieldId)) {
+      if (m.value && (m.fieldType === 'radio' || emptyFields.find((f) => f.fieldId === m.fieldId))) {
         deterministicActions.push({ fieldId: m.fieldId, sectionId: `Goal${n}`, fieldType: m.fieldType, value: m.value, confidence: 1 })
       }
     })
