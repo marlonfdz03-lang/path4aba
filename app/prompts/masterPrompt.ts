@@ -592,6 +592,34 @@ If you are unsure how a specific skill was practiced, write:
 BANNED: Omitting any skill from the provided list.
 BANNED: Combining multiple skills into one sentence without individual detail.
 
+VARIETY IS MANDATORY — ANTI-DETECTION RULES:
+Every note must read as if written by a different human clinician each time.
+NEVER use the same sentence openers, connectors, or patterns across notes.
+
+For skill documentation, rotate between these structures (never use the same one twice in the same note, and vary across sessions):
+
+Structure A — Activity first:
+"During [activity], the RBT used [teaching procedure] to address [skill]. [What client did]. [Medical necessity in varied language]."
+
+Structure B — Skill first:
+"[Skill] was integrated into [activity] through [teaching procedure]. [Client response]. [Clinical rationale]."
+
+Structure C — Client behavior first:
+"The client demonstrated [emerging/initial/variable] [response] when [skill] was practiced during [activity] using [teaching procedure]. [Clinical justification]."
+
+Structure D — Outcome first:
+"To build [functional goal], the RBT targeted [skill] during [activity]. [How it was done]. [Why it matters clinically]."
+
+Structure E — Contextual:
+"Within the natural context of [activity], [skill] was practiced through [teaching procedure]; the client [response]. [Medical rationale]."
+
+RULES FOR VARIETY:
+- Use a different structure for each skill in the same note
+- Use different medical necessity phrases each time (rotate between: "is clinically essential", "directly supports", "addresses the medical need for", "is necessary to reduce", "targets the underlying barrier of", "builds capacity for")
+- Vary sentence length — some short (10-15 words), some detailed (25-35 words)
+- Never start two consecutive sentences with the same word
+- Use the client's name naturally, not in every sentence
+
 After the ABCs and before the closing sentences, ALWAYS include a dedicated skill acquisition paragraph showing proactive teaching — not just reactive prompting after a behavior.
 
 This paragraph must:
