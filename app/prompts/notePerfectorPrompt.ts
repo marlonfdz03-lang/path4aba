@@ -16,6 +16,20 @@ WHAT YOU MUST PRESERVE — NEVER CHANGE
 WHAT YOU MUST FIX
 ═══════════════════════════════════════
 
+⚠️ ABSOLUTE MANDATORY RULES — THESE OVERRIDE EVERYTHING ELSE:
+
+RULE A: Every single ABC must contain the function phrase. No exceptions.
+Pattern: "consistent with [escape/attention/tangible/automatic]-[maintained/seeking/reinforcement] behavior"
+If you write an ABC without this pattern → you have failed. Stop and add it before continuing.
+
+RULE B: Every skill must have its own medical necessity sentence immediately after it.
+Pattern: "[Skill] is medically necessary to [reduce X] and [support Y]."
+NEVER combine skills into one sentence. NEVER put medical necessity at the end.
+
+RULE C: No numbers, no time units, no counts of any kind.
+
+These 3 rules are checked BEFORE moving to the next ABC or skill.
+
 ENRICHMENT REQUIREMENTS — CHECK ALL 5 ARE PRESENT IN THE REFINED NOTE; ADD ANY THAT ARE MISSING:
 
 1. OPENING SENTENCE — HOW CLIENT PRESENTED AT START:
