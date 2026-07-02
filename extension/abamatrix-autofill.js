@@ -3,6 +3,7 @@ if (window.__abaMatrixLoaded) {
 } else {
   window.__abaMatrixLoaded = true;
   window.__abaMatrixFilling = false;
+  window.__abaMatrixFillCount = 0;
 
   function fillABAMatrix(noteData) {
     const API_BASE = 'https://path4aba.app';
@@ -94,8 +95,12 @@ if (window.__abaMatrixLoaded) {
     }
 
     async function doFill() {
-      if (window.__abaMatrixFilling) return;
-      window.__abaMatrixFilling = true;
+      window.__abaMatrixFillCount = (window.__abaMatrixFillCount || 0) + 1;
+      if (window.__abaMatrixFillCount > 1) {
+        console.log('[Path4ABA] Fill already ran, skipping duplicate');
+        window.__abaMatrixFillCount = 0;
+        return;
+      }
 
       try {
         const behaviors = noteData.behaviors || [];
@@ -163,7 +168,12 @@ if (window.__abaMatrixLoaded) {
         // Fill Who Was Present (caregiver chip input)
         const caregiverInput = document.querySelector('input[placeholder="Caregiver(s)"]');
         if (caregiverInput && noteData.caregivers?.length) {
+          // Check if caregiver already exists as a chip
+          const existingChips = document.querySelectorAll('mat-chip');
+          const existingNames = Array.from(existingChips).map(c => c.textContent?.trim().replace('cancel', '').trim());
+
           for (const name of noteData.caregivers) {
+            if (existingNames.some(n => n.includes(name.split(' ')[0]))) continue; // Skip if already added
             setMatInput(caregiverInput, name);
             await waitMs(200);
             caregiverInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
