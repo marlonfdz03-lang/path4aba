@@ -32,16 +32,39 @@ if (window.__abaMatrixLoaded) {
     async function selectMatOption(selectEl, value) {
       if (!selectEl || !value) return;
       selectEl.click();
-      await waitMs(400);
+      await waitMs(500);
       const options = document.querySelectorAll('mat-option');
-      const match = Array.from(options).find(opt =>
-        opt.innerText?.trim().toLowerCase().includes(value.toLowerCase()) ||
-        value.toLowerCase().includes(opt.innerText?.trim().toLowerCase())
+      if (!options.length) return;
+
+      const valueLower = value.toLowerCase().trim();
+
+      // Try exact match first
+      let match = Array.from(options).find(opt =>
+        opt.innerText?.trim().toLowerCase() === valueLower
       );
+
+      // Try contains match
+      if (!match) {
+        match = Array.from(options).find(opt =>
+          opt.innerText?.trim().toLowerCase().includes(valueLower) ||
+          valueLower.includes(opt.innerText?.trim().toLowerCase())
+        );
+      }
+
+      // Try word-by-word match (e.g. "Manding Attention" matches "Manding for Attention Response")
+      if (!match) {
+        const words = valueLower.split(' ').filter(w => w.length > 3);
+        match = Array.from(options).find(opt => {
+          const optLower = opt.innerText?.trim().toLowerCase();
+          return words.every(w => optLower.includes(w));
+        });
+      }
+
       if (match) {
         match.click();
-      } else if (options.length > 0) {
-        options[0].click();
+      } else {
+        // Close dropdown without selecting
+        document.body.click();
       }
       await waitMs(300);
     }
