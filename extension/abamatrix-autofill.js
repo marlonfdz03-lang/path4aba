@@ -74,14 +74,18 @@ if (window.__abaMatrixLoaded) {
       }
       await waitMs(400);
 
-      // Safety close — press Escape and click overlay backdrop to dismiss
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
-      await waitMs(100);
-      // Click the CDK overlay backdrop if present
-      const backdrop = document.querySelector('.cdk-overlay-backdrop, .cdk-overlay-container');
-      if (backdrop) backdrop.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await waitMs(100);
-      document.body.click();
+      // Close the dropdown — focus select then send Escape
+      selectEl.focus();
+      selectEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
+      await waitMs(150);
+      // Also click the CDK overlay backdrop specifically
+      const backdrop = document.querySelector('.cdk-overlay-backdrop');
+      if (backdrop) {
+        backdrop.click();
+      } else {
+        // Fallback: click outside the panel
+        document.documentElement.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      }
       await waitMs(200);
     }
 
