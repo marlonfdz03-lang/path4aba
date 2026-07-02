@@ -256,18 +256,14 @@ if (window.__abaMatrixLoaded) {
           clickRadioByGroupIndex(3 + (i * 3), 'Yes');
           await waitMs(200);
 
-          // Antecedent Interventions chip (appears after clicking Yes)
-          await waitMs(500); // Wait for chip input to appear
-          const antecedentChips = document.querySelectorAll('input[placeholder*="Antecedent"], input[class*="mat-chip"][id*="antecedent"]');
-          // Re-query all chip inputs after Yes is clicked
-          const allChipsNow = document.querySelectorAll('input[class*="mat-chip-list-input"]');
-          // Antecedent interventions chip is at index 2 + i (one per behavior)
-          const antecedentChip = allChipsNow[2 + i];
+          // Antecedent Interventions chip — find by placeholder since position is dynamic
+          await waitMs(600);
+          const antecedentChip = document.querySelector('input[placeholder="Antecedent Interventions:"]');
           if (antecedentChip) {
-            setMatInput(antecedentChip, answers[String(qIdx + 4)] || 'Antecedent strategies implemented to prevent recurrence.');
+            setMatInput(antecedentChip, answers[String(qIdx + 4)] || 'Visual schedule and verbal prompts to prevent behavior escalation.');
             await waitMs(200);
             antecedentChip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-            await waitMs(200);
+            await waitMs(300);
           }
 
           // Interventions chip
@@ -299,7 +295,9 @@ if (window.__abaMatrixLoaded) {
         let gIdx = 7 + (behaviors.length * 8);
         const goalSelectBase = behaviors.length * 3;
         for (let i = 0; i < skills.length; i++) {
-          const chipBase = 7 + (i * 3);
+          // Goal chips: index 0=caregiver, 1=antecedent, 2-6=interventions (5 behaviors), then goals start at 7
+          // But use dynamic calculation: 2 + behaviors.length + (i * 3)
+          const chipBase = 2 + behaviors.length + (i * 3);
 
           // Goal name → mat-select (from assessment dropdown)
           await selectMatOption(matSelects[goalSelectBase + i], skills[i].name || skills[i]);
@@ -326,7 +324,7 @@ if (window.__abaMatrixLoaded) {
           // Re-query to get fresh textarea list
           const teachingTextareas = document.querySelectorAll('textarea');
           // Teaching procedure textareas start after behavior textareas (4 + behaviors*3) + goal pairs (goals*2)
-          const teachingBase = 4 + (behaviors.length * 3) + (skills.length * 2);
+          const teachingBase = 4 + (behaviors.length * 3) + skills.length;
           const teachingTextarea = teachingTextareas[teachingBase + i];
           if (teachingTextarea) {
             setMatInput(teachingTextarea, answers[String(gIdx + 3)] || '');
