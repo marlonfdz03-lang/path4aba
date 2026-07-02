@@ -217,10 +217,16 @@ if (window.__abaMatrixLoaded) {
 
           // Main focus → mat-select (selectBase + 2)
           await selectMatOption(matSelects[selectBase + 2], answers[String(qIdx + 6)] || '');
+          await waitMs(800); // Extra wait for Angular to settle after dropdown
 
-          // Result → textarea (tBase + 2)
-          setMatInput(updatedTextareas[tBase + 2], answers[String(qIdx + 7)] || '');
-          await waitMs(200);
+          // Result → textarea (tBase + 2) — fill twice to overcome Angular re-render
+          const resultText = answers[String(qIdx + 7)] || '';
+          setMatInput(updatedTextareas[tBase + 2], resultText);
+          await waitMs(500);
+          // Re-query and fill again in case Angular cleared it
+          const freshTextareas = document.querySelectorAll('textarea');
+          setMatInput(freshTextareas[tBase + 2], resultText);
+          await waitMs(300);
 
           qIdx += 8;
           await waitMs(400);
