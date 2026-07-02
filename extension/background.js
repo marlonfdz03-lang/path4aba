@@ -119,4 +119,58 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true; // keep channel open for async sendResponse
   }
+
+  // ── DEV (Phase 1 calibration): inject the Form Engine on demand, then debug ──
+  // Injects the engine modules into the target tab's MAIN world (so
+  // window.debugFormEngine is reachable) and runs it immediately. This is an
+  // ADDITIONAL path — it coexists with the content_scripts loading strategy; the
+  // modules' idempotency guards make the double-injection a harmless no-op. The
+  // NormalizedForm is logged in the TARGET TAB's console, not here.
+  if (message.action === 'injectFormEngine') {
+    const engineFiles = [
+      'engine/adapters/ABAMatrixAdapter.js',
+      'engine/core/scanner.js',
+      'engine/core/normalizer.js',
+      'engine/debug.js',
+    ];
+
+    const runDebug = (tabId) => {
+      if (!tabId) { sendResponse({ ok: false, error: 'No target tab' }); return; }
+      chrome.scripting.executeScript(
+        { target: { tabId }, files: engineFiles, world: 'MAIN' },
+        () => {
+          if (chrome.runtime.lastError) {
+            sendResponse({ ok: false, error: chrome.runtime.lastError.message });
+            return;
+          }
+          // Second call MUST also target MAIN world, or it won't see window.debugFormEngine.
+          chrome.scripting.executeScript(
+            {
+              target: { tabId },
+              world: 'MAIN',
+              func: () => (typeof window.debugFormEngine === 'function' ? !!window.debugFormEngine() : false),
+            },
+            (results) => {
+              if (chrome.runtime.lastError) {
+                sendResponse({ ok: false, error: chrome.runtime.lastError.message });
+                return;
+              }
+              sendResponse({ ok: true, ran: results && results[0] ? results[0].result : null });
+            }
+          );
+        }
+      );
+    };
+
+    if (message.tabId) {
+      runDebug(message.tabId);
+    } else {
+      // Fallback: locate the ABA Matrix tab when no tabId was passed.
+      chrome.tabs.query({ active: true }, (tabs) => {
+        const tab = (tabs || []).find(t => t.url && t.url.includes('app.abamatrix.com')) || (tabs || [])[0];
+        runDebug(tab && tab.id);
+      });
+    }
+    return true; // keep channel open for async sendResponse
+  }
 });

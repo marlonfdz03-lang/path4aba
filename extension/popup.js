@@ -2081,6 +2081,35 @@ document.getElementById('fillABAMatrixBtn')?.addEventListener('click', () => {
   });
 });
 
+// ── DEV ONLY (Phase 1 calibration): on-demand Form Engine injection ──────────
+// Temporary developer button. Injects engine/* into the active tab's MAIN world
+// and runs window.debugFormEngine() there. Output appears in the ABA MATRIX TAB's
+// console (not the popup's). Remove once the final loading strategy is decided.
+(function addDebugFormButton() {
+  if (document.getElementById('debugFormEngineBtn')) return;
+  const btn = document.createElement('button');
+  btn.id = 'debugFormEngineBtn';
+  btn.textContent = '🧪 Debug Form';
+  btn.title = 'DEV: inject the Form Engine into the active tab and run debugFormEngine()';
+  btn.style.cssText = 'position:fixed;bottom:6px;right:6px;z-index:99999;font-size:10px;' +
+    'padding:3px 7px;border:1px dashed #94a3b8;border-radius:5px;background:#f8fafc;' +
+    'color:#475569;cursor:pointer;opacity:0.85;';
+  btn.addEventListener('click', () => {
+    chrome.tabs.query({ active: true }, (tabs) => {
+      const tab = (tabs || []).find(t => t.url && t.url.includes('app.abamatrix.com')) || (tabs || [])[0];
+      if (!tab) { console.warn('[Path4ABA] Debug Form: no active tab found'); return; }
+      chrome.runtime.sendMessage({ action: 'injectFormEngine', tabId: tab.id }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('[Path4ABA] Debug Form error:', chrome.runtime.lastError.message);
+        } else {
+          console.log('[Path4ABA] Debug Form response:', response, '— open the ABA Matrix tab console to see the NormalizedForm.');
+        }
+      });
+    });
+  });
+  document.body.appendChild(btn);
+})();
+
 // Runs inside the Office Puzzle page — must be fully self-contained (no outer scope refs).
 async function officePuzzleExtractor() {
   // Scroll incrementally to force lazy-rendered charts to mount, then wait for them.
