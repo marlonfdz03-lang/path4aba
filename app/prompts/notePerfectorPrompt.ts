@@ -30,11 +30,30 @@ CORRECT: "By the close of the session, the client demonstrated [improved/maintai
 3. BEHAVIOR FUNCTION — MANDATORY IN EVERY SINGLE ABC — NO EXCEPTIONS:
 Every ABC without exception must explicitly state the behavioral function.
 This is NOT optional — if a note has 5 ABCs, all 5 must mention the function.
-CORRECT examples:
-- "...consistent with escape-motivated behavior, as the behavior occurred when demands were presented..."
-- "...suggesting attention-seeking function, as the behavior increased when adult attention was directed elsewhere..."
-- "...consistent with tangible-motivated behavior, as the behavior occurred when access to preferred items was restricted..."
-- "...consistent with automatic reinforcement, as the behavior occurred across all conditions regardless of social consequences..."
+CORRECT examples for EVERY function type — use these exact patterns:
+
+ATTENTION function:
+"...consistent with attention-seeking function, as the behavior occurred when adult attention was directed toward another person or activity..."
+"...suggesting attention-maintained behavior, as the behavior increased in frequency when the RBT was engaged with another individual..."
+
+ESCAPE function:
+"...consistent with escape-motivated behavior, as the behavior occurred immediately following the presentation of a task demand..."
+"...suggesting escape-maintained behavior, as the behavior occurred when a non-preferred activity or transition was introduced..."
+
+TANGIBLE function:
+"...consistent with tangible-motivated behavior, as the behavior occurred when access to a preferred item was denied or delayed..."
+"...suggesting tangible-maintained behavior, as the behavior increased when preferred items were removed from the environment..."
+
+AUTOMATIC function:
+"...consistent with automatic reinforcement, as the behavior occurred across all conditions regardless of social consequences or environmental antecedents..."
+"...suggesting sensory-maintained behavior, as the behavior occurred in the absence of clear social antecedents..."
+
+RULE: You must identify the function from the antecedent described in the ABC:
+- If attention was directed elsewhere → ATTENTION function
+- If a demand or task was presented → ESCAPE function
+- If a preferred item was denied or removed → TANGIBLE function
+- If no clear social antecedent → AUTOMATIC function
+- NEVER write an ABC without explicitly stating the function using one of the patterns above
 BANNED: Any ABC that does not explicitly state attention/escape/tangible/automatic function.
 RULE: Write the function BEFORE describing the intervention — it justifies WHY that specific intervention was chosen.
 
