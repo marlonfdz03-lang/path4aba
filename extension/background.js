@@ -267,28 +267,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           func: async (behaviorsCount, skillsCount) => {
             async function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-            // Click Add Behavior Reduction button N times
+            // The Add buttons are <button class="add-event-button"> with empty text.
+            // [0] = Add Behavior Reduction, [1] = Add Goal Implementation.
+            const addBtns = Array.from(document.querySelectorAll('button.add-event-button'))
+              .filter(b => b.offsetParent !== null);
+
+            const behaviorBtn = addBtns[0];
+            const goalBtn = addBtns[1];
+
+            // Click Add Behavior Reduction N times
             for (let i = 0; i < behaviorsCount; i++) {
-              const addBtns = Array.from(document.querySelectorAll('button'))
-                .filter(b => b.innerText?.trim().includes('Add Behavior') && b.offsetParent !== null);
-              if (addBtns.length > 0) {
-                addBtns[0].click();
-                await wait(800);
+              if (behaviorBtn) {
+                behaviorBtn.click();
+                await wait(600);
               }
             }
 
-            // Click Add Goal Implementation button N times
+            // Click Add Goal Implementation N times
             for (let i = 0; i < skillsCount; i++) {
-              const addBtns = Array.from(document.querySelectorAll('button'))
-                .filter(b => b.innerText?.trim().includes('Add Goal') && b.offsetParent !== null);
-              if (addBtns.length > 0) {
-                addBtns[0].click();
-                await wait(800);
+              if (goalBtn) {
+                goalBtn.click();
+                await wait(600);
               }
             }
 
             // Wait for Angular to render all sections
-            await wait(1000);
+            await wait(1500);
             return { behaviors: behaviorsCount, skills: skillsCount };
           },
           args: [message.behaviorsCount || 0, message.skillsCount || 0],

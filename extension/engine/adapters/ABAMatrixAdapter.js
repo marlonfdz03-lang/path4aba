@@ -65,13 +65,11 @@
       return sections;
     },
 
-    // Buttons whose visible label reads "Add Behavior" or "Add Goal".
+    // Add buttons are <button class="add-event-button"> with empty text (no label to match).
+    // Order: [0] = Add Behavior Reduction, [1] = Add Goal Implementation.
     getAddButtons: function () {
-      const candidates = Array.from(document.querySelectorAll('button, a[role="button"], .add-event-button'));
-      return candidates.filter(function (b) {
-        const label = (b.innerText || b.textContent || '').trim();
-        return /add\s+behavior|add\s+goal/i.test(label);
-      });
+      return Array.from(document.querySelectorAll('button.add-event-button'))
+        .filter(function (b) { return b.offsetParent !== null; });
     },
 
     // ABA Matrix cards have NO title elements — detect the section type from the
