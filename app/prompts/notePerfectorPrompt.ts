@@ -402,6 +402,24 @@ CORRECT — each skill gets its own dedicated sentence immediately after its des
 
 RULE: Write skill → write medical necessity for THAT skill → move to next skill. Never group them.
 
+TEACHING PROCEDURE — MANDATORY PER SKILL:
+For each skill acquisition target, you MUST explicitly mention the teaching procedure used.
+Use ONLY these exact terms (they must appear verbatim in the note):
+- "Discrete Trial Teaching (DTT)"
+- "Functional Communication Training (FCT)"
+- "Modeling and visual supports"
+- "Modeling and gestural prompts"
+- "Activity schedules"
+- "Modeling"
+
+CORRECT examples:
+- "The RBT implemented Discrete Trial Teaching (DTT) to practice Manding for Attention Response by presenting structured trials..."
+- "Following Instructions Response Chain was targeted using Modeling and visual supports, where the RBT demonstrated the expected behavior..."
+- "Help Request Response was practiced through Functional Communication Training (FCT) by modeling appropriate verbal requests..."
+
+BANNED: Describing how a skill was practiced without naming the teaching procedure.
+BANNED: Using vague terms like "structured teaching", "prompting hierarchy", "behavior momentum" as the teaching procedure name.
+
 10. LENGTH:
 - Minimum 450 words. No maximum — longer notes with more clinical detail are always preferred.
 - Expand clinical detail to reach this — never pad with repetitive language
