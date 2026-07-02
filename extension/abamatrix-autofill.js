@@ -321,10 +321,17 @@ if (window.__abaMatrixLoaded) {
             await waitMs(200);
           }
 
-          // Teaching procedure → mat-select
-          const teachingSelectIdx = goalSelectBase + skills.length + i;
-          await selectMatOption(matSelects[teachingSelectIdx], answers[String(gIdx + 3)] || '');
-          await waitMs(400);
+          // Teaching procedure → textarea (it's a free-text textarea, not a mat-select)
+          // Teaching textareas come after the behavior textareas in the DOM
+          // Re-query to get fresh textarea list
+          const teachingTextareas = document.querySelectorAll('textarea');
+          // Teaching procedure textareas start after behavior textareas (4 + behaviors*3) + goal pairs (goals*2)
+          const teachingBase = 4 + (behaviors.length * 3) + (skills.length * 2);
+          const teachingTextarea = teachingTextareas[teachingBase + i];
+          if (teachingTextarea) {
+            setMatInput(teachingTextarea, answers[String(gIdx + 3)] || '');
+            await waitMs(200);
+          }
 
           // Prompts radio → Yes
           clickRadioByGroupIndex(3 + (behaviors.length * 3) + (i * 2), 'Yes');
