@@ -88,6 +88,21 @@
     });
   }
 
+  // Execute the FillPlan in the MAIN world (the Executor's world) via the background bridge.
+  function executeFillPlan(plan) {
+    return new Promise(function (resolve) {
+      chrome.runtime.sendMessage({ action: 'executeFillPlan', plan: plan }, function (response) {
+        if (chrome.runtime.lastError) {
+          console.error('[Path4ABA] executeFillPlan error:', chrome.runtime.lastError.message);
+          resolve(null);
+          return;
+        }
+        if (response && response.error) console.error('[Path4ABA] executeFillPlan error:', response.error);
+        resolve((response && response.results) || null);
+      });
+    });
+  }
+
   async function runFormAgent(noteData) {
     noteData = noteData || {};
 
@@ -123,8 +138,23 @@
     console.log('[Path4ABA] FillPlan:', plan);
     sendStatus('Plan created: ' + (plan ? plan.length : 0) + ' actions', 'info');
 
-    // Phase 4 (Executor) is not implemented — do NOT fill anything yet.
-    return { clinicalFacts: clinicalFacts, normalizedForm: normalizedForm, plan: plan };
+    // ── Phase 4: Executor — fill the form from the plan (runs in the MAIN world) ──
+    if (!plan || plan.length === 0) {
+      sendStatus('No fill actions to execute.', 'warning');
+      return { clinicalFacts: clinicalFacts, normalizedForm: normalizedForm, plan: plan, results: null };
+    }
+    sendStatus('✍️ Filling ' + plan.length + ' fields…');
+    const results = await executeFillPlan(plan);
+    console.log('[Path4ABA] Executor results:', results);
+    if (results) {
+      sendStatus(
+        'Filled ' + results.filled + ' fields, ' + results.skipped + ' skipped, ' + results.failed + ' failed',
+        results.filled > 0 ? 'success' : 'warning'
+      );
+    } else {
+      sendStatus('⚠️ Executor failed — see console.', 'warning');
+    }
+    return { clinicalFacts: clinicalFacts, normalizedForm: normalizedForm, plan: plan, results: results };
   }
 
   window.runFormAgent = runFormAgent;

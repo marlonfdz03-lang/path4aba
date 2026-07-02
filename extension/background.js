@@ -275,7 +275,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               func: () => {
                 if (!window.FormEngineScanner || !window.FormEngineNormalizer) return null;
                 const raw = window.FormEngineScanner.scan(window.ABAMatrixAdapter || null);
-                return window.FormEngineNormalizer.normalize(raw, window.ABAMatrixAdapter || null);
+                const norm = window.FormEngineNormalizer.normalize(raw, window.ABAMatrixAdapter || null);
+                window.__p4NormalizedForm = norm; // persist in MAIN world for the Executor
+                return norm;
               },
             },
             (results) => {
@@ -306,6 +308,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .then(r => r.json())
         .then(data => sendResponse({ plan: data.plan || [], error: data.error }))
         .catch(err => sendResponse({ error: err.message }));
+    });
+    return true; // keep channel open for async sendResponse
+  }
+
+  // ── Phase 4: Executor — run the FillPlan in the ABA Matrix tab's MAIN world ──
+  // The Executor + mat-helpers + adapter live in the MAIN world. Inject them (idempotent),
+  // then run FormEngineExecutor.execute(plan). window.__p4NormalizedForm was persisted by the
+  // earlier getFormSchema call, so the Executor can resolve each field's questionText.
+  if (message.action === 'executeFillPlan') {
+    chrome.tabs.query({ active: true }, (tabs) => {
+      const abaTab = (tabs || []).find(t => t.url && t.url.includes('app.abamatrix.com')) || (tabs || [])[0];
+      if (!abaTab) { sendResponse({ error: 'ABA Matrix tab not found' }); return; }
+      chrome.scripting.executeScript(
+        {
+          target: { tabId: abaTab.id },
+          world: 'MAIN',
+          files: ['engine/adapters/ABAMatrixAdapter.js', 'engine/core/mat-helpers.js', 'engine/core/executor.js'],
+        },
+        () => {
+          if (chrome.runtime.lastError) { sendResponse({ error: chrome.runtime.lastError.message }); return; }
+          chrome.scripting.executeScript(
+            {
+              target: { tabId: abaTab.id },
+              world: 'MAIN',
+              func: async (plan) => {
+                if (!window.FormEngineExecutor) return { error: 'Executor not loaded' };
+                return await window.FormEngineExecutor.execute(plan);
+              },
+              args: [message.plan],
+            },
+            (results) => {
+              if (chrome.runtime.lastError) { sendResponse({ error: chrome.runtime.lastError.message }); return; }
+              sendResponse({ results: results && results[0] ? results[0].result : null });
+            }
+          );
+        }
+      );
     });
     return true; // keep channel open for async sendResponse
   }
