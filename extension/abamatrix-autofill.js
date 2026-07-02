@@ -356,9 +356,12 @@ if (window.__abaMatrixLoaded) {
         setMatInput(finalTextareas[2], answers['2'] || 'The client demonstrated appropriate disengagement and responded to closing routines.');
         setMatInput(finalTextareas[3], answers['4'] || 'The client demonstrated active participation throughout the session.');
 
-        // Fill Evidenced by (input field)
-        const finalInputs = document.querySelectorAll('input.mat-input-element, input[class*="mat-chip"]');
-        setMatInput(finalInputs[1], answers['1'] || 'Verbal responses, eye contact, and engagement with materials.');
+        // Fill Evidenced by start (mat-input-6 — plain text input, not chip)
+        const evidencedByInput = document.getElementById('mat-input-6') ||
+          document.querySelector('input.mat-input-element[id*="mat-input"]');
+        if (evidencedByInput) {
+          setMatInput(evidencedByInput, answers['1'] || 'Verbal responses, eye contact, and engagement with materials.');
+        }
 
         await waitMs(500);
 
