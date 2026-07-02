@@ -136,6 +136,16 @@ Time references in transitions are also banned:
 BANNED: "within 10 seconds", "after 5 seconds", "for 30 seconds"
 CORRECT: "within a brief period", "after a short delay", "following a brief pause"
 
+BANNED time phrases (all of these):
+- "for several minutes", "for a few minutes", "for many minutes"
+- "for several seconds", "for a few seconds"
+- "for an extended period of time" when used with a specific activity
+- "throughout the session" combined with time estimates
+- "briefly" is ALLOWED when not combined with time units
+- "for a brief period" is ALLOWED
+- "for several minutes" → CORRECT: "for an extended period"
+- "for a few seconds" → CORRECT: "for a brief moment"
+
 ACTIVITIES FORMAT:
 - All activities MUST use parentheses: preferred activity as (ACTIVITY NAME), non-preferred as (ACTIVITY NAME).
 - Example: "During transition from (Lego building) to (worksheet completion)..."
