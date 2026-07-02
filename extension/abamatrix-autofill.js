@@ -9,145 +9,137 @@ if (window.__abaMatrixLoaded) {
   window.__abaMatrixLoaded = true;
 
   function fillABAMatrix(noteData) {
-    // Helper to set Angular Material input value
+    const API_BASE = 'https://path4aba.app';
+
+    // Helper to set Angular Material input/textarea value
     function setMatInput(el, value) {
-      // Focus the element first
       el.focus();
-      // Clear existing value
       el.value = '';
-      // Use execCommand to set value (works with Angular Material)
       document.execCommand('insertText', false, value);
-      // Dispatch events for Angular to detect the change
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
       el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
-      // Blur to confirm
       el.blur();
     }
 
-    // Helper to click radio button (Yes/No)
-    function clickRadio(groupName, value) {
-      const radios = document.querySelectorAll(`input[name="${groupName}"]`);
-      radios.forEach(r => {
-        const label = r.closest('mat-radio-button')?.querySelector('.mat-radio-label-content')?.textContent?.trim();
-        if (label === value) r.click();
-      });
-    }
-
-    // Helper to click a radio group by index
-    function clickRadioByIndex(index, value) {
+    // Helper to click radio Yes/No by group index
+    function clickRadioByGroupIndex(groupIndex, value) {
       const groups = document.querySelectorAll('mat-radio-group');
-      if (groups[index]) {
-        const buttons = groups[index].querySelectorAll('mat-radio-button');
+      if (groups[groupIndex]) {
+        const buttons = groups[groupIndex].querySelectorAll('mat-radio-button');
         buttons.forEach(btn => {
           if (btn.textContent?.trim() === value) btn.querySelector('input')?.click();
         });
       }
     }
 
-    // Helper to fill textarea by index
-    function fillTextarea(index, value) {
-      const textareas = document.querySelectorAll('textarea');
-      if (textareas[index]) setMatInput(textareas[index], value);
-    }
-
-    // Helper to click add button (+ for behavior/goal)
+    // Helper to click + button
     function clickAddButton(index) {
       const addButtons = document.querySelectorAll('.add-event-button');
       if (addButtons[index]) addButtons[index].click();
     }
 
-    // Helper to set CKEditor rich text
-    function setCKEditor(value) {
-      const editor = document.querySelector('.ck-editor__editable');
-      if (editor) {
-        editor.focus();
-        document.execCommand('selectAll', false, null);
-        document.execCommand('insertText', false, value);
-      }
+    // Helper to wait for element
+    function waitMs(ms) {
+      return new Promise(r => setTimeout(r, ms));
     }
 
-    // Wait for dynamic elements to appear
-    function waitForElement(selector, callback, timeout = 3000) {
-      const start = Date.now();
-      const check = () => {
-        const el = document.querySelector(selector);
-        if (el) { callback(el); return; }
-        if (Date.now() - start < timeout) setTimeout(check, 100);
+    // Extract all questions from the form dynamically
+    function extractQuestions() {
+      const questions = [];
+      const questionDivs = document.querySelectorAll('mat-card, .session-form, [class*="form-field"], mat-form-field');
+
+      // Get all visible text labels that look like questions
+      const allText = document.querySelectorAll('div, span, label, p');
+      allText.forEach(el => {
+        const text = el.innerText?.trim();
+        if (text && text.endsWith('?') && text.length > 10 && text.length < 200) {
+          if (!questions.includes(text)) questions.push(text);
+        }
+      });
+      return questions;
+    }
+
+    // Main fill function
+    async function doFill() {
+      // Step 1: Extract questions from the form
+      const questions = extractQuestions();
+      console.log('[Path4ABA] Found questions:', questions);
+
+      // Step 2: Get AI answers from Path4ABA API
+      let answers = {};
+      try {
+        const res = await fetch(`${API_BASE}/api/extension/fill-aba-matrix`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ note: noteData.fullNote, questions }),
+        });
+        const data = await res.json();
+        answers = data.answers || {};
+        console.log('[Path4ABA] AI answers:', answers);
+      } catch (err) {
+        console.error('[Path4ABA] Failed to get AI answers:', err);
+        return;
+      }
+
+      // Step 3: Fill radio buttons
+      clickRadioByGroupIndex(0, 'No'); // Significant changes → No
+      clickRadioByGroupIndex(1, 'No'); // Incidents → No
+      clickRadioByGroupIndex(2, 'No'); // Medical concerns → No
+
+      await waitMs(300);
+
+      // Step 4: Fill textareas with AI answers
+      // Map question text to textarea
+      const textareas = document.querySelectorAll('textarea');
+      const questionMap = {
+        'How did the client present at the start of the session?': answers[2] || answers['2'] || 'The client presented as cooperative and engaged.',
+        'How did the client present at the end of the session?': answers[3] || answers['3'] || 'The client demonstrated appropriate disengagement.',
+        "How was the client's participation during service?": answers[4] || answers['4'] || 'The client demonstrated active participation throughout the session.',
       };
-      check();
-    }
 
-    // ── FILL DAILY LOG ──────────────────────────────────────────────────────
+      // Fill textareas by finding nearest question label
+      textareas.forEach(textarea => {
+        let label = '';
+        let el = textarea;
+        for (let j = 0; j < 10; j++) {
+          el = el.parentElement;
+          if (!el) break;
+          const text = el.innerText?.trim().split('\n')[0];
+          if (text && text.length > 10) { label = text; break; }
+        }
+        if (questionMap[label]) setMatInput(textarea, questionMap[label]);
+      });
 
-    // Significant changes to environment → No
-    clickRadioByIndex(0, 'No');
-
-    // Who was present → already set by ABA Matrix from session data
-
-    // How did client present at START
-    fillTextarea(3, noteData.clientPresentStart || 'The client presented as cooperative and ready to engage in structured activities.');
-
-    // Evidenced by (start)
-    const inputs = document.querySelectorAll('input.mat-input-element');
-    if (inputs[0]) setMatInput(inputs[0], noteData.evidentStart || 'Verbal responses, eye contact, and engagement with materials.');
-
-    // How did client present at END
-    fillTextarea(5, noteData.clientPresentEnd || 'The client demonstrated appropriate disengagement and responded to closing routines.');
-
-    // Evidenced by (end)
-    fillTextarea(6, noteData.evidentEnd || 'Compliance with clean-up routine and appropriate farewell behavior.');
-
-    // Client participation
-    fillTextarea(7, noteData.participation || 'The client demonstrated active participation throughout the session with consistent engagement across targeted activities.');
-
-    // Incidents → No
-    clickRadioByIndex(1, 'No');
-
-    // Medical concerns → No
-    clickRadioByIndex(2, 'No');
-
-    // Relevant Information / Comments → paste full note
-    setTimeout(() => {
-      setCKEditor(noteData.fullNote || '');
-    }, 500);
-
-    // ── FILL BEHAVIOR REDUCTION ─────────────────────────────────────────────
-    async function fillBehaviorReduction(behaviors) {
+      // Step 5: Fill Behavior Reduction sections
+      const behaviors = noteData.behaviors || [];
       for (let i = 0; i < behaviors.length; i++) {
-        const behavior = behaviors[i];
-        // Click + button for Behavior Reduction
         clickAddButton(0);
-        await new Promise(r => setTimeout(r, 800));
-
-        // After clicking +, new fields appear — fill them
-        const allTextareas = document.querySelectorAll('textarea');
-        const allInputs = document.querySelectorAll('input.mat-input-element');
-
-        // These indices shift after each + click — use last added section
-        // Behavior name field. Accept both { name } objects and plain name strings.
-        const behaviorFields = document.querySelectorAll('[placeholder*="behavior"], [placeholder*="Behavior"]');
-        const behaviorName = behavior.name || behavior;
-        if (behaviorFields[i]) setMatInput(behaviorFields[i], behaviorName);
-
-        await new Promise(r => setTimeout(r, 300));
+        await waitMs(1000);
       }
-    }
 
-    // ── FILL GOAL IMPLEMENTATION ────────────────────────────────────────────
-    async function fillGoalImplementation(skills) {
+      // Step 6: Fill Goal Implementation sections
+      const skills = noteData.skills || [];
       for (let i = 0; i < skills.length; i++) {
-        const skill = skills[i];
         clickAddButton(1);
-        await new Promise(r => setTimeout(r, 800));
+        await waitMs(1000);
       }
+
+      // Step 7: Fill Relevant Information with summary only (not full note)
+      await waitMs(500);
+      const ckEditor = document.querySelector('.ck-editor__editable');
+      if (ckEditor) {
+        ckEditor.focus();
+        document.execCommand('selectAll', false, null);
+        const summary = answers['summary'] || `Session addressed behavior reduction and skill acquisition goals per the treatment plan. ${answers[5] || ''}`;
+        document.execCommand('insertText', false, summary);
+      }
+
+      console.log('[Path4ABA] ABA Matrix form filled successfully');
     }
 
-    // Run behavior and goal filling
-    if (noteData.behaviors?.length) fillBehaviorReduction(noteData.behaviors);
-    setTimeout(() => {
-      if (noteData.skills?.length) fillGoalImplementation(noteData.skills);
-    }, noteData.behaviors?.length * 1000 + 1000);
+    doFill();
   }
 
   // Listen for messages from popup
