@@ -149,6 +149,24 @@
       if (text && text.length > 3) return text;
     }
 
+    // Try 4: extract label from parent container text, excluding app-select content.
+    // (mat-form-field with no mat-label whose sibling is an <app-select> — the question is
+    // in the parent's text AFTER the app-select's selected value, e.g. EvidencedBy fields.)
+    const parentEl = fieldEl.parentElement;
+    if (parentEl) {
+      // Get all text lines in parent
+      const parentText = parentEl.innerText || '';
+      // Get app-select text to exclude it
+      const appSelectText = parentEl.querySelector('app-select')?.innerText || '';
+      // Remove app-select content from parent text
+      const remainingText = parentText.replace(appSelectText, '').trim();
+      // Get first meaningful line
+      const lines = remainingText.split('\n')
+        .map(l => l.trim())
+        .filter(l => l.length > 3 && !l.match(/^(Yes|No|cancel|\d+)$/i));
+      if (lines.length > 0) return lines[0];
+    }
+
     return '';
   }
 
