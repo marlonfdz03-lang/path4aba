@@ -155,6 +155,12 @@ The ONLY allowed time-related phrases:
 
 RULE: If you are about to write ANY number near a time word (seconds, minutes, hours), STOP and use one of the allowed phrases above instead.
 
+BANNED implicit time references:
+- "within seconds" → CORRECT: "immediately upon presentation"
+- "within moments" → CORRECT: "immediately" or "upon presentation"
+- "in a matter of seconds" → CORRECT: "rapidly" or "immediately"
+- "after just a few seconds" → CORRECT: "shortly after" or "immediately following"
+
 ACTIVITIES FORMAT:
 - All activities MUST use parentheses: preferred activity as (ACTIVITY NAME), non-preferred as (ACTIVITY NAME).
 - Example: "During transition from (Lego building) to (worksheet completion)..."
