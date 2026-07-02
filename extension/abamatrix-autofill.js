@@ -256,14 +256,20 @@ if (window.__abaMatrixLoaded) {
           clickRadioByGroupIndex(3 + (i * 3), 'Yes');
           await waitMs(200);
 
-          // Antecedent Interventions chip — find by placeholder since position is dynamic
+          // Antecedent Interventions — find chip within this behavior's card
           await waitMs(600);
-          const antecedentChip = document.querySelector('input[placeholder="Antecedent Interventions:"]');
-          if (antecedentChip) {
-            setMatInput(antecedentChip, answers[String(qIdx + 4)] || 'Visual schedule and verbal prompts to prevent behavior escalation.');
-            await waitMs(200);
-            antecedentChip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-            await waitMs(300);
+          const behaviorCards = document.querySelectorAll('mat-card');
+          // Behavior cards start after the Daily Log cards
+          // Find the card that contains the current behavior's radio button
+          const currentBehaviorCard = behaviorCards[i + 1]; // offset by 1 for Daily Log card
+          if (currentBehaviorCard) {
+            const antecedentChipInCard = currentBehaviorCard.querySelector('input[placeholder="Antecedent Interventions:"]');
+            if (antecedentChipInCard) {
+              setMatInput(antecedentChipInCard, answers[String(qIdx + 4)] || 'Visual schedule and verbal prompts to prevent behavior escalation.');
+              await waitMs(200);
+              antecedentChipInCard.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+              await waitMs(300);
+            }
           }
 
           // Interventions chip
