@@ -1,18 +1,19 @@
 /**
- * Path4ABA Form Engine — Normalizer (Phase 1)
+ * Path4ABA Form Engine — Normalizer (calibrated for ABA Matrix labels)
  *
- * Input:  raw FormSchema from the Scanner.
+ * Input:  raw FormSchema from the Scanner (section .type already set during the scan).
  * Output: NormalizedForm with STABLE field IDs.
  *
  * ID format: {SectionPrefix}{Ordinal}_{FieldKey}
- *   DailyLog          -> "DL"   (single section, no ordinal)  e.g. DL_ClientPresStart
+ *   DailyLog          -> "DL"   (single section, no ordinal)  e.g. DL_PresentationStart
  *   BehaviorReduction -> "BR"   + ordinal                     e.g. BR3_Antecedent
- *   GoalImplementation-> "Goal" + ordinal                     e.g. Goal2_Prompts
+ *   GoalImplementation-> "Goal" + ordinal                     e.g. Goal2_PromptsUsed
  *   Other             -> "OT"   + ordinal
  *
- * Field keys are detected by fuzzy-matching the question text against ordered rule sets
- * (first match wins — specific rules precede general ones). Unmatched fields get
- * fieldKey "Unknown" and identified=false so they surface in debug output.
+ * Field keys are matched from the question text against FIELD_KEY_MAP (real ABA Matrix
+ * labels). Matching is LONGEST-KEY-FIRST so specific labels win over general ones
+ * (e.g. "antecedent interventions:" beats "interventions:"). Colons are preserved during
+ * normalization because several keys use ":" to disambiguate.
  *
  * Exposes: window.FormEngineNormalizer.normalize(rawSchema, adapter) -> NormalizedForm
  */
@@ -27,62 +28,55 @@
     Other: 'OT'
   };
 
-  // Ordered rules. all[] = every token must be present; any[] = at least one; notAll[] =
-  // reject if every token present. Tokens are matched against the normalized question text.
-  const KEY_RULES = {
-    DailyLog: [
-      { key: 'ClientPresStart', all: ['present'], any: ['start', 'beginning', 'arriv'] },
-      { key: 'EvidencedByStart', all: ['evidenc'], any: ['start', 'beginning'] },
-      { key: 'ClientPresEnd', all: ['present'], any: ['end', 'conclus', 'leav', 'depart'] },
-      { key: 'EvidencedByEnd', all: ['evidenc'], any: ['end', 'conclus'] },
-      { key: 'EvidencedBy', any: ['evidenc'] },
-      { key: 'Participation', any: ['participat', 'engagement'] },
-      { key: 'Incidents', any: ['incident'] },
-      { key: 'MedicalConcerns', any: ['medical'] },
-      { key: 'SignificantChanges', any: ['significant', 'changes'] },
-      { key: 'CaregiversPresent', any: ['caregiver', 'who was present', 'present during'] }
-    ],
-    BehaviorReduction: [
-      { key: 'AntecedentInterventions', all: ['antecedent'], any: ['intervention', 'prevent', 'strateg'] },
-      { key: 'ConsequenceInterventions', any: ['after the behavior', 'consequence'], notAll: ['antecedent'] },
-      { key: 'Antecedent', any: ['antecedent', 'prompted the behavior', 'what prompted', 'trigger'] },
-      { key: 'Function', any: ['function'] },
-      { key: 'EvidencedBy', any: ['evidenc', 'observable'] },
-      { key: 'MainFocus', any: ['main focus', 'focus of'] },
-      { key: 'Result', any: ['result', 'outcome'] },
-      { key: 'Interventions', any: ['intervention'] },
-      { key: 'BehaviorName', any: ['behavior name', 'name of the behavior', 'select behavior', 'behavior'] }
-    ],
-    GoalImplementation: [
-      { key: 'MedicalBarriers', any: ['medical barrier', 'barrier'] },
-      { key: 'Activities', any: ['activit'] },
-      { key: 'TeachingProcedure', any: ['teaching', 'procedure', 'how did you teach'] },
-      { key: 'Prompts', any: ['prompt'] },
-      { key: 'Reinforcers', any: ['reinforcer', 'reinforcement used', 'reward'] },
-      { key: 'ReinforcementSchedule', any: ['schedule'] },
-      { key: 'GoalName', any: ['goal name', 'name of the goal', 'select goal', 'goal', 'skill'] }
-    ],
-    Other: []
+  // Real ABA Matrix question fragments -> canonical field key (from calibration).
+  const FIELD_KEY_MAP = {
+    'behavior:': 'BehaviorName',
+    'evidenced by:': 'EvidencedBy',
+    'interventions:': 'Interventions',
+    'antecedent interventions:': 'AntecedentInterventions',
+    'goal implementation:': 'GoalName',
+    'what medical barriers': 'MedicalBarriers',
+    'what activities were used': 'Activities',
+    'what was the teaching procedure': 'TeachingProcedure',
+    'what reinforcers were used': 'Reinforcers',
+    'what was the schedule': 'Schedule',
+    'how did the client present at the start': 'PresentationStart',
+    'how did the client present at the end': 'PresentationEnd',
+    'evidenced by': 'EvidencedBy',
+    'how was the client': 'Participation',
+    'who was present': 'WhoWasPresent',
+    'were there any significant changes': 'EnvironmentChanges',
+    'were there any incidents': 'Incidents',
+    'were there any medical concerns': 'MedicalConcerns',
+    'what was the function': 'BehaviorFunction',
+    'what prompted the behavior': 'Antecedent',
+    'what was the main focus': 'MainFocus',
+    'what was the result': 'Result',
+    'once the antecedent was presented': 'AntecedentInterventionsYesNo',
+    'would you like to add current sto': 'STO',
+    'did you use any prompts': 'PromptsUsed'
   };
 
-  function norm(s) {
-    return (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  // Sorted longest-first so the most specific fragment matches before a shorter substring.
+  const FIELD_KEY_ENTRIES = Object.keys(FIELD_KEY_MAP)
+    .sort(function (a, b) { return b.length - a.length; })
+    .map(function (k) { return [k, FIELD_KEY_MAP[k]]; });
+
+  // Lowercase + collapse whitespace, but PRESERVE punctuation (keys rely on ":").
+  function normForMap(s) {
+    return (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
   }
 
-  function detectFieldKey(sectionType, questionText) {
-    const rules = KEY_RULES[sectionType] || [];
-    const q = norm(questionText);
+  function detectFieldKey(questionText) {
+    const q = normForMap(questionText);
     if (!q) return null;
-    for (const rule of rules) {
-      if (rule.all && !rule.all.every(function (w) { return q.indexOf(w) !== -1; })) continue;
-      if (rule.any && !rule.any.some(function (w) { return q.indexOf(w) !== -1; })) continue;
-      if (rule.notAll && rule.notAll.every(function (w) { return q.indexOf(w) !== -1; })) continue;
-      return rule.key;
+    for (const entry of FIELD_KEY_ENTRIES) {
+      if (q.indexOf(entry[0]) !== -1) return entry[1];
     }
     return null;
   }
 
-  function normalize(rawSchema, adapter) {
+  function normalize(rawSchema, _adapter) {
     const counters = {};      // sectionType -> running ordinal
     const fieldIndex = {};    // id -> field
     const unidentified = [];
@@ -90,13 +84,10 @@
 
     const rawSections = (rawSchema && rawSchema.sections) || [];
     for (const rawSection of rawSections) {
-      // Re-derive the type from the adapter when possible (source of truth), else trust the scan.
-      let type = rawSection.type || 'Other';
-      if (adapter && typeof adapter.getSectionType === 'function' && rawSection.title) {
-        try { type = adapter.getSectionType(rawSection.title) || type; } catch (e) { /* keep scan type */ }
-      }
-
+      // Section type is decided during the scan (element-based); trust it here.
+      const type = rawSection.type || 'Other';
       const prefix = SECTION_PREFIX[type] || 'OT';
+
       let sectionId, ordinal;
       if (type === 'DailyLog') {
         counters.DailyLog = (counters.DailyLog || 0) + 1;
@@ -112,7 +103,7 @@
       const keyCounts = {}; // disambiguate repeated keys within one section
       const rawFields = rawSection.fields || [];
       for (const rawField of rawFields) {
-        const matched = detectFieldKey(type, rawField.questionText);
+        const matched = detectFieldKey(rawField.questionText);
         let fieldKey, id, identified;
         if (matched) {
           keyCounts[matched] = (keyCounts[matched] || 0) + 1;

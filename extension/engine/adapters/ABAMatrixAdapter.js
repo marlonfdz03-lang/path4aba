@@ -16,14 +16,16 @@
   'use strict';
   if (window.ABAMatrixAdapter) return; // idempotent
 
-  const SECTION_SELECTOR = 'mat-card, mat-expansion-panel';
+  const SECTION_SELECTOR = 'mat-card';
 
   const ABAMatrixAdapter = {
     platform: 'abamatrix',
 
-    // Candidate section containers. Skeleton: generic Angular Material containers.
+    // ABA Matrix sections are <mat-card> only (no mat-expansion-panel). Skip hidden cards.
     detectSections: function () {
-      return Array.from(document.querySelectorAll(SECTION_SELECTOR));
+      return Array.from(document.querySelectorAll(SECTION_SELECTOR)).filter(function (el) {
+        return el.offsetParent !== null;
+      });
     },
 
     // Buttons whose visible label reads "Add Behavior" or "Add Goal".
@@ -35,13 +37,14 @@
       });
     },
 
-    // Map a section's visible title to a section type. Order matters: the specific
-    // DailyLog check runs first, then BehaviorReduction, then GoalImplementation.
-    getSectionType: function (titleText) {
-      const t = (titleText || '').toLowerCase();
-      if (/daily\s*log|session\s*summary|client\s*present|general\s*information/.test(t)) return 'DailyLog';
-      if (/behavior\s*reduction|behavior|maladaptive|reduction/.test(t)) return 'BehaviorReduction';
-      if (/goal\s*implementation|goal|skill|acquisition|implementation/.test(t)) return 'GoalImplementation';
+    // ABA Matrix cards have NO title elements — detect the section type from the
+    // questions rendered inside the card. Takes the section ELEMENT (not a title string).
+    // Order matters: DailyLog first, then BehaviorReduction, then GoalImplementation.
+    getSectionType: function (sectionEl) {
+      const text = (sectionEl && sectionEl.innerText) || '';
+      if (text.includes('How did the client present') || text.includes('Who was present') || text.includes('significant changes')) return 'DailyLog';
+      if (text.includes('Behavior:') && text.includes('Evidenced By:')) return 'BehaviorReduction';
+      if (text.includes('Goal Implementation:') && text.includes('medical barriers')) return 'GoalImplementation';
       return 'Other';
     }
   };
