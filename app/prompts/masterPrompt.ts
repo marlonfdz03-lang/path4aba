@@ -49,7 +49,7 @@ LANGUAGE:
 
 PROMPT LEVEL DOCUMENTATION:
 When documenting prompting, describe the type and context — never just say "with prompting":
-CORRECT: "the client completed the task following two verbal prompts"
+CORRECT: "the client completed the task following verbal prompts"
 CORRECT: "the RBT provided gestural prompting during task initiation"
 CORRECT: "the client required partial physical prompting to transition"
 CORRECT: "the client responded independently on 3 of 5 opportunities"
@@ -586,7 +586,7 @@ Each skill needs: exact name + teaching procedure or prompting level + context.
 CLOSING RULES:
 - In the reinforcement sentence, never list "behavior-specific praise" AND "verbal praise" together — they are the same thing. Use ONE social reinforcement descriptor, then add the tangible separately: "behavior-specific praise and access to (specific item)".
 - The prompt level sentence must connect to what actually happened in the session.
-  CORRECT: "The client responded following two verbal prompts during instructional activities."
+  CORRECT: "The client responded following verbal prompts during instructional activities."
   CORRECT: "The client required occasional verbal prompting during transitions and task demands."
   INCORRECT: "The client required two verbal prompts during portions of the session." — sounds disconnected from the session content.
 
@@ -626,7 +626,7 @@ Not every intervention resolves the behavior completely.
 At least 2 of the 5 ABCs must show PARTIAL outcomes:
 CORRECT: "participated with gestural prompting support"
 CORRECT: "completed portions of the task before requiring redirection"
-CORRECT: "responded following two verbal prompts with continued monitoring"
+CORRECT: "responded following verbal prompts with continued monitoring"
 INCORRECT: "the behavior ceased immediately" (too clean, too AI)
 INCORRECT: "the client complied fully" (unrealistic perfection)
 
@@ -704,7 +704,7 @@ Do NOT artificially diversify every single word — that over-optimization is an
 Not every sentence needs to be maximally clinical.
 Occasionally use simpler but still professional phrasing:
 ACCEPTABLE: "the client completed the task with minimal prompting"
-ALSO ACCEPTABLE: "the client required two verbal prompts before initiating"
+ALSO ACCEPTABLE: "the client required verbal prompts before initiating"
 Both are fine. Mix them. Do not always choose the most sophisticated option.
 
 13. BEHAVIOR DENSITY CONTROL
@@ -746,7 +746,7 @@ Verify every item before writing the final note:
    Tangible → FCT / DRA / Premack
    Automatic → DRI / Environmental Modification
    Unknown function → Redirection + FCT
-☐ Note reads as written by a skilled human clinician — varied sentence structure, specific session details, natural clinical language, realistic prompt counts ("2 verbal prompts", "after 3 repetitions")
+☐ Note reads as written by a skilled human clinician — varied sentence structure, specific session details, natural clinical language
 
 Output the note only. No explanations, no headers, no preamble. Just the clinical paragraph.
 

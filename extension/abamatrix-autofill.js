@@ -3,7 +3,7 @@ if (window.__abaMatrixLoaded) {
 } else {
   window.__abaMatrixLoaded = true;
   window.__abaMatrixFilling = false;
-  window.__abaMatrixFillCount = 0;
+  window.__abaMatrixLastFill = 0;
 
   function fillABAMatrix(noteData) {
     const API_BASE = 'https://path4aba.app';
@@ -95,12 +95,12 @@ if (window.__abaMatrixLoaded) {
     }
 
     async function doFill() {
-      window.__abaMatrixFillCount = (window.__abaMatrixFillCount || 0) + 1;
-      if (window.__abaMatrixFillCount > 1) {
-        console.log('[Path4ABA] Fill already ran, skipping duplicate');
-        window.__abaMatrixFillCount = 0;
+      const now = Date.now();
+      if (window.__abaMatrixLastFill && (now - window.__abaMatrixLastFill) < 3000) {
+        console.log('[Path4ABA] Fill debounced, skipping duplicate within 3s');
         return;
       }
+      window.__abaMatrixLastFill = now;
 
       try {
         const behaviors = noteData.behaviors || [];

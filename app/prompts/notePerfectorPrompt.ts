@@ -198,7 +198,7 @@ RULE: If you are about to write ANY number near a time word (seconds, minutes, h
 
 PROMPT LEVEL DOCUMENTATION:
 When documenting prompting, describe the type and context — never just say "with prompting":
-CORRECT: "the client completed the task following two verbal prompts"
+CORRECT: "the client completed the task following verbal prompts"
 CORRECT: "the RBT provided gestural prompting during task initiation"
 CORRECT: "the client required partial physical prompting to transition"
 CORRECT: "the client responded independently across multiple opportunities"
