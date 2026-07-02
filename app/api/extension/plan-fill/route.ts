@@ -47,6 +47,78 @@ export async function POST(req: Request) {
 
   if (emptyFields.length === 0) return NextResponse.json({ plan: [] })
 
+  // ── Deterministic mapping ──────────────────────────────────────────────────
+  // Fill known field->fact mappings directly (confidence 1). The AI is then only needed for
+  // whatever fields are left. `facts` is the value already destructured above; emptyFields
+  // objects carry `fieldId` (not `id`).
+  const deterministicActions: any[] = []
+
+  // Daily Log deterministic mappings
+  if (facts.dailyLog) {
+    const dl = facts.dailyLog
+    const dlMappings = [
+      { fieldId: 'DL_EnvironmentChanges', fieldType: 'radio', value: dl.environmentChanges || 'No' },
+      { fieldId: 'DL_WhoWasPresent', fieldType: 'chip', value: dl.whoWasPresent?.[0] || '' },
+      { fieldId: 'DL_PresentationStart', fieldType: 'textarea', value: dl.presentationStart || '' },
+      { fieldId: 'DL_EvidencedBy', fieldType: 'text', value: dl.evidencedByStart || '' },
+      { fieldId: 'DL_PresentationEnd', fieldType: 'textarea', value: dl.presentationEnd || '' },
+      { fieldId: 'DL_EvidencedBy2', fieldType: 'textarea', value: dl.evidencedByEnd || '' },
+      { fieldId: 'DL_Participation', fieldType: 'textarea', value: dl.participation || '' },
+      { fieldId: 'DL_Incidents', fieldType: 'radio', value: dl.incidents || 'No' },
+      { fieldId: 'DL_MedicalConcerns', fieldType: 'radio', value: dl.medicalConcerns || 'No' },
+    ]
+    dlMappings.forEach((m) => {
+      if (m.value && emptyFields.find((f) => f.fieldId === m.fieldId)) {
+        deterministicActions.push({ fieldId: m.fieldId, sectionId: 'DL', fieldType: m.fieldType, value: m.value, confidence: 1 })
+      }
+    })
+  }
+
+  // Behavior deterministic mappings
+  facts.behaviors?.forEach((b: any, i: number) => {
+    const n = i + 1
+    const brMappings = [
+      { fieldId: `BR${n}_BehaviorName`, fieldType: 'select', value: b.name },
+      { fieldId: `BR${n}_EvidencedBy`, fieldType: 'textarea', value: b.evidencedBy },
+      { fieldId: `BR${n}_BehaviorFunction`, fieldType: 'select', value: b.function },
+      { fieldId: `BR${n}_Antecedent`, fieldType: 'textarea', value: b.antecedent },
+      { fieldId: `BR${n}_AntecedentInterventionsYesNo`, fieldType: 'radio', value: b.hadAntecedentIntervention ? 'Yes' : 'No' },
+      { fieldId: `BR${n}_AntecedentInterventions`, fieldType: 'chip', value: b.antecedentIntervention || '' },
+      { fieldId: `BR${n}_ConsequenceInterventions`, fieldType: 'chip', value: b.consequenceIntervention },
+      { fieldId: `BR${n}_MainFocus`, fieldType: 'select', value: b.mainFocus },
+      { fieldId: `BR${n}_Result`, fieldType: 'textarea', value: b.result },
+      { fieldId: `BR${n}_STO`, fieldType: 'radio', value: 'No' },
+    ]
+    brMappings.forEach((m) => {
+      if (m.value && emptyFields.find((f) => f.fieldId === m.fieldId)) {
+        deterministicActions.push({ fieldId: m.fieldId, sectionId: `BR${n}`, fieldType: m.fieldType, value: m.value, confidence: 1 })
+      }
+    })
+  })
+
+  // Skill deterministic mappings
+  facts.skills?.forEach((s: any, i: number) => {
+    const n = i + 1
+    const goalMappings = [
+      { fieldId: `Goal${n}_GoalName`, fieldType: 'select', value: s.name },
+      { fieldId: `Goal${n}_MedicalBarriers`, fieldType: 'chip', value: s.medicalNecessity },
+      { fieldId: `Goal${n}_Activities`, fieldType: 'chip', value: s.activity },
+      { fieldId: `Goal${n}_TeachingProcedure`, fieldType: 'textarea', value: s.teachingProcedure },
+      { fieldId: `Goal${n}_PromptsUsed`, fieldType: 'radio', value: s.promptsUsed ? 'Yes' : 'No' },
+      { fieldId: `Goal${n}_Reinforcers`, fieldType: 'chip', value: s.reinforcers },
+      { fieldId: `Goal${n}_Schedule`, fieldType: 'textarea', value: s.schedule || 'Continuous Reinforcement' },
+    ]
+    goalMappings.forEach((m) => {
+      if (m.value && emptyFields.find((f) => f.fieldId === m.fieldId)) {
+        deterministicActions.push({ fieldId: m.fieldId, sectionId: `Goal${n}`, fieldType: m.fieldType, value: m.value, confidence: 1 })
+      }
+    })
+  })
+
+  // Only send the fields NOT handled deterministically to the AI.
+  const deterministicIds = new Set(deterministicActions.map((a) => a.fieldId))
+  const remainingFields = emptyFields.filter((f) => !deterministicIds.has(f.fieldId))
+
   const prompt = `You are an ABA documentation form-filling planner. You are given structured ClinicalFacts and a list of EMPTY fields from an ABA Matrix session form. For each field you can confidently fill, output one fill action. Perform NO clinical reasoning — only MATCH the already-extracted facts to the fields.
 
 Return ONLY a JSON array — no markdown, no prose. Each action is exactly:
@@ -57,7 +129,7 @@ CLINICAL FACTS:
 ${JSON.stringify(facts, null, 2)}
 
 EMPTY FIELDS (fill these; echo each field's fieldId, sectionId and fieldType):
-${JSON.stringify(emptyFields, null, 2)}
+${JSON.stringify(remainingFields, null, 2)}
 
 MATCHING RULES (section IDs encode order):
 - BR{n}_* fields use facts.behaviors[n-1] (BR1 = first behavior, BR2 = second, …).
@@ -105,25 +177,32 @@ BR{n}_AntecedentInterventions is a chip field that appears when AntecedentInterv
 Always include a fill action for BR{n}_AntecedentInterventions when hadAntecedentIntervention is true.
 Value: use behaviors[n-1].antecedentIntervention or write 'Visual schedule and verbal prompts to prevent recurrence.'`
 
-  // Same OpenAI completion pattern as fill-aba-matrix/route.ts (max_tokens raised for the plan).
-  const response = await client.chat.completions.create({
-    model: 'gpt-4o',
-    messages: [{ role: 'user', content: prompt }],
-    temperature: 0,
-    max_tokens: 4000,
-  })
+  // Only call the AI for the fields not handled deterministically.
+  let aiActions: any[] = []
+  if (remainingFields.length > 0) {
+    // Same OpenAI completion pattern as fill-aba-matrix/route.ts (max_tokens raised for the plan).
+    const response = await client.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0,
+      max_tokens: 4000,
+    })
 
-  const text = response.choices[0]?.message?.content || '[]'
-  const clean = text.replace(/```json|```/g, '').trim()
+    const text = response.choices[0]?.message?.content || '[]'
+    const clean = text.replace(/```json|```/g, '').trim()
 
-  try {
-    const parsed = JSON.parse(clean)
-    const actions = Array.isArray(parsed) ? parsed : (parsed.plan || parsed.actions || [])
-    const plan = actions.filter(
-      (a: any) => a && typeof a.confidence === 'number' && a.confidence >= 0.65
-    )
-    return NextResponse.json({ plan })
-  } catch {
-    return NextResponse.json({ error: 'Failed to parse AI response', raw: text }, { status: 500 })
+    try {
+      const parsed = JSON.parse(clean)
+      aiActions = Array.isArray(parsed) ? parsed : (parsed.plan || parsed.actions || [])
+    } catch {
+      // AI parse failed — proceed with the deterministic actions only rather than failing the plan.
+      aiActions = []
+    }
   }
+
+  // Merge: deterministic (confidence 1) first, then AI, keeping only confident actions.
+  const plan = [...deterministicActions, ...aiActions].filter(
+    (a: any) => a && typeof a.confidence === 'number' && a.confidence >= 0.65
+  )
+  return NextResponse.json({ plan })
 }

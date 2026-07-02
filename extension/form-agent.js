@@ -182,6 +182,28 @@
     } else {
       sendStatus('⚠️ Executor failed — see console.', 'warning');
     }
+
+    // ── Audit: which scanned fields were planned, and with what value ──
+    try {
+      const norm = window.__p4NormalizedForm;
+      const auditPlan = window.__p4FillPlan || [];
+      if (norm && norm.fieldIndex) {
+        const plannedIds = new Set(auditPlan.map(function (a) { return a.fieldId; }));
+        console.table(
+          Object.keys(norm.fieldIndex).map(function (id) {
+            const action = auditPlan.find(function (a) { return a.fieldId === id; });
+            return {
+              field: id,
+              planned: plannedIds.has(id) ? '✅' : '❌',
+              value: action && action.value != null ? String(action.value).slice(0, 30) : '—'
+            };
+          })
+        );
+      }
+    } catch (e) {
+      console.warn('[Path4ABA] audit table failed:', e);
+    }
+
     return { clinicalFacts: clinicalFacts, normalizedForm: normalizedForm, plan: plan, results: results };
   }
 
