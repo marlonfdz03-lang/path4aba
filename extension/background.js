@@ -67,3 +67,32 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true; // keep channel open for async sendResponse
   }
 });
+
+// ── ABA Matrix: inject the autofill script on demand, then fill ──────────────
+// Routed through the background service worker (not the popup) so it works from
+// detached popup windows, where the popup's own chrome.tabs/chrome.scripting
+// context is scoped to the popup window rather than the browser window holding
+// the ABA Matrix tab. The injected script's __abaMatrixLoaded guard makes repeat
+// injections safe (no duplicate onMessage listeners).
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'injectAndFillABAMatrix') {
+    chrome.tabs.query({ active: true }, (tabs) => {
+      const abaTab = tabs.find(t => t.url?.includes('app.abamatrix.com/session'));
+      if (!abaTab) {
+        sendResponse({ ok: false, error: 'ABA Matrix tab not found' });
+        return;
+      }
+      chrome.scripting.executeScript({
+        target: { tabId: abaTab.id },
+        files: ['abamatrix-autofill.js']
+      }, () => {
+        setTimeout(() => {
+          chrome.tabs.sendMessage(abaTab.id, { action: 'fillABAMatrix', data: message.data }, (response) => {
+            sendResponse({ ok: true, response });
+          });
+        }, 500);
+      });
+    });
+    return true; // Keep channel open for async response
+  }
+});

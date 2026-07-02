@@ -2070,27 +2070,12 @@ document.getElementById('fillABAMatrixBtn')?.addEventListener('click', () => {
     participation: 'The client demonstrated active participation throughout the session.',
   };
 
-  chrome.tabs.query({ active: true }, (tabs) => {
-    const abaTab = tabs.find(t => t.url?.includes('app.abamatrix.com/session'));
-    if (!abaTab) {
-      alert('Please open ABA Matrix session page first.');
-      return;
+  chrome.runtime.sendMessage({ action: 'injectAndFillABAMatrix', data: noteData }, (response) => {
+    if (chrome.runtime.lastError) {
+      console.error('Fill error:', chrome.runtime.lastError.message);
+    } else {
+      console.log('Fill response:', response);
     }
-    // First inject the content script, then send message
-    chrome.scripting.executeScript({
-      target: { tabId: abaTab.id },
-      files: ['abamatrix-autofill.js']
-    }, () => {
-      setTimeout(() => {
-        chrome.tabs.sendMessage(abaTab.id, { action: 'fillABAMatrix', data: noteData }, (response) => {
-          if (chrome.runtime.lastError) {
-            console.error('Fill error:', chrome.runtime.lastError.message);
-          } else {
-            console.log('Fill response:', response);
-          }
-        });
-      }, 500);
-    });
   });
 });
 
