@@ -106,7 +106,12 @@ CORRECT: "the client responded independently across multiple opportunities"
 CORRECT: "the client demonstrated emerging accuracy across several tasks"
 CORRECT: "the client required minimal prompting to complete the task"
 CORRECT: "the behavior occurred multiple times during the session", "across multiple opportunities", "briefly", "on several occasions"
-Exception: prompt counts describing RBT action are allowed: "following two verbal prompts", "after three repetitions" — these describe technique, not data.
+BANNED number phrases in clinical descriptions:
+- "following two verbal prompts" → CORRECT: "following verbal prompts"
+- "following three repetitions" → CORRECT: "following repeated prompts"
+- "two verbal prompts" → CORRECT: "verbal prompts"
+- "three high-probability requests" → CORRECT: "high-probability requests"
+Exception ONLY: "least-to-most prompting" and "most-to-least prompting" are ALLOWED as they describe a procedure name, not a count.
 
 NUMBERS, MEASUREMENTS AND UNITS — COMPLETELY BANNED:
 NEVER include any numbers, measurements, counts, or units of time in the note.
@@ -524,6 +529,24 @@ Verbal pool: saying their own name, repeating a simple word, answering 'how old 
 Each note must use a DIFFERENT combination of 2-3 requests from different pools. Never repeat 'handing over a pencil and clapping hands' — that combination is banned.
 
 BODY (exactly 5 ABCs in one flowing paragraph):
+
+CRITICAL ABC RULE — FUNCTION MUST APPEAR IN EVERY SINGLE ABC:
+Before writing ANY ABC, you must identify the function from the antecedent:
+- Demand or task presented → ESCAPE function
+- Attention shifted away from client → ATTENTION function
+- Preferred item denied, delayed, or removed → TANGIBLE function
+- No clear social antecedent / behavior occurs across all conditions → AUTOMATIC function
+
+Then write the function INTO the antecedent description using this exact pattern:
+"...consistent with [escape/attention/tangible/automatic]-[maintained/seeking/reinforcement] behavior, as the behavior occurred [when demand was presented / when attention was directed elsewhere / when access to preferred item was restricted / in the absence of social antecedents]..."
+
+THIS IS NOT OPTIONAL. If you write an ABC without this pattern, you have made an error.
+CHECK: Before moving to the next ABC, verify the function phrase is present.
+CHECK: Before writing skill acquisition section, verify ALL ABCs have function phrases.
+
+BANNED: Any ABC that describes an antecedent without identifying the function.
+BANNED: "the client displayed [behavior]" without immediately connecting it to a function.
+
 Each ABC: "When [antecedent], the client [exact topography]; the RBT implemented [intervention] by [specific how]; the client [observable response]."
 
 Connect ABCs naturally with transitions. NEVER use the same transition phrase twice in one note. Pool to rotate from:
