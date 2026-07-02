@@ -117,6 +117,17 @@ if (window.__abaMatrixLoaded) {
         clickRadioByGroupIndex(2, 'No'); // Medical concerns → No
         await waitMs(300);
 
+        // Fill Who Was Present (caregiver chip input)
+        const caregiverInput = document.querySelector('input[placeholder="Caregiver(s)"]');
+        if (caregiverInput && noteData.caregivers?.length) {
+          for (const name of noteData.caregivers) {
+            setMatInput(caregiverInput, name);
+            await waitMs(200);
+            caregiverInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+            await waitMs(300);
+          }
+        }
+
         // Step 3: Fill Daily Log textareas by exact index
         // textarea 0 = How did client present at START
         // textarea 1 = How did client present at END

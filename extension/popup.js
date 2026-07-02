@@ -2065,6 +2065,7 @@ document.getElementById('fillABAMatrixBtn')?.addEventListener('click', () => {
     fullNote: document.getElementById('outputNote')?.value || '',
     behaviors: (selectedBehaviors || []).map(b => typeof b === 'string' ? { name: b } : b),
     skills: (selectedSkills || []).map(s => typeof s === 'string' ? { name: s } : s),
+    caregivers: selectedPresent || [],
     clientPresentStart: 'The client presented as cooperative and ready to engage in structured activities.',
     clientPresentEnd: 'The client demonstrated appropriate disengagement and responded to closing routines.',
     participation: 'The client demonstrated active participation throughout the session.',
