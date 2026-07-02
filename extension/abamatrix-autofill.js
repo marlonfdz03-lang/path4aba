@@ -46,7 +46,6 @@ if (window.__abaMatrixLoaded) {
       await waitMs(500);
       const options = document.querySelectorAll('mat-option');
       if (!options.length) {
-        // Close by pressing Escape
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         await waitMs(200);
         return;
@@ -54,20 +53,15 @@ if (window.__abaMatrixLoaded) {
 
       const valueLower = value.toLowerCase().trim();
 
-      // Try exact match first
       let match = Array.from(options).find(opt =>
         opt.innerText?.trim().toLowerCase() === valueLower
       );
-
-      // Try contains match
       if (!match) {
         match = Array.from(options).find(opt =>
           opt.innerText?.trim().toLowerCase().includes(valueLower) ||
           valueLower.includes(opt.innerText?.trim().toLowerCase())
         );
       }
-
-      // Try word-by-word match
       if (!match) {
         const words = valueLower.split(' ').filter(w => w.length > 3);
         match = Array.from(options).find(opt => {
@@ -79,7 +73,6 @@ if (window.__abaMatrixLoaded) {
       if (match) {
         match.click();
       } else {
-        // Close without selecting using Escape
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       }
       await waitMs(400);
@@ -88,12 +81,10 @@ if (window.__abaMatrixLoaded) {
       selectEl.focus();
       selectEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
       await waitMs(150);
-      // Also click the CDK overlay backdrop specifically
       const backdrop = document.querySelector('.cdk-overlay-backdrop');
       if (backdrop) {
         backdrop.click();
       } else {
-        // Fallback: click outside the panel
         document.documentElement.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
       }
       await waitMs(200);
@@ -110,8 +101,87 @@ if (window.__abaMatrixLoaded) {
     function clickAddButton(index) {
       // ABA Matrix has duplicate add buttons — use only first 2 (behavior and goal)
       const addButtons = document.querySelectorAll('.add-event-button');
-      // First 2 are the real ones, last 2 are duplicates from second form section
       if (index < 2 && addButtons[index]) addButtons[index].click();
+    }
+
+    // ── Label-based field detection helpers (new architecture) ──────────────────
+
+    async function waitForElement(selector, parent = document, timeout = 4000) {
+      return new Promise((resolve) => {
+        const start = Date.now();
+        const check = () => {
+          const el = parent.querySelector(selector);
+          if (el && el.offsetParent !== null) { resolve(el); return; }
+          if (Date.now() - start > timeout) { resolve(null); return; }
+          requestAnimationFrame(check);
+        };
+        check();
+      });
+    }
+
+    async function findFieldByLabel(labelText, parent = document) {
+      // Find a field (input, textarea, mat-select) near a label containing labelText
+      const allLabels = parent.querySelectorAll('mat-label, label, .mat-form-field-label, strong, b, p');
+      for (const label of allLabels) {
+        if (label.innerText?.trim().toLowerCase().includes(labelText.toLowerCase())) {
+          const formField = label.closest('mat-form-field') || label.closest('div');
+          if (formField) {
+            const field = formField.querySelector('textarea, input:not([type="radio"]):not([type="checkbox"]), mat-select');
+            if (field) return field;
+          }
+        }
+      }
+      return null;
+    }
+
+    async function fillSection(sectionEl, fields) {
+      // fields = array of { label, value, type: 'text'|'select'|'radio'|'chip' }
+      for (const field of fields) {
+        if (field.type === 'radio') {
+          const radios = sectionEl.querySelectorAll('mat-radio-button, input[type="radio"]');
+          for (const radio of radios) {
+            if (radio.innerText?.trim() === field.value || radio.value === field.value) {
+              radio.click();
+              await waitMs(300);
+              break;
+            }
+          }
+          continue;
+        }
+        const el = await waitForElement(
+          field.type === 'select' ? 'mat-select' :
+          field.type === 'chip' ? 'input[class*="mat-chip"]' : 'textarea, input.mat-input-element',
+          sectionEl,
+          3000
+        );
+        if (!el) continue;
+        if (field.type === 'select') {
+          await selectMatOption(el, field.value);
+        } else if (field.type === 'chip') {
+          setMatInput(el, field.value);
+          await waitMs(150);
+          el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        } else {
+          setMatInput(el, field.value);
+        }
+        await waitMs(200);
+      }
+    }
+
+    // Click the first "Yes" radio button within a card (card-scoped, label-based).
+    function clickYesRadioInCard(card) {
+      const yesBtn = Array.from(card.querySelectorAll('mat-radio-button'))
+        .find(r => r.textContent?.trim() === 'Yes');
+      yesBtn?.querySelector('input')?.click();
+    }
+
+    // Fill + submit a chip input (Enter to commit the chip).
+    async function fillChip(chipEl, value) {
+      if (!chipEl) return;
+      setMatInput(chipEl, value);
+      await waitMs(150);
+      chipEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await waitMs(200);
     }
 
     async function doFill() {
@@ -140,7 +210,6 @@ if (window.__abaMatrixLoaded) {
             'Were there any medical concerns?',
           ];
 
-          // Add behavior questions
           behaviors.forEach((b, i) => {
             const name = b.name || b;
             questions.push(`Behavior Reduction #${i+1} - Behavior name: ${name}`);
@@ -153,7 +222,6 @@ if (window.__abaMatrixLoaded) {
             questions.push(`Behavior Reduction #${i+1} - What was the result of the implemented interventions?`);
           });
 
-          // Add skill questions
           skills.forEach((s, i) => {
             const name = s.name || s;
             questions.push(`Goal Implementation #${i+1} - Goal name: ${name}`);
@@ -171,7 +239,6 @@ If not specified → Continuous Reinforcement.`);
           });
 
           // Route the AI call through the background service worker (Bearer token, CORS-exempt).
-          // A direct content-script fetch to path4aba.app is CORS-blocked from the abamatrix origin.
           answers = await new Promise((resolve) => {
             chrome.runtime.sendMessage(
               { action: 'getABAMatrixAnswers', note, questions },
@@ -184,21 +251,27 @@ If not specified → Continuous Reinforcement.`);
           return;
         }
 
-        // Step 2: Fill radio buttons (before adding behavior/goal sections)
+        const functionMap = {
+          'attention': 'Attention',
+          'escape': 'Escape',
+          'tangible': 'Tangible',
+          'automatic': 'Automatic',
+          'sensory': 'Automatic',
+        };
+
+        // Step 2: Fill top-level radios (before adding behavior/goal sections)
         clickRadioByGroupIndex(0, 'No'); // Significant changes → No
         clickRadioByGroupIndex(1, 'No'); // Incidents → No
         clickRadioByGroupIndex(2, 'No'); // Medical concerns → No
         await waitMs(300);
 
-        // Fill Who Was Present (caregiver chip input)
+        // Step 3: Fill Who Was Present (caregiver chip input)
         const caregiverInput = document.querySelector('input[placeholder="Caregiver(s)"]');
         if (caregiverInput && noteData.caregivers?.length) {
-          // Check if caregiver already exists as a chip
           const existingChips = document.querySelectorAll('mat-chip');
           const existingNames = Array.from(existingChips).map(c => c.textContent?.trim().replace('cancel', '').trim());
-
           for (const name of noteData.caregivers) {
-            if (existingNames.some(n => n.includes(name.split(' ')[0]))) continue; // Skip if already added
+            if (existingNames.some(n => n.includes(name.split(' ')[0]))) continue;
             setMatInput(caregiverInput, name);
             await waitMs(200);
             caregiverInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
@@ -211,173 +284,109 @@ If not specified → Continuous Reinforcement.`);
           clickAddButton(0);
           await waitMs(800);
         }
-
         // Step 5: Click + for each skill
         for (let i = 0; i < skills.length; i++) {
           clickAddButton(1);
           await waitMs(800);
         }
-
         await waitMs(1000);
 
-        // Step 6: Fill behavior fields
-        // Per behavior (11 fields each):
-        // mat-select = Behavior name (dropdown from assessment)
-        // textarea = Evidenced By
-        // mat-select = Function (Attention/Escape/Tangible/Automatic)
-        // textarea = Antecedent
-        // radio Yes = Antecedent Interventions
-        // chip input = Interventions
-        // mat-select = Main focus
-        // textarea = Result
-        // radio No = STO information
-        const updatedTextareas = document.querySelectorAll('textarea');
-        const updatedInputs = document.querySelectorAll('input.mat-input-element, input[class*="mat-chip"]');
-        // Use ALL mat-selects — ABA Matrix does not duplicate these
-        const matSelects = Array.from(document.querySelectorAll('mat-select'));
+        // Helper: get the mat-card for behavior/goal by section order.
+        // Card 0 = Daily Log; behavior cards follow; goal cards follow behaviors.
+        const cardAt = (idx) => document.querySelectorAll('mat-card')[idx];
 
-        const functionMap = {
-          'attention': 'Attention',
-          'escape': 'Escape',
-          'tangible': 'Tangible',
-          'automatic': 'Automatic',
-          'sensory': 'Automatic',
-        };
-
-        let qIdx = 7;
+        // ── Step 6: Fill behavior fields — label-based within each behavior card ──
+        // CALIBRATE: the label strings below (evidenced/function/prompted/main focus/result)
+        // are best-guesses from the field semantics. Verify against ABA Matrix's real labels.
         for (let i = 0; i < behaviors.length; i++) {
-          const tBase = 4 + (i * 3);
-          const selectBase = i * 3;
-          const interventionInput = updatedInputs[2 + i];
+          const qIdx = 7 + (i * 8);
+          const card = cardAt(i + 1); // +1 skips the Daily Log card
+          if (!card) continue;
 
-          // Behavior name → mat-select (dropdown has client's behaviors from assessment)
-          const behaviorName = behaviors[i].name || behaviors[i];
-          await selectMatOption(matSelects[selectBase], behaviorName);
+          // Behavior name → mat-select
+          const nameSelect = await findFieldByLabel('behavior name', card) || card.querySelector('mat-select');
+          if (nameSelect) await selectMatOption(nameSelect, behaviors[i].name || behaviors[i]);
 
-          // Evidenced By → textarea (tBase)
-          setMatInput(updatedTextareas[tBase], answers[String(qIdx + 1)] || '');
-          await waitMs(200);
+          // Evidenced By → textarea
+          const evidencedField = await findFieldByLabel('evidenced', card);
+          if (evidencedField) { setMatInput(evidencedField, answers[String(qIdx + 1)] || ''); await waitMs(200); }
 
-          // Function → mat-select (selectBase + 1)
+          // Function → mat-select
           const functionAnswer = (answers[String(qIdx + 2)] || '').toLowerCase();
           const functionKey = Object.keys(functionMap).find(k => functionAnswer.includes(k)) || 'escape';
-          await selectMatOption(matSelects[selectBase + 1], functionMap[functionKey]);
+          const functionSelect = await findFieldByLabel('function', card);
+          if (functionSelect) await selectMatOption(functionSelect, functionMap[functionKey]);
 
-          // Antecedent → textarea (tBase + 1)
-          setMatInput(updatedTextareas[tBase + 1], answers[String(qIdx + 3)] || '');
-          await waitMs(200);
+          // Antecedent → textarea ("What prompted the behavior?")
+          const antecedentField = await findFieldByLabel('what prompted', card) || await findFieldByLabel('antecedent (', card);
+          if (antecedentField) { setMatInput(antecedentField, answers[String(qIdx + 3)] || ''); await waitMs(200); }
 
-          // Antecedent Interventions → Yes radio
-          clickRadioByGroupIndex(3 + (i * 2), 'Yes');
-          await waitMs(200);
-
-          // Antecedent Interventions — chip input within this behavior's card
-          await waitMs(600);
-          const behaviorCardsNow = document.querySelectorAll('mat-card');
-          const currentBehaviorCard = behaviorCardsNow[i + 1];
-          if (currentBehaviorCard) {
-            const antecedentChip = currentBehaviorCard.querySelector('input[class*="mat-chip"]');
-            if (antecedentChip) {
-              setMatInput(antecedentChip, answers[String(qIdx + 4)] || 'Visual schedule and verbal prompts.');
-              await waitMs(200);
-              antecedentChip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-              await waitMs(300);
-            }
-          }
-
-          // Interventions chip
-          if (interventionInput) {
-            setMatInput(interventionInput, answers[String(qIdx + 5)] || '');
-            await waitMs(200);
-            interventionInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-          }
-          await waitMs(200);
-
-          // Main focus → mat-select (selectBase + 2)
-          await selectMatOption(matSelects[selectBase + 2], answers[String(qIdx + 6)] || '');
-          await waitMs(800); // Extra wait for Angular to settle after dropdown
-
-          // Result → textarea (tBase + 2) — fill twice to overcome Angular re-render
-          const resultText = answers[String(qIdx + 7)] || '';
-          setMatInput(updatedTextareas[tBase + 2], resultText);
-          await waitMs(500);
-          // Re-query and fill again in case Angular cleared it
-          const freshTextareas = document.querySelectorAll('textarea');
-          setMatInput(freshTextareas[tBase + 2], resultText);
-          await waitMs(300);
-
-          qIdx += 8;
+          // Antecedent Interventions → Yes radio, then wait for the chip to appear
+          clickYesRadioInCard(card);
           await waitMs(400);
+          const antecedentChip = await waitForElement('input[class*="mat-chip"]', card, 3000);
+          await fillChip(antecedentChip, answers[String(qIdx + 4)] || 'Visual schedule and verbal prompts.');
+
+          // Consequence / after-behavior interventions → second chip in the card
+          const behaviorChips = card.querySelectorAll('input[class*="mat-chip"]');
+          await fillChip(behaviorChips[1], answers[String(qIdx + 5)] || '');
+
+          // Main focus → mat-select
+          const mainFocusSelect = await findFieldByLabel('main focus', card);
+          if (mainFocusSelect) { await selectMatOption(mainFocusSelect, answers[String(qIdx + 6)] || ''); await waitMs(400); }
+
+          // Result → textarea
+          const resultField = await findFieldByLabel('result', card);
+          if (resultField) { setMatInput(resultField, answers[String(qIdx + 7)] || ''); await waitMs(200); }
+
+          await waitMs(300);
         }
 
-        // Step 7: Fill goal fields
-        let gIdx = 7 + (behaviors.length * 8);
-        const goalSelectBase = behaviors.length * 3;
+        // ── Step 7: Fill goal fields — label-based within each goal card ──
+        // CALIBRATE: label strings (goal/medical barrier/activit/what prompts/teaching/reinforcer/schedule).
         for (let i = 0; i < skills.length; i++) {
-          // Goal chips: index 0=caregiver, 1=antecedent, 2-6=interventions (5 behaviors), then goals start at 7
-          // But use dynamic calculation: 2 + behaviors.length + (i * 3)
-          const chipBase = 2 + behaviors.length + (i * 3);
+          const gIdx = 7 + (behaviors.length * 8) + (i * 7);
+          const card = cardAt(1 + behaviors.length + i); // after Daily Log + behavior cards
+          if (!card) continue;
 
-          // Goal name → mat-select (from assessment dropdown)
-          await selectMatOption(matSelects[goalSelectBase + i], skills[i].name || skills[i]);
-          await waitMs(500);
+          // Goal name → mat-select
+          const goalNameSelect = await findFieldByLabel('goal', card) || card.querySelector('mat-select');
+          if (goalNameSelect) { await selectMatOption(goalNameSelect, skills[i].name || skills[i]); await waitMs(300); }
 
-          // Medical barriers chip
-          if (updatedInputs[chipBase]) {
-            setMatInput(updatedInputs[chipBase], answers[String(gIdx + 1)] || '');
-            await waitMs(200);
-            updatedInputs[chipBase].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-            await waitMs(200);
-          }
+          // Medical barriers → chip
+          const barriersChip = await findFieldByLabel('medical barrier', card);
+          await fillChip(barriersChip, answers[String(gIdx + 1)] || '');
 
-          // Activities chip
-          if (updatedInputs[chipBase + 1]) {
-            setMatInput(updatedInputs[chipBase + 1], answers[String(gIdx + 2)] || '');
-            await waitMs(200);
-            updatedInputs[chipBase + 1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-            await waitMs(200);
-          }
+          // Activities → chip
+          const activitiesChip = await findFieldByLabel('activit', card);
+          await fillChip(activitiesChip, answers[String(gIdx + 2)] || '');
 
-          // Teaching procedure → textarea within goal card
-          const goalCards = document.querySelectorAll('mat-card');
-          const goalCardOffset = 1 + behaviors.length + i;
-          const goalCard = goalCards[goalCardOffset];
-          if (goalCard) {
-            const goalTextareas = goalCard.querySelectorAll('textarea');
-            // First textarea in goal card = teaching procedure
-            if (goalTextareas[0]) {
-              setMatInput(goalTextareas[0], answers[String(gIdx + 3)] || '');
-              await waitMs(200);
-            }
-            // Second textarea in goal card = schedule of reinforcement
-            if (goalTextareas[1]) {
-              setMatInput(goalTextareas[1], answers[String(gIdx + 6)] || 'Continuous Reinforcement');
-              await waitMs(200);
-            }
-          }
+          // Prompts → Yes radio, then wait for the "what prompts were used?" field
+          clickYesRadioInCard(card);
+          await waitMs(400);
+          const promptsField = await findFieldByLabel('what prompts', card)
+            || await waitForElement('textarea, input.mat-input-element', card, 3000);
+          if (promptsField) { setMatInput(promptsField, answers[String(gIdx + 4)] || 'Verbal and gestural prompts.'); await waitMs(200); }
 
-          // Prompts radio → Yes
-          // Radio groups: 1 (environment) + 1 (incidents) + 1 (medical) + behaviors*2 (antecedent+STO per behavior) + i*1
-          clickRadioByGroupIndex(3 + (behaviors.length * 2) + i, 'Yes');
-          await waitMs(200);
+          // Teaching procedure → textarea
+          const teachingField = await findFieldByLabel('teaching', card);
+          if (teachingField) { setMatInput(teachingField, answers[String(gIdx + 3)] || ''); await waitMs(200); }
 
-          // Reinforcers chip
-          if (updatedInputs[chipBase + 2]) {
-            setMatInput(updatedInputs[chipBase + 2], answers[String(gIdx + 5)] || '');
-            await waitMs(200);
-            updatedInputs[chipBase + 2].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-            await waitMs(200);
-          }
+          // Reinforcers → chip
+          const reinforcersChip = await findFieldByLabel('reinforcer', card);
+          await fillChip(reinforcersChip, answers[String(gIdx + 5)] || '');
 
-          gIdx += 7;
-          await waitMs(800);
+          // Schedule of reinforcement → textarea
+          const scheduleField = await findFieldByLabel('schedule', card);
+          if (scheduleField) { setMatInput(scheduleField, answers[String(gIdx + 6)] || 'Continuous Reinforcement'); await waitMs(200); }
+
+          await waitMs(300);
         }
 
         // Force close ALL open dropdowns before filling Daily Log
         await waitMs(500);
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
         await waitMs(200);
-        // Click far from any dropdown
         document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 0, clientY: 0 }));
         await waitMs(500);
 
@@ -388,7 +397,7 @@ If not specified → Continuous Reinforcement.`);
         setMatInput(finalTextareas[2], answers['2'] || 'The client demonstrated appropriate disengagement and responded to closing routines.');
         setMatInput(finalTextareas[3], answers['4'] || 'The client demonstrated active participation throughout the session.');
 
-        // Fill Evidenced by start (mat-input-6 — plain text input, not chip)
+        // Fill Evidenced by start (plain text input)
         const evidencedByInput = document.getElementById('mat-input-6') ||
           document.querySelector('input.mat-input-element[id*="mat-input"]');
         if (evidencedByInput) {
@@ -397,8 +406,7 @@ If not specified → Continuous Reinforcement.`);
 
         await waitMs(500);
 
-        // Note: Leave Relevant Information / Comments EMPTY
-        // (The full note should NOT go here)
+        // Note: Leave Relevant Information / Comments EMPTY (the full note should NOT go here)
 
         console.log('[Path4ABA] ABA Matrix form filled successfully');
         alert('✅ ABA Matrix form filled! Please review and adjust before submitting.');
