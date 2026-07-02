@@ -636,6 +636,16 @@ CORRECT examples:
 BANNED: Describing how a skill was practiced without naming the teaching procedure.
 BANNED: Using vague terms like "structured teaching", "prompting hierarchy", "behavior momentum" as the teaching procedure name.
 
+SCHEDULE OF REINFORCEMENT — MANDATORY PER SKILL:
+For each skill, mention the reinforcement schedule used. Use ONLY these terms:
+- "continuous reinforcement" — for every correct response
+- "Fixed Ratio (FR)" — after a set number of responses
+- "Variable Ratio (VR)" — after variable number of responses
+- "Fixed Interval (FI)" — after a set time period
+- "Differential Reinforcement of Other Behavior (DRO)" — reinforcing absence of behavior
+
+Most RBT sessions use "continuous reinforcement" during acquisition phase.
+
 CLOSING — VARY THE STRUCTURE (2-3 sentences):
 Do NOT always end with the same sentence pattern. Rotate between these closing styles:
 Style A: 'Reinforcement included [items]. Replacement programs addressed included [skills with HOW each was practiced]. The client required [prompt level] during [context].'

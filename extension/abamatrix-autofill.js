@@ -162,7 +162,12 @@ if (window.__abaMatrixLoaded) {
             questions.push(`Goal Implementation #${i+1} - What was the teaching procedure used?`);
             questions.push(`Goal Implementation #${i+1} - Did you use any prompts? (Yes or No)`);
             questions.push(`Goal Implementation #${i+1} - What reinforcers were used?`);
-            questions.push(`Goal Implementation #${i+1} - What was the schedule of reinforcement used? Answer with ONLY one of these exact options based on the client's assessment: Fixed Ratio, Variable Ratio, Fixed Interval, Variable Interval, DRO, DRS, Continuous Reinforcement. If not specified in the note, answer: Continuous Reinforcement`);
+            questions.push(`Goal Implementation #${i+1} - What schedule of reinforcement was used? Select ONLY from these exact options based on what's described in the note:
+Continuous Reinforcement, Fixed Ratio (FR) Schedule, Variable Ratio (VR) Schedule, Fixed Interval (FI) Schedule, Variable Interval (VI) Schedule, Fixed Time (FT) Schedule, Variable Time (VT) Schedule, DRO (Differential Reinforcement of Other Behavior), DRA (Differential Reinforcement of Alternative Behavior), DRI (Differential Reinforcement of Incompatible Behavior), DRL (Differential Reinforcement of Low Rates), DRH (Differential Reinforcement of High Rates), Multiple Schedule, Mixed Schedule, Concurrent Schedule, Chained Schedule, Tandem Schedule, Conjunctive Schedule, Alternative Schedule.
+If the note mentions reinforcement contingent on specific responses → Fixed Ratio (FR) Schedule.
+If the note mentions reinforcement after time delays → Fixed Interval (FI) Schedule.
+If the note mentions continuous praise → Continuous Reinforcement.
+If not specified → Continuous Reinforcement.`);
           });
 
           // Route the AI call through the background service worker (Bearer token, CORS-exempt).
@@ -362,13 +367,15 @@ if (window.__abaMatrixLoaded) {
             await waitMs(200);
           }
 
-          // Schedule of reinforcement → textarea
-          const scheduleTextareas = document.querySelectorAll('textarea');
-          const scheduleBase = 4 + (behaviors.length * 3) + skills.length + skills.length;
-          const scheduleTextarea = scheduleTextareas[scheduleBase + i];
-          if (scheduleTextarea) {
-            setMatInput(scheduleTextarea, answers[String(gIdx + 6)] || 'Continuous Reinforcement');
-            await waitMs(200);
+          // Schedule of reinforcement → mat-select within goal card
+          if (goalCard) {
+            const allGoalSelects = goalCard.querySelectorAll('mat-select');
+            // Second mat-select in goal card is schedule of reinforcement
+            const scheduleSelect = allGoalSelects[1];
+            if (scheduleSelect) {
+              await selectMatOption(scheduleSelect, answers[String(gIdx + 6)] || 'Continuous Reinforcement');
+              await waitMs(400);
+            }
           }
 
           gIdx += 7;
