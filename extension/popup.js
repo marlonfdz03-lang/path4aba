@@ -2954,7 +2954,9 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
             const orderedEls = Array.from(document.querySelectorAll('h4, table'));
             let pastH4 = false;
             for (const el of orderedEls) {
-              if (el.tagName === 'H4' && namesMatch(el.innerText.trim(), name)) {
+              // OP wraps the skill name in quotes — strip them before matching.
+              if (el.tagName === 'H4' &&
+                  namesMatch(el.innerText.trim().replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim(), name)) {
                 pastH4 = true; continue;
               }
               if (pastH4 && el.tagName === 'TABLE' &&
