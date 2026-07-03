@@ -87,6 +87,7 @@ export async function POST(req: Request) {
       { fieldId: `BR${n}_AntecedentInterventionsYesNo`, fieldType: 'radio', value: b.hadAntecedentIntervention ? 'Yes' : 'No' },
       { fieldId: `BR${n}_AntecedentInterventions`, fieldType: 'chip', value: b.antecedentIntervention || '' },
       { fieldId: `BR${n}_ConsequenceInterventions`, fieldType: 'chip', value: b.consequenceIntervention },
+      { fieldId: `BR${n}_Interventions`, fieldType: 'chip', value: b.interventions },
       { fieldId: `BR${n}_MainFocus`, fieldType: 'select', value: b.mainFocus },
       { fieldId: `BR${n}_Result`, fieldType: 'textarea', value: b.result },
       { fieldId: `BR${n}_STO`, fieldType: 'radio', value: 'No' },

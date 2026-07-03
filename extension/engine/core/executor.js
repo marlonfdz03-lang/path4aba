@@ -61,7 +61,7 @@ window.FormEngineExecutor = {
 
   // Resolve a field's DOM element from the locator the SCANNER saved — no re-discovery.
   // Chips resolve by placeholder / chip-index; everything else falls back to proximity.
-  resolveLocator(locator, sectionEl, fieldType) {
+  resolveLocator(locator, sectionEl, fieldType, fieldId = '') {
     if (!locator) return null;
 
     switch (locator.strategy) {
@@ -87,21 +87,26 @@ window.FormEngineExecutor = {
           fieldType === 'select' ? 'mat-select' :
           fieldType === 'chip' ? 'input[class*="mat-chip-input"]' :
           'textarea, input.mat-input-element';
+        // Fields whose id ends in "2" (e.g. DL_EvidencedBy2) are the SECOND matching instance.
+        const isSecondInstance = (fieldId || '').endsWith('2');
         const els = Array.isArray(sectionEl) ? sectionEl : [sectionEl];
+        const matches = [];
+        const seenEls = new Set();
         for (const el of els) {
           const labels = el.querySelectorAll('mat-label, label, strong, b, p, div');
           for (const label of labels) {
             if (label.innerText?.trim().toLowerCase().includes(locator.searchText.toLowerCase())) {
-              // Try each candidate container; return the first that actually holds the field.
+              // Try each candidate container; collect the field it holds. Dedupe by element,
+              // since nested divs match the same field repeatedly.
               for (const ff of [label.nextElementSibling, label.closest('mat-form-field'), label.parentElement?.nextElementSibling, label.closest('div')]) {
                 if (!ff) continue;
                 const field = ff.querySelector(sel);
-                if (field) return field;
+                if (field && !seenEls.has(field)) { seenEls.add(field); matches.push(field); break; }
               }
             }
           }
         }
-        return null;
+        return matches[isSecondInstance ? 1 : 0] || matches[0] || null;
       }
       case 'proximity':
       default:
@@ -217,7 +222,7 @@ window.FormEngineExecutor = {
       return false;
     }
 
-    const resolvedEl = this.resolveLocator(fieldData.locator, sectionEl, action.fieldType);
+    const resolvedEl = this.resolveLocator(fieldData.locator, sectionEl, action.fieldType, action.fieldId);
     // Chips can be conditional (they render after a "Yes" radio) — let them retry below
     // instead of failing here. All other types require the element up front.
     if (!resolvedEl && action.fieldType !== 'chip') {
@@ -257,7 +262,7 @@ window.FormEngineExecutor = {
         if (!el) {
           // Retry once after a delay — a conditional chip may appear after a radio click.
           await this.wait(500);
-          el = this.resolveLocator(fieldData.locator, sectionEl, action.fieldType);
+          el = this.resolveLocator(fieldData.locator, sectionEl, action.fieldType, action.fieldId);
         }
         if (!el) {
           console.warn('[Path4ABA Executor] Chip not found (after retry):', action.fieldId, fieldData.questionText);

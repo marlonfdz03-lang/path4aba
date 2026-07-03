@@ -322,6 +322,11 @@
       if (q.includes('end of the session')) {
         field.locator = { strategy: 'label-search', searchText: 'end of the session' };
       }
+      // Both DL EvidencedBy fields share the "evidenced by" label; the executor tells them
+      // apart via the fieldId (DL_EvidencedBy = 1st, DL_EvidencedBy2 = 2nd instance).
+      if (q.includes('evidenced')) {
+        field.locator = { strategy: 'label-search', searchText: 'evidenced by' };
+      }
       return field;
     };
 
