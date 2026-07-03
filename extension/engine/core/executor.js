@@ -88,9 +88,16 @@ window.FormEngineExecutor = {
           const labels = el.querySelectorAll('mat-label, label, strong, b, p, div');
           for (const label of labels) {
             if (label.innerText?.trim().toLowerCase().includes(locator.searchText.toLowerCase())) {
-              const formField = label.nextElementSibling || label.closest('mat-form-field') || label.closest('div');
+              const sel =
+                fieldType === 'select' ? 'mat-select' :
+                fieldType === 'chip' ? 'input[class*="mat-chip-input"]' :
+                'textarea, input.mat-input-element';
+              const formField = label.nextElementSibling?.querySelector(sel) ? label.nextElementSibling :
+                                label.closest('mat-form-field') ||
+                                label.parentElement?.nextElementSibling ||
+                                label.closest('div');
               if (formField) {
-                const field = formField.querySelector('textarea, input.mat-input-element, mat-select, input[class*="mat-chip-input"]');
+                const field = formField.querySelector(sel);
                 if (field) {
                   console.log('[label-search] found:', field?.tagName, field?.className?.slice(0, 40), field?.id);
                   return field;
