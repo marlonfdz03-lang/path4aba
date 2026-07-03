@@ -32,6 +32,13 @@ BEHAVIORS IN TREATMENT PLAN: ${behaviors?.join(', ')}
 SKILLS IN TREATMENT PLAN: ${skills?.join(', ')}
 CAREGIVERS: ${caregivers?.join(', ')}
 
+CRITICAL — presentationStart vs presentationEnd:
+- presentationStart = how the client presented at the VERY BEGINNING of the session (first paragraph, arrival, initial behaviors)
+- presentationEnd = how the client presented at the CLOSE of the session (last paragraph, 'By the close of the session...')
+- These MUST be different values extracted from different parts of the note
+- 'By the close of the session' or 'By the end of the session' always maps to presentationEnd, never to presentationStart
+- The opening sentence/paragraph always maps to presentationStart
+
 Return this exact JSON structure:
 {
   "dailyLog": {
@@ -77,13 +84,7 @@ Return this exact JSON structure:
       "medicalNecessity": "clinical justification sentence"
     }
   ]
-}
-
-CRITICAL — presentationStart vs presentationEnd:
-- presentationStart = FIRST sentence or paragraph describing how the client presented at the BEGINNING of the session (arrival, initial behavior)
-- presentationEnd = LAST sentence or paragraph describing how the client presented at the END or CLOSE of the session
-- These MUST be different. Do not repeat the same text.
-- If the note says 'By the close of the session...' that is presentationEnd, NOT presentationStart`
+}`
 
   // Same OpenAI completion pattern as fill-aba-matrix/route.ts. max_tokens is raised to 4000
   // because the ClinicalFacts payload (behaviors[] + skills[] with ~12 fields each) is larger

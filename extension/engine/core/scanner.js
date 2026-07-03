@@ -211,7 +211,7 @@
     return { strategy: 'proximity', questionText };
   }
 
-  function buildField(questionText, type, control, sectionTitle) {
+  function buildField(questionText, type, control, sectionTitle, locatorOverride) {
     return {
       questionText: questionText || '',
       fieldType: type,
@@ -219,7 +219,7 @@
       options: control ? getOptions(control, type) : undefined,
       visible: control ? isVisible(control) : false,
       sectionTitle: sectionTitle || '',
-      locator: makeLocator(control, type, questionText || '')
+      locator: locatorOverride || makeLocator(control, type, questionText || '')
     };
   }
 
@@ -276,7 +276,10 @@
       if (!hasEvidenced && allFF[1]) {
         const ta = allFF[1].querySelector('textarea');
         if (ta) {
-          fields.push(buildField('Evidenced By:', 'textarea', ta, sectionTitle));
+          // Use a generic label-search locator so the executor finds it by label text,
+          // not the fragile proximity/sibling walk.
+          fields.push(buildField('Evidenced By:', 'textarea', ta, sectionTitle,
+            { strategy: 'label-search', searchText: 'Evidenced By:' }));
         }
       }
     }
