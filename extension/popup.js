@@ -2928,7 +2928,11 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
         // DOM click approach — find the table for this behavior and click cells
         const orderedElements = Array.from(document.querySelectorAll('h4, table'));
         const h4Els = orderedElements.filter(el => el.tagName === 'H4');
-        const h4El = h4Els.find(h => namesMatch(h.innerText.trim(), name));
+        const h4El = h4Els.find(h => {
+          // OP wraps the skill name in quotes — strip leading/trailing quotes first.
+          const text = h.innerText.trim().replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
+          return namesMatch(text, name);
+        });
         if (!h4El) {
           log.push(`❌ "${name}" day ${task.dayNumber} — h4 not found in DOM`);
           await delay(300);

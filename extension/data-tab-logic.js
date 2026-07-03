@@ -580,7 +580,12 @@ async function opReadReplacementPattern(skills, days) {
 
   const out = [];
   for (const skill of skills) {
-    const h4El = Array.from(document.querySelectorAll('h4')).find(x => namesMatch(x.innerText.trim(), skill.name));
+    const h4El = Array.from(document.querySelectorAll('h4')).find(x => {
+      // OP wraps the skill name in quotes (e.g. "Transitioning between activities").
+      // Strip leading/trailing straight or curly quotes before matching.
+      const text = x.innerText.trim().replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
+      return namesMatch(text, skill.name);
+    });
     let hiddenContainer = null;
     if (h4El) {
       const container = h4El.parentElement;
