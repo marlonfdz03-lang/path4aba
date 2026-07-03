@@ -39,6 +39,8 @@ CRITICAL — presentationStart vs presentationEnd:
 - 'By the close of the session' or 'By the end of the session' always maps to presentationEnd, never to presentationStart
 - The opening sentence/paragraph always maps to presentationStart
 
+CRITICAL — For evidencedBy: write ONLY the topography (physical description of HOW the behavior appeared). Never write WHAT triggered it or WHEN it occurred. The antecedent field handles context.
+
 Return this exact JSON structure:
 {
   "dailyLog": {
@@ -60,7 +62,7 @@ Return this exact JSON structure:
     {
       "name": "exact behavior name from treatment plan",
       "topography": "what the behavior looked like",
-      "evidencedBy": "specific observable description",
+      "evidencedBy": "TOPOGRAPHY ONLY — the specific physical form of the behavior (what it looked like, not when or why it occurred). Examples: 'Repetitive finger tapping on table and rocking in seat', 'Dropping to floor and emitting high-pitched vocalizations', 'Reaching for materials without waiting for instruction'. Do NOT describe when it happened or what preceded it.",
       "function": "Attention or Escape or Tangible or Automatic Reinforcement",
       "antecedent": "what triggered the behavior",
       "hadAntecedentIntervention": true or false,
