@@ -516,7 +516,7 @@ function renderCorrectionsList(corrections) {
 
     const byWeek = {};
     items.forEach(c => {
-      const ws = c.weekStart || getMondayOfDate(c.sessionDate || new Date().toISOString().split('T')[0]);
+      const ws = getMondayOfDate(c.weekStart || c.sessionDate || new Date().toISOString().split('T')[0]);
       (byWeek[ws] = byWeek[ws] || []).push(c);
     });
 
