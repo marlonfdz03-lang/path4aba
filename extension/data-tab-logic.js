@@ -572,62 +572,91 @@ async function opReadReplacementPattern(skills, days) {
     return '·';
   }
 
-  // Nudge Vue to mount lazy cells, then return to top.
-  let pos = 0, h = document.documentElement.scrollHeight;
-  while (pos < h) { pos = Math.min(pos + 600, h); window.scrollTo(0, pos); await delay(120); h = document.documentElement.scrollHeight; }
-  window.scrollTo(0, 0);
-  await delay(200);
-
-  const out = [];
+  // Step 1: Reveal ALL skill containers upfront — before scrolling — so Vue mounts
+  // their lazy cells during the scroll and they stay visible while we read. (Reading
+  // per-skill and re-hiding between skills let Vue re-hide cells mid-pass → empty
+  // innerText.)
+  const revealedContainers = [];
   for (const skill of skills) {
     const h4El = Array.from(document.querySelectorAll('h4')).find(x => {
-      // OP wraps the skill name in quotes (e.g. "Transitioning between activities").
-      // Strip leading/trailing straight or curly quotes before matching.
+      // OP wraps the skill name in quotes — strip them before matching.
       const text = x.innerText.trim().replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
       return namesMatch(text, skill.name);
     });
-    let hiddenContainer = null;
     if (h4El) {
       const container = h4El.parentElement;
-      if (container?.classList.contains('d-none')) { container.classList.remove('d-none'); hiddenContainer = container; await delay(150); }
+      if (container?.classList.contains('d-none')) {
+        container.classList.remove('d-none');
+        revealedContainers.push(container);
+      }
+      skill._h4El = h4El; // attach for later use
     }
-    // h4El is already found and its container is already d-none-removed.
-    // Search for the trial table starting from h4El in DOM order — since the
-    // container is revealed, the table's rows/innerText are now readable.
+  }
+
+  // Step 2: Scroll to mount all lazy cells (containers are already revealed).
+  let pos = 0, h = document.documentElement.scrollHeight;
+  while (pos < h) {
+    pos = Math.min(pos + 600, h);
+    window.scrollTo(0, pos);
+    await delay(120);
+    h = document.documentElement.scrollHeight;
+  }
+  window.scrollTo(0, 0);
+  await delay(300);
+
+  // Step 3: Read data for all skills.
+  const out = [];
+  for (const skill of skills) {
+    const h4El = skill._h4El;
+    if (!h4El) {
+      for (const day of days) {
+        out.push({ skillName: skill.name, dayNumber: day.dayNumber, trials: null, currentPct: null });
+      }
+      continue;
+    }
+
+    // Find the trial table starting from h4El in DOM order.
+    const allEls = Array.from(document.querySelectorAll('h4, table'));
     let table = null;
-    if (h4El) {
-      const allEls = Array.from(document.querySelectorAll('h4, table'));
-      let pastH4 = false;
-      for (const el of allEls) {
-        if (el === h4El) { pastH4 = true; continue; }
-        if (pastH4 && el.tagName === 'TABLE') {
-          const rows = el.querySelectorAll('tr');
-          if (rows.length >= 10) {
-            // Trial table = one that contains at least one "Trial …" row. Scan all
-            // rows (not just row[0]) so a header-first layout still matches.
-            const hasTrialRow = Array.from(rows).some(r => r.querySelector('td')?.innerText.trim().startsWith('Trial'));
-            if (hasTrialRow) {
-              table = el;
-              break;
-            }
-          }
+    let pastH4 = false;
+    for (const el of allEls) {
+      if (el === h4El) { pastH4 = true; continue; }
+      if (pastH4 && el.tagName === 'TABLE') {
+        const rows = el.querySelectorAll('tr');
+        if (rows.length >= 10) {
+          const hasTrialRow = Array.from(rows).some(r =>
+            r.querySelector('td')?.innerText.trim().startsWith('Trial'));
+          if (hasTrialRow) { table = el; break; }
         }
       }
     }
+
     for (const day of days) {
-      if (!table) { out.push({ skillName: skill.name, dayNumber: day.dayNumber, trials: null, currentPct: null }); continue; }
+      if (!table) {
+        out.push({ skillName: skill.name, dayNumber: day.dayNumber, trials: null, currentPct: null });
+        continue;
+      }
       const trialRows = Array.from(table.querySelectorAll('tr'))
         .filter(r => r.querySelector('td')?.innerText.trim().startsWith('Trial'));
       const colIdx = findDayColumn(table, day.dayNumber);
-      if (colIdx < 0) { out.push({ skillName: skill.name, dayNumber: day.dayNumber, trials: null, currentPct: null }); continue; }
+      if (colIdx < 0) {
+        out.push({ skillName: skill.name, dayNumber: day.dayNumber, trials: null, currentPct: null });
+        continue;
+      }
       const total = skill.totalTrials || trialRows.length;
-      const trials = trialRows.slice(0, total).map(r => readSymbol(Array.from(r.querySelectorAll('td'))[colIdx]));
+      const trials = trialRows.slice(0, total).map(r =>
+        readSymbol(Array.from(r.querySelectorAll('td'))[colIdx]));
       const plus = trials.filter(s => s === '＋').length;
       const currentPct = total ? Math.round(plus / total * 100) : 0;
       out.push({ skillName: skill.name, dayNumber: day.dayNumber, trials, currentPct });
     }
-    if (hiddenContainer) hiddenContainer.classList.add('d-none');
   }
+
+  // Step 4: Re-hide all containers we revealed.
+  for (const container of revealedContainers) {
+    container.classList.add('d-none');
+  }
+
   return out;
 }
 
