@@ -564,18 +564,6 @@ async function opReadReplacementPattern(skills, days) {
     return targetCol;
   }
 
-  function findTrialTable(name) {
-    const orderedEls = Array.from(document.querySelectorAll('h4, table'));
-    let pastH4 = false;
-    for (const el of orderedEls) {
-      if (el.tagName === 'H4' && namesMatch(el.innerText.trim(), name)) { pastH4 = true; continue; }
-      if (pastH4 && el.tagName === 'TABLE' &&
-          el.innerText.includes('Trial 1') &&
-          el.querySelectorAll('tr').length >= 10) return el;
-    }
-    return null;
-  }
-
   function readSymbol(cell) {
     const span = cell?.querySelector('span.bold span');
     const text = span?.innerText?.trim() || '';
@@ -598,7 +586,29 @@ async function opReadReplacementPattern(skills, days) {
       const container = h4El.parentElement;
       if (container?.classList.contains('d-none')) { container.classList.remove('d-none'); hiddenContainer = container; await delay(150); }
     }
-    const table = findTrialTable(skill.name);
+    // h4El is already found and its container is already d-none-removed.
+    // Search for the trial table starting from h4El in DOM order — since the
+    // container is revealed, the table's rows/innerText are now readable.
+    let table = null;
+    if (h4El) {
+      const allEls = Array.from(document.querySelectorAll('h4, table'));
+      let pastH4 = false;
+      for (const el of allEls) {
+        if (el === h4El) { pastH4 = true; continue; }
+        if (pastH4 && el.tagName === 'TABLE') {
+          const rows = el.querySelectorAll('tr');
+          if (rows.length >= 10) {
+            // Trial table = one that contains at least one "Trial …" row. Scan all
+            // rows (not just row[0]) so a header-first layout still matches.
+            const hasTrialRow = Array.from(rows).some(r => r.querySelector('td')?.innerText.trim().startsWith('Trial'));
+            if (hasTrialRow) {
+              table = el;
+              break;
+            }
+          }
+        }
+      }
+    }
     for (const day of days) {
       if (!table) { out.push({ skillName: skill.name, dayNumber: day.dayNumber, trials: null, currentPct: null }); continue; }
       const trialRows = Array.from(table.querySelectorAll('tr'))
