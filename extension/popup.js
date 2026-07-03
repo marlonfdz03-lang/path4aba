@@ -2967,58 +2967,56 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
           }
 
           const totalTrials   = task.trials || trialRows.length;
-          const targetCorrect = Math.round(task.value / 100 * totalTrials);
-
-          // This day's cell in each trial row (cells[colIdx] — same offset as Days row).
+          // Read current state of this day's column
           const trialCells = trialRows.slice(0, totalTrials).map(r => {
             const cells = Array.from(r.querySelectorAll('td'));
             return cells[colIdx];
           });
 
-          // Count how many cells are already marked correct (＋).
-          let currentCorrect = 0;
+          // Categorize each cell — never touch empty cells
+          const plusCells = [];
+          const minusCells = [];
+          const emptyCells = [];
+
           trialCells.forEach(cell => {
             const span = cell?.querySelector('span.bold span');
-            if (span?.innerText.includes('＋')) currentCorrect++;
+            const text = span?.innerText?.trim() || '';
+            if (text.includes('＋')) plusCells.push(cell);
+            else if (text.includes('－')) minusCells.push(cell);
+            else emptyCells.push(cell);
           });
 
+          const currentCorrect = plusCells.length;
+          const targetCorrect = Math.round(task.value / 100 * totalTrials);
           const diff = targetCorrect - currentCorrect;
           let clickCount = 0;
+
           if (diff > 0) {
-            // Need more ＋ — click non-＋ cells until target reached.
-            let toAdd = diff;
-            for (const cell of trialCells) {
-              if (toAdd <= 0) break;
-              const span = cell?.querySelector('span.bold span');
-              if (!span?.innerText.includes('＋')) {
-                cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                await delay(80);
-                cell.click();
-                clickCount++;
-                toAdd--;
-                await delay(80);
-              }
+            // Need more ＋: click － cells only (never empty)
+            const toClick = minusCells.slice(0, diff);
+            for (const cell of toClick) {
+              cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              await delay(80);
+              cell.click();
+              clickCount++;
+              await delay(80);
             }
           } else if (diff < 0) {
-            // Too many ＋ — toggle ＋ cells from the bottom up until target reached.
-            let toRemove = Math.abs(diff);
-            for (const cell of trialCells.slice().reverse()) {
-              if (toRemove <= 0) break;
-              const span = cell?.querySelector('span.bold span');
-              if (span?.innerText.includes('＋')) {
-                cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                await delay(80);
-                cell.click();
-                clickCount++;
-                toRemove--;
-                await delay(80);
-              }
+            // Need fewer ＋: click ＋ cells to remove them
+            const toClick = plusCells.slice(0, Math.abs(diff));
+            for (const cell of toClick) {
+              cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              await delay(80);
+              cell.click();
+              clickCount++;
+              await delay(80);
             }
           }
+          // diff === 0: do nothing — already at target
 
           if (wasHidden) behaviorContainer.classList.add('d-none');
           filledDays.push(task.dayNumber);
-          log.push(`✓ "${name}" day ${task.dayNumber} — ${Math.abs(diff)} cells changed (${currentCorrect}→${targetCorrect} correct of ${totalTrials})`);
+          log.push(`✓ "${name}" day ${task.dayNumber} — ${Math.abs(diff)} cells changed (${currentCorrect}→${targetCorrect} of ${totalTrials} correct, ${emptyCells.length} empty cells untouched)`);
           await delay(300);
           continue;
         }
