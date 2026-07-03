@@ -91,7 +91,10 @@ window.FormEngineExecutor = {
               const formField = label.closest('mat-form-field') || label.closest('div');
               if (formField) {
                 const field = formField.querySelector('textarea, input.mat-input-element, mat-select, input[class*="mat-chip-input"]');
-                if (field) return field;
+                if (field) {
+                  console.log('[label-search] found:', field?.tagName, field?.className?.slice(0, 40), field?.id);
+                  return field;
+                }
               }
             }
           }
