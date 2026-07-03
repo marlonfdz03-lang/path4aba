@@ -88,7 +88,7 @@ window.FormEngineExecutor = {
           const labels = el.querySelectorAll('mat-label, label, strong, b, p, div');
           for (const label of labels) {
             if (label.innerText?.trim().toLowerCase().includes(locator.searchText.toLowerCase())) {
-              const formField = label.closest('mat-form-field') || label.closest('div');
+              const formField = label.nextElementSibling || label.closest('mat-form-field') || label.closest('div');
               if (formField) {
                 const field = formField.querySelector('textarea, input.mat-input-element, mat-select, input[class*="mat-chip-input"]');
                 if (field) {

@@ -312,6 +312,19 @@
     const seen = new Set();
     const outsideCard = function (el) { return !el.closest('mat-card'); };
 
+    // PresentationStart/End share the same control type, so proximity can't tell them apart.
+    // Give them a label-search locator keyed on the distinct "start/end of the session" phrase.
+    const withDLLocator = function (field) {
+      const q = (field.questionText || '').toLowerCase();
+      if (q.includes('start of the session')) {
+        field.locator = { strategy: 'label-search', searchText: 'start of the session' };
+      }
+      if (q.includes('end of the session')) {
+        field.locator = { strategy: 'label-search', searchText: 'end of the session' };
+      }
+      return field;
+    };
+
     // 1) mat-form-field units at form level.
     for (const ff of form.querySelectorAll('mat-form-field')) {
       if (!outsideCard(ff)) continue;
@@ -319,7 +332,7 @@
       const type = control ? detectFieldType(control) : 'unknown';
       if (control) seen.add(control);
       seen.add(ff);
-      fields.push(buildField(getQuestionText(ff), type, control, sectionTitle));
+      fields.push(withDLLocator(buildField(getQuestionText(ff), type, control, sectionTitle)));
     }
 
     // 2) Bare form-level field elements not wrapped in a mat-form-field.
@@ -334,7 +347,7 @@
       while (p && p !== form) { if (candSet.has(p)) { nested = true; break; } p = p.parentElement; }
       if (nested) continue;
       seen.add(el);
-      fields.push(buildField(getQuestionText(el), detectFieldType(el), el, sectionTitle));
+      fields.push(withDLLocator(buildField(getQuestionText(el), detectFieldType(el), el, sectionTitle)));
     }
 
     return fields;
