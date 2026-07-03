@@ -98,6 +98,24 @@ window.FormEngineExecutor = {
     const elements = Array.isArray(sectionEl) ? sectionEl : [sectionEl];
     const searchText = questionText.toLowerCase().slice(0, 30);
 
+    // Special case: EvidencedBy textareas — the label is often a plain <p>/<strong>/<div>
+    // (not a mat-label), so mirror the legacy findFieldByLabel search (closest form-field/div).
+    if (questionText.toLowerCase().includes('evidenced')) {
+      const allLabels = Array.isArray(sectionEl)
+        ? sectionEl.flatMap(f => Array.from(f.querySelectorAll('mat-label, label, strong, b, p, div')))
+        : Array.from(sectionEl.querySelectorAll('mat-label, label, strong, b, p, div'));
+
+      for (const label of allLabels) {
+        if (label.innerText?.trim().toLowerCase().includes('evidenced')) {
+          const formField = label.closest('mat-form-field') || label.closest('div');
+          if (formField) {
+            const ta = formField.querySelector('textarea');
+            if (ta) return ta;
+          }
+        }
+      }
+    }
+
     for (const el of elements) {
       const labels = el.querySelectorAll('mat-label, strong, p, b, div.text-bold, div[class*="header"]');
       for (const label of labels) {

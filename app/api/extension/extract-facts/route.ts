@@ -77,7 +77,13 @@ Return this exact JSON structure:
       "medicalNecessity": "clinical justification sentence"
     }
   ]
-}`
+}
+
+CRITICAL — presentationStart vs presentationEnd:
+- presentationStart = FIRST sentence or paragraph describing how the client presented at the BEGINNING of the session (arrival, initial behavior)
+- presentationEnd = LAST sentence or paragraph describing how the client presented at the END or CLOSE of the session
+- These MUST be different. Do not repeat the same text.
+- If the note says 'By the close of the session...' that is presentationEnd, NOT presentationStart`
 
   // Same OpenAI completion pattern as fill-aba-matrix/route.ts. max_tokens is raised to 4000
   // because the ClinicalFacts payload (behaviors[] + skills[] with ~12 fields each) is larger
