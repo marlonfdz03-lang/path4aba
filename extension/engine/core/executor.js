@@ -83,25 +83,20 @@ window.FormEngineExecutor = {
         return null;
       }
       case 'label-search': {
+        const sel =
+          fieldType === 'select' ? 'mat-select' :
+          fieldType === 'chip' ? 'input[class*="mat-chip-input"]' :
+          'textarea, input.mat-input-element';
         const els = Array.isArray(sectionEl) ? sectionEl : [sectionEl];
         for (const el of els) {
           const labels = el.querySelectorAll('mat-label, label, strong, b, p, div');
           for (const label of labels) {
             if (label.innerText?.trim().toLowerCase().includes(locator.searchText.toLowerCase())) {
-              const sel =
-                fieldType === 'select' ? 'mat-select' :
-                fieldType === 'chip' ? 'input[class*="mat-chip-input"]' :
-                'textarea, input.mat-input-element';
-              const formField = label.nextElementSibling?.querySelector(sel) ? label.nextElementSibling :
-                                label.closest('mat-form-field') ||
-                                label.parentElement?.nextElementSibling ||
-                                label.closest('div');
-              if (formField) {
-                const field = formField.querySelector(sel);
-                if (field) {
-                  console.log('[label-search] found:', field?.tagName, field?.className?.slice(0, 40), field?.id);
-                  return field;
-                }
+              // Try each candidate container; return the first that actually holds the field.
+              for (const ff of [label.nextElementSibling, label.closest('mat-form-field'), label.parentElement?.nextElementSibling, label.closest('div')]) {
+                if (!ff) continue;
+                const field = ff.querySelector(sel);
+                if (field) return field;
               }
             }
           }
