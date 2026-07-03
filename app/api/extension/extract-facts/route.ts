@@ -41,7 +41,7 @@ CRITICAL — presentationStart vs presentationEnd:
 
 CRITICAL — For evidencedBy: write ONLY the topography (physical description of HOW the behavior appeared). Never write WHAT triggered it or WHEN it occurred. The antecedent field handles context.
 
-CRITICAL — For behavior function: function must ALWAYS be one of exactly: Attention, Escape, Tangible, Automatic Reinforcement. If the note says 'attention-maintained' use 'Attention'. If 'escape-maintained' use 'Escape'. If 'tangible-motivated' use 'Tangible'. If 'automatic' or 'self-stimulatory' or 'sensory' use 'Automatic Reinforcement'. Never leave function empty.
+CRITICAL — For behavior function: function must ALWAYS be one of exactly: Attention, Escape, Tangible, Automatic Reinforcement. If the note says 'attention-maintained' use 'Attention'. If 'escape-maintained' use 'Escape'. If 'tangible-motivated' use 'Tangible'. If 'automatic' or 'self-stimulatory' or 'sensory' use 'Automatic Reinforcement'. If you cannot determine the function from the note, use 'Automatic Reinforcement' as the default. A function field must NEVER be empty, null, or missing.
 
 Return this exact JSON structure:
 {
