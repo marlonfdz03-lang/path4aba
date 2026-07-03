@@ -6,7 +6,10 @@ function calcWeekEndDate(startStr) {
   if (!startStr) return null;
   const d = new Date(startStr + 'T00:00:00');
   d.setDate(d.getDate() + 6);
-  return d.toISOString().split('T')[0];
+  const yr = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const dy = String(d.getDate()).padStart(2, '0');
+  return `${yr}-${mo}-${dy}`;
 }
 
 function fmtWeekRange(mondayStr) {

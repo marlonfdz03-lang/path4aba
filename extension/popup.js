@@ -1354,11 +1354,18 @@ function calcWeekEndDate(startStr) {
   return d.toISOString().split('T')[0];
 }
 
+function toLocalDateStr(d) {
+  const yr = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const dy = String(d.getDate()).padStart(2, '0');
+  return `${yr}-${mo}-${dy}`;
+}
+
 function getMondayOfDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   const dow = d.getDay();
   d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
-  return d.toISOString().split('T')[0];
+  return toLocalDateStr(d);
 }
 
 function getWeekDaysFromMonday(mondayStr) {
@@ -1366,7 +1373,7 @@ function getWeekDaysFromMonday(mondayStr) {
   for (let i = 0; i < 7; i++) {
     const d = new Date(mondayStr + 'T00:00:00');
     d.setDate(d.getDate() + i);
-    days.push(d.toISOString().split('T')[0]);
+    days.push(toLocalDateStr(d));
   }
   return days;
 }
