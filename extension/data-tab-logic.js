@@ -347,6 +347,44 @@ function buildWeekCard(weekStart, items) {
       notice.style.cssText = 'font-size:10px;color:#854d0e;background:#fef9c3;border:1px solid #fde047;border-radius:5px;padding:5px 8px;margin-bottom:8px;line-height:1.4;';
       notice.textContent = `Navigate to the OP datasheet for the week of ${fmtWeekRange(weekStart)}, then click Apply below.`;
       daySelector.appendChild(notice);
+
+      // ── Read-only preview (rendered above Confirm & Apply) ──
+      // Lets the RBT inspect the current OP pattern and see how many trials will flip
+      // per worked day BEFORE anything is applied — cancel if it looks wrong.
+      const previewBtn = document.createElement('button');
+      previewBtn.type = 'button';
+      previewBtn.textContent = '🔍 Preview current pattern';
+      previewBtn.style.cssText = 'width:100%;margin-bottom:8px;font-size:11px;padding:6px 0;border:1px solid #d1d5db;border-radius:6px;background:#f9fafb;color:#374151;cursor:pointer;font-weight:600;';
+      daySelector.appendChild(previewBtn);
+
+      const previewContainer = document.createElement('div');
+      daySelector.appendChild(previewContainer);
+
+      previewBtn.addEventListener('click', async () => {
+        const workedDays = [...checkedDates].sort();
+        if (!workedDays.length) {
+          showWeekStatus(statusEl, 'Select at least one worked day to preview.', true);
+          return;
+        }
+        previewBtn.disabled = true;
+        previewBtn.textContent = 'Reading OP…';
+        previewContainer.innerHTML = '';
+        try {
+          const tabs = await chrome.tabs.query({ url: '*://*.officepuzzle.com/*' });
+          const tab = tabs[0];
+          if (!tab?.id) {
+            showWeekStatus(statusEl, 'No Office Puzzle tab found. Open the datasheet first.', true);
+            return;
+          }
+          const patternRows = await readReplacementPattern(tab, items, workedDays);
+          renderReplacementPreview(previewContainer, items, workedDays, patternRows);
+        } catch (err) {
+          showWeekStatus(statusEl, 'Preview failed: ' + err.message, true);
+        } finally {
+          previewBtn.disabled = false;
+          previewBtn.textContent = '🔍 Preview current pattern';
+        }
+      });
     }
 
     const actionsRow = document.createElement('div');
@@ -489,6 +527,247 @@ function buildWeekCard(weekStart, items) {
   });
 
   return card;
+}
+
+// ── Section 2b: Replacement pattern preview (read-only, pre-confirm) ───────────
+
+// Injected into the OP tab (MAIN world) to READ — never click — the current
+// replacement pattern. Serialized by chrome.scripting.executeScript, so it must be
+// fully self-contained: every helper it uses is declared inside it.
+async function opReadReplacementPattern(skills, days) {
+  const delay = (ms) => new Promise(r => setTimeout(r, ms));
+
+  function namesMatch(a, b) {
+    const norm = s => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+    const al = norm(a), bl = norm(b);
+    if (al === bl) return true;
+    if (al.includes(bl) || bl.includes(al)) return true;
+    const aWords = al.split(' ').filter(w => w.length > 2);
+    const bWords = new Set(bl.split(' ').filter(w => w.length > 2));
+    return aWords.some(w => bWords.has(w));
+  }
+
+  function findDayColumn(table, dayNumber) {
+    const day = parseInt(dayNumber, 10);
+    const rows = Array.from(table.querySelectorAll('tr'));
+    let targetCol = -1;
+    for (const row of rows) {
+      const cells = Array.from(row.querySelectorAll('th, td'));
+      if (!cells.length || cells[0].textContent.trim() !== 'Days') continue;
+      cells.forEach((cell, colIdx) => {
+        if (colIdx === 1) return; // col 1 is the previous-month overflow
+        const raw = cell.textContent.trim();
+        if (parseInt(raw, 10) === day && /^\d{1,2}$/.test(raw)) targetCol = colIdx;
+      });
+      break;
+    }
+    return targetCol;
+  }
+
+  function findTrialTable(name) {
+    const orderedEls = Array.from(document.querySelectorAll('h4, table'));
+    let pastH4 = false;
+    for (const el of orderedEls) {
+      if (el.tagName === 'H4' && namesMatch(el.innerText.trim(), name)) { pastH4 = true; continue; }
+      if (pastH4 && el.tagName === 'TABLE' &&
+          el.innerText.includes('Trial 1') &&
+          el.querySelectorAll('tr').length >= 10) return el;
+    }
+    return null;
+  }
+
+  function readSymbol(cell) {
+    const span = cell?.querySelector('span.bold span');
+    const text = span?.innerText?.trim() || '';
+    if (text.includes('＋')) return '＋';
+    if (text.includes('－')) return '－';
+    return '·';
+  }
+
+  // Nudge Vue to mount lazy cells, then return to top.
+  let pos = 0, h = document.documentElement.scrollHeight;
+  while (pos < h) { pos = Math.min(pos + 600, h); window.scrollTo(0, pos); await delay(120); h = document.documentElement.scrollHeight; }
+  window.scrollTo(0, 0);
+  await delay(200);
+
+  const out = [];
+  for (const skill of skills) {
+    const h4El = Array.from(document.querySelectorAll('h4')).find(x => namesMatch(x.innerText.trim(), skill.name));
+    let hiddenContainer = null;
+    if (h4El) {
+      const container = h4El.parentElement;
+      if (container?.classList.contains('d-none')) { container.classList.remove('d-none'); hiddenContainer = container; await delay(150); }
+    }
+    const table = findTrialTable(skill.name);
+    for (const day of days) {
+      if (!table) { out.push({ skillName: skill.name, dayNumber: day.dayNumber, trials: null, currentPct: null }); continue; }
+      const trialRows = Array.from(table.querySelectorAll('tr'))
+        .filter(r => r.querySelector('td')?.innerText.trim().startsWith('Trial'));
+      const colIdx = findDayColumn(table, day.dayNumber);
+      if (colIdx < 0) { out.push({ skillName: skill.name, dayNumber: day.dayNumber, trials: null, currentPct: null }); continue; }
+      const total = skill.totalTrials || trialRows.length;
+      const trials = trialRows.slice(0, total).map(r => readSymbol(Array.from(r.querySelectorAll('td'))[colIdx]));
+      const plus = trials.filter(s => s === '＋').length;
+      const currentPct = total ? Math.round(plus / total * 100) : 0;
+      out.push({ skillName: skill.name, dayNumber: day.dayNumber, trials, currentPct });
+    }
+    if (hiddenContainer) hiddenContainer.classList.add('d-none');
+  }
+  return out;
+}
+
+// Popup-side wrapper: runs a preliminary read-only executeScript on the OP tab and
+// returns [{ skillName, dayNumber, trials:['＋','－','·',…], currentPct }] for every
+// replacement skill × worked day. No cells are clicked — safe to run before confirm.
+async function readReplacementPattern(tab, corrections, workedDays) {
+  const skills = corrections
+    .filter(c => c.type === 'replacement')
+    .map(c => ({
+      name: c.name,
+      targetPct: c.currentValue,
+      totalTrials: c.totalTrials ?? trialsPerSession ?? 10,
+    }));
+  const days = workedDays.map(dateStr => ({
+    dateStr,
+    dayNumber: new Date(dateStr + 'T00:00:00').getDate(),
+  }));
+  const [res] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: opReadReplacementPattern,
+    args: [skills, days],
+    world: 'MAIN',
+  });
+  return res?.result || [];
+}
+
+// Render the read-only preview grid (rows = trials, cols = worked days) into
+// `container`, one table per replacement skill. Cells that will flip are shaded.
+function renderReplacementPreview(container, corrections, workedDays, patternRows) {
+  container.innerHTML = '';
+
+  const DAY_SHORT = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const dayCols = workedDays.map(dateStr => {
+    const d = new Date(dateStr + 'T00:00:00');
+    const dow = d.getDay();              // 0=Sun … 6=Sat
+    const idx = dow === 0 ? 6 : dow - 1; // Mon=0 … Sun=6
+    return { dateStr, dayNumber: d.getDate(), label: `${DAY_SHORT[idx]} ${d.getMonth() + 1}/${d.getDate()}` };
+  });
+
+  const repl = corrections.filter(c => c.type === 'replacement');
+  if (!repl.length) return;
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'margin:8px 0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;';
+
+  repl.forEach(c => {
+    const totalTrials   = c.totalTrials ?? trialsPerSession ?? 10;
+    const targetPct     = c.currentValue;
+    const targetCorrect = Math.round((targetPct || 0) / 100 * totalTrials);
+
+    const perDay = dayCols.map(col => {
+      const row = patternRows.find(r => r.skillName === c.name && r.dayNumber === col.dayNumber);
+      const trials = Array.isArray(row?.trials) ? row.trials : null;
+      const currentPct = (row && row.currentPct != null) ? row.currentPct : null;
+      const currentCorrect = trials ? trials.filter(s => s === '＋').length : null;
+      const diff = currentCorrect != null ? targetCorrect - currentCorrect : null;
+
+      // Illustrative highlight: the first |diff| cells of the type that would flip.
+      // The autofiller shuffles before clicking, so the COUNT is exact but the actual
+      // cells are randomized on apply.
+      const highlight = new Set();
+      if (trials && diff) {
+        const want = diff > 0 ? '－' : '＋';
+        let need = Math.abs(diff);
+        for (let i = 0; i < trials.length && need > 0; i++) {
+          if (trials[i] === want) { highlight.add(i); need--; }
+        }
+      }
+      return { col, trials, currentPct, diff, highlight };
+    });
+
+    const nTrials = Math.max(totalTrials, ...perDay.map(d => (d.trials ? d.trials.length : 0)));
+
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'font-size:10px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.03em;margin:8px 0 3px;';
+    hdr.textContent = c.name;
+    wrap.appendChild(hdr);
+
+    const table = document.createElement('table');
+    table.style.cssText = 'border-collapse:collapse;font-size:10px;width:100%;';
+
+    const thead = document.createElement('thead');
+    const htr = document.createElement('tr');
+    htr.appendChild(document.createElement('th')); // empty corner
+    dayCols.forEach(col => {
+      const th = document.createElement('th');
+      th.style.cssText = 'padding:1px 4px;color:#374151;font-weight:600;text-align:center;white-space:nowrap;';
+      th.textContent = col.label;
+      htr.appendChild(th);
+    });
+    thead.appendChild(htr);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    for (let i = 0; i < nTrials; i++) {
+      const tr = document.createElement('tr');
+      const lbl = document.createElement('td');
+      lbl.style.cssText = 'padding:1px 4px;color:#6b7280;white-space:nowrap;';
+      lbl.textContent = `Trial ${i + 1}`;
+      tr.appendChild(lbl);
+      perDay.forEach(d => {
+        const td = document.createElement('td');
+        const sym = d.trials ? (d.trials[i] ?? '·') : '?';
+        const flips = d.highlight.has(i);
+        td.style.cssText = `padding:1px 4px;text-align:center;${flips ? 'background:#fef08a;font-weight:700;border-radius:2px;' : ''}`;
+        td.textContent = sym;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+
+    const tfoot = document.createElement('tfoot');
+    const footRow = (label, labelColor, cellFn) => {
+      const tr = document.createElement('tr');
+      const l = document.createElement('td');
+      l.style.cssText = `padding:2px 4px;color:${labelColor};font-weight:600;white-space:nowrap;border-top:1px solid #e5e7eb;`;
+      l.textContent = label;
+      tr.appendChild(l);
+      perDay.forEach(d => {
+        const td = document.createElement('td');
+        td.style.cssText = 'padding:2px 4px;text-align:center;border-top:1px solid #e5e7eb;';
+        td.appendChild(cellFn(d));
+        tr.appendChild(td);
+      });
+      return tr;
+    };
+
+    tfoot.appendChild(footRow('Current', '#6b7280', d =>
+      document.createTextNode(d.currentPct != null ? `${d.currentPct}%` : '—')));
+    tfoot.appendChild(footRow('Target', '#065f46', () =>
+      document.createTextNode(targetPct != null ? `${targetPct}%` : '—')));
+    tfoot.appendChild(footRow('Change', '#374151', d => {
+      const span = document.createElement('span');
+      if (d.diff == null)    { span.textContent = '—'; span.style.color = '#9ca3af'; }
+      else if (d.diff === 0) { span.textContent = '0'; span.style.color = '#9ca3af'; }
+      else {
+        span.textContent = (d.diff > 0 ? '+' : '') + d.diff;
+        span.style.color = d.diff > 0 ? '#16a34a' : '#dc2626';
+        span.style.fontWeight = '700';
+      }
+      return span;
+    }));
+    table.appendChild(tfoot);
+
+    wrap.appendChild(table);
+  });
+
+  const note = document.createElement('p');
+  note.style.cssText = 'font-size:9px;color:#9ca3af;margin:4px 0 0;font-style:italic;';
+  note.textContent = 'Shaded = trials that will flip (count is exact; which cells are randomized on apply).';
+  wrap.appendChild(note);
+
+  container.appendChild(wrap);
 }
 
 // ── Render grouped corrections ────────────────────────────────────────────────

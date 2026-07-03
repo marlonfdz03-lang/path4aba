@@ -2798,6 +2798,19 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  // Fisher–Yates shuffle — returns a shuffled COPY so the cells we flip are spread
+  // naturally across the trial column instead of always hitting the first N (which
+  // produces a visibly top-heavy ＋/－ pattern). Defined here so it's self-contained
+  // when this function is injected into the OP page (MAIN world).
+  function shuffleArray(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
   // Scroll incrementally top→bottom in 600px steps, 150ms per step, so Vue renders
   // all lazy-mounted cells. Then scroll back to top and wait for a final settle.
   async function scrollFullPage() {
@@ -2992,8 +3005,8 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
           let clickCount = 0;
 
           if (diff > 0) {
-            // Need more ＋: click － cells only (never empty)
-            const toClick = minusCells.slice(0, diff);
+            // Need more ＋: click － cells only (never empty), shuffled for a natural spread
+            const toClick = shuffleArray(minusCells).slice(0, diff);
             for (const cell of toClick) {
               cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
               await delay(80);
@@ -3002,8 +3015,8 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
               await delay(80);
             }
           } else if (diff < 0) {
-            // Need fewer ＋: click ＋ cells to remove them
-            const toClick = plusCells.slice(0, Math.abs(diff));
+            // Need fewer ＋: click ＋ cells to remove them, shuffled for a natural spread
+            const toClick = shuffleArray(plusCells).slice(0, Math.abs(diff));
             for (const cell of toClick) {
               cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
               await delay(80);
