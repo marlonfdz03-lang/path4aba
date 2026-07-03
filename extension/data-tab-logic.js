@@ -593,16 +593,10 @@ async function opReadReplacementPattern(skills, days) {
     }
   }
 
-  // Step 2: Scroll to mount all lazy cells (containers are already revealed).
-  let pos = 0, h = document.documentElement.scrollHeight;
-  while (pos < h) {
-    pos = Math.min(pos + 600, h);
-    window.scrollTo(0, pos);
-    await delay(120);
-    h = document.documentElement.scrollHeight;
-  }
-  window.scrollTo(0, 0);
-  await delay(300);
+  // Step 2: Let Vue settle after revealing containers. No scroll — the page is
+  // already visible for this read-only pass, and scrolling triggers Vue reactivity
+  // that re-hides the containers we just revealed.
+  await delay(100);
 
   // Step 3: Read data for all skills.
   const out = [];
