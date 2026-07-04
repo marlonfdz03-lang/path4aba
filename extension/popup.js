@@ -1945,8 +1945,12 @@ async function runWeekAutofill(type) {
     const tab = tabs[0];
     if (!tab?.id) { setStatus(statusId, 'No Office Puzzle tab found. Open the datasheet first.', true); return; }
     const opData = await fetchOpDataMapForTab(tab);
-    if (!opData.ok) { setStatus(statusId, opData.error, true); return; }
-    const result = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: officePuzzleDatasheetAutofiller, args: [tasks, opData.opDataMap], world: 'MAIN' });
+    // Replacements fill purely via DOM clicks and never read the OP data map, so a
+    // map-fetch failure shouldn't block them (mirrors Fix Past Data, which injects
+    // with an empty map). Maladaptives still require the map.
+    if (!opData.ok && type !== 'replacement') { setStatus(statusId, opData.error, true); return; }
+    const opDataMap = opData.opDataMap || {};
+    const result = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: officePuzzleDatasheetAutofiller, args: [tasks, opDataMap], world: 'MAIN' });
     const log  = result?.[0]?.result || [];
     const ok   = log.filter(l => l.startsWith('✓'));
     const errs = log.filter(l => l.startsWith('❌'));
@@ -2986,24 +2990,38 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
           }
 
           const totalTrials   = task.trials || trialRows.length;
-          // Read current state of this day's column
-          const trialCells = trialRows.slice(0, totalTrials).map(r => {
-            const cells = Array.from(r.querySelectorAll('td'));
-            return cells[colIdx];
-          });
 
-          // Categorize each cell — never touch empty cells
-          const plusCells = [];
-          const minusCells = [];
-          const emptyCells = [];
+          // Read + categorize this day's column. Re-runnable so we can re-read after
+          // activating a fresh (all-empty) column. Never touches empty cells otherwise.
+          const categorize = () => {
+            const plus = [], minus = [], empty = [];
+            trialRows.slice(0, totalTrials).forEach(r => {
+              const cell = Array.from(r.querySelectorAll('td'))[colIdx];
+              const span = cell?.querySelector('span.bold span');
+              const text = span?.innerText?.trim() || '';
+              if (text.includes('＋')) plus.push(cell);
+              else if (text.includes('－')) minus.push(cell);
+              else empty.push(cell);
+            });
+            return { plus, minus, empty };
+          };
+          let { plus: plusCells, minus: minusCells, empty: emptyCells } = categorize();
 
-          trialCells.forEach(cell => {
-            const span = cell?.querySelector('span.bold span');
-            const text = span?.innerText?.trim() || '';
-            if (text.includes('＋')) plusCells.push(cell);
-            else if (text.includes('－')) minusCells.push(cell);
-            else emptyCells.push(cell);
-          });
+          // Fill Data: a brand-new column is completely empty (no ＋/－), so there are
+          // no － cells to flip and min-diff would do nothing. Clicking any empty cell
+          // activates the whole column in OP; wait for Vue to populate it, then re-read
+          // before running min-diff. (Fix Past Data columns already have a pattern, so
+          // this is skipped there.)
+          let activatedEmpty = false;
+          if (plusCells.length === 0 && minusCells.length === 0 && emptyCells.length > 0) {
+            const first = emptyCells[0];
+            first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            await delay(80);
+            first.click();
+            await delay(300); // let Vue populate the activated column
+            ({ plus: plusCells, minus: minusCells, empty: emptyCells } = categorize());
+            activatedEmpty = true;
+          }
 
           const currentCorrect = plusCells.length;
           const targetCorrect = Math.round(task.value / 100 * totalTrials);
@@ -3035,7 +3053,7 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
 
           if (wasHidden) behaviorContainer.classList.add('d-none');
           filledDays.push(task.dayNumber);
-          log.push(`✓ "${name}" day ${task.dayNumber} — ${Math.abs(diff)} cells changed (${currentCorrect}→${targetCorrect} of ${totalTrials} correct, ${emptyCells.length} empty cells untouched)`);
+          log.push(`✓ "${name}" day ${task.dayNumber} — ${Math.abs(diff)} cells changed (${currentCorrect}→${targetCorrect} of ${totalTrials} correct, ${emptyCells.length} empty cells untouched${activatedEmpty ? ', activated empty column' : ''})`);
           await delay(300);
           continue;
         }
