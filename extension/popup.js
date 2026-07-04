@@ -1972,13 +1972,17 @@ document.getElementById('autofillWeekReplBtn')?.addEventListener('click',  () =>
 async function fillPageTo100() {
   const delay = ms => new Promise(r => setTimeout(r, ms));
 
-  // OP hides behavior containers with d-none, and elements inside a hidden container
-  // have empty innerText — so the trial tables can't be found. Reveal every hidden
-  // container that holds a table first, let Vue render, then re-hide them at the end.
-  const hiddenContainers = Array.from(document.querySelectorAll('.d-none'))
-    .filter(el => el.querySelector('table'));
-  hiddenContainers.forEach(el => el.classList.remove('d-none'));
-  await delay(300);
+  // Scroll the whole page so Vue lazy-loads all trial tables before we search.
+  let pos = 0;
+  let pageH = document.documentElement.scrollHeight;
+  while (pos < pageH) {
+    pos = Math.min(pos + 600, pageH);
+    window.scrollTo(0, pos);
+    await delay(100);
+    pageH = document.documentElement.scrollHeight;
+  }
+  window.scrollTo(0, 0);
+  await delay(500);
 
   const tables = Array.from(document.querySelectorAll('table'))
     .filter(t => t.querySelectorAll('tr').length >= 10 &&
@@ -2038,8 +2042,6 @@ async function fillPageTo100() {
     }
   }
 
-  // Re-hide the containers we revealed.
-  hiddenContainers.forEach(el => el.classList.add('d-none'));
   return totalClicks;
 }
 
