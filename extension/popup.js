@@ -1972,106 +1972,57 @@ document.getElementById('autofillWeekReplBtn')?.addEventListener('click',  () =>
 document.getElementById('fillPage100Btn')?.addEventListener('click', async () => {
   const btn = document.getElementById('fillPage100Btn');
   const statusEl = document.getElementById('fillPage100Status');
-  const showStatus = (msg, isErr) => {
-    if (!statusEl) return;
-    statusEl.textContent = msg;
-    statusEl.style.display = msg ? '' : 'none';
-    statusEl.style.background = isErr ? '#fef2f2' : '#f0fdf4';
-    statusEl.style.color      = isErr ? '#991b1b' : '#166534';
-  };
-
-  const orig = btn.textContent;
   btn.disabled = true;
-  btn.textContent = 'Filling…';
-  showStatus('Filling... please wait', false);
+  statusEl.textContent = 'Filling...';
+  statusEl.style.display = '';
+  statusEl.style.color = '#16a34a';
+
   try {
+    if (!selectedClientId) {
+      statusEl.textContent = 'Select a client first';
+      return;
+    }
+    if (!projectedItems.length) {
+      statusEl.textContent = 'Load week data first (Section 3)';
+      return;
+    }
+
+    // Build tasks for all replacement skills, days 1-27
+    // Use current month from the OP tab URL or default to current month
     const tabs = await chrome.tabs.query({});
-    const tab = tabs.find(t => (t.url || '').includes('officepuzzle.com') &&
-      (t.url || '').includes('/data/sheets'));
-    if (!tab?.id) { showStatus('No Office Puzzle tab found. Open the datasheet first.', true); return; }
+    const tab = tabs.find(t => (t.url||'').includes('officepuzzle.com') && (t.url||'').includes('/data/sheets'));
+    if (!tab?.id) { statusEl.textContent = 'Open OP datasheet first'; return; }
 
-    // Step 1 — read all skills + days-with-data. Scroll first so Vue lazy-loads every
-    // trial table before we search (otherwise 0 tables are found).
-    const [readerResult] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: async () => {
-        const delay = ms => new Promise(r => setTimeout(r, ms));
-        let pos = 0, pageH = document.documentElement.scrollHeight;
-        while (pos < pageH) {
-          pos = Math.min(pos + 600, pageH);
-          window.scrollTo(0, pos);
-          await delay(100);
-          pageH = document.documentElement.scrollHeight;
-        }
-        window.scrollTo(0, 0);
-        await delay(500);
+    const replItems = projectedItems.filter(i => i.type === 'replacement');
+    if (!replItems.length) { statusEl.textContent = 'No replacement skills loaded'; return; }
 
-        const results = [];
-        const tables = Array.from(document.querySelectorAll('table'))
-          .filter(t => t.querySelectorAll('tr').length >= 10 &&
-            Array.from(t.querySelectorAll('tr')).some(r =>
-              r.querySelector('td')?.innerText.trim().startsWith('Trial')));
+    // Get worked days from URL month param
+    const urlMonth = tab.url.match(/month=(\d{4}-\d{2})/)?.[1];
+    const now = new Date();
+    const monthStr = urlMonth || `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    const daysInMonth = new Date(monthStr.split('-')[0], monthStr.split('-')[1], 0).getDate();
 
-        for (const table of tables) {
-          const rows = Array.from(table.querySelectorAll('tr'));
-          const daysRow = rows.find(r => r.querySelector('td,th')?.innerText.trim() === 'Days');
-          if (!daysRow) continue;
-
-          // Get skill name from nearest preceding h4 (strip OP's wrapping quotes).
-          const allEls = Array.from(document.querySelectorAll('h4, table'));
-          const tableIdx = allEls.indexOf(table);
-          let skillName = null;
-          for (let i = tableIdx - 1; i >= 0; i--) {
-            if (allEls[i].tagName === 'H4') {
-              skillName = allEls[i].innerText.trim().replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
-              break;
-            }
-          }
-          if (!skillName) continue;
-
-          const trialRows = rows.filter(r => r.querySelector('td')?.innerText.trim().startsWith('Trial'));
-          const dayCells = Array.from(daysRow.querySelectorAll('th,td'));
-          const days = [];
-
-          for (let colIdx = 2; colIdx < dayCells.length; colIdx++) {
-            const dayNum = parseInt(dayCells[colIdx]?.innerText.trim());
-            if (!dayNum || dayNum > 31) continue;
-            const colCells = trialRows.map(r => Array.from(r.querySelectorAll('td'))[colIdx]);
-            const hasData = colCells.some(cell => {
-              const span = cell?.querySelector('span.bold span');
-              const t = span?.innerText?.trim() || '';
-              return t.includes('＋') || t.includes('－');
-            });
-            if (hasData) days.push(dayNum);
-          }
-
-          if (days.length > 0) results.push({ skillName, days, trials: trialRows.length });
-        }
-        return results;
-      },
-      world: 'MAIN',
-    });
-
-    // Step 2 — build "fill to 100%" tasks for every skill × day-with-data.
-    const skillDays = readerResult?.result || [];
     const tasks = [];
-    for (const { skillName, days, trials } of skillDays) {
-      for (const dayNumber of days) {
-        tasks.push({ name: skillName, dayNumber, type: 'replacement', value: 100, trials });
+    for (const item of replItems) {
+      for (let day = 1; day <= daysInMonth; day++) {
+        tasks.push({
+          name: item.name,
+          dayNumber: day,
+          type: 'replacement',
+          value: 100,
+          trials: trialsPerSession || 10,
+        });
       }
     }
 
-    // Step 3 — run via runTasksOnOP (world:MAIN, same path as the maladaptive autofill).
-    if (tasks.length === 0) { showStatus('✓ 0 tasks found', false); return; }
-    showStatus(`Filling ${tasks.length} day-skill combinations...`, false);
+    statusEl.textContent = `Filling ${tasks.length} combinations...`;
     const result = await runTasksOnOP(tasks);
-    if (!result.ok) { showStatus('Fill failed — check the OP tab.', true); return; }
-    showStatus(`✓ Done — ${result.log?.length || 0} processed`, false);
-  } catch (err) {
-    showStatus('Error: ' + err.message, true);
+    statusEl.textContent = `✓ Done`;
+
+  } catch(err) {
+    statusEl.textContent = 'Error: ' + err.message;
   } finally {
     btn.disabled = false;
-    btn.textContent = orig;
   }
 });
 
