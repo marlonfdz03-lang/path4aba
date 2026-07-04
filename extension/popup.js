@@ -1642,8 +1642,9 @@ async function runSingleAutofill(type) {
   const btn = document.getElementById(btnId);
   btn.disabled = true; btn.textContent = 'Filling…';
   try {
-    const tabs = await chrome.tabs.query({ url: '*://*.officepuzzle.com/*' });
-    const tab = tabs[0];
+    const tabs = await chrome.tabs.query({});
+    const tab = tabs.find(t => (t.url || '').includes('officepuzzle.com') &&
+      (t.url || '').includes('/data/sheets'));
     if (!tab?.id) { setStatus(statusId, 'No Office Puzzle tab found. Open the datasheet first.', true); return; }
     const opData = await fetchOpDataMapForTab(tab);
     if (!opData.ok) { setStatus(statusId, opData.error, true); return; }
@@ -1941,8 +1942,9 @@ async function runWeekAutofill(type) {
   const btn = document.getElementById(btnId);
   btn.disabled = true; btn.textContent = 'Filling…';
   try {
-    const tabs = await chrome.tabs.query({ url: '*://*.officepuzzle.com/*' });
-    const tab = tabs[0];
+    const tabs = await chrome.tabs.query({});
+    const tab = tabs.find(t => (t.url || '').includes('officepuzzle.com') &&
+      (t.url || '').includes('/data/sheets'));
     if (!tab?.id) { setStatus(statusId, 'No Office Puzzle tab found. Open the datasheet first.', true); return; }
     const opData = await fetchOpDataMapForTab(tab);
     // Replacements fill purely via DOM clicks and never read the OP data map, so a
@@ -2046,8 +2048,9 @@ document.getElementById('fillPage100Btn')?.addEventListener('click', async () =>
   btn.textContent = 'Filling…';
   showStatus('Filling... please wait', false);
   try {
-    const tabs = await chrome.tabs.query({ url: '*://*.officepuzzle.com/*' });
-    const tab = tabs[0];
+    const tabs = await chrome.tabs.query({});
+    const tab = tabs.find(t => (t.url || '').includes('officepuzzle.com') &&
+      (t.url || '').includes('/data/sheets'));
     if (!tab?.id) { showStatus('No Office Puzzle tab found. Open the datasheet first.', true); return; }
     const result = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: fillPageTo100, world: 'MAIN' });
     const clicks = result?.[0]?.result ?? 0;
@@ -2136,8 +2139,9 @@ function applyDataTabGate() {
 
 async function checkOfficePuzzlePage() {
   try {
-    const tabs = await chrome.tabs.query({ url: '*://*.officepuzzle.com/*' });
-    const tab = tabs[0];
+    const tabs = await chrome.tabs.query({});
+    const tab = tabs.find(t => (t.url || '').includes('officepuzzle.com') &&
+      (t.url || '').includes('/data/sheets'));
     const url = tab?.url || '';
     const isOPCharts = url.includes('/data/charts');
     const chartsEl = document.getElementById('extractChartsSection');
@@ -2629,8 +2633,9 @@ document.getElementById('extractChartsBtn').addEventListener('click', async () =
   showExtractStatus('Scrolling page to load all charts…', 'info');
 
   try {
-    const tabs = await chrome.tabs.query({ url: '*://*.officepuzzle.com/*' });
-    const tab = tabs[0];
+    const tabs = await chrome.tabs.query({});
+    const tab = tabs.find(t => (t.url || '').includes('officepuzzle.com') &&
+      (t.url || '').includes('/data/sheets'));
     if (!tab?.id) throw new Error('No Office Puzzle tab found. Open the charts page first.');
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },

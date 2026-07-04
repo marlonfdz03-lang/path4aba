@@ -370,8 +370,9 @@ function buildWeekCard(weekStart, items) {
         previewBtn.textContent = 'Reading OP…';
         previewContainer.innerHTML = '';
         try {
-          const tabs = await chrome.tabs.query({ url: '*://*.officepuzzle.com/*' });
-          const tab = tabs[0];
+          const tabs = await chrome.tabs.query({});
+          const tab = tabs.find(t => (t.url || '').includes('officepuzzle.com') &&
+            (t.url || '').includes('/data/sheets'));
           if (!tab?.id) {
             showWeekStatus(statusEl, 'No Office Puzzle tab found. Open the datasheet first.', true);
             return;
@@ -888,8 +889,9 @@ function buildOpDataMap(sheetsData) {
 // ── Core OP task runner ───────────────────────────────────────────────────────
 async function runTasksOnOP(tasks) {
   try {
-    const tabs = await chrome.tabs.query({ url: '*://*.officepuzzle.com/*' });
-    const tab = tabs[0];
+    const tabs = await chrome.tabs.query({});
+    const tab = tabs.find(t => (t.url || '').includes('officepuzzle.com') &&
+      (t.url || '').includes('/data/sheets'));
     if (!tab?.id) {
       setCorrectionsStatus('No Office Puzzle tab found. Open the datasheet first.', true);
       return { ok: false };
