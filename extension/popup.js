@@ -1963,6 +1963,103 @@ async function runWeekAutofill(type) {
 document.getElementById('autofillWeekMaladBtn')?.addEventListener('click', () => runWeekAutofill('maladaptive'));
 document.getElementById('autofillWeekReplBtn')?.addEventListener('click',  () => runWeekAutofill('replacement'));
 
+// ── TEMP debug helper: bulk-fill every trial column on the OP page to 100% (＋) ──
+// Injected into the OP tab (MAIN world) — must be fully self-contained. Remove
+// before release. For empty columns it clicks the first cell to activate, waits for
+// Vue to populate, then converts every non-＋ cell to ＋.
+async function fillPageTo100() {
+  const delay = ms => new Promise(r => setTimeout(r, ms));
+
+  const tables = Array.from(document.querySelectorAll('table'))
+    .filter(t => t.querySelectorAll('tr').length >= 10 &&
+      Array.from(t.querySelectorAll('tr')).some(r =>
+        r.querySelector('td')?.innerText.trim().startsWith('Trial')));
+
+  let totalClicks = 0;
+
+  for (const table of tables) {
+    const rows = Array.from(table.querySelectorAll('tr'));
+    const trialRows = rows.filter(r =>
+      r.querySelector('td')?.innerText.trim().startsWith('Trial'));
+    const daysRow = rows.find(r =>
+      r.querySelector('td,th')?.innerText.trim() === 'Days');
+    if (!daysRow || !trialRows.length) continue;
+
+    const dayCells = Array.from(daysRow.querySelectorAll('th,td'));
+
+    for (let colIdx = 2; colIdx < dayCells.length; colIdx++) {
+      const dayNum = parseInt(dayCells[colIdx]?.innerText.trim());
+      if (!dayNum || dayNum > 31) continue;
+
+      const colCells = trialRows.map(r =>
+        Array.from(r.querySelectorAll('td'))[colIdx]);
+
+      // Check if column has any data
+      const hasData = colCells.some(cell => {
+        const span = cell?.querySelector('span.bold span');
+        const t = span?.innerText?.trim() || '';
+        return t.includes('＋') || t.includes('－');
+      });
+
+      // If completely empty, activate it first
+      if (!hasData) {
+        const firstCell = colCells[0];
+        if (firstCell) {
+          firstCell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          await delay(200);
+          firstCell.click();
+          await delay(300);
+          totalClicks++;
+        }
+      }
+
+      // Now convert all non-plus to plus
+      for (const cell of colCells) {
+        const span = cell?.querySelector('span.bold span');
+        const text = span?.innerText?.trim() || '';
+        if (!text.includes('＋')) {
+          cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          await delay(150);
+          cell.click();
+          await delay(150);
+          totalClicks++;
+        }
+      }
+    }
+  }
+  return totalClicks;
+}
+
+document.getElementById('fillPage100Btn')?.addEventListener('click', async () => {
+  const btn = document.getElementById('fillPage100Btn');
+  const statusEl = document.getElementById('fillPage100Status');
+  const showStatus = (msg, isErr) => {
+    if (!statusEl) return;
+    statusEl.textContent = msg;
+    statusEl.style.display = msg ? '' : 'none';
+    statusEl.style.background = isErr ? '#fef2f2' : '#f0fdf4';
+    statusEl.style.color      = isErr ? '#991b1b' : '#166534';
+  };
+
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Filling…';
+  showStatus('Filling... please wait', false);
+  try {
+    const tabs = await chrome.tabs.query({ url: '*://*.officepuzzle.com/*' });
+    const tab = tabs[0];
+    if (!tab?.id) { showStatus('No Office Puzzle tab found. Open the datasheet first.', true); return; }
+    const result = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: fillPageTo100, world: 'MAIN' });
+    const clicks = result?.[0]?.result ?? 0;
+    showStatus(`✓ ${clicks} cells filled`, false);
+  } catch (err) {
+    showStatus('Error: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+});
+
 async function saveWeekData(userInitiated) {
   if (!selectedClientId || !projectedItems.length || !workedDayDates.length) return false;
   const weekStart   = document.getElementById('weekStartDate').value;
