@@ -2979,6 +2979,9 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
     ? _urlMonthParam
     : `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}`;
 
+  // Scroll full page to trigger Vue lazy-loading of all behaviors
+  await scrollFullPage();
+
   // ── Step 2: Group tasks by unique name ───────────────────────────────────────
   const tasksByName = new Map();
   for (const task of tasks) {
