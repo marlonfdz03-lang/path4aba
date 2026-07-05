@@ -3014,7 +3014,7 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
         const behaviorContainer = h4El.parentElement;
         const wasHidden = behaviorContainer.classList.contains('d-none');
         if (wasHidden) behaviorContainer.classList.remove('d-none');
-        await delay(200);
+        await delay(800);
 
         // ── Replacement branch: per-skill trial table, min-diff toggle ──────────
         // Each replacement skill has its own table of "Trial N" rows. Convert the
@@ -3092,7 +3092,7 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
             first.scrollIntoView({ behavior: 'smooth', block: 'center' });
             await delay(80);
             first.click();
-            await delay(300); // let Vue populate the activated column
+            await delay(600); // let Vue populate the activated column
             ({ plus: plusCells, minus: minusCells, empty: emptyCells } = categorize());
             activatedEmpty = true;
           }
