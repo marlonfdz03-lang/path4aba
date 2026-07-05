@@ -3078,7 +3078,13 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
           // before running min-diff. (Fix Past Data columns already have a pattern, so
           // this is skipped there.)
           let activatedEmpty = false;
-          if (plusCells.length === 0 && minusCells.length === 0 && emptyCells.length > 0) {
+          if (plusCells.length === 0 && minusCells.length === 0 && task.value === 100) {
+            log.push(`⚪ "${name}" day ${task.dayNumber} — skipped (empty column, fill-to-100 mode)`);
+            if (wasHidden) behaviorContainer.classList.add('d-none');
+            continue;
+          }
+          if (plusCells.length === 0 && minusCells.length === 0 &&
+              emptyCells.length > 0 && task.value < 100) {
             const first = emptyCells[0];
             first.scrollIntoView({ behavior: 'smooth', block: 'center' });
             await delay(80);
