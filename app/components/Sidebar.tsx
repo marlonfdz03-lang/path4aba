@@ -222,7 +222,7 @@ export default function Sidebar() {
   const isStudentOnly = ["bcba_student", "bcaba_student"].includes(role);
   const isOwner = session?.user?.email === "marlonfdz03@gmail.com";
 
-  if (["/" , "/login", "/pricing", "/onboarding", "/privacy", "/terms", "/admin"].some(p => pathname === p || pathname.startsWith(p + "/"))) return null;
+  if (["/" , "/login", "/pricing", "/onboarding", "/privacy", "/terms", "/admin", "/app"].some(p => pathname === p || pathname.startsWith(p + "/"))) return null;
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");

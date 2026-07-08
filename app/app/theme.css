@@ -1,0 +1,154 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   Scoped dark + glassmorphism theme for the /app mobile experience.
+
+   This file is imported ONLY by app/app/layout.tsx. Every selector is
+   namespaced under `.app-*`, so nothing here affects the existing website.
+   The theme is a FIXED dark theme — it deliberately does not react to the
+   system light/dark preference (color-scheme is pinned to dark).
+   ────────────────────────────────────────────────────────────────────────── */
+
+.app-shell {
+  /* palette */
+  --app-bg: #0A1628;
+  --app-text: #E9F1FA;
+  --app-muted: #5A7A9E;
+  --app-muted-2: #6B8BAE;
+  --app-accent: #378ADD;
+  --app-accent-2: #85B7EB;
+  --app-accent-3: #B5D4F4;
+  --app-glass-bg: rgba(255, 255, 255, 0.05);
+  --app-glass-border: rgba(255, 255, 255, 0.14);
+
+  /* Site chrome (Sidebar/ContentShell) is excluded on /app, so the shell is a
+     normal full-height block rather than a fixed overlay. */
+  min-height: 100dvh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+
+  background-color: var(--app-bg);
+  color: var(--app-text);
+  color-scheme: dark;               /* pin form controls / scrollbars to dark */
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Reusable frosted translucent surface. */
+.app-glass {
+  background: var(--app-glass-bg);
+  border: 0.5px solid var(--app-glass-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 18px;
+}
+
+/* Ambient background glows for depth (positioned by modifier). */
+.app-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+}
+.app-glow--tr {
+  top: -120px;
+  right: -110px;
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle, rgba(55, 138, 221, 0.45), transparent 70%);
+}
+.app-glow--bl {
+  bottom: -150px;
+  left: -120px;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(45, 212, 191, 0.16), transparent 70%);
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+.app-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 54px;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 0.5px solid transparent;
+  transition: transform 0.06s ease, opacity 0.2s ease;
+}
+.app-btn:active {
+  transform: scale(0.985);
+}
+.app-btn--primary {
+  background: var(--app-accent);
+  color: #ffffff;
+  box-shadow: 0 8px 24px rgba(55, 138, 221, 0.35);
+}
+.app-btn--secondary {
+  background: var(--app-glass-bg);
+  border-color: var(--app-glass-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  color: var(--app-accent-3);
+}
+
+/* ── Welcome screen ───────────────────────────────────────────────────────── */
+.app-welcome {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  /* generous padding + iOS safe-area insets (notch / home indicator) */
+  padding:
+    calc(32px + env(safe-area-inset-top)) 24px
+    calc(40px + env(safe-area-inset-bottom));
+}
+.app-welcome__content {
+  position: relative;
+  z-index: 1;               /* above the ambient glows */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto;
+}
+.app-welcome__logo {
+  width: 110px;
+  height: 110px;
+  border-radius: 26px;
+  margin-bottom: 28px;
+  box-shadow: 0 12px 40px rgba(55, 138, 221, 0.35);
+}
+.app-welcome__eyebrow {
+  color: var(--app-accent-2);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  margin-bottom: 6px;
+}
+.app-welcome__title {
+  color: #ffffff;
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.1;
+  margin-bottom: 14px;
+}
+.app-welcome__tagline {
+  color: var(--app-muted-2);
+  font-size: 15px;
+  line-height: 1.5;
+  max-width: 300px;
+  margin-bottom: 40px;
+}
+.app-welcome__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 340px;
+}
