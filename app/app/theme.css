@@ -296,6 +296,69 @@
   font-size: 14px;
 }
 
+/* ── Role selection cards ─────────────────────────────────────────────────── */
+.app-role-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+}
+.app-role-list > * + * {
+  margin-top: 14px;      /* was flex gap */
+}
+.app-role-card {
+  display: flex;
+  align-items: center;
+  padding: 18px;
+  border-radius: 18px;
+  background: var(--app-glass-bg);
+  border: 0.5px solid var(--app-glass-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  text-decoration: none;
+  color: var(--app-text);
+  transition: transform 0.06s ease, border-color 0.15s ease;
+}
+.app-role-card > * + * {
+  margin-left: 16px;     /* was flex gap; chevron's margin-left:auto still wins (defined later) */
+}
+.app-role-card:active {
+  transform: scale(0.99);
+}
+.app-role-card__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  background: rgba(55, 138, 221, 0.15);
+  color: var(--app-accent-2);
+}
+.app-role-card__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.app-role-card__body > * + * {
+  margin-top: 3px;       /* was flex gap */
+}
+.app-role-card__title {
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 600;
+}
+.app-role-card__desc {
+  color: var(--app-muted-2);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.app-role-card__chevron {
+  margin-left: auto;
+  color: var(--app-muted);
+  flex-shrink: 0;
+}
+
 /* ── Placeholder screens ──────────────────────────────────────────────────── */
 .app-placeholder {
   position: relative;
