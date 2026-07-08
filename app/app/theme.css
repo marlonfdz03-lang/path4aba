@@ -549,6 +549,19 @@
   margin-top: 28px;
 }
 
+/* Compact single-line card (client row: avatar + name + chevron) */
+.app-session-card--compact {
+  align-items: center;
+}
+
+/* Loading / empty / error state message */
+.app-empty {
+  color: var(--app-muted-2);
+  font-size: 15px;
+  text-align: center;
+  padding: 32px 16px;
+}
+
 /* ── Placeholder screens ──────────────────────────────────────────────────── */
 .app-placeholder {
   position: relative;
