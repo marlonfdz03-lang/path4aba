@@ -1,9 +1,8 @@
 import Image from "next/image";
+import Link from "next/link";
 
 /**
  * Welcome screen — the entry point of the mobile app (/app).
- *
- * Buttons are placeholders for now; routing is wired up in a later step.
  */
 export default function WelcomePage() {
   return (
@@ -29,12 +28,12 @@ export default function WelcomePage() {
         </p>
 
         <div className="app-welcome__actions">
-          <button type="button" className="app-btn app-btn--primary">
+          <Link href="/app/login" className="app-btn app-btn--primary">
             Sign in
-          </button>
-          <button type="button" className="app-btn app-btn--secondary">
+          </Link>
+          <Link href="/app/role" className="app-btn app-btn--secondary">
             New here?
-          </button>
+          </Link>
         </div>
       </div>
     </main>

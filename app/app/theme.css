@@ -76,10 +76,19 @@
   font-weight: 600;
   cursor: pointer;
   border: 0.5px solid transparent;
+  text-decoration: none;            /* also used on <Link> anchors */
   transition: transform 0.06s ease, opacity 0.2s ease;
 }
 .app-btn:active {
   transform: scale(0.985);
+}
+.app-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.app-btn__icon {
+  margin-right: 8px;
+  flex-shrink: 0;
 }
 .app-btn--primary {
   background: var(--app-accent);
@@ -151,4 +160,161 @@
   gap: 12px;
   width: 100%;
   max-width: 340px;
+}
+
+/* ── Generic screen scaffold (login, placeholders) ────────────────────────── */
+.app-screen {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding:
+    calc(20px + env(safe-area-inset-top)) 24px
+    calc(32px + env(safe-area-inset-bottom));
+}
+.app-screen__content {
+  position: relative;
+  z-index: 1;                 /* above the ambient glows */
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  max-width: 380px;
+  margin: 0 auto;
+}
+
+/* Back button (arrow) */
+.app-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: var(--app-accent-3);
+  background: var(--app-glass-bg);
+  border: 0.5px solid var(--app-glass-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  text-decoration: none;
+  margin-bottom: 28px;
+}
+
+/* ── Auth heading ─────────────────────────────────────────────────────────── */
+.app-auth__logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 10px 30px rgba(55, 138, 221, 0.3);
+}
+.app-auth__title {
+  color: #ffffff;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.15;
+  margin-bottom: 6px;
+}
+.app-auth__subtitle {
+  color: var(--app-muted-2);
+  font-size: 15px;
+  margin-bottom: 28px;
+}
+
+/* ── Form ─────────────────────────────────────────────────────────────────── */
+.app-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.app-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 54px;
+  padding: 0 16px;
+  border-radius: 14px;
+  background: var(--app-glass-bg);
+  border: 0.5px solid var(--app-glass-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  transition: border-color 0.15s ease;
+}
+.app-field:focus-within {
+  border-color: var(--app-accent);
+}
+.app-field__icon {
+  color: var(--app-muted);
+  flex-shrink: 0;
+}
+.app-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--app-text);
+  font-size: 16px;            /* >=16px prevents iOS zoom-on-focus */
+}
+.app-input::placeholder {
+  color: var(--app-muted);
+}
+
+.app-error {
+  background: rgba(239, 68, 68, 0.12);
+  border: 0.5px solid rgba(239, 68, 68, 0.4);
+  color: #FCA5A5;
+  font-size: 14px;
+  line-height: 1.4;
+  padding: 12px 14px;
+  border-radius: 12px;
+}
+
+.app-form__row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -4px;
+  margin-bottom: 4px;
+}
+
+.app-link {
+  color: var(--app-accent-2);
+  font-size: 14px;
+  font-weight: 500;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.app-auth__foot {
+  margin-top: 24px;
+  text-align: center;
+  color: var(--app-muted-2);
+  font-size: 14px;
+}
+
+/* ── Placeholder screens ──────────────────────────────────────────────────── */
+.app-placeholder {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+}
+.app-placeholder__title {
+  color: #ffffff;
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.app-placeholder__text {
+  color: var(--app-muted-2);
+  font-size: 15px;
 }
