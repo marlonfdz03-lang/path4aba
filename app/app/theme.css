@@ -562,6 +562,171 @@
   padding: 32px 16px;
 }
 
+/* ── Note form controls ───────────────────────────────────────────────────── */
+.app-form-group {
+  margin-bottom: 22px;
+}
+
+/* Segmented control (location, compliance) */
+.app-seg {
+  display: flex;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--app-glass-bg);
+  border: 0.5px solid var(--app-glass-border);
+}
+.app-seg__btn {
+  flex: 1;
+  padding: 10px 6px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--app-muted-2);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: center;
+}
+.app-seg__btn--active {
+  background: var(--app-accent);
+  color: #ffffff;
+}
+
+/* Chips (who was present) */
+.app-chips {
+  display: flex;
+  flex-wrap: wrap;
+}
+.app-chips > * {
+  margin: 0 8px 8px 0;   /* margin instead of flex gap (WKWebView compat) */
+}
+.app-chip {
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--app-accent-3);
+  background: var(--app-glass-bg);
+  border: 0.5px solid var(--app-glass-border);
+  cursor: pointer;
+}
+.app-chip--active {
+  background: var(--app-accent);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+/* Check rows (behaviors / skills) */
+.app-check-list {
+  display: flex;
+  flex-direction: column;
+}
+.app-check-list > * + * {
+  margin-top: 10px;
+}
+.app-check-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--app-glass-bg);
+  border: 0.5px solid var(--app-glass-border);
+  color: var(--app-text);
+  text-align: left;
+  cursor: pointer;
+}
+.app-check-row--checked {
+  border-color: var(--app-accent);
+}
+.app-check-row__box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  margin-right: 12px;
+  border-radius: 7px;
+  border: 1.5px solid var(--app-glass-border);
+  color: #ffffff;
+}
+.app-check-row--checked .app-check-row__box {
+  background: var(--app-accent);
+  border-color: var(--app-accent);
+}
+.app-check-row__label {
+  font-size: 15px;
+}
+
+/* Toggle switch (medication / environmental / missed hours) */
+.app-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--app-glass-bg);
+  border: 0.5px solid var(--app-glass-border);
+}
+.app-toggle-row__label {
+  font-size: 15px;
+  color: var(--app-text);
+}
+.app-toggle {
+  position: relative;
+  width: 46px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.app-toggle--on {
+  background: var(--app-accent);
+}
+.app-toggle__knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  transition: transform 0.15s ease;
+}
+.app-toggle--on .app-toggle__knob {
+  transform: translateX(18px);
+}
+
+/* Sub-controls revealed under a toggle */
+.app-subfield {
+  margin-top: 10px;
+}
+
+/* Multiline text (environmental change) */
+.app-textarea {
+  width: 100%;
+  min-height: 90px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--app-glass-bg);
+  border: 0.5px solid var(--app-glass-border);
+  color: var(--app-text);
+  font-size: 16px;             /* >=16px prevents iOS zoom-on-focus */
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+}
+.app-textarea:focus {
+  border-color: var(--app-accent);
+}
+.app-textarea::placeholder {
+  color: var(--app-muted);
+}
+
 /* ── Placeholder screens ──────────────────────────────────────────────────── */
 .app-placeholder {
   position: relative;
