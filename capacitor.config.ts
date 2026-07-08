@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'Path4ABA',
   webDir: 'public', // placeholder — we load the remote URL, not a static export
   server: {
-    url: 'https://path4aba.app',
+    url: 'https://path4aba.app/app',
     cleartext: false,
   },
 };
