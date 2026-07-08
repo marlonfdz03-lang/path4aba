@@ -157,9 +157,11 @@
 .app-welcome__actions {
   display: flex;
   flex-direction: column;
-  gap: 12px;
   width: 100%;
   max-width: 340px;
+}
+.app-welcome__actions > * + * {
+  margin-top: 12px;      /* was flex gap */
 }
 
 /* ── Generic screen scaffold (login, placeholders) ────────────────────────── */
@@ -225,12 +227,13 @@
 .app-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+}
+.app-form > * + * {
+  margin-top: 14px;      /* was flex gap */
 }
 .app-field {
   display: flex;
   align-items: center;
-  gap: 10px;
   height: 54px;
   padding: 0 16px;
   border-radius: 14px;
@@ -244,8 +247,14 @@
   border-color: var(--app-accent);
 }
 .app-field__icon {
-  color: var(--app-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  /* margin instead of the parent's flex `gap`: WKWebView < 14.1 ignores
+     flex gap, which collapses the icon onto the input text. */
+  margin-right: 10px;
+  color: var(--app-muted);
 }
 .app-input {
   flex: 1;
@@ -274,7 +283,7 @@
 .app-form__row {
   display: flex;
   justify-content: flex-end;
-  margin-top: -4px;
+  margin-top: 10px;      /* was margin-top:-4 + parent form gap:14 (=10) */
   margin-bottom: 4px;
 }
 
