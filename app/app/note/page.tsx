@@ -3,6 +3,9 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { buildSessionInput, type NoteClientProfile } from "./lib/buildSessionInput";
+import { consumeNoteStream } from "./lib/consumeNoteStream";
+import { extractInterventions } from "./lib/extractInterventions";
 
 // ── Constants (mirror the website's note form) ──────────────────────────────
 const LOCATION_OPTIONS = [
@@ -30,19 +33,29 @@ const IconCheck = () => (
   </svg>
 );
 
+// Copy button: "Copy" -> "✓ Copied" for 2s (matches the website).
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className={`app-copy-btn ${copied ? "app-copy-btn--copied" : ""}`}
+      onClick={() => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }}
+    >
+      {copied ? "✓ Copied" : "Copy"}
+    </button>
+  );
+}
+
 // clinical_profile items may be strings or { name } objects.
 const getName = (item: unknown): string =>
   typeof item === "string" ? item : ((item as { name?: string } | null)?.name ?? "");
 
 const todayISO = () => new Date().toISOString().split("T")[0];
-
-type Profile = {
-  name?: string;
-  maladaptiveBehaviors?: unknown[];
-  replacementBehaviors?: unknown[];
-  skillAcquisition?: unknown[];
-  whoWasPresent?: string[];
-};
 
 function NoteForm() {
   const clientId = useSearchParams().get("clientId") ?? "";
@@ -51,11 +64,13 @@ function NoteForm() {
     clientId ? "loading" : "no-client"
   );
   const [clientName, setClientName] = useState("");
-  const [profile, setProfile] = useState<Profile>({});
+  const [profile, setProfile] = useState<NoteClientProfile>({});
+  const [continuity, setContinuity] = useState<unknown>(null);
 
   // ── Form state ──
   const [date, setDate] = useState("");
   const [location, setLocation] = useState("home");
+  const [otherLocation, setOtherLocation] = useState("");
   const [savedPresent, setSavedPresent] = useState<string[]>([]);
   const [selectedPresent, setSelectedPresent] = useState<string[]>([]);
   const [customPresent, setCustomPresent] = useState("");
@@ -69,6 +84,16 @@ function NoteForm() {
   const [missedCount, setMissedCount] = useState("");
   const [missedReason, setMissedReason] = useState("");
   const [nextAppt, setNextAppt] = useState("");
+
+  // ── Generation state ──
+  const [generating, setGenerating] = useState(false);
+  const [generatedNote, setGeneratedNote] = useState("");
+  const [status, setStatus] = useState("");
+  const [similarityWarning, setSimilarityWarning] = useState(false);
+  const [genError, setGenError] = useState("");
+  const [summary, setSummary] = useState<
+    { behaviors: string[]; skills: string[]; interventions: string[] } | null
+  >(null);
 
   // Default the date on the client (device clock) to avoid an SSR mismatch.
   useEffect(() => setDate(todayISO()), []);
@@ -84,15 +109,32 @@ function NoteForm() {
       })
       .then((data) => {
         if (cancelled) return;
-        const p: Profile = data.clinical_profile || {};
+        const p: NoteClientProfile = data.clinical_profile || {};
         setProfile(p);
         setClientName(p.name || data.internal_code || "Unnamed Client");
-        setSavedPresent(p.whoWasPresent || []);
+        setSavedPresent((data.clinical_profile?.whoWasPresent as string[]) || []);
         setState("ready");
       })
       .catch((e) => {
         if (!cancelled) setState(e.message === "notfound" ? "notfound" : "error");
       });
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId]);
+
+  // Best-effort progress-report trend context (matches the website; optional).
+  useEffect(() => {
+    if (!clientId) return;
+    let cancelled = false;
+    fetch(`/api/progress-report?clientId=${clientId}&latest=true`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.report?.continuity_context) {
+          setContinuity(data.report.continuity_context);
+        }
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -112,6 +154,94 @@ function NoteForm() {
     setCustomPresent("");
   };
 
+  const canGenerate =
+    date.trim() !== "" &&
+    location !== "" &&
+    selectedPresent.length > 0 &&
+    selectedBehaviors.length >= 1 &&
+    selectedSkills.length >= 1;
+
+  async function handleGenerate() {
+    if (!canGenerate || generating) return;
+    setGenError("");
+    setSimilarityWarning(false);
+    setGeneratedNote("");
+    setSummary(null);
+    setGenerating(true);
+    setStatus("Generating note…");
+
+    try {
+      const body = buildSessionInput(
+        {
+          clientId, date, location, otherLocation,
+          present: selectedPresent,
+          behaviors: selectedBehaviors,
+          skills: selectedSkills,
+          compliance, medicationChange,
+          envChange, envChangeDesc,
+          missedHours, missedCount, missedReason,
+          nextAppt,
+        },
+        profile,
+        continuity,
+      );
+
+      const res = await fetch("/api/generate-note", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        setGenError(data?.details || data?.error || "Note generation failed.");
+        setStatus("");
+        return;
+      }
+
+      let metaError = "";
+      const finalText = await consumeNoteStream(res, {
+        onText: (t) => setGeneratedNote(t),
+        onRegen: () => {
+          setGeneratedNote("");
+          setStatus("Regenerating for uniqueness…");
+        },
+        onMeta: (meta) => {
+          if (meta.error) {
+            metaError = meta.error;
+            setGenError(meta.error);
+          } else {
+            setSimilarityWarning(!!meta.similarityWarning);
+          }
+        },
+      });
+      setStatus("");
+
+      // Build the summary from state at generation time + the final note text
+      // (matches the website — /api/generate-note does not return these).
+      if (!metaError && finalText.trim()) {
+        setSummary({
+          behaviors: selectedBehaviors,
+          skills: selectedSkills,
+          interventions: extractInterventions(finalText),
+        });
+      }
+    } catch {
+      setGenError("Something went wrong while generating. Please try again.");
+      setStatus("");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  function backToForm() {
+    setGenError("");
+    setGeneratedNote("");
+    setStatus("");
+    setSimilarityWarning(false);
+    setSummary(null);
+  }
+
   // ── Non-ready states ──
   if (state !== "ready") {
     const message =
@@ -128,6 +258,87 @@ function NoteForm() {
           <IconBack />
         </Link>
         <p className="app-empty">{message}</p>
+      </div>
+    );
+  }
+
+  // ── Generation result view ──
+  const showResult = generating || generatedNote !== "" || genError !== "";
+  if (showResult) {
+    return (
+      <div className="app-screen__content">
+        <Link href="/app/home" className="app-back" aria-label="Back to home">
+          <IconBack />
+        </Link>
+        <h1 className="app-auth__title">{clientName}</h1>
+        <p className="app-auth__subtitle">Session note</p>
+
+        {genError ? (
+          <>
+            <p className="app-empty">{genError}</p>
+            <button type="button" className="app-btn app-btn--secondary app-note-cta" onClick={backToForm}>
+              Back to form
+            </button>
+          </>
+        ) : summary ? (
+          <>
+            {similarityWarning && (
+              <div className="app-warning">
+                This note is similar to a recent note for this client. Please review it carefully before use.
+              </div>
+            )}
+
+            <div className="app-result-list">
+              {/* Box 1 — the generated note */}
+              <div className="app-result-box">
+                <div className="app-result-box__head">
+                  <span className="app-result-box__label">Generated note</span>
+                  <CopyButton text={generatedNote} />
+                </div>
+                <div className="app-note-text">{generatedNote}</div>
+              </div>
+
+              {/* Boxes 2–4 — summary sections */}
+              {[
+                { label: "Maladaptive Behaviors", items: summary.behaviors },
+                { label: "Replacement Skills", items: summary.skills },
+                { label: "Interventions Used", items: summary.interventions },
+              ].map((section) => (
+                <div key={section.label} className="app-result-box">
+                  <div className="app-result-box__head">
+                    <span className="app-result-box__label">{section.label}</span>
+                    <CopyButton text={section.items.join(", ")} />
+                  </div>
+                  {section.items.length > 0 ? (
+                    <div className="app-tags">
+                      {section.items.map((item, i) => (
+                        <span key={i} className="app-tag">{item}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="app-result-none">None detected</p>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <Link href="/app/home" className="app-btn app-btn--primary app-note-cta">
+              Done
+            </Link>
+          </>
+        ) : (
+          <>
+            {status && <p className="app-note-status">{status}</p>}
+            {similarityWarning && (
+              <div className="app-warning">
+                This note is similar to a recent note for this client. Please review it carefully before use.
+              </div>
+            )}
+            <div className="app-note-output">
+              {generatedNote || (generating ? "Generating…" : "")}
+            </div>
+          </>
+        )}
       </div>
     );
   }
@@ -152,12 +363,7 @@ function NoteForm() {
       <div className="app-form-group">
         <p className="app-section-label">Date</p>
         <label className="app-field">
-          <input
-            className="app-input"
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
+          <input className="app-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
       </div>
 
@@ -176,6 +382,19 @@ function NoteForm() {
             </button>
           ))}
         </div>
+        {location === "other" && (
+          <div className="app-subfield">
+            <label className="app-field">
+              <input
+                className="app-input"
+                type="text"
+                placeholder="e.g. After school program, Summer camp..."
+                value={otherLocation}
+                onChange={(e) => setOtherLocation(e.target.value)}
+              />
+            </label>
+          </div>
+        )}
       </div>
 
       {/* Who was present */}
@@ -282,7 +501,7 @@ function NoteForm() {
       {/* Medication change */}
       <div className="app-form-group">
         <div className="app-toggle-row">
-          <span className="app-toggle-row__label">Medication change</span>
+          <span className="app-toggle-row__label">Medication Changes</span>
           <button
             type="button"
             role="switch"
@@ -367,17 +586,16 @@ function NoteForm() {
       <div className="app-form-group">
         <p className="app-section-label">Next appointment (optional)</p>
         <label className="app-field">
-          <input
-            className="app-input"
-            type="date"
-            value={nextAppt}
-            onChange={(e) => setNextAppt(e.target.value)}
-          />
+          <input className="app-input" type="date" value={nextAppt} onChange={(e) => setNextAppt(e.target.value)} />
         </label>
       </div>
 
-      {/* Generate — wired in Part 2 */}
-      <button type="button" className="app-btn app-btn--primary">
+      <button
+        type="button"
+        className="app-btn app-btn--primary"
+        onClick={handleGenerate}
+        disabled={!canGenerate}
+      >
         Generate note
       </button>
     </div>
