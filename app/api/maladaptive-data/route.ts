@@ -8,6 +8,36 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter } as any)
 
+// Normalize a program name for fuzzy comparison: lowercase, strip punctuation
+// to spaces, collapse whitespace. "Self-Injurious Behavior (SIB)" -> "self injurious behavior sib"
+function normName(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ').trim()
+}
+
+// If `incoming` fuzzy-matches an already-stored name, return that existing
+// (canonical) name so all data consolidates under one series. Otherwise return
+// `incoming` unchanged. Match = exact (normalized), substring, or >= 2 shared
+// words longer than 2 chars.
+function canonicalName(incoming: string, existingNames: string[]): string {
+  if (!incoming) return incoming
+  const inNorm = normName(incoming)
+  if (!inNorm) return incoming
+  const inWords = new Set(inNorm.split(' ').filter(w => w.length > 2))
+  for (const name of existingNames) {
+    const exNorm = normName(name)
+    if (!exNorm) continue
+    if (exNorm === inNorm) return name
+    if (exNorm.includes(inNorm) || inNorm.includes(exNorm)) return name
+    let shared = 0
+    for (const w of exNorm.split(' ')) {
+      if (w.length > 2 && inWords.has(w)) shared++
+    }
+    if (shared >= 2) return name
+  }
+  return incoming
+}
+
 export async function GET(req: Request) {
   const user = await getExtensionAuth()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -94,14 +124,33 @@ export async function POST(req: Request) {
   const now = new Date()
 
   try {
+    // Pre-fetch the distinct behavior names already stored for each client in
+    // this batch, so an incoming name that fuzzy-matches an existing series
+    // consolidates under the canonical (already-stored) name instead of
+    // creating a duplicate series.
+    const clientIds = [...new Set(records.map((r) => r.clientId).filter(Boolean))]
+    const namesByClient = new Map<string, string[]>()
+    await Promise.all(
+      clientIds.map(async (cid) => {
+        const existing = await prisma.maladaptive_data.findMany({
+          where: { client_id: cid },
+          select: { behavior_name: true },
+          distinct: ['behavior_name'],
+        })
+        namesByClient.set(cid, existing.map((e) => e.behavior_name))
+      })
+    )
+
     const results = await Promise.all(
       records.map(async (r) => {
+        const behaviorName = canonicalName(r.behaviorName, namesByClient.get(r.clientId) ?? [])
+
         // Upsert: if a record for the same client+behavior+week already exists, update it.
         const existing = r.weekStart
           ? await prisma.maladaptive_data.findFirst({
               where: {
                 client_id:     r.clientId,
-                behavior_name: r.behaviorName,
+                behavior_name: behaviorName,
                 week_start:    r.weekStart,
               },
               select: { id: true },
@@ -128,7 +177,7 @@ export async function POST(req: Request) {
         return prisma.maladaptive_data.create({
           data: {
             client_id:       r.clientId,
-            behavior_name:   r.behaviorName,
+            behavior_name:   behaviorName,
             week_start:      r.weekStart      ?? null,
             week_end:        r.weekEnd        ?? null,
             session_date:    r.sessionDate    ?? null,
