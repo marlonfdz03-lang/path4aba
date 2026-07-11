@@ -3106,28 +3106,20 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
         const freq = task.type === 'replacement'
           ? Math.round(task.value / 100 * freqRows.length)
           : Math.round(task.value);
+        // OP maladaptive rows are cumulative: clicking the cell in the row for
+        // frequency N automatically marks rows 1..N with X. So a single click on
+        // freqRows[freq - 1] fills the whole day's count in one action.
         let clickCount = 0;
-        for (let i = 0; i < freqRows.length; i++) {
-          const rowFreq = i + 1; // row index 0 = frequency 1
-          const cells = Array.from(freqRows[i].querySelectorAll('td'));
-          const cell = cells[colIdx]; // colIdx is 1-based from Days row
-          if (!cell) continue;
-          const span = cell.querySelector('span');
-          const hasX = span?.classList.contains('bold') ||
-                       (span?.innerText.trim() === 'X');
-          const shouldHaveX = rowFreq <= freq;
-          if (shouldHaveX && !hasX) {
+        const targetRow = freqRows[freq - 1];
+        if (targetRow) {
+          const cells = Array.from(targetRow.querySelectorAll('td'));
+          const cell = cells[colIdx];
+          if (cell) {
             cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            await delay(80);
+            await delay(200);
             cell.click();
             clickCount++;
-            await delay(80);
-          } else if (!shouldHaveX && hasX) {
-            cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            await delay(80);
-            cell.click();
-            clickCount++;
-            await delay(80);
+            await delay(200);
           }
         }
 
