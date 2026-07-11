@@ -1965,67 +1965,6 @@ async function runWeekAutofill(type) {
 document.getElementById('autofillWeekMaladBtn')?.addEventListener('click', () => runWeekAutofill('maladaptive'));
 document.getElementById('autofillWeekReplBtn')?.addEventListener('click',  () => runWeekAutofill('replacement'));
 
-// ── TEMP debug helper: bulk-fill every trial column on the OP page to 100% (＋) ──
-// Reads all trial tables + days-with-data on the OP page, then fills each via the
-// same working injection path as the autofill (runTasksOnOP →
-// officePuzzleDatasheetAutofiller, world:MAIN). Remove before release.
-document.getElementById('fillPage100Btn')?.addEventListener('click', async () => {
-  const btn = document.getElementById('fillPage100Btn');
-  const statusEl = document.getElementById('fillPage100Status');
-  btn.disabled = true;
-  statusEl.textContent = 'Filling...';
-  statusEl.style.display = '';
-  statusEl.style.color = '#16a34a';
-
-  try {
-    if (!selectedClientId) {
-      statusEl.textContent = 'Select a client first';
-      return;
-    }
-    if (!projectedItems.length) {
-      statusEl.textContent = 'Load week data first (Section 3)';
-      return;
-    }
-
-    // Build tasks for all replacement skills, days 1-27
-    // Use current month from the OP tab URL or default to current month
-    const tabs = await chrome.tabs.query({});
-    const tab = tabs.find(t => (t.url||'').includes('officepuzzle.com') && (t.url||'').includes('/data/sheets'));
-    if (!tab?.id) { statusEl.textContent = 'Open OP datasheet first'; return; }
-
-    const replItems = projectedItems.filter(i => i.type === 'replacement');
-    if (!replItems.length) { statusEl.textContent = 'No replacement skills loaded'; return; }
-
-    // Get worked days from URL month param
-    const urlMonth = tab.url.match(/month=(\d{4}-\d{2})/)?.[1];
-    const now = new Date();
-    const monthStr = urlMonth || `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-    const daysInMonth = new Date(monthStr.split('-')[0], monthStr.split('-')[1], 0).getDate();
-
-    const tasks = [];
-    for (const item of replItems) {
-      for (let day = 1; day <= daysInMonth; day++) {
-        tasks.push({
-          name: item.name,
-          dayNumber: day,
-          type: 'replacement',
-          value: 100,
-          trials: trialsPerSession || 10,
-        });
-      }
-    }
-
-    statusEl.textContent = `Filling ${tasks.length} combinations...`;
-    const result = await runTasksOnOP(tasks);
-    statusEl.textContent = `✓ Done`;
-
-  } catch(err) {
-    statusEl.textContent = 'Error: ' + err.message;
-  } finally {
-    btn.disabled = false;
-  }
-});
-
 async function saveWeekData(userInitiated) {
   if (!selectedClientId || !projectedItems.length || !workedDayDates.length) return false;
   const weekStart   = document.getElementById('weekStartDate').value;
