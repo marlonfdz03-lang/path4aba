@@ -2535,8 +2535,7 @@ document.getElementById('extractChartsBtn').addEventListener('click', async () =
 
   try {
     const tabs = await chrome.tabs.query({});
-    const tab = tabs.find(t => (t.url || '').includes('officepuzzle.com') &&
-      (t.url || '').includes('/data/sheets'));
+    const tab = tabs.find(t => (t.url || '').includes('officepuzzle.com'));
     if (!tab?.id) throw new Error('No Office Puzzle tab found. Open the charts page first.');
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
