@@ -1930,11 +1930,17 @@ async function runWeekAutofill(type) {
       });
     });
   } else {
-    workedDayDates.forEach(dateStr => {
-      const dayNum = new Date(dateStr + 'T00:00:00').getDate();
-      items.forEach(item => {
+    // Spread each behavior's weekly total across worked days with natural
+    // variation (summing to the total) instead of an identical per-day value.
+    items.forEach(item => {
+      const dailyVals = distributeMaladaptiveAcrossDays(
+        Math.round(item.projectedValue),
+        workedDayDates.length
+      );
+      workedDayDates.forEach((dateStr, idx) => {
+        const dayNum = new Date(dateStr + 'T00:00:00').getDate();
         tasks.push({ name: item.name, dayNumber: dayNum, type,
-          value: Math.round(item.projectedValue / workedCount) });
+          value: dailyVals[idx] });
       });
     });
   }
