@@ -2922,6 +2922,15 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
     ? _urlMonthParam
     : `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}`;
 
+  // Reveal ALL behavior containers up front. Vue keeps un-viewed behaviors in
+  // `d-none`, and the per-task reveal below gets re-hidden by Vue between tasks,
+  // so behaviors processed later would otherwise be skipped. Reveal everything
+  // before scrolling (so lazy content mounts) and re-hide after all tasks finish.
+  const behaviorContainers = Array.from(document.querySelectorAll('h4'))
+    .map(h => h.parentElement)
+    .filter(el => el?.classList.contains('d-none'));
+  behaviorContainers.forEach(el => el.classList.remove('d-none'));
+
   // Scroll full page to trigger Vue lazy-loading of all behaviors
   await scrollFullPage();
 
@@ -3141,6 +3150,9 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
       log.push(`✓ "${name}" filled (${daysStr})`);
     }
   }
+
+  // Restore the containers we revealed up front now that all tasks are done.
+  behaviorContainers.forEach(el => el.classList.add('d-none'));
 
   return log.length ? log : ['❌ No data was filled'];
 }
