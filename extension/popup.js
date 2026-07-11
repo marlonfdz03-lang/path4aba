@@ -2954,8 +2954,15 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
         const h4Els = orderedElements.filter(el => el.tagName === 'H4');
         const h4El = h4Els.find(h => {
           // OP wraps the skill name in quotes — strip leading/trailing quotes first.
-          const text = h.innerText.trim().replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
-          return namesMatch(text, name);
+          // Stricter than namesMatch for h4 lookup: exact or substring only, NO
+          // shared-word tier — otherwise "Defiant Behavior", "Off-Task Behavior",
+          // and "Self-Injurious Behavior (SIB)" all wrongly match "Disruptive
+          // Behavior" via the shared word "Behavior".
+          const raw = h.innerText.trim().replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
+          const norm = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+          const nt = norm(raw);
+          const nn = norm(name);
+          return nt === nn || nt.includes(nn) || nn.includes(nt);
         });
         console.log(`[autofill] task "${name}" h4El found:`, !!h4El, h4El?.innerText?.trim()?.slice(0,40));
         if (!h4El) {
@@ -2980,9 +2987,16 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
             let pastH4 = false;
             for (const el of orderedEls) {
               // OP wraps the skill name in quotes — strip them before matching.
-              if (el.tagName === 'H4' &&
-                  namesMatch(el.innerText.trim().replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim(), name)) {
-                pastH4 = true; continue;
+              // Stricter than namesMatch: exact or substring only, NO shared-word
+              // tier (avoids matching the wrong behavior on a shared word).
+              if (el.tagName === 'H4') {
+                const raw = el.innerText.trim().replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
+                const norm = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+                const nt = norm(raw);
+                const nn = norm(name);
+                if (nt === nn || nt.includes(nn) || nn.includes(nt)) {
+                  pastH4 = true; continue;
+                }
               }
               if (pastH4 && el.tagName === 'TABLE' &&
                   el.innerText.includes('Trial 1') &&
