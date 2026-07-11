@@ -2042,8 +2042,7 @@ function applyDataTabGate() {
 async function checkOfficePuzzlePage() {
   try {
     const tabs = await chrome.tabs.query({});
-    const tab = tabs.find(t => (t.url || '').includes('officepuzzle.com') &&
-      (t.url || '').includes('/data/sheets'));
+    const tab = tabs.find(t => (t.url || '').includes('officepuzzle.com'));
     const url = tab?.url || '';
     const isOPCharts = url.includes('/data/charts');
     const chartsEl = document.getElementById('extractChartsSection');
