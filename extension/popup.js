@@ -3127,6 +3127,7 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
             if (cell) {
               cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
               await delay(200);
+              console.log(`[autofill] clicking "${name}" day ${task.dayNumber} freq ${freq} colIdx ${colIdx} cell:`, cell?.outerHTML?.slice(0,100));
               cell.click();
               clickCount++;
               await delay(200);
