@@ -2957,6 +2957,7 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
           const text = h.innerText.trim().replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
           return namesMatch(text, name);
         });
+        console.log(`[autofill] task "${name}" h4El found:`, !!h4El, h4El?.innerText?.trim()?.slice(0,40));
         if (!h4El) {
           log.push(`❌ "${name}" day ${task.dayNumber} — h4 not found in DOM`);
           await delay(300);
