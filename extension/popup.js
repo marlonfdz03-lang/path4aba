@@ -2964,7 +2964,6 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
           const nn = norm(name);
           return nt === nn || nt.includes(nn) || nn.includes(nt);
         });
-        console.log(`[autofill] task "${name}" h4El found:`, !!h4El, h4El?.innerText?.trim()?.slice(0,40));
         if (!h4El) {
           log.push(`❌ "${name}" day ${task.dayNumber} — h4 not found in DOM`);
           await delay(300);
@@ -3142,7 +3141,6 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
             if (cell) {
               cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
               await delay(200);
-              console.log(`[autofill] clicking "${name}" day ${task.dayNumber} freq ${freq} colIdx ${colIdx} cell:`, cell?.outerHTML?.slice(0,100));
               cell.click();
               clickCount++;
               await delay(200);
