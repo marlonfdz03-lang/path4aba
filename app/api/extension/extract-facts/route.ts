@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getExtensionAuth } from '@/lib/extensionAuth'
 import OpenAI from 'openai'
-import { FUNCTION_PATTERNS } from '@/lib/functionPatterns'
+import { FUNCTION_PATTERNS, inferFunctionFromAntecedent } from '@/lib/functionPatterns'
 
 // New diagnostics are gated behind this flag (default false) so nothing is logged in
 // production. No field VALUES (PHI) are ever logged even when true — counts/labels only.
@@ -450,15 +450,24 @@ Return this exact JSON structure:
         const b = facts.behaviors[i]
         const fn = deriveBehaviorFunction(segments[i], b)
         b.function = fn.resolved
-        // Clinical sanity conflict (automatic derived but antecedent is social): carry it so the
-        // pair is flagged for review — never a silent blank — with the derived function + antecedent.
-        if (fn.conflict) {
-          b.functionConflict = {
-            reason: 'FUNCTION_ANTECEDENT_CONFLICT',
-            derived: fn.conflict.derived,
-            antecedent: fn.conflict.antecedent,
+        let functionReview: any = null
+        let inferredFn: string | null = null
+        if (fn.resolved === 'unknown') {
+          // Fallback: the note always states the function, so an 'unknown' means extraction missed
+          // it. Infer from the antecedent (clinical evidence in the same note) — never a default. A
+          // successfully-inferred function is marked for review ("inferred — verify"); the executor
+          // still only fills it if the client's dropdown offers it.
+          inferredFn = inferFunctionFromAntecedent(b.antecedent)
+          if (inferredFn) {
+            b.function = inferredFn
+            functionReview = { reason: 'INFERRED_FROM_ANTECEDENT', intended: inferredFn, antecedent: String(b.antecedent || '') }
+          } else if (fn.conflict) {
+            // Automatic derived but antecedent is social AND the antecedent matched no function:
+            // stay 'unknown' and flag the conflict (never a silent blank).
+            functionReview = { reason: 'FUNCTION_ANTECEDENT_CONFLICT', intended: fn.conflict.derived, antecedent: fn.conflict.antecedent }
           }
         }
+        if (functionReview) b.functionReview = functionReview
         b.hadAntecedentIntervention = inferAntecedentInterventionUsed(b)
         // Change 2b: extract the grounded before-behavior clause so plan-fill can fill the
         // conditional "Antecedent Interventions" child (only when an antecedent was used).
@@ -471,8 +480,10 @@ Return this exact JSON structure:
           console.log('[extract-facts] function derivation —', {
             behaviorIndex: i,
             matchedPattern: fn.matchedPattern,
-            resolvedFunction: fn.resolved,
-            conflict: fn.conflict ? `FUNCTION_ANTECEDENT_CONFLICT (patterns said ${fn.conflict.derived})` : null,
+            patternResolved: fn.resolved,
+            finalFunction: b.function,
+            inferredFromAntecedent: inferredFn || null,
+            reviewReason: functionReview ? functionReview.reason : null,
             antecedent: stripNames(String(b.antecedent || ''), clientName, caregivers).slice(0, 140),
             segment: stripNames(fn.segment, clientName, caregivers).slice(0, 200),
           })

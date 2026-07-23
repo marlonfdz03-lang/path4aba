@@ -2163,7 +2163,8 @@ function renderFillSummary(summary) {
     review.forEach((r) => {
       const li = document.createElement('li');
       li.style.cssText = 'margin-bottom:2px;';
-      const reason = r.reason && r.reason !== 'INVALID' && r.reason !== 'NEEDS_REVIEW' ? ` — ${r.reason}` : '';
+      const QUIET_REASONS = ['INVALID', 'NEEDS_REVIEW', 'FUNCTION_ANTECEDENT_CONFLICT', 'INFERRED_FROM_ANTECEDENT'];
+      const reason = r.reason && QUIET_REASONS.indexOf(r.reason) === -1 ? ` — ${r.reason}` : '';
       let extra = '';
       if (r.reason === 'NO_MATCHING_OPTION') {
         const opts = Array.isArray(r.options) ? r.options : [];
@@ -2173,6 +2174,10 @@ function renderFillSummary(summary) {
         const derived = r.intended == null ? '' : String(r.intended);
         const ant = r.detail == null ? '' : String(r.detail);
         extra = ` (derived “${derived}” but the antecedent describes a social event: “${ant}” — set the function manually)`;
+      } else if (r.reason === 'INFERRED_FROM_ANTECEDENT') {
+        const fn = r.intended == null ? '' : String(r.intended);
+        const ant = r.detail == null ? '' : String(r.detail);
+        extra = ` → ${fn}: inferred from antecedent — verify (“${ant}”)`;
       }
       li.textContent = `${r.label || r.stableId || 'field'}${reason}${extra}`;
       ul.appendChild(li);

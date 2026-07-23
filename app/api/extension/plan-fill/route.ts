@@ -110,9 +110,10 @@ export async function POST(req: Request) {
     const brMappings: any[] = [
       { fieldId: `BR${n}_BehaviorName`, fieldType: 'select', value: b.name },
       { fieldId: `BR${n}_EvidencedBy`, fieldType: 'textarea', value: b.evidencedBy },
-      // Carry any FUNCTION_ANTECEDENT_CONFLICT so the executor emits an informative review entry
-      // (derived function + antecedent) when this 'unknown' function is skipped — never a silent blank.
-      { fieldId: `BR${n}_BehaviorFunction`, fieldType: 'select', value: normalizedFunction, review: b.functionConflict || undefined },
+      // Carry the function review meta (FUNCTION_ANTECEDENT_CONFLICT when skipped, or
+      // INFERRED_FROM_ANTECEDENT when the value was inferred from the antecedent) so the executor
+      // emits an informative review entry — never a silent blank, and inferred values say "verify".
+      { fieldId: `BR${n}_BehaviorFunction`, fieldType: 'select', value: normalizedFunction, review: b.functionReview || undefined },
       { fieldId: `BR${n}_Antecedent`, fieldType: 'textarea', value: b.antecedent },
       {
         fieldId: `BR${n}_AntecedentInterventionsYesNo`, fieldType: 'radio', value: antYesNo,

@@ -96,6 +96,12 @@ window.FormEngineExecutor = {
         actionOutcomes.push({ fieldId: action.fieldId, cls });
         if (outcome.review) results.needsReview.push(outcome.review);
         if (outcome.verification) results.verifications.push(outcome.verification);
+        // A function inferred from the antecedent still fills (when the dropdown offers it) but is
+        // less certain than a pattern-read one — surface it for verification, not just on failure.
+        if (action.review && action.review.reason === 'INFERRED_FROM_ANTECEDENT' && outcome.status === 'filled') {
+          const lbl = (outcome.verification && outcome.verification.label) || action.fieldId;
+          results.needsReview.push({ stableId: action.fieldId, label: lbl, reason: 'INFERRED_FROM_ANTECEDENT', intended: action.review.intended, detail: action.review.antecedent });
+        }
         // Conditional children (Issue 1c) add their own review/verification entries but are NOT
         // plan actions, so they don't affect the plan-action bucket totals.
         if (outcome.extraReviews) outcome.extraReviews.forEach((r) => results.needsReview.push(r));
@@ -938,7 +944,7 @@ window.FormEngineExecutor = {
     // (e.g. FUNCTION_ANTECEDENT_CONFLICT), surface it — the skip is never a silent blank.
     if (this.isSkippable(action.value)) {
       const review = action.review
-        ? { stableId: action.fieldId, label, reason: action.review.reason || 'NEEDS_REVIEW', intended: action.review.derived, detail: action.review.antecedent }
+        ? { stableId: action.fieldId, label, reason: action.review.reason || 'NEEDS_REVIEW', intended: action.review.intended, detail: action.review.antecedent }
         : { stableId: action.fieldId, label, reason: 'NEEDS_REVIEW' };
       return { status: 'skipped', review };
     }

@@ -34,3 +34,25 @@ export const FUNCTION_PATTERNS: { re: RegExp; label: string }[] = [
   // sensory reinforcers/activities (sensory bin, sensory break).
   { re: /automatic[-\s]?(reinforcement|maintained)|automatically[-\s]?maintained|sensory[-\s]?(reinforcement|maintained|stimulation|seeking|input)|self[-\s]?stimulat|stereotyp/i, label: 'Automatic Reinforcement' },
 ]
+
+// Antecedent -> function FALLBACK. Used ONLY when FUNCTION_PATTERNS return no match: the note always
+// states the function, so an 'unknown' means extraction missed it — infer from the antecedent, which
+// is clinical evidence in the same note. NEVER a default: an antecedent that matches nothing returns
+// null. Order matters: automatic (absence-of-social) is checked first so "no social demand" doesn't
+// fall to the broad escape "demand"; then the specific verb-driven social functions (item removed ->
+// Tangibles, attention shifted -> Attention); then the broad escape (demand/transition).
+export const ANTECEDENT_FUNCTION_PATTERNS: { re: RegExp; label: string }[] = [
+  { label: 'Automatic Reinforcement', re: /no (clear |observable )?(social|external|environmental)? ?antecedent|no social (antecedent|trigger|demand)|without (a )?(social )?(demand|antecedent|trigger)|independent (activity|play|engagement)|low[- ]stimulation|unstructured (time|period)|monotonous|repetitive task|self[- ]stimulat/i },
+  { label: 'Tangibles', re: /(preferred (item|toy|activity|reinforcer)|item|access|tangible)\b[^.]{0,40}\b(removed|withheld|delayed|denied|restricted|taken away|unavailable|out of reach|ended|blocked)|\b(removed|withheld|delayed|denied|restricted|blocked)\b[^.]{0,40}\b(preferred|item|toy|access|reinforcer)|access (was )?(restricted|denied|removed|delayed|blocked)/i },
+  { label: 'Attention', re: /attention (was )?(shifted|directed|diverted|removed|unavailable|redirected|elsewhere)|(shifted|directed|diverted|redirected|removed) (adult |social )?attention|attention (to|toward) (another|other|elsewhere)|adult attention|caregiver('?s)? (conversation|attention)|(caregiver|adult|staff|rbt)[^.]{0,25}(conversation|talking|on the phone)|engaged in (a )?conversation|social (interaction|attention) (removed|withheld|unavailable)|attention (was )?unavailable/i },
+  { label: 'Escape', re: /demand|instruction|instructed|directed to|told to|asked to|prompted to|task (was )?present|presented with (a |an )?(task|demand|instruction|non[- ]preferred|worksheet|activity)|non[- ]preferred|clean[- ]?up|put(ting)? away|transition (away )?from a? ?preferred|transition (from|to|away)|move to the next|difficult (or lengthy )?task|work demand|complete (a |the )?task/i },
+]
+
+export function inferFunctionFromAntecedent(antecedent: string): string | null {
+  const ant = String(antecedent || '')
+  if (!ant.trim()) return null
+  for (const { re, label } of ANTECEDENT_FUNCTION_PATTERNS) {
+    if (re.test(ant)) return label
+  }
+  return null
+}
