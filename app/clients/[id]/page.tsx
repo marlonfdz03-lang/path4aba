@@ -9,6 +9,7 @@ import Link from "next/link";
 import { getClientProfiles } from "@/lib/clientStorage";
 import { saveNote, getNotesByClientId, deleteNote } from "@/lib/noteStorage";
 import { DataTab } from "./DataTab";
+import { CatalogDiffPanel } from "./CatalogDiffPanel";
 
 const LOCATION_OPTIONS = [
   { label: "Home", value: "home" },
@@ -1029,6 +1030,9 @@ export default function ClientProfilePage() {
               </div>
             </div>
           </div>
+
+          {/* Phase 2: live treatment-plan diff (informational; proves the matcher for Phase 3) */}
+          <CatalogDiffPanel clinicalProfile={client.clinicalProfile} />
           </div>
         )}
 
