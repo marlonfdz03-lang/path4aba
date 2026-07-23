@@ -79,14 +79,60 @@ function anchorIndex(hay: string, behavior: any): number {
   return -1
 }
 
-// Rule 6: derive the function from tolerant patterns run over the behavior's text segment
-// (note + the behavior's own extracted fields). If more than one pattern matches, take the
-// one whose match index is closest to the behavior's topography. If none match, 'unknown'.
-// Returns the resolved label plus which pattern matched (regex source only — never note text,
-// which could be PHI) so the caller can DEBUG-log the derivation.
-function deriveBehaviorFunction(note: string, behavior: any): { resolved: string; matchedPattern: string | null } {
+// Split a note into sentences (also breaking on newlines/semicolons).
+function splitSentences(note: string): string[] {
+  return (note || '').split(/(?<=[.!?])\s+|[\n;]+/).map((s) => s.trim()).filter(Boolean)
+}
+
+// Significant (topography-ish) words used to attribute a sentence to a behavior. Lowercased,
+// >=4 chars, minus common clinical/filler words so generic terms don't cause misattribution.
+const SEGMENT_STOPWORDS = new Set([
+  'the', 'and', 'was', 'were', 'with', 'that', 'this', 'client', 'behavior', 'behaviors',
+  'during', 'into', 'from', 'their', 'they', 'them', 'been', 'when', 'which', 'while', 'after',
+  'before', 'consistent', 'maintained', 'seeking', 'session', 'appropriate', 'response',
+  'responded', 'engaged', 'presented', 'staff', 'adult', 'task', 'used', 'such',
+])
+function significantWords(s: string): string[] {
+  return ((s || '').toLowerCase().match(/[a-z]{4,}/g) || []).filter((w) => !SEGMENT_STOPWORDS.has(w))
+}
+
+// Issue 2 fix: split the note into PER-BEHAVIOR prose segments. Each sentence is attributed to
+// the behavior whose extracted keywords (topography/evidencedBy/name) it best overlaps; a
+// sentence with no overlap (e.g. a trailing "...consistent with X-maintained behavior" clause
+// that repeats no topography words) is attached to the most recently attributed behavior. This
+// keeps each behavior's function phrase in its OWN segment instead of running every pattern over
+// the whole note (which cross-contaminates when the LLM's topography isn't verbatim in the note).
+function segmentNoteByBehavior(note: string, behaviors: any[]): string[] {
+  const sentences = splitSentences(note)
+  const kwSets = behaviors.map((b) => new Set([
+    ...significantWords(b?.topography), ...significantWords(b?.evidencedBy), ...significantWords(b?.name),
+  ]))
+  const segments: string[][] = behaviors.map(() => [])
+  if (!sentences.length || !behaviors.length) return behaviors.map(() => note || '')
+
+  let last = 0
+  for (const sentence of sentences) {
+    const words = significantWords(sentence)
+    let best = -1
+    let bestScore = 0
+    kwSets.forEach((kw, bi) => {
+      const score = words.reduce((n, w) => n + (kw.has(w) ? 1 : 0), 0)
+      if (score > bestScore) { bestScore = score; best = bi }
+    })
+    if (best >= 0) { segments[best].push(sentence); last = best }
+    else { segments[last].push(sentence) }
+  }
+  // A behavior that captured no sentence falls back to the whole note (better a shot than blank).
+  return segments.map((arr) => (arr.length ? arr.join(' ') : (note || '')))
+}
+
+// Rule 6: derive the function from tolerant patterns run over the behavior's PROSE SEGMENT (plus
+// the behavior's own fields as backup). If more than one pattern matches, take the one whose
+// match index is closest to the topography. If none match, 'unknown'. Returns the resolved label,
+// which pattern matched (regex source), and the raw segment (the caller PHI-strips before logging).
+function deriveBehaviorFunction(segment: string, behavior: any): { resolved: string; matchedPattern: string | null; segment: string } {
   const hay = [
-    note || '',
+    segment || '',
     behavior?.topography || '', behavior?.evidencedBy || '', behavior?.antecedent || '',
     behavior?.interventions || '', behavior?.result || '',
   ].join('\n')
@@ -96,15 +142,26 @@ function deriveBehaviorFunction(note: string, behavior: any): { resolved: string
     const m = re.exec(hay)
     if (m) matches.push({ label, index: m.index, pattern: re.source })
   }
-  if (matches.length === 0) return { resolved: 'unknown', matchedPattern: null }
-  if (matches.length === 1) return { resolved: matches[0].label, matchedPattern: matches[0].pattern }
+  if (matches.length === 0) return { resolved: 'unknown', matchedPattern: null, segment: segment || '' }
+  if (matches.length === 1) return { resolved: matches[0].label, matchedPattern: matches[0].pattern, segment: segment || '' }
 
   const anchor = anchorIndex(hay, behavior)
   if (anchor >= 0) {
     matches.sort((a, b) => Math.abs(a.index - anchor) - Math.abs(b.index - anchor))
   }
   // Deterministic tiebreak when there's no topography anchor: FUNCTION_PATTERNS order.
-  return { resolved: matches[0].label, matchedPattern: matches[0].pattern }
+  return { resolved: matches[0].label, matchedPattern: matches[0].pattern, segment: segment || '' }
+}
+
+// Remove client + caregiver names from a text before it is DEBUG-logged (no PHI in logs).
+function stripNames(text: string, clientName?: string, caregivers?: string[]): string {
+  let t = text || ''
+  const names = [clientName || '', ...(Array.isArray(caregivers) ? caregivers : [])]
+  for (const raw of names) {
+    const n = String(raw || '').trim()
+    if (n.length >= 2) t = t.replace(new RegExp(esc(n), 'gi'), '[name]')
+  }
+  return t
 }
 
 // Issue 1: an "incident" is a REPORTABLE event, not a treatment-plan behavior. true only when a
@@ -309,15 +366,23 @@ Return this exact JSON structure:
     // Override the LLM's guesses with tolerant, note-grounded derivations. Fields that
     // cannot be determined become 'unknown' so the executor skips them (never a false "No").
     if (Array.isArray(facts.behaviors)) {
+      // Attribute each sentence of the note to a behavior first, so the function is derived from
+      // that behavior's OWN prose (where "consistent with X-maintained" actually lives).
+      const segments = segmentNoteByBehavior(note, facts.behaviors)
       for (let i = 0; i < facts.behaviors.length; i++) {
         const b = facts.behaviors[i]
-        const fn = deriveBehaviorFunction(note, b)
+        const fn = deriveBehaviorFunction(segments[i], b)
         b.function = fn.resolved
         b.hadAntecedentIntervention = inferAntecedentInterventionUsed(b)
-        // Issue 2: prove the derivation ran and what it resolved to (no note text / PHI logged).
+        // Issue 2: prove the derivation ran and show EXACTLY what it matched against. The segment
+        // is PHI-stripped (client + caregiver names removed) and capped at 200 chars.
         if (DEBUG) {
-          console.log('[extract-facts] function derivation —',
-            { behaviorIndex: i, matchedPattern: fn.matchedPattern, resolvedFunction: fn.resolved })
+          console.log('[extract-facts] function derivation —', {
+            behaviorIndex: i,
+            matchedPattern: fn.matchedPattern,
+            resolvedFunction: fn.resolved,
+            segment: stripNames(fn.segment, clientName, caregivers).slice(0, 200),
+          })
         }
       }
     }
