@@ -252,6 +252,7 @@
             capturedAt: new Date().toISOString(),
             programs: cat.programs || [],
             behaviors: cat.behaviors || [],
+            formState: cat.formState || null,
           }, function () { void chrome.runtime.lastError; /* swallow — never block */ });
         }
       } catch (e) { /* catalog sync is best-effort; never block the fill */ }

@@ -35,10 +35,21 @@ export async function POST(req: Request) {
   const user = await getExtensionAuth()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { clientId, source, programs, behaviors, capturedAt } = await req.json().catch(() => ({}))
+  const { clientId, source, programs, behaviors, capturedAt, formState } = await req.json().catch(() => ({}))
   if (!clientId || typeof clientId !== 'string') {
     return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
   }
+
+  // Form-population snapshot at capture time (bounded, numeric-only) — evidence for whether the
+  // observed catalog is complete or a filtered subset.
+  const cleanFormState = formState && typeof formState === 'object'
+    ? {
+        goalsTotal: Math.max(0, Math.min(999, Number(formState.goalsTotal) || 0)),
+        goalsPopulated: Math.max(0, Math.min(999, Number(formState.goalsPopulated) || 0)),
+        behaviorsTotal: Math.max(0, Math.min(999, Number(formState.behaviorsTotal) || 0)),
+        behaviorsPopulated: Math.max(0, Math.min(999, Number(formState.behaviorsPopulated) || 0)),
+      }
+    : null
 
   const src = typeof source === 'string' && source.trim() ? source.trim().slice(0, 40) : 'aba_matrix'
   const cleanPrograms = cleanList(programs)
@@ -71,6 +82,7 @@ export async function POST(req: Request) {
       behaviors: cleanBehaviors,
       capturedAt: typeof capturedAt === 'string' ? capturedAt : new Date().toISOString(),
       capturedBy: user.id,
+      formState: cleanFormState,
     },
     // Keep exactly one prior version for diffing (drop its own `previous` to avoid unbounded growth).
     previous: prior ? { ...prior.current } : null,

@@ -169,6 +169,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           capturedAt: message.capturedAt,
           programs: message.programs || [],
           behaviors: message.behaviors || [],
+          formState: message.formState || null,
         }),
       })
         .then(r => r.json().catch(() => ({})))

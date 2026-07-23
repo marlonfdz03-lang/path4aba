@@ -34,6 +34,11 @@ window.FormEngineExecutor = {
     // interaction, no polling) and accumulate the option texts to persist after the fill.
     this._catalogPrograms = new Set();
     this._catalogBehaviors = new Set();
+    // Form-population state at capture time (BEFORE we fill anything). If ABA Matrix's dropdown is
+    // filtered, a form that already has populated Goal/Behavior instances may offer a SMALLER list
+    // than an empty one — so recording how many instances were already populated lets us detect
+    // that filtering signature over time.
+    this._catalogFormState = this.measureFormState();
 
     // Guard for the Issue 1d audit: capture whether any radio already had a selection BEFORE we
     // fill anything. The audit is destructive, so it must never probe a form that already carries
@@ -182,10 +187,12 @@ window.FormEngineExecutor = {
       }
     }
 
-    // Surface the passively-captured catalog (deduped) for the caller to persist.
+    // Surface the passively-captured catalog (deduped) for the caller to persist, plus the
+    // form-population snapshot taken at capture time (for the completeness / filtering check).
     results.catalog = {
       programs: Array.from(this._catalogPrograms || []),
       behaviors: Array.from(this._catalogBehaviors || []),
+      formState: this._catalogFormState || null,
     };
 
     if (this.DEBUG) console.log('[Path4ABA Executor] Done:', {
@@ -194,6 +201,34 @@ window.FormEngineExecutor = {
       catalog: { programs: results.catalog.programs.length, behaviors: results.catalog.behaviors.length },
     });
     return results;
+  },
+
+  // Count how many Goal/Behavior instances already have a program selected RIGHT NOW (at capture
+  // time). A program is "selected" when the instance's mat-select shows a value. Best-effort; any
+  // failure yields null so it never affects the fill.
+  measureFormState() {
+    try {
+      const adapter = window.ABAMatrixAdapter;
+      const sections = (adapter && typeof adapter.detectSections === 'function') ? adapter.detectSections() : [];
+      const hasProgram = (section) => {
+        const el = section && section.element;
+        if (!el || Array.isArray(el) || !el.querySelector) return false;
+        const sel = el.querySelector('mat-select');
+        if (!sel) return false;
+        const v = sel.querySelector('.mat-select-value-text, .mat-mdc-select-value-text, .mat-select-value');
+        return !!(v && (v.innerText || '').trim());
+      };
+      const goals = sections.filter((s) => s.type === 'GoalImplementation');
+      const behs = sections.filter((s) => s.type === 'BehaviorReduction');
+      return {
+        goalsTotal: goals.length,
+        goalsPopulated: goals.filter(hasProgram).length,
+        behaviorsTotal: behs.length,
+        behaviorsPopulated: behs.filter(hasProgram).length,
+      };
+    } catch (e) {
+      return null;
+    }
   },
 
   // Passively record a select's option list into the live catalog, by field kind. Called on every
