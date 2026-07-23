@@ -237,6 +237,24 @@
           },
         });
       } catch (e) { /* summary is best-effort; never block the fill */ }
+
+      // Passive live-catalog sync: persist the program/behavior lists captured from the selects
+      // this fill already opened. Fully best-effort — any failure is logged and ignored, and must
+      // never interfere with the fill (which has already completed by this point).
+      try {
+        const cat = results.catalog || { programs: [], behaviors: [] };
+        const clientId = noteData.clientId || null;
+        if (clientId && ((cat.programs && cat.programs.length) || (cat.behaviors && cat.behaviors.length))) {
+          chrome.runtime.sendMessage({
+            action: 'syncCatalog',
+            clientId: clientId,
+            source: 'aba_matrix',
+            capturedAt: new Date().toISOString(),
+            programs: cat.programs || [],
+            behaviors: cat.behaviors || [],
+          }, function () { void chrome.runtime.lastError; /* swallow — never block */ });
+        }
+      } catch (e) { /* catalog sync is best-effort; never block the fill */ }
     } else {
       sendStatus('⚠️ Executor failed — see console.', 'warning');
     }

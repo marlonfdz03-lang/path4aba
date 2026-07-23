@@ -149,6 +149,35 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep channel open for async sendResponse
   }
 
+  // ── Passive live-catalog sync: persist the program/behavior lists captured during a fill ──
+  // Same CORS-exempt Bearer proxy as getClinicalFacts. Best-effort: on any error we respond with
+  // { ok:false } and the caller ignores it — this must never affect a fill. No PHI is sent, only
+  // the client id and treatment-plan labels (program/behavior names).
+  if (message.action === 'syncCatalog') {
+    chrome.storage.local.get(['extensionToken'], (stored) => {
+      const token = stored.extensionToken;
+      if (!token) { sendResponse({ ok: false, error: 'Not authenticated' }); return; }
+      fetch('https://path4aba.app/api/extension/sync-catalog', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          clientId: message.clientId,
+          source: message.source || 'aba_matrix',
+          capturedAt: message.capturedAt,
+          programs: message.programs || [],
+          behaviors: message.behaviors || [],
+        }),
+      })
+        .then(r => r.json().catch(() => ({})))
+        .then(data => sendResponse({ ok: true, data }))
+        .catch(err => sendResponse({ ok: false, error: err.message }));
+    });
+    return true; // keep channel open for async sendResponse
+  }
+
   // ── DEV (Phase 1 calibration): inject the Form Engine on demand, then debug ──
   // Injects the engine modules into the target tab's MAIN world (so
   // window.debugFormEngine is reachable) and runs it immediately. This is an

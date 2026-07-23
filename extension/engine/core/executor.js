@@ -29,6 +29,12 @@ window.FormEngineExecutor = {
       return results;
     }
 
+    // Passive live-catalog capture: the goal/behavior selects the fill is ALREADY opening expose
+    // the client's current program/behavior lists. We piggyback on those opens (no extra DOM
+    // interaction, no polling) and accumulate the option texts to persist after the fill.
+    this._catalogPrograms = new Set();
+    this._catalogBehaviors = new Set();
+
     // Guard for the Issue 1d audit: capture whether any radio already had a selection BEFORE we
     // fill anything. The audit is destructive, so it must never probe a form that already carries
     // user-entered radio data we didn't write. Fail safe to "has data" on any error.
@@ -131,11 +137,29 @@ window.FormEngineExecutor = {
       }
     }
 
+    // Surface the passively-captured catalog (deduped) for the caller to persist.
+    results.catalog = {
+      programs: Array.from(this._catalogPrograms || []),
+      behaviors: Array.from(this._catalogBehaviors || []),
+    };
+
     if (this.DEBUG) console.log('[Path4ABA Executor] Done:', {
       filled: results.filled, skipped: results.skipped, failed: results.failed,
       needsReview: results.needsReview.length,
+      catalog: { programs: results.catalog.programs.length, behaviors: results.catalog.behaviors.length },
     });
     return results;
+  },
+
+  // Passively record a select's option list into the live catalog, by field kind. Called on every
+  // goal/behavior select the fill opens (both matched and no-match paths) — never opens anything
+  // itself. Program list comes from *_GoalName selects, behavior list from *_BehaviorName selects.
+  captureCatalog(fieldId, options) {
+    if (!options || !options.length) return;
+    const set = /_GoalName$/.test(fieldId) ? this._catalogPrograms
+      : /_BehaviorName$/.test(fieldId) ? this._catalogBehaviors : null;
+    if (!set) return;
+    options.forEach((o) => { const t = String(o == null ? '' : o).trim(); if (t) set.add(t); });
   },
 
   // ── Value helpers ──────────────────────────────────────────────────────────
@@ -872,6 +896,7 @@ window.FormEngineExecutor = {
         this.setAngularValue(resolvedEl, action.value);
         const acInfo = await this.commitAutocomplete(resolvedEl, action);
         await this.wait(80);
+        this.captureCatalog(action.fieldId, acInfo.options); // passive catalog capture
         // Options were offered but none matched -> strict pick-list with no match: clear the
         // typed value (never leave a partial) and flag it. NO options offered -> treat as a
         // free-text autocomplete and keep the committed value.
@@ -898,6 +923,7 @@ window.FormEngineExecutor = {
         // returns { options, matched } so we can flag a no-match instead of leaving it empty.
         const info = await window.selectMatOption(resolvedEl, action.value);
         await this.wait(80);
+        this.captureCatalog(action.fieldId, info && info.options); // passive catalog capture
         if (!info || !info.matched) {
           return this.noMatchingOption(action, label, (info && info.options) || []);
         }

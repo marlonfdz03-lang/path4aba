@@ -2229,6 +2229,7 @@ document.getElementById('aiFillBetaBtn')?.addEventListener('click', () => {
     skills: (selectedSkills || []).map(s => typeof s === 'string' ? { name: s } : s),
     caregivers: selectedPresent || [],
     clientName: (clientOpt && clientOpt.value) ? clientOpt.textContent : 'the client',
+    clientId: selectedClientId || null, // for passive live-catalog sync after the fill
   };
 
   const statusDiv = document.getElementById('aiFillStatus');
