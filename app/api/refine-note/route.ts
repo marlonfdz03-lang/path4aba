@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import { NOTE_PERFECTOR_PROMPT } from '@/app/prompts/notePerfectorPrompt';
 import { prisma } from '@/lib/prisma';
 import { filterBlockedNarrative, type BlockedTerm } from '@/lib/blockedNarrativeTerms';
+import { findInterventionViolations } from '@/lib/interventionPolicy';
 
 export const runtime = 'nodejs';
 
@@ -124,6 +125,41 @@ export async function POST(req: NextRequest) {
             }
             finalNote = regenNote;
             similarityWarning = previousTexts.some(prev => calculateSimilarity(regenNote, prev) > 0.55);
+          }
+
+          // TREATMENT-PLAN INTERVENTION GATE — a REFINED note may document ONLY interventions in the
+          // client's approved plan, same compliance invariant as generation (interventionPolicy.ts).
+          // The refiner is a second LLM pass that can reintroduce an out-of-plan procedure (its prompt
+          // used to suggest RIRD), so it needs the same hard gate: prohibited (RIRD) always blocked,
+          // closed-set check only when an approved list is present. On violation, regenerate once
+          // naming it; if it still violates, surface an error instead of a note the RBT might sign.
+          const approvedInterventions: string[] = Array.isArray(clientProfile?.approvedInterventions)
+            ? clientProfile.approvedInterventions : [];
+          let violations = findInterventionViolations(finalNote, approvedInterventions);
+          const violatingNames = () => [...new Set([...violations.prohibited, ...violations.unapproved])];
+          if (violatingNames().length > 0) {
+            const bad = violatingNames();
+            controller.enqueue(encoder.encode('\n__REGEN__\n'));
+            const violationHint = `\n\nCOMPLIANCE VIOLATION: the note you produced documented ${bad.join(', ')}, which ${bad.length === 1 ? 'is' : 'are'} NOT in this client's approved treatment plan. Rewrite the note using ONLY approved interventions, and NEVER mention ${bad.join(', ')}, response interruption and redirection (RIRD), or any intervention outside the approved list.`;
+            const streamV = await openai.chat.completions.create({
+              model: 'gpt-4o', temperature: 0.5, max_tokens: 1500, stream: true,
+              messages: [
+                { role: 'system', content: NOTE_PERFECTOR_PROMPT },
+                { role: 'user', content: userMessage(originalNote, violationHint) }
+              ]
+            });
+            let regenNote = '';
+            for await (const chunk of streamV) {
+              const delta = chunk.choices[0]?.delta?.content || '';
+              if (delta) { regenNote += delta; controller.enqueue(encoder.encode(delta)); }
+            }
+            finalNote = regenNote;
+            violations = findInterventionViolations(finalNote, approvedInterventions);
+            if (violatingNames().length > 0) {
+              const still = violatingNames();
+              controller.enqueue(encoder.encode(`\n__META__${JSON.stringify({ error: `Refined note repeatedly documented ${still.join(', ')}, which ${still.length === 1 ? 'is' : 'are'} not in this client's approved treatment plan. An RBT may only document approved interventions — please review the assessment or regenerate.` })}`));
+              return;
+            }
           }
 
           // Strip host-EHR-blocked narrative terms (e.g. "sensory"), merging any per-client terms
