@@ -48,9 +48,14 @@ const VOCAB = {
 // Behavior-function phrase patterns (tolerant to phrasing variants). Output strings are the
 // canonical labels; plan-fill normalizes 'Tangibles' -> the exact ABA Matrix dropdown option.
 const FUNCTION_PATTERNS: { re: RegExp; label: string }[] = [
-  { re: /attention[-\s]?(maintained|seeking|based)?/i, label: 'Attention' },
-  { re: /escape[-\s]?(maintained|motivated)?|avoidance|demand[-\s]avoidance/i, label: 'Escape' },
-  { re: /tangible[s]?[-\s]?(maintained|access)?|access[-\s]to[-\s]items?/i, label: 'Tangibles' },
+  // Each pattern requires FUNCTION-asserting context — never a bare noun that appears in ordinary
+  // reinforcement/activity prose. Bare "attention" (adult attention, attention to task), bare
+  // "avoidance" (avoidance of eye contact), and bare "tangible"/"access to items" (access to
+  // preferred items, tangible reinforcer) all appear without asserting function and were
+  // false-matching — the same class of bug as bare "sensory" in the automatic pattern.
+  { re: /attention[-\s]?(maintained|seeking|based|motivated)|maintained by (adult |social )?attention|(seeking|to (seek|gain|access|obtain|recruit)) (adult |social )?attention|attention[-\s]function/i, label: 'Attention' },
+  { re: /escape[-\s]?(maintained|motivated)|maintained by escape|escape[-\s]function|to escape (a |the )?(demand|task|activity|instruction|situation)|escape[/\s-]avoidance|avoidance[-\s]?(maintained|motivated)|(demand|task)[-\s]avoidance/i, label: 'Escape' },
+  { re: /tangible[s]?[-\s]?(maintained|motivated)|maintained by (access to )?tangibles?|tangible[-\s]function|access[-\s]to[-\s]tangibles?/i, label: 'Tangibles' },
   // Require the FUNCTION context — never bare "automatic"/"sensory", which appear in ubiquitous
   // sensory reinforcers/activities (sensory bin, sensory break) and were systematically producing
   // false Automatic derivations for escape/tangible/attention behaviors.
