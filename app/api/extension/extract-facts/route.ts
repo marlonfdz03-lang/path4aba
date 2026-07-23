@@ -129,11 +129,45 @@ function segmentNoteByBehavior(note: string, behaviors: any[]): string[] {
   return segments.map((arr) => (arr.length ? arr.join(' ') : (note || '')))
 }
 
+// A SOCIAL/environmental antecedent — a demand or instruction, a denied/delayed tangible, a shift
+// in adult attention, or a DIRECTED transition. Kept to clear FUNCTIONAL triggers (not bare words
+// like "task"/"transition", which also appear in automatic-context antecedents like "during a
+// repetitive task"). Its presence is evidence AGAINST an automatic function.
+const SOCIAL_ANTECEDENT = new RegExp([
+  'demand', 'task demand', 'non[- ]preferred',
+  'presented with (a |an )?(task|demand|instruction|worksheet|activity|direction)',
+  'instruction', 'instructed', 'directed to', 'direction to', 'told to', 'asked to',
+  'prompted to', 'request(ed)? to (complete|do|stop|finish|start|begin)',
+  'transition (from|to)', 'transition away', 'transitioning (from|to)',
+  'clean[- ]?up', 'cleaning up', 'put(ting)? away', 'told .* (ending|ended|to stop|to finish)',
+  'denied', 'removed', 'taken away', 'withheld', 'out of reach', 'unavailable', 'restricted',
+  'blocked access', 'access .* (denied|removed|restricted|ended)',
+  'preferred (item|toy|activity)[^.]{0,30}(denied|removed|delayed|withheld|restricted|unavailable|taken|ended)',
+  'attention (was )?(directed|shifted|removed|diverted)', 'attention (to|toward) (another|other)',
+  'adult (attention|engaged|attending|turned away)', 'another (person|child|peer|student|adult)',
+].join('|'), 'i')
+
+// An AUTOMATIC-consistent antecedent — one describing the ABSENCE of a social trigger, or an
+// automatic CONTEXT/timing (a repetitive task, a plain transition period, sensory/independent
+// activity). If present, an automatic derivation is coherent and the sanity rule does NOT fire.
+const AUTOMATIC_ANTECEDENT = new RegExp([
+  'no (clear |observable )?(external |environmental |social )?antecedent',
+  'no (clear |observable )?(social )?(trigger|cue)',
+  'absence of (a |clear )?(social|environmental)',
+  'unstructured (time|period|activity)', 'independent (activity|engagement|play|work)',
+  'during (a )?transition', 'between activities',
+  'monotonous', 'repetitive task', '(prolonged |extended )?waiting (period)?',
+  'low[- ]stimulation', 'minimal (environmental )?stimulation', 'minimal adult',
+  'self[- ]stimulat', 'sensory', 'quiet (independent )?work', 'seated activity', 'fine motor',
+  'across (all )?conditions', 'regardless of (social )?(consequence|antecedent)',
+].join('|'), 'i')
+
 // Rule 6: derive the function from tolerant patterns run over the behavior's PROSE SEGMENT (plus
-// the behavior's own fields as backup). If more than one pattern matches, take the one whose
-// match index is closest to the topography. If none match, 'unknown'. Returns the resolved label,
-// which pattern matched (regex source), and the raw segment (the caller PHI-strips before logging).
-function deriveBehaviorFunction(segment: string, behavior: any): { resolved: string; matchedPattern: string | null; segment: string } {
+// the behavior's own fields as backup). If more than one pattern matches, take the one whose match
+// index is closest to the topography. If none match, 'unknown'. Returns the resolved label, which
+// pattern matched (regex source), the raw segment, and any clinical conflict (see the sanity rule).
+function deriveBehaviorFunction(segment: string, behavior: any):
+  { resolved: string; matchedPattern: string | null; segment: string; conflict: { derived: string; antecedent: string } | null } {
   const hay = [
     segment || '',
     behavior?.topography || '', behavior?.evidencedBy || '', behavior?.antecedent || '',
@@ -145,15 +179,30 @@ function deriveBehaviorFunction(segment: string, behavior: any): { resolved: str
     const m = re.exec(hay)
     if (m) matches.push({ label, index: m.index, pattern: re.source })
   }
-  if (matches.length === 0) return { resolved: 'unknown', matchedPattern: null, segment: segment || '' }
-  if (matches.length === 1) return { resolved: matches[0].label, matchedPattern: matches[0].pattern, segment: segment || '' }
 
-  const anchor = anchorIndex(hay, behavior)
-  if (anchor >= 0) {
-    matches.sort((a, b) => Math.abs(a.index - anchor) - Math.abs(b.index - anchor))
+  let resolved = 'unknown'
+  let matchedPattern: string | null = null
+  if (matches.length === 1) {
+    resolved = matches[0].label; matchedPattern = matches[0].pattern
+  } else if (matches.length > 1) {
+    const anchor = anchorIndex(hay, behavior)
+    if (anchor >= 0) matches.sort((a, b) => Math.abs(a.index - anchor) - Math.abs(b.index - anchor))
+    // Deterministic tiebreak when there's no topography anchor: FUNCTION_PATTERNS order.
+    resolved = matches[0].label; matchedPattern = matches[0].pattern
   }
-  // Deterministic tiebreak when there's no topography anchor: FUNCTION_PATTERNS order.
-  return { resolved: matches[0].label, matchedPattern: matches[0].pattern, segment: segment || '' }
+
+  // CLINICAL SANITY RULE (applied AFTER pattern matching): automatic reinforcement is defined by
+  // the ABSENCE of a social antecedent. If the patterns resolved to Automatic Reinforcement but the
+  // antecedent clearly describes a social event, the matcher likely grabbed text from the wrong
+  // behavior — do NOT write a clinically incoherent function. Return 'unknown' and flag the
+  // conflict (derived function + antecedent) for review. Note: keyed on the ANTECEDENT, never on a
+  // fixed list of topography labels.
+  const antecedent = String(behavior?.antecedent || '')
+  if (resolved === 'Automatic Reinforcement' && !AUTOMATIC_ANTECEDENT.test(antecedent) && SOCIAL_ANTECEDENT.test(antecedent)) {
+    return { resolved: 'unknown', matchedPattern, segment: segment || '', conflict: { derived: 'Automatic Reinforcement', antecedent } }
+  }
+
+  return { resolved, matchedPattern, segment: segment || '', conflict: null }
 }
 
 // Remove client + caregiver names from a text before it is DEBUG-logged (no PHI in logs).
@@ -405,18 +454,30 @@ Return this exact JSON structure:
         const b = facts.behaviors[i]
         const fn = deriveBehaviorFunction(segments[i], b)
         b.function = fn.resolved
+        // Clinical sanity conflict (automatic derived but antecedent is social): carry it so the
+        // pair is flagged for review — never a silent blank — with the derived function + antecedent.
+        if (fn.conflict) {
+          b.functionConflict = {
+            reason: 'FUNCTION_ANTECEDENT_CONFLICT',
+            derived: fn.conflict.derived,
+            antecedent: fn.conflict.antecedent,
+          }
+        }
         b.hadAntecedentIntervention = inferAntecedentInterventionUsed(b)
         // Change 2b: extract the grounded before-behavior clause so plan-fill can fill the
         // conditional "Antecedent Interventions" child (only when an antecedent was used).
         b.antecedentInterventionText = b.hadAntecedentIntervention === true
           ? deriveAntecedentInterventionText(b) : ''
-        // Issue 2: prove the derivation ran and show EXACTLY what it matched against. The segment
-        // is PHI-stripped (client + caregiver names removed) and capped at 200 chars.
+        // Issue 2: prove the derivation ran and show EXACTLY what it matched against, plus the
+        // antecedent and any sanity-rule conflict (so segmentation misattribution is traceable).
+        // All text is PHI-stripped (client + caregiver names removed) and capped.
         if (DEBUG) {
           console.log('[extract-facts] function derivation —', {
             behaviorIndex: i,
             matchedPattern: fn.matchedPattern,
             resolvedFunction: fn.resolved,
+            conflict: fn.conflict ? `FUNCTION_ANTECEDENT_CONFLICT (patterns said ${fn.conflict.derived})` : null,
+            antecedent: stripNames(String(b.antecedent || ''), clientName, caregivers).slice(0, 140),
             segment: stripNames(fn.segment, clientName, caregivers).slice(0, 200),
           })
         }

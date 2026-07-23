@@ -934,9 +934,13 @@ window.FormEngineExecutor = {
 
     // Rule 5: deliberate skip — an 'unknown'/blank planned value is never written (audit safety).
     // This is the ONLY path that yields 'skipped'; everything else with a real value must land in
-    // 'filled' or 'failed' so the buckets sum to the plan.
+    // 'filled' or 'failed' so the buckets sum to the plan. If the plan attached review metadata
+    // (e.g. FUNCTION_ANTECEDENT_CONFLICT), surface it — the skip is never a silent blank.
     if (this.isSkippable(action.value)) {
-      return { status: 'skipped', review: { stableId: action.fieldId, label, reason: 'NEEDS_REVIEW' } };
+      const review = action.review
+        ? { stableId: action.fieldId, label, reason: action.review.reason || 'NEEDS_REVIEW', intended: action.review.derived, detail: action.review.antecedent }
+        : { stableId: action.fieldId, label, reason: 'NEEDS_REVIEW' };
+      return { status: 'skipped', review };
     }
 
     // A real planned value we could not resolve to a field -> it never landed -> 'failed' (NOT a

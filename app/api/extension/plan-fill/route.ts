@@ -110,7 +110,9 @@ export async function POST(req: Request) {
     const brMappings: any[] = [
       { fieldId: `BR${n}_BehaviorName`, fieldType: 'select', value: b.name },
       { fieldId: `BR${n}_EvidencedBy`, fieldType: 'textarea', value: b.evidencedBy },
-      { fieldId: `BR${n}_BehaviorFunction`, fieldType: 'select', value: normalizedFunction },
+      // Carry any FUNCTION_ANTECEDENT_CONFLICT so the executor emits an informative review entry
+      // (derived function + antecedent) when this 'unknown' function is skipped — never a silent blank.
+      { fieldId: `BR${n}_BehaviorFunction`, fieldType: 'select', value: normalizedFunction, review: b.functionConflict || undefined },
       { fieldId: `BR${n}_Antecedent`, fieldType: 'textarea', value: b.antecedent },
       {
         fieldId: `BR${n}_AntecedentInterventionsYesNo`, fieldType: 'radio', value: antYesNo,
@@ -127,6 +129,7 @@ export async function POST(req: Request) {
         deterministicActions.push({
           fieldId: m.fieldId, sectionId: `BR${n}`, fieldType: m.fieldType, value: m.value, confidence: 1,
           ...(m.conditional ? { conditional: m.conditional } : {}),
+          ...(m.review ? { review: m.review } : {}),
         })
       }
     })

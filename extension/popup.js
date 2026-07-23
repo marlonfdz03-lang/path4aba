@@ -2157,6 +2157,10 @@ function renderFillSummary(summary) {
         const opts = Array.isArray(r.options) ? r.options : [];
         const wanted = r.intended == null ? '' : String(r.intended);
         extra = ` (wanted “${wanted}”; available: ${opts.length ? opts.join(', ') : 'none'})`;
+      } else if (r.reason === 'FUNCTION_ANTECEDENT_CONFLICT') {
+        const derived = r.intended == null ? '' : String(r.intended);
+        const ant = r.detail == null ? '' : String(r.detail);
+        extra = ` (derived “${derived}” but the antecedent describes a social event: “${ant}” — set the function manually)`;
       }
       li.textContent = `${r.label || r.stableId || 'field'}${reason}${extra}`;
       ul.appendChild(li);

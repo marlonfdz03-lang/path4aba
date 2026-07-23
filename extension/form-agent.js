@@ -206,9 +206,11 @@
             stableId: r.stableId || null,
             label: r.label || r.stableId || 'field',
             reason: r.reason || 'NEEDS_REVIEW',
-            // Carried through for NO_MATCHING_OPTION so the popup can show expected-vs-offered.
+            // Carried through for NO_MATCHING_OPTION (expected-vs-offered) and
+            // FUNCTION_ANTECEDENT_CONFLICT (derived function + antecedent detail).
             intended: r.intended,
             options: r.options,
+            detail: r.detail,
           }, (r.stableId || r.label || '') + '|' + (r.reason || ''));
         });
         const validation = results.validation || { sections: [], messages: [], invalidFields: [] };
