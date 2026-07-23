@@ -555,4 +555,31 @@ RULE: Never use the same closing structure in consecutive notes — rotate throu
 5. EXPANDED REINFORCER ROTATION — add these approved non-food reinforcers to the rotation:
 sensory break, movement activity, bubbles, music access, choice of next activity, drawing materials, gross motor game, preferred song, stickers, computer time, spinning top.
 RULE: Each note must use at least 3 different reinforcers, and never the same combination twice across notes.
+
+═══════════════════════════════════════
+ANTI-REPETITION — STARTERS, FUNCTION PHRASING, SKILL STRUCTURE, RESPONSE SPECIFICITY, BANNED PHRASES
+═══════════════════════════════════════
+
+1. VARY ANTECEDENT SENTENCE STARTERS — rotate through this pool so no two ABCs open the same way:
+"As [activity] was introduced...", "Immediately following [transition/demand]...", "While materials were being presented...", "Once [activity] began...", "Following [activity change]...", "During the transition to...", "Before [activity] concluded...", "At the point when...", "Once adult attention shifted...", "As the RBT prepared materials for...".
+RULE: No two ABCs in the same note may begin with the same word or phrase.
+
+2. VARY THE FUNCTION PHRASING — do NOT write "consistent with [function]-maintained behavior" in every ABC. Rotate through:
+"consistent with patterns documented in the treatment plan", "observed following [specific antecedent condition]", "occurring in the context of [demand/restriction/attention shift]", "aligned with the behavioral function identified during assessment", "noted in association with [specific context]".
+RULE: Use the literal "consistent with [function]-maintained behavior" phrasing in AT MOST 2 of the 5 ABCs; the behavioral function must still be identifiable in every ABC, just expressed with variety.
+
+3. MAKE THE SKILL ACQUISITION SECTION ORGANIC — do not always follow name -> procedure -> success -> justification. Rotate these structures, using a DIFFERENT one for each skill in the same note:
+- Structure A (context first): "Within the natural context of [activity], [skill] was practiced through [procedure]. [Client response]. [Clinical rationale]."
+- Structure B (client first): "[Client] demonstrated [behavior] when [skill] was targeted during [activity] using [procedure]. [Outcome]."
+- Structure C (outcome first): "To build [functional goal], [skill] was integrated into [activity] through [procedure], resulting in [client response]."
+
+4. MAKE CLIENT RESPONSES SPECIFIC — replace generic phrasing with concrete observable descriptions such as:
+"independently completed the first step before requiring gestural prompting", "remained engaged for the duration of the activity with a verbal redirect", "resumed participation after a brief pause", "maintained seated behavior through the transition", "participated without additional vocal protests for the remainder of the activity", "required repeated redirections before reengaging with materials".
+RULE: NEVER use "completed portions of the activity" — always specify WHICH portion, HOW LONG (using the allowed qualitative time terms), or WHAT TYPE of prompting was needed. Do NOT introduce numeric counts — this note bans numbers.
+
+5. BANNED OVERUSED CLINICAL PHRASES — never reuse these stock expressions; write the clinical rationale in fresh language specific to that skill and this client each time:
+BANNED: "which directly reduces escape-maintained behaviors and supports increased compliance"
+BANNED: "this program is necessary to foster"
+BANNED: "promotes increased participation"
+BANNED: "supports generalization across settings"
 `;
