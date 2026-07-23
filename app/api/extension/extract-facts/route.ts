@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getExtensionAuth } from '@/lib/extensionAuth'
 import OpenAI from 'openai'
+import { FUNCTION_PATTERNS } from '@/lib/functionPatterns'
 
 // New diagnostics are gated behind this flag (default false) so nothing is logged in
 // production. No field VALUES (PHI) are ever logged even when true — counts/labels only.
@@ -45,22 +46,9 @@ const VOCAB = {
   ],
 } as const
 
-// Behavior-function phrase patterns (tolerant to phrasing variants). Output strings are the
-// canonical labels; plan-fill normalizes 'Tangibles' -> the exact ABA Matrix dropdown option.
-const FUNCTION_PATTERNS: { re: RegExp; label: string }[] = [
-  // Each pattern requires FUNCTION-asserting context — never a bare noun that appears in ordinary
-  // reinforcement/activity prose. Bare "attention" (adult attention, attention to task), bare
-  // "avoidance" (avoidance of eye contact), and bare "tangible"/"access to items" (access to
-  // preferred items, tangible reinforcer) all appear without asserting function and were
-  // false-matching — the same class of bug as bare "sensory" in the automatic pattern.
-  { re: /attention[-\s]?(maintained|seeking|based|motivated)|maintained by (adult |social )?attention|(seeking|to (seek|gain|access|obtain|recruit)) (adult |social )?attention|attention[-\s]function/i, label: 'Attention' },
-  { re: /escape[-\s]?(maintained|motivated)|maintained by escape|escape[-\s]function|to escape (a |the )?(demand|task|activity|instruction|situation)|escape[/\s-]avoidance|avoidance[-\s]?(maintained|motivated)|(demand|task)[-\s]avoidance/i, label: 'Escape' },
-  { re: /tangible[s]?[-\s]?(maintained|motivated)|maintained by (access to )?tangibles?|tangible[-\s]function|access[-\s]to[-\s]tangibles?/i, label: 'Tangibles' },
-  // Require the FUNCTION context — never bare "automatic"/"sensory", which appear in ubiquitous
-  // sensory reinforcers/activities (sensory bin, sensory break) and were systematically producing
-  // false Automatic derivations for escape/tangible/attention behaviors.
-  { re: /automatic[-\s]?(reinforcement|maintained)|automatically[-\s]?maintained|sensory[-\s]?(reinforcement|maintained|stimulation|seeking|input)|self[-\s]?stimulat|stereotyp/i, label: 'Automatic Reinforcement' },
-]
+// Behavior-function phrase patterns live in a shared, pure module (single source of truth) with a
+// regression test — see lib/functionPatterns.ts for the failure-class doc + the anti-bare-noun rule.
+// (Output strings are the canonical labels; plan-fill normalizes 'Tangibles' -> the dropdown option.)
 
 type ThreeState = true | false | 'unknown'
 
