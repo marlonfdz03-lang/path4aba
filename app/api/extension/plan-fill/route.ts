@@ -100,13 +100,22 @@ export async function POST(req: Request) {
   facts.behaviors?.forEach((b: any, i: number) => {
     const n = i + 1
     const normalizedFunction = b.function === 'Tangibles' ? 'Tangible' : b.function
-    const brMappings = [
+    // Change 2b: the "Antecedent Interventions" field is a CONDITIONAL child revealed by the
+    // Yes/No radio (not present in the pre-Yes scan), so — like promptTypes — its value rides on
+    // the radio action as `conditional`, and the executor fills the revealed field. Only attach it
+    // when the radio is Yes AND there is grounded text; otherwise the pair is left for review
+    // (never a generic phrase).
+    const antYesNo = threeStateRadio(b.hadAntecedentIntervention)
+    const antText = String(b.antecedentInterventionText || '').trim()
+    const brMappings: any[] = [
       { fieldId: `BR${n}_BehaviorName`, fieldType: 'select', value: b.name },
       { fieldId: `BR${n}_EvidencedBy`, fieldType: 'textarea', value: b.evidencedBy },
       { fieldId: `BR${n}_BehaviorFunction`, fieldType: 'select', value: normalizedFunction },
       { fieldId: `BR${n}_Antecedent`, fieldType: 'textarea', value: b.antecedent },
-      { fieldId: `BR${n}_AntecedentInterventionsYesNo`, fieldType: 'radio', value: threeStateRadio(b.hadAntecedentIntervention) },
-      { fieldId: `BR${n}_AntecedentInterventions`, fieldType: 'chip', value: b.antecedentIntervention || '' },
+      {
+        fieldId: `BR${n}_AntecedentInterventionsYesNo`, fieldType: 'radio', value: antYesNo,
+        conditional: antYesNo === 'Yes' && antText ? { value: antText, types: [antText] } : undefined,
+      },
       { fieldId: `BR${n}_ConsequenceInterventions`, fieldType: 'chip', value: b.consequenceIntervention },
       { fieldId: `BR${n}_Interventions`, fieldType: 'chip', value: b.interventions },
       { fieldId: `BR${n}_MainFocus`, fieldType: 'select', value: b.mainFocus },
@@ -115,7 +124,10 @@ export async function POST(req: Request) {
     ]
     brMappings.forEach((m) => {
       if (m.value && (m.fieldType === 'radio' || emptyFields.find((f) => f.fieldId === m.fieldId))) {
-        deterministicActions.push({ fieldId: m.fieldId, sectionId: `BR${n}`, fieldType: m.fieldType, value: m.value, confidence: 1 })
+        deterministicActions.push({
+          fieldId: m.fieldId, sectionId: `BR${n}`, fieldType: m.fieldType, value: m.value, confidence: 1,
+          ...(m.conditional ? { conditional: m.conditional } : {}),
+        })
       }
     })
   })
@@ -203,15 +215,13 @@ For each Behavior Reduction section (BR1, BR2, etc.):
 - BR{n}_EvidencedBy: use behaviors[n-1].evidencedBy — write specific observable description
 - BR{n}_Antecedent: use behaviors[n-1].antecedent — write what triggered the behavior
 - BR{n}_AntecedentInterventionsYesNo: if behaviors[n-1].hadAntecedentIntervention is true → value must be exactly 'Yes', if false → 'No'
-- BR{n}_AntecedentInterventions: if hadAntecedentIntervention is true → use behaviors[n-1].antecedentIntervention
 - BR{n}_ConsequenceInterventions: use behaviors[n-1].consequenceIntervention
 - BR{n}_BehaviorFunction: use behaviors[n-1].function — must match exactly: 'Attention', 'Escape', 'Tangible', or 'Automatic Reinforcement'
 - BR{n}_Result: use behaviors[n-1].result
 NEVER leave EvidencedBy or Antecedent empty if the behavior data contains them.
 
-BR{n}_AntecedentInterventions is a chip field that appears when AntecedentInterventionsYesNo is Yes.
-Always include a fill action for BR{n}_AntecedentInterventions when hadAntecedentIntervention is true.
-Value: use behaviors[n-1].antecedentIntervention or write 'Visual schedule and verbal prompts to prevent recurrence.'`
+The "Antecedent Interventions" field is a CONDITIONAL child handled deterministically from the
+note's own text — do NOT plan it, and NEVER invent a generic antecedent phrase for it.`
 
   // Only call the AI for the fields not handled deterministically.
   let aiActions: any[] = []

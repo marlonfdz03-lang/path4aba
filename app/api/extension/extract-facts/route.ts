@@ -12,10 +12,13 @@ const DEBUG = false
 const VOCAB = {
   // Procedures delivered BEFORE the behavior (antecedent-based).
   antecedentProcedures: [
-    'behavior momentum', 'high-probability request', 'high-p request', 'high-p sequence',
-    'high probability request', 'ncr', 'non-contingent reinforcement', 'noncontingent reinforcement',
-    'premack', 'environmental modification', 'priming', 'visual schedule', 'visual support',
-    'visual supports', 'antecedent intervention', 'antecedent-based', 'antecedent strategy',
+    'behavior momentum', 'behavioral momentum', 'high-probability request', 'high-p request',
+    'high-p sequence', 'high probability request', 'high-probability', 'high probability', 'high-p',
+    'ncr', 'non-contingent reinforcement', 'noncontingent reinforcement', 'premack',
+    'environmental modification', 'priming', 'pre-teaching', 'pre teaching', 'preteaching',
+    'choice provision', 'task modification', 'structured antecedent', 'visual schedule',
+    'visual support', 'visual supports', 'antecedent intervention', 'antecedent-based',
+    'antecedent strategy', 'antecedent strategies',
   ],
   // Procedures delivered AFTER the behavior (consequence-based).
   consequenceProcedures: [
@@ -195,6 +198,23 @@ function inferAntecedentInterventionUsed(behavior: any): ThreeState {
   return 'unknown'
 }
 
+// Change 2b: the ACTUAL before-behavior clause to fill into the conditional "Antecedent
+// Interventions" field. Returns the grounded text (the note's own description of what was done
+// before the behavior). Never a generic phrase: if nothing traceable exists, returns '' and the
+// pair is left for review. Only meaningful when hadAntecedentIntervention === true.
+function deriveAntecedentInterventionText(behavior: any): string {
+  const ai = String(behavior?.antecedentIntervention || '').trim()
+  const iv = String(behavior?.interventions || '').trim()
+  // Prefer the dedicated before-behavior field when it names a recognized antecedent procedure.
+  if (ai && containsAny(ai, VOCAB.antecedentProcedures)) return ai
+  // Otherwise the note's own before-behavior clause (from the LLM's antecedentIntervention field),
+  // which is specific to this note — NOT a generic fallback.
+  if (ai) return ai
+  // Last resort: the intervention clause, but only if it actually names an antecedent procedure.
+  if (iv && containsAny(iv, VOCAB.antecedentProcedures)) return iv
+  return ''
+}
+
 // The text segment that describes a goal's teaching (used by both prompt inferences).
 function goalText(skill: any): string {
   return [
@@ -243,19 +263,31 @@ function derivePromptTypes(skill: any): string[] {
   return PROMPT_TYPE_RULES.map((r) => r.canonical).filter((c) => found.has(c))
 }
 
-// Rule 2: environmental changes are true/false only when the note states it explicitly;
-// 'unknown' otherwise (never default to "No").
-const ENV_CHANGE_POSITIVE = /\b(significant|notable|environmental)\s+chang|change(s)?\s+(in|to)\s+(the\s+)?(environment|routine|setting|staff|schedule|classroom|home)|new\s+(staff|setting|environment|routine|classroom|teacher)/i
-const ENV_CHANGE_NEGATIVE = /\bno\s+(significant|notable|environmental)?\s*chang|\bno\s+changes\b|denied\s+any\s+changes|there\s+were\s+no\s+changes/i
-function inferEnvironmentalChanges(note: string, dailyLog: any): ThreeState {
-  const text = note || ''
-  if (ENV_CHANGE_NEGATIVE.test(text)) return false
+// Change 1: environmentalChanges — a COMPLETE note that mentions no environmental change is
+// asserting that none occurred (that is how a BCBA reads it), so the DEFAULT is false. 'unknown'
+// is reserved for a truncated / clearly incomplete note where we genuinely cannot tell.
+const ENV_CHANGE_POSITIVE = new RegExp([
+  'environmental\\s+chang',
+  'change(s)?\\s+(in|to)\\s+(the\\s+)?(environment|setting|routine|schedule|classroom|home|room)',
+  'new\\s+(setting|room|classroom|environment|location|people|person|staff|teacher|aide|caregiver|visitor)',
+  '(room|setting|location|classroom)\\s+change',
+  'changed\\s+(rooms?|settings?|locations?|classrooms?)',
+  'different\\s+(room|setting|location|environment|classroom)',
+  '(unusual|loud|excessive|background)\\s+nois',
+  'construction',
+  'visitor',
+  'unfamiliar\\s+(person|people|adult|adults|staff|face|setting)',
+  'schedule\\s+(chang|disrupt)',
+  'disrupt\\w*\\s+(to\\s+)?(the\\s+)?(routine|schedule|session|environment|transition)',
+].join('|'), 'i')
+function inferEnvironmentalChanges(note: string): ThreeState {
+  const text = (note || '').trim()
+  // Truncated / clearly incomplete note -> we can't assert either way.
+  if (text.length < 40) return 'unknown'
+  // The note explicitly describes an environmental change.
   if (ENV_CHANGE_POSITIVE.test(text)) return true
-  // Corroborated LLM signal: an explicit "Yes" WITH a described detail counts as explicit.
-  const yn = String(dailyLog?.environmentChanges || '').trim().toLowerCase()
-  const detail = String(dailyLog?.environmentChangesDetail || '').trim()
-  if (yn === 'yes' && detail) return true
-  return 'unknown'
+  // A complete note that describes the session and mentions no such change asserts none occurred.
+  return false
 }
 
 export async function POST(req: Request) {
@@ -374,6 +406,10 @@ Return this exact JSON structure:
         const fn = deriveBehaviorFunction(segments[i], b)
         b.function = fn.resolved
         b.hadAntecedentIntervention = inferAntecedentInterventionUsed(b)
+        // Change 2b: extract the grounded before-behavior clause so plan-fill can fill the
+        // conditional "Antecedent Interventions" child (only when an antecedent was used).
+        b.antecedentInterventionText = b.hadAntecedentIntervention === true
+          ? deriveAntecedentInterventionText(b) : ''
         // Issue 2: prove the derivation ran and show EXACTLY what it matched against. The segment
         // is PHI-stripped (client + caregiver names removed) and capped at 200 chars.
         if (DEBUG) {
@@ -395,7 +431,7 @@ Return this exact JSON structure:
       }
     }
     if (facts.dailyLog) {
-      facts.dailyLog.environmentChanges = inferEnvironmentalChanges(note, facts.dailyLog)
+      facts.dailyLog.environmentChanges = inferEnvironmentalChanges(note)
       facts.dailyLog.incidents = inferIncidents(note, facts.dailyLog)
     }
 
