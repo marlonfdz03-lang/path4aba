@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { NOTE_PERFECTOR_PROMPT } from '@/app/prompts/notePerfectorPrompt';
 import { prisma } from '@/lib/prisma';
+import { filterBlockedNarrative, type BlockedTerm } from '@/lib/blockedNarrativeTerms';
 
 export const runtime = 'nodejs';
 
@@ -93,13 +94,16 @@ export async function POST(req: NextRequest) {
               { role: 'user', content: userMessage(originalNote) }
             ]
           });
+          // Accumulate (not streamed live) — the note is post-filtered for host-EHR-blocked terms
+          // and the FILTERED text is sent at the end. Clients buffer before display.
           let refinedNote = '';
           for await (const chunk of stream1) {
             const delta = chunk.choices[0]?.delta?.content || '';
-            if (delta) { refinedNote += delta; controller.enqueue(encoder.encode(delta)); }
+            if (delta) { refinedNote += delta; }
           }
 
-          // Similarity check against previous session notes
+          let finalNote = refinedNote;
+          let similarityWarning = false;
           const tooSimilar = previousTexts.length > 0 &&
             previousTexts.some(prev => calculateSimilarity(refinedNote, prev) > 0.55);
 
@@ -116,13 +120,29 @@ export async function POST(req: NextRequest) {
             let regenNote = '';
             for await (const chunk of stream2) {
               const delta = chunk.choices[0]?.delta?.content || '';
-              if (delta) { regenNote += delta; controller.enqueue(encoder.encode(delta)); }
+              if (delta) { regenNote += delta; }
             }
-            const stillSimilar = previousTexts.some(prev => calculateSimilarity(regenNote, prev) > 0.55);
-            controller.enqueue(encoder.encode(`\n__META__${JSON.stringify({ similarityWarning: stillSimilar })}`));
-          } else {
-            controller.enqueue(encoder.encode('\n__META__{}'));
+            finalNote = regenNote;
+            similarityWarning = previousTexts.some(prev => calculateSimilarity(regenNote, prev) > 0.55);
           }
+
+          // Strip host-EHR-blocked narrative terms (e.g. "sensory"), merging any per-client terms
+          // the extension learned from host validation messages.
+          let learned: BlockedTerm[] = [];
+          try {
+            if (clientId) {
+              const c = await prisma.clients.findUnique({ where: { id: clientId }, select: { clinical_profile: true } });
+              const bt = (c?.clinical_profile as any)?.blockedNarrativeTerms;
+              if (Array.isArray(bt)) {
+                learned = bt
+                  .map((t: any) => (typeof t === 'string' ? { term: t, substitute: null } : { term: t?.term, substitute: t?.substitute ?? null }))
+                  .filter((t: BlockedTerm) => t.term);
+              }
+            }
+          } catch { /* best-effort; seeded list still applies */ }
+          const { text: cleaned, flagged } = filterBlockedNarrative(finalNote, learned);
+          controller.enqueue(encoder.encode(cleaned));
+          controller.enqueue(encoder.encode(`\n__META__${JSON.stringify({ similarityWarning, blockedFlagged: flagged })}`));
         } catch (e) {
           controller.enqueue(encoder.encode(`\n__META__${JSON.stringify({ error: 'Stream error' })}`));
         } finally {

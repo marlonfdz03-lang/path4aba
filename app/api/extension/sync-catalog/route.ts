@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   const user = await getExtensionAuth()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { clientId, source, programs, behaviors, functions, capturedAt, formState } = await req.json().catch(() => ({}))
+  const { clientId, source, programs, behaviors, functions, blockedTerms, capturedAt, formState } = await req.json().catch(() => ({}))
   if (!clientId || typeof clientId !== 'string') {
     return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
   }
@@ -55,8 +55,10 @@ export async function POST(req: Request) {
   const cleanPrograms = cleanList(programs)
   const cleanBehaviors = cleanList(behaviors)
   const cleanFunctions = cleanList(functions)
-  // Nothing observed -> nothing to persist (a fill that opened no goal/behavior/function select).
-  if (cleanPrograms.length === 0 && cleanBehaviors.length === 0 && cleanFunctions.length === 0) {
+  const cleanBlocked = cleanList(blockedTerms).map((t) => t.toLowerCase())
+  const hasCatalog = cleanPrograms.length > 0 || cleanBehaviors.length > 0 || cleanFunctions.length > 0
+  // Nothing observed -> nothing to persist.
+  if (!hasCatalog && cleanBlocked.length === 0) {
     return NextResponse.json({ ok: true, stored: false })
   }
 
@@ -74,25 +76,46 @@ export async function POST(req: Request) {
   if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
 
   const profile = (client.clinical_profile as any) || {}
-  const observedCatalog = { ...(profile.observedCatalog || {}) }
-  const prior = observedCatalog[src] || null
+  const nextProfile: any = { ...profile }
 
-  observedCatalog[src] = {
-    current: {
-      programs: cleanPrograms,
-      behaviors: cleanBehaviors,
-      functions: cleanFunctions,
-      capturedAt: typeof capturedAt === 'string' ? capturedAt : new Date().toISOString(),
-      capturedBy: user.id,
-      formState: cleanFormState,
-    },
-    // Keep exactly one prior version for diffing (drop its own `previous` to avoid unbounded growth).
-    previous: prior ? { ...prior.current } : null,
+  // Program/behavior/function catalog (only when catalog data was observed).
+  if (hasCatalog) {
+    const observedCatalog = { ...(profile.observedCatalog || {}) }
+    const prior = observedCatalog[src] || null
+    observedCatalog[src] = {
+      current: {
+        programs: cleanPrograms,
+        behaviors: cleanBehaviors,
+        functions: cleanFunctions,
+        capturedAt: typeof capturedAt === 'string' ? capturedAt : new Date().toISOString(),
+        capturedBy: user.id,
+        formState: cleanFormState,
+      },
+      // Keep exactly one prior version for diffing (drop its own `previous` to avoid unbounded growth).
+      previous: prior ? { ...prior.current } : null,
+    }
+    nextProfile.observedCatalog = observedCatalog
+  }
+
+  // Learned host-blocked narrative terms (e.g. "sensory") captured from validation messages. Merge
+  // additively; never clobber an existing entry that already has a substitute. Learned terms carry
+  // no substitute -> the note generator FLAGS them to the RBT rather than substituting blindly.
+  if (cleanBlocked.length > 0) {
+    const existing: any[] = Array.isArray(profile.blockedNarrativeTerms) ? profile.blockedNarrativeTerms : []
+    const byTerm = new Map<string, { term: string; substitute: string | null }>()
+    for (const e of existing) {
+      const term = typeof e === 'string' ? e : e?.term
+      if (term) byTerm.set(String(term).toLowerCase(), typeof e === 'string' ? { term, substitute: null } : { term: e.term, substitute: e.substitute ?? null })
+    }
+    for (const term of cleanBlocked) {
+      if (!byTerm.has(term)) byTerm.set(term, { term, substitute: null })
+    }
+    nextProfile.blockedNarrativeTerms = [...byTerm.values()]
   }
 
   await prisma.clients.update({
     where: { id: clientId },
-    data: { clinical_profile: { ...profile, observedCatalog } },
+    data: { clinical_profile: nextProfile },
   })
 
   return NextResponse.json({

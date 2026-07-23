@@ -90,7 +90,7 @@
     // ng-invalid / aria-invalid controls, mapping each to a normalizer stableId where possible.
     // Returns { sections: [{ name, missingCount }], messages: [string], invalidFields: [...] }.
     readValidationState: function () {
-      var result = { sections: [], messages: [], invalidFields: [] };
+      var result = { sections: [], messages: [], invalidFields: [], blockedTerms: [] };
       var seen = new Set();
 
       var toInt = function (s) {
@@ -156,6 +156,23 @@
           var msg = (item.innerText || '').replace(/\s+/g, ' ').trim();
           if (msg.length > 3 && !seenMsg.has(msg)) { seenMsg.add(msg); result.messages.push(msg); }
         });
+      });
+
+      // 3b) Blocked narrative terms: "The text < X > is not allowed in the narrative section" -> X.
+      // Same passive-capture idea as the program catalog: learn the host's blocked words instead of
+      // guessing them. Scan the collected dialog messages plus any visible inline error/alert text.
+      var blockedRe = /text\s*<\s*([^>]+?)\s*>\s*is not allowed/i;
+      var seenTerm = new Set();
+      var scanBlocked = function (text) {
+        var m = blockedRe.exec(String(text || ''));
+        if (!m) return;
+        var t = m[1].trim().toLowerCase();
+        if (t && !seenTerm.has(t)) { seenTerm.add(t); result.blockedTerms.push(t); }
+      };
+      result.messages.forEach(scanBlocked);
+      document.querySelectorAll('[role="alert"], [class*="error"], [class*="validation"], mat-error').forEach(function (el) {
+        if (el.offsetParent === null) return;
+        scanBlocked(el.innerText || el.textContent);
       });
 
       // 4) Angular-invalid / aria-invalid controls -> map to normalizer stableIds where possible.

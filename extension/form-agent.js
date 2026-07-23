@@ -245,9 +245,11 @@
       // never interfere with the fill (which has already completed by this point).
       try {
         const cat = results.catalog || { programs: [], behaviors: [], functions: [] };
+        const blockedTerms = (results.validation && results.validation.blockedTerms) || [];
         const clientId = noteData.clientId || null;
         const anyCaptured = (cat.programs && cat.programs.length) ||
-          (cat.behaviors && cat.behaviors.length) || (cat.functions && cat.functions.length);
+          (cat.behaviors && cat.behaviors.length) || (cat.functions && cat.functions.length) ||
+          (blockedTerms && blockedTerms.length);
         if (clientId && anyCaptured) {
           chrome.runtime.sendMessage({
             action: 'syncCatalog',
@@ -257,6 +259,7 @@
             programs: cat.programs || [],
             behaviors: cat.behaviors || [],
             functions: cat.functions || [],
+            blockedTerms: blockedTerms,
             formState: cat.formState || null,
           }, function () { void chrome.runtime.lastError; /* swallow — never block */ });
         }

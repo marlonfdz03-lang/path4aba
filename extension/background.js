@@ -170,6 +170,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           programs: message.programs || [],
           behaviors: message.behaviors || [],
           functions: message.functions || [],
+          blockedTerms: message.blockedTerms || [],
           formState: message.formState || null,
         }),
       })

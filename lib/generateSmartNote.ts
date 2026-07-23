@@ -7,6 +7,7 @@ import {
   isValidSkillForLocation,
   cleanBehaviorLabel,
 } from '@/lib/clinicalFilters';
+import { filterBlockedNarrative, type BlockedTerm } from '@/lib/blockedNarrativeTerms';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -88,6 +89,8 @@ export interface GeneratedNote {
   replacementSkillsDocumented: string[];
   generatedAt: string;
   similarityWarning?: boolean;
+  // Host-EHR-blocked narrative terms that had NO substitute — left in place and surfaced to the RBT.
+  blockedFlagged?: string[];
 }
 
 function calculateSimilarity(text1: string, text2: string): number {
@@ -434,6 +437,27 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     }
   }
 
+  // Step 7b: Strip host-EHR-blocked narrative terms (payer-compliance on ABA Matrix's side — e.g.
+  // "sensory" is not billable under 97153 and is rejected on submit). Substitute where we can, flag
+  // where we can't. Merge in any per-client terms the extension learned from host validation
+  // messages. Runs BEFORE save so the stored/reused note is also clean.
+  let blockedFlagged: string[] = [];
+  {
+    let learned: BlockedTerm[] = [];
+    try {
+      const c = await prisma.clients.findUnique({ where: { id: input.clientId }, select: { clinical_profile: true } });
+      const bt = (c?.clinical_profile as any)?.blockedNarrativeTerms;
+      if (Array.isArray(bt)) {
+        learned = bt
+          .map((t: any) => (typeof t === 'string' ? { term: t, substitute: null } : { term: t?.term, substitute: t?.substitute ?? null }))
+          .filter((t: BlockedTerm) => t.term);
+      }
+    } catch { /* learned terms are best-effort; the seeded list still applies */ }
+    const result = filterBlockedNarrative(note, learned);
+    note = result.text;
+    blockedFlagged = result.flagged;
+  }
+
   // Step 8: Always save to session_notes. FK violation = localStorage-only client → logged, not thrown.
   try {
     await prisma.session_notes.create({
@@ -459,5 +483,6 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     replacementSkillsDocumented: input.replacementSkillsAddressed.map(s => s.name),
     generatedAt: new Date().toISOString(),
     similarityWarning,
+    blockedFlagged,
   };
 }

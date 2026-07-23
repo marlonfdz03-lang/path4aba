@@ -22,11 +22,15 @@ export async function POST(req: NextRequest) {
     const readable = new ReadableStream({
       async start(controller) {
         try {
-          const result = await generateSmartNote(input, userId, (text) => {
-            controller.enqueue(encoder.encode(text));
+          // The note text is post-filtered for host-EHR-blocked terms (e.g. "sensory") inside
+          // generateSmartNote, so we send the FILTERED result.note rather than the raw live deltas.
+          // Only the regen control signal is forwarded live for UX (clients buffer before display).
+          const result = await generateSmartNote(input, userId, (chunk) => {
+            if (chunk.includes('__REGEN__')) controller.enqueue(encoder.encode('\n__REGEN__\n'));
           });
+          controller.enqueue(encoder.encode(result.note));
           controller.enqueue(encoder.encode(
-            `\n__META__${JSON.stringify({ similarityWarning: result.similarityWarning || false })}`
+            `\n__META__${JSON.stringify({ similarityWarning: result.similarityWarning || false, blockedFlagged: result.blockedFlagged || [] })}`
           ));
         } catch (e: any) {
           controller.enqueue(encoder.encode(

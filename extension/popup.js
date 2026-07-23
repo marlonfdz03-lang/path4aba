@@ -1038,6 +1038,7 @@ async function streamGenerate(endpoint, body, method = 'POST') {
   refineBtn.disabled = true;
 
   let finalText = '';
+  let blockedFlagged = [];
   let retries = 0;
   const MAX_RETRIES = 2;
 
@@ -1069,6 +1070,7 @@ async function streamGenerate(endpoint, body, method = 'POST') {
             const meta = JSON.parse(parts[1]);
             if (meta.error) { showError(meta.error); return; }
             hasSimilarityWarning = !!meta.similarityWarning;
+            if (Array.isArray(meta.blockedFlagged)) blockedFlagged = meta.blockedFlagged;
           } catch {}
           break outer;
         }
@@ -1095,6 +1097,11 @@ async function streamGenerate(endpoint, body, method = 'POST') {
 
     outputNote.value = finalText;
     streamStatus.style.display = 'none';
+    // Blocked narrative terms with no substitute were left in place — flag them so the RBT edits
+    // before filling ABA Matrix (which would reject them on submit). Substituted terms are silent.
+    if (blockedFlagged.length) {
+      showError('Heads up: ABA Matrix may reject these terms in the narrative — edit before filling: ' + blockedFlagged.join(', '));
+    }
   } catch {
     streamStatus.style.display = 'none';
     showError('Network error. Make sure you are logged into Path4ABA.');
