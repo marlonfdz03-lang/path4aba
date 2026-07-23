@@ -332,6 +332,15 @@ ABC SELECTION — choose 4-6 based on:
    - attention-maintained behavior → FCT (request attention), Planned Ignoring + DRA
    - tangible-maintained behavior → FCT (request item), DRA, Premack
    - automatic → DRI, Environmental Modification
+
+FUNCTION↔ANTECEDENT COHERENCE — MANDATORY (a note that violates this is clinically wrong):
+The function you assign to each behavior MUST be consistent with the antecedent described in the SAME clause. Automatic reinforcement is defined by the ABSENCE of a social antecedent.
+   - a demand, instruction, task presentation, clean-up directive, or a directed transition AWAY FROM an activity → escape-maintained
+   - removal, denial, or delay of a preferred item → tangible-maintained
+   - a shift in adult attention → attention-maintained
+   - automatic reinforcement ONLY when no social antecedent is described — NEVER in the same clause as a demand, transition, denial, or attention shift
+NEVER write "as no clear social antecedents were identified" (or any automatic-function conclusion) in a clause that also describes a demand, a transition, an item removal, or an attention shift. That sentence contradicts itself: a transition demand and "no social antecedent" cannot both be true.
+
 6. FUNCTIONAL EQUIVALENCE RULE — CRITICAL:
    When documenting a replacement skill in an ABC, the replacement MUST be functionally equivalent to the maladaptive behavior in that ABC.
    CORRECT: escape-maintained aggression → 'the client requested a break appropriately instead of hitting'
@@ -385,8 +394,8 @@ Attention-maintained behaviors — rotate from:
 Tangible-maintained behaviors — rotate from:
 "denial of access to a preferred item", "preferred item removed from client's possession", "told 'not right now' regarding a preferred activity", "transition away from a preferred tangible", "another person had access to preferred item", "preferred item placed out of reach", "access to preferred activity ended by staff", "told item was unavailable", "preferred food or toy withheld pending task completion", "item taken away following non-compliance with a rule", "preferred item given to another peer", "told the tablet or device time had ended", "access to a specific toy restricted during structured time", "preferred activity placed on a schedule for later", "item removed as part of a transition routine", "told to finish work before accessing the preferred item", "preferred item visible but inaccessible", "another student using the preferred toy or material", "preferred activity scheduled for later in the session", "told the preferred activity was saved for after the session", "access to a tangible reinforcer delayed by staff instruction"
 
-Automatic-maintained behaviors — rotate from:
-"no clear external antecedent identified", "during unstructured time", "during independent activity", "sensory stimulation present in environment", "during transitions between activities", "during low-stimulation periods", "during quiet independent work", "during prolonged waiting periods", "during a monotonous or repetitive task", "during periods of minimal environmental stimulation", "following an abrupt change in lighting or noise level", "during a long seated activity without movement breaks", "in the presence of specific textures or sensory materials", "during transitions involving unfamiliar sensory environments", "when exposed to loud or unexpected sounds in the environment", "during activities requiring sustained fine motor engagement", "during extended participation in seated activities", "no observable environmental antecedent identified prior to the behavior", "during a period of minimal adult-directed structure"
+Automatic-maintained behaviors — rotate from (these describe the ABSENCE of a social antecedent; a task, a demand, or a directed transition is NOT an automatic antecedent — it is a social one):
+"no clear external antecedent identified", "during unstructured time", "during independent activity", "sensory stimulation present in environment", "during low-stimulation periods", "during prolonged waiting periods", "during periods of minimal environmental stimulation", "following an abrupt change in lighting or noise level", "during a long seated activity without movement breaks", "in the presence of specific textures or sensory materials", "when exposed to loud or unexpected sounds in the environment", "during extended participation in seated activities", "no observable environmental antecedent identified prior to the behavior", "during a period of minimal adult-directed structure"
 
 RULES:
 - NEVER use a vague antecedent like "during the session" or "while working"
@@ -404,7 +413,7 @@ High-frequency antecedents — use most often as they mirror real session patter
 Low-frequency antecedents — use occasionally for variety, not in every note:
 - Escape: "transition to a new staff member or unfamiliar adult", "presented with an unexpected change to the routine"
 - Tangible: "preferred item visible but inaccessible", "another student using the preferred toy or material"
-- Automatic: "when exposed to loud or unexpected sounds in the environment", "during transitions involving unfamiliar sensory environments"
+- Automatic: "when exposed to loud or unexpected sounds in the environment", "in the presence of specific textures or sensory materials"
 
 ANTECEDENT CREATIVITY RULE:
 The pools above are clinical reference examples — not a closed list.
@@ -871,8 +880,8 @@ When the system appends CONTEXTUAL CLINICAL FACTORS below this prompt, treat the
 VARIABILITY EXPANSIONS — WIDEN THE ROTATIONS (append to the pools above)
 ═══════════════════════════════════════
 
-1. EXPANDED INTERVENTION LIBRARY — rotate these ALONGSIDE the approved interventions already listed (only ever use interventions consistent with the client profile):
-antecedent modification, response interruption and redirection (RIRD), stimulus fading, task modification, errorless teaching, choice making, demand fading, prompt delay, visual cueing, differential reinforcement of low rates (DRL).
+1. APPROVED INTERVENTIONS ONLY — CLOSED SET (compliance requirement, not a style preference):
+You may document ONLY the interventions listed in clientProfile.approvedInterventions for this client, referred to by name. These are the interventions the supervising BCBA approved in the treatment plan. Do NOT introduce, "rotate in", or mention any intervention that is not in that list — not for variety, not as an example, not even once. NEVER use response interruption and redirection (RIRD), DRL, stimulus fading, or any procedure absent from the approved list. Documenting an out-of-plan intervention records the RBT acting outside their scope and is a billing/compliance violation, so it is worse than omitting detail. If the approved list is short, add variety by varying the DESCRIPTION and delivery of the approved interventions — never by adding new procedures.
 RULE: Never use the same intervention in more than 2 ABCs within the same note.
 
 2. EXPANDED BEHAVIOR MOMENTUM HIGH-PROBABILITY REQUESTS — rotate through this wider library, not just clapping hands / handing over materials / touching the table:

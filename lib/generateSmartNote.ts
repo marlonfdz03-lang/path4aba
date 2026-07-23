@@ -8,6 +8,7 @@ import {
   cleanBehaviorLabel,
 } from '@/lib/clinicalFilters';
 import { filterBlockedNarrative, type BlockedTerm } from '@/lib/blockedNarrativeTerms';
+import { findFunctionAntecedentContradictions } from '@/lib/functionPatterns';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -91,6 +92,9 @@ export interface GeneratedNote {
   similarityWarning?: boolean;
   // Host-EHR-blocked narrative terms that had NO substitute — left in place and surfaced to the RBT.
   blockedFlagged?: string[];
+  // Function↔antecedent contradictions (automatic asserted alongside a social antecedent) — the
+  // note is returned as-is but flagged "review before using"; never auto-corrected.
+  coherenceFlags?: string[];
 }
 
 function calculateSimilarity(text1: string, text2: string): number {
@@ -440,23 +444,31 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   // Step 7b: Strip host-EHR-blocked narrative terms (payer-compliance on ABA Matrix's side — e.g.
   // "sensory" is not billable under 97153 and is rejected on submit). Substitute where we can, flag
   // where we can't. Merge in any per-client terms the extension learned from host validation
-  // messages. Runs BEFORE save so the stored/reused note is also clean.
+  // messages. Runs BEFORE save so the stored/reused note is also clean. Re-runnable so the
+  // intervention gate (Step 7c) can re-clean a regenerated note.
+  let learnedBlockedTerms: BlockedTerm[] = [];
+  try {
+    const c = await prisma.clients.findUnique({ where: { id: input.clientId }, select: { clinical_profile: true } });
+    const bt = (c?.clinical_profile as any)?.blockedNarrativeTerms;
+    if (Array.isArray(bt)) {
+      learnedBlockedTerms = bt
+        .map((t: any) => (typeof t === 'string' ? { term: t, substitute: null } : { term: t?.term, substitute: t?.substitute ?? null }))
+        .filter((t: BlockedTerm) => t.term);
+    }
+  } catch { /* learned terms are best-effort; the seeded list still applies */ }
   let blockedFlagged: string[] = [];
-  {
-    let learned: BlockedTerm[] = [];
-    try {
-      const c = await prisma.clients.findUnique({ where: { id: input.clientId }, select: { clinical_profile: true } });
-      const bt = (c?.clinical_profile as any)?.blockedNarrativeTerms;
-      if (Array.isArray(bt)) {
-        learned = bt
-          .map((t: any) => (typeof t === 'string' ? { term: t, substitute: null } : { term: t?.term, substitute: t?.substitute ?? null }))
-          .filter((t: BlockedTerm) => t.term);
-      }
-    } catch { /* learned terms are best-effort; the seeded list still applies */ }
-    const result = filterBlockedNarrative(note, learned);
-    note = result.text;
+  const applyBlockedFilter = (text: string): string => {
+    const result = filterBlockedNarrative(text, learnedBlockedTerms);
     blockedFlagged = result.flagged;
-  }
+    return result.text;
+  };
+  note = applyBlockedFilter(note);
+
+  // Step 7d: Function↔antecedent coherence flags. Automatic reinforcement requires the ABSENCE of a
+  // social antecedent; a clause asserting automatic function while describing a demand, directed
+  // transition, item removal, or attention shift is contradictory. We surface these to the RBT as
+  // "review before using" — we never auto-rewrite, because a wrong function needs a human decision.
+  const coherenceFlags = findFunctionAntecedentContradictions(note);
 
   // Step 8: Always save to session_notes. FK violation = localStorage-only client → logged, not thrown.
   try {
@@ -484,5 +496,6 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     generatedAt: new Date().toISOString(),
     similarityWarning,
     blockedFlagged,
+    coherenceFlags,
   };
 }

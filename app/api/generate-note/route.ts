@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
             controller.enqueue(encoder.encode(text));
           });
           controller.enqueue(encoder.encode(
-            `\n__META__${JSON.stringify({ similarityWarning: result.similarityWarning || false, blockedFlagged: result.blockedFlagged || [], filteredText: result.note })}`
+            `\n__META__${JSON.stringify({ similarityWarning: result.similarityWarning || false, blockedFlagged: result.blockedFlagged || [], coherenceFlags: result.coherenceFlags || [], filteredText: result.note })}`
           ));
         } catch (e: any) {
           controller.enqueue(encoder.encode(

@@ -56,3 +56,56 @@ export function inferFunctionFromAntecedent(antecedent: string): string | null {
   }
   return null
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST-GENERATION COHERENCE: automatic reinforcement is defined by the ABSENCE of a
+// social antecedent. A generated clause that ASSERTS an automatic function while ALSO
+// describing a social antecedent (a demand, a DIRECTED transition, an item removal, an
+// attention shift) is internally contradictory — the exact bug that shipped: "...during
+// the transition from a fine motor task..., consistent with automatic reinforcement, as
+// no clear social antecedents were identified". Both cannot be true. We FLAG the clause
+// for RBT review; we never auto-rewrite it — a wrong function needs a human decision.
+//
+// Bare-noun discipline (AGENTS.md): "during transitions between activities" is a TIME
+// marker (automatic-consistent) and must NOT count as social; "transition from/away from
+// a task" is a DIRECTED change (a demand) and must. SOCIAL_CLAUSE_ANTECEDENT below
+// requires the directed/asserting form, never the bare word.
+const AUTOMATIC_CLAUSE_ASSERTION = /automatic(?:ally)?[-\s]?(?:reinforcement|maintained|reinforced)|no (?:clear |observable )?social antecedent|absence of (?:a |any )?(?:clear )?social antecedent|across all conditions regardless of (?:social )?(?:consequence|antecedent)/i
+
+const SOCIAL_CLAUSE_ANTECEDENT = new RegExp([
+  // Demand — must be ASSERTED, never bare: "the/a/task demand", "demand was presented",
+  // "presented a demand". Deliberately excludes the NEGATED "no social demand" (which is the
+  // automatic assertion itself), so a coherent automatic clause is not mis-flagged.
+  '(?:a|the|task|work|academic|non[- ]preferred)[- ]demand',
+  'demand (?:was |is )?(?:presented|placed|introduced|given)',
+  'presented (?:with )?(?:a |an |the )?demand',
+  'instruction', 'instructed', 'directed to', 'told to', 'asked to',
+  'prompted to', 'task (?:was )?present',
+  'non[- ]preferred', 'clean[- ]?up', 'cleaning up', 'put(?:ting)? away',
+  'transition (?:from|away from|to (?:a |the )?(?:non[- ]preferred|structured|less[- ]preferred|table|new|next))',
+  'transitioning (?:from|away from)',
+  '(?:denied|removed|withheld|delayed|restricted|taken away|out of reach)\\b[^.]{0,30}\\b(?:item|toy|access|activity|reinforcer|tangible)',
+  '(?:preferred (?:item|toy|activity))[^.]{0,30}(?:denied|removed|withheld|delayed|restricted|taken|unavailable)',
+  'access (?:was )?(?:denied|removed|restricted|delayed)',
+  'attention (?:was )?(?:shifted|directed|diverted|removed) (?:to|toward|elsewhere|away)?',
+  '(?:shifted|directed|diverted|redirected) (?:adult |social )?attention',
+  'adult attention (?:directed|shifted|toward|to another)',
+].join('|'), 'i')
+
+function splitClauses(note: string): string[] {
+  return String(note || '').split(/(?<=[.!?])\s+/).filter((s) => s.trim().length > 0)
+}
+
+// Returns a short human-readable flag for each clause that asserts an automatic function
+// while also describing a social antecedent. Empty when the note is coherent.
+export function findFunctionAntecedentContradictions(note: string): string[] {
+  const flags: string[] = []
+  for (const clause of splitClauses(note)) {
+    if (AUTOMATIC_CLAUSE_ASSERTION.test(clause) && SOCIAL_CLAUSE_ANTECEDENT.test(clause)) {
+      const snippet = clause.trim().replace(/\s+/g, ' ').slice(0, 160)
+      const flag = `Automatic reinforcement asserted alongside a social antecedent — verify function: "${snippet}${clause.length > 160 ? '…' : ''}"`
+      if (!flags.includes(flag)) flags.push(flag)
+    }
+  }
+  return flags
+}

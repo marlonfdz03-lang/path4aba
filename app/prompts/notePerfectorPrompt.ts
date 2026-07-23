@@ -319,9 +319,11 @@ Never prefix observable behavior with a category label ("engaged in X behavior b
   If the original uses one intervention multiple times, replace duplicates with:
   DRA (behavior reduction) / Environmental Modification (antecedent control) / Redirection (immediate management) / Premack Principle (compliance)
   Vary interventions to match the function of each behavior.
+- FUNCTION↔ANTECEDENT COHERENCE — MANDATORY: the function stated for each behavior must be consistent with the antecedent in the SAME clause. A demand / instruction / directed transition away from an activity → escape; item removal/denial/delay → tangible; attention shift → attention; automatic reinforcement ONLY when no social antecedent is described. NEVER write "no clear social antecedents were identified" (or any automatic conclusion) in a clause that also describes a demand, transition, item removal, or attention shift — that contradicts itself.
 
 5. PROHIBITED INTERVENTIONS:
-- Never mention: Punishment, Response Cost, Restraint, Time Out, Overcorrection, Aversive, Standalone Extinction
+- Never mention: Response Interruption and Redirection (RIRD), Punishment, Response Cost, Restraint, Time Out, Overcorrection, Aversive, Standalone Extinction
+- Document ONLY interventions in the client's approved treatment plan (clientProfile.approvedInterventions). An intervention outside the approved plan is a scope/billing violation — never add one.
 - If original mentions these, replace with approved positive alternatives:
   - Punishment → DRA or FCT
   - Time Out → Redirection to structured activity
@@ -532,8 +534,8 @@ Output the refined note only. No explanations, no headers, no preamble. Just the
 VARIABILITY EXPANSIONS — WIDEN THE ROTATIONS (append to the pools above)
 ═══════════════════════════════════════
 
-1. EXPANDED INTERVENTION LIBRARY — rotate these ALONGSIDE the approved interventions already listed (only ever use interventions consistent with the client profile):
-antecedent modification, response interruption and redirection (RIRD), stimulus fading, task modification, errorless teaching, choice making, demand fading, prompt delay, visual cueing, differential reinforcement of low rates (DRL).
+1. APPROVED INTERVENTIONS ONLY — CLOSED SET (compliance requirement, not a style preference):
+Document ONLY interventions listed in clientProfile.approvedInterventions for this client, by name. Do NOT introduce, "rotate in", or mention any intervention absent from that list — not for variety, not once. NEVER use response interruption and redirection (RIRD), DRL, stimulus fading, or any procedure outside the approved list; an out-of-plan intervention records the RBT outside their scope and is a billing/compliance violation. Add variety by varying the DESCRIPTION of approved interventions, never by adding new procedures.
 RULE: Never use the same intervention in more than 2 ABCs within the same note.
 
 2. EXPANDED BEHAVIOR MOMENTUM HIGH-PROBABILITY REQUESTS — rotate through this wider library, not just clapping hands / handing over materials / touching the table:

@@ -150,11 +150,15 @@ const AUTOMATIC_ANTECEDENT = new RegExp([
   'no (clear |observable )?(external |environmental |social )?antecedent',
   'no (clear |observable )?(social )?(trigger|cue)',
   'absence of (a |clear )?(social|environmental)',
-  'unstructured (time|period|activity)', 'independent (activity|engagement|play|work)',
-  'during (a )?transition', 'between activities',
+  'unstructured (time|period|activity)', 'independent (activity|engagement|play)',
+  // Time-marker transition only ("during transitions between activities"). A DIRECTED transition
+  // ("transition from a fine motor task") is a demand and must NOT test automatic-consistent, so
+  // the bare 'during (a )?transition' and the bare activity noun 'fine motor' are deliberately gone
+  // (that pairing is exactly what let a transition-demand antecedent read as automatic).
+  'between activities',
   'monotonous', 'repetitive task', '(prolonged |extended )?waiting (period)?',
   'low[- ]stimulation', 'minimal (environmental )?stimulation', 'minimal adult',
-  'self[- ]stimulat', 'sensory', 'quiet (independent )?work', 'seated activity', 'fine motor',
+  'self[- ]stimulat', 'sensory', 'seated activity',
   'across (all )?conditions', 'regardless of (social )?(consequence|antecedent)',
 ].join('|'), 'i')
 
