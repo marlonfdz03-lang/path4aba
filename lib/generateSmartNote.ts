@@ -8,6 +8,7 @@ import {
   cleanBehaviorLabel,
 } from '@/lib/clinicalFilters';
 import { filterBlockedNarrative, type BlockedTerm } from '@/lib/blockedNarrativeTerms';
+import { findInterventionViolations } from '@/lib/interventionPolicy';
 import { findFunctionAntecedentContradictions } from '@/lib/functionPatterns';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -463,6 +464,36 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     return result.text;
   };
   note = applyBlockedFilter(note);
+
+  // Step 7c: TREATMENT-PLAN INTERVENTION GATE (compliance, not quality). An RBT may document ONLY
+  // interventions in the client's approved assessment — an out-of-plan procedure records work
+  // outside scope, bills against an authorization that does not cover it, and exposes the
+  // supervising BCBA to liability. A prompt instruction is not enough (the model has generated RIRD
+  // despite the constraint), so this is a hard gate: if the note documents a prohibited (e.g. RIRD)
+  // or unapproved intervention, regenerate ONCE naming the violation; if it still violates, throw an
+  // error naming the intervention rather than return a note the RBT might sign. With NO approved
+  // list captured we cannot know the plan, so only the always-prohibited set applies — we never
+  // block every note for a client whose approved interventions were never synced.
+  const approvedInterventions: string[] = resolvedProfile.approvedInterventions || [];
+  let violations = findInterventionViolations(note, approvedInterventions);
+  const violatingNames = () => [...new Set([...violations.prohibited, ...violations.unapproved])];
+  if (violatingNames().length > 0) {
+    const bad = violatingNames();
+    const approvedClause = approvedInterventions.length
+      ? `ONLY these approved interventions: ${approvedInterventions.join(', ')}`
+      : `ONLY interventions named in the session data's approved list`;
+    if (onChunk) onChunk('\n__REGEN__\n');
+    const violationInstruction = `\n\nCOMPLIANCE VIOLATION — REGENERATE: the previous note documented ${bad.join(', ')}, which ${bad.length === 1 ? 'is' : 'are'} NOT in this client's approved treatment plan. An RBT may only document interventions the BCBA has approved. Rewrite the entire note using ${approvedClause}. Never mention ${bad.join(', ')}, response interruption and redirection (RIRD), or any intervention outside the approved list.`;
+    note = applyBlockedFilter(await callOpenAI(MASTER_RBT_NOTE_PROMPT + contextualFactors + violationInstruction));
+    violations = findInterventionViolations(note, approvedInterventions);
+    if (violatingNames().length > 0) {
+      const still = violatingNames();
+      throw new Error(
+        `Note could not be generated within the client's approved treatment plan: it repeatedly documented ${still.join(', ')}, which ${still.length === 1 ? 'is' : 'are'} not approved for this client. ` +
+        `An RBT may only document interventions in the approved plan — please review the client's assessment or regenerate.`
+      );
+    }
+  }
 
   // Step 7d: Function↔antecedent coherence flags. Automatic reinforcement requires the ABSENCE of a
   // social antecedent; a clause asserting automatic function while describing a demand, directed
