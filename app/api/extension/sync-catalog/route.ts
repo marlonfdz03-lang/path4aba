@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   const user = await getExtensionAuth()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { clientId, source, programs, behaviors, capturedAt, formState } = await req.json().catch(() => ({}))
+  const { clientId, source, programs, behaviors, functions, capturedAt, formState } = await req.json().catch(() => ({}))
   if (!clientId || typeof clientId !== 'string') {
     return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
   }
@@ -54,8 +54,9 @@ export async function POST(req: Request) {
   const src = typeof source === 'string' && source.trim() ? source.trim().slice(0, 40) : 'aba_matrix'
   const cleanPrograms = cleanList(programs)
   const cleanBehaviors = cleanList(behaviors)
-  // Nothing observed -> nothing to persist (a fill that opened no goal/behavior select).
-  if (cleanPrograms.length === 0 && cleanBehaviors.length === 0) {
+  const cleanFunctions = cleanList(functions)
+  // Nothing observed -> nothing to persist (a fill that opened no goal/behavior/function select).
+  if (cleanPrograms.length === 0 && cleanBehaviors.length === 0 && cleanFunctions.length === 0) {
     return NextResponse.json({ ok: true, stored: false })
   }
 
@@ -80,6 +81,7 @@ export async function POST(req: Request) {
     current: {
       programs: cleanPrograms,
       behaviors: cleanBehaviors,
+      functions: cleanFunctions,
       capturedAt: typeof capturedAt === 'string' ? capturedAt : new Date().toISOString(),
       capturedBy: user.id,
       formState: cleanFormState,

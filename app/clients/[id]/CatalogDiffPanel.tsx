@@ -38,6 +38,16 @@ const METHOD_STYLE: Record<string, { bg: string; color: string }> = {
   "token-overlap": { bg: "#fef3c7", color: "#92400e" },
 };
 
+// The four canonical ABA behavior functions. Matched by keyword so "Tangible"/"Tangibles" and
+// wording variants still count. If a client's EHR select omits one, behaviors with that function
+// can't be documented — a limitation note generation must know about before asserting it.
+const CANONICAL_FUNCTIONS = [
+  { label: "Attention", kw: "attention" },
+  { label: "Escape", kw: "escape" },
+  { label: "Tangibles", kw: "tangible" },
+  { label: "Automatic Reinforcement", kw: "automatic" },
+];
+
 function Empty() {
   return <p className="text-[11px]" style={{ color: "var(--text3)" }}>None</p>;
 }
@@ -141,6 +151,13 @@ export function CatalogDiffPanel({ clinicalProfile }: { clinicalProfile: any }) 
   const popChanged = !!previous &&
     (Number(observed.formState?.goalsPopulated) || 0) !== (Number(previous.formState?.goalsPopulated) || 0);
 
+  // Behavior-function coverage: which canonical functions this client's EHR can actually record.
+  const capturedFns: string[] = (observed.functions || []).map((x: any) => String(x || "")).filter(Boolean);
+  const fnsLower = capturedFns.map((s) => s.toLowerCase());
+  const missingFns = capturedFns.length
+    ? CANONICAL_FUNCTIONS.filter((f) => !fnsLower.some((c) => c.includes(f.kw)))
+    : [];
+
   const Row = ({ label, val }: { label: string; val: string }) => (
     <div className="flex justify-between gap-3 text-[11px]">
       <span style={{ color: "var(--text3)" }}>{label}</span>
@@ -164,6 +181,18 @@ export function CatalogDiffPanel({ clinicalProfile }: { clinicalProfile: any }) 
         {previous
           ? <Row label={`Live before · captured ${ageLabel(previous.capturedAt)}`} val={`${prevP} programs · ${prevB} behaviors · ${formStateLabel(previous.formState)}`} />
           : <Row label="Live before" val="no previous capture yet" />}
+
+        {capturedFns.length > 0 && (
+          <Row label="Behavior functions the EHR can record" val={capturedFns.join(", ")} />
+        )}
+        {missingFns.length > 0 && (
+          <div className="mt-2 p-2 rounded text-[11px]" style={{ background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca" }}>
+            ⚠ This client's ABA Matrix cannot record the function{missingFns.length > 1 ? "s" : ""}:{" "}
+            <strong>{missingFns.map((f) => f.label).join(", ")}</strong>. A behavior with{" "}
+            {missingFns.length > 1 ? "these functions" : "this function"} can't be documented correctly here —
+            note generation should flag the limitation rather than assert a function the EHR can't represent.
+          </div>
+        )}
 
         {countChanged && (
           <div className="mt-2 p-2 rounded text-[11px]" style={{ background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca" }}>

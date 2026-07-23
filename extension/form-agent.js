@@ -242,9 +242,11 @@
       // this fill already opened. Fully best-effort — any failure is logged and ignored, and must
       // never interfere with the fill (which has already completed by this point).
       try {
-        const cat = results.catalog || { programs: [], behaviors: [] };
+        const cat = results.catalog || { programs: [], behaviors: [], functions: [] };
         const clientId = noteData.clientId || null;
-        if (clientId && ((cat.programs && cat.programs.length) || (cat.behaviors && cat.behaviors.length))) {
+        const anyCaptured = (cat.programs && cat.programs.length) ||
+          (cat.behaviors && cat.behaviors.length) || (cat.functions && cat.functions.length);
+        if (clientId && anyCaptured) {
           chrome.runtime.sendMessage({
             action: 'syncCatalog',
             clientId: clientId,
@@ -252,6 +254,7 @@
             capturedAt: new Date().toISOString(),
             programs: cat.programs || [],
             behaviors: cat.behaviors || [],
+            functions: cat.functions || [],
             formState: cat.formState || null,
           }, function () { void chrome.runtime.lastError; /* swallow — never block */ });
         }

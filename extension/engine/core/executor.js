@@ -34,6 +34,7 @@ window.FormEngineExecutor = {
     // interaction, no polling) and accumulate the option texts to persist after the fill.
     this._catalogPrograms = new Set();
     this._catalogBehaviors = new Set();
+    this._catalogFunctions = new Set();
     // Form-population state at capture time (BEFORE we fill anything). If ABA Matrix's dropdown is
     // filtered, a form that already has populated Goal/Behavior instances may offer a SMALLER list
     // than an empty one — so recording how many instances were already populated lets us detect
@@ -192,6 +193,7 @@ window.FormEngineExecutor = {
     results.catalog = {
       programs: Array.from(this._catalogPrograms || []),
       behaviors: Array.from(this._catalogBehaviors || []),
+      functions: Array.from(this._catalogFunctions || []),
       formState: this._catalogFormState || null,
     };
 
@@ -232,12 +234,15 @@ window.FormEngineExecutor = {
   },
 
   // Passively record a select's option list into the live catalog, by field kind. Called on every
-  // goal/behavior select the fill opens (both matched and no-match paths) — never opens anything
-  // itself. Program list comes from *_GoalName selects, behavior list from *_BehaviorName selects.
+  // goal/behavior/function select the fill opens (both matched and no-match paths) — never opens
+  // anything itself. Programs from *_GoalName, behaviors from *_BehaviorName, functions from
+  // *_BehaviorFunction (the "What was the function?" select — a client's EHR may omit a canonical
+  // function like Automatic Reinforcement, which note generation needs to know before asserting it).
   captureCatalog(fieldId, options) {
     if (!options || !options.length) return;
     const set = /_GoalName$/.test(fieldId) ? this._catalogPrograms
-      : /_BehaviorName$/.test(fieldId) ? this._catalogBehaviors : null;
+      : /_BehaviorName$/.test(fieldId) ? this._catalogBehaviors
+      : /_BehaviorFunction$/.test(fieldId) ? this._catalogFunctions : null;
     if (!set) return;
     options.forEach((o) => { const t = String(o == null ? '' : o).trim(); if (t) set.add(t); });
   },
