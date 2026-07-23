@@ -175,14 +175,18 @@
     const results = await executeFillPlan(plan);
     console.log('[Path4ABA] Executor results:', results);
     if (results) {
+      // Buckets sum to the plan: written + repaired + skipped + failed.
+      const c = results.counts || {
+        written: results.filled || 0, repaired: 0, skipped: results.skipped || 0,
+        failed: results.failed || 0, attempted: results.filled || 0, verified: results.filled || 0,
+      };
       sendStatus(
-        'Filled ' + results.filled + ' fields, ' + results.skipped + ' skipped, ' + results.failed + ' failed',
-        results.filled > 0 ? 'success' : 'warning'
+        c.verified + ' verified, ' + c.repaired + ' repaired, ' + c.skipped + ' skipped, ' + c.failed + ' failed',
+        c.failed === 0 ? 'success' : 'warning'
       );
       // Post-fill summary for the popup (Rule 7): totals + fields needing review. The needsReview
       // list combines the executor's skips/mismatches with the host app's own validation state.
       try {
-        const verifiedOk = (results.verifications || []).filter(function (v) { return v && v.ok; }).length;
         const repair = results.repair || { passes: 0, repaired: [], stillMissing: [] };
         // Fields the repair pass genuinely fixed on retry (resolved === true).
         const repairedResolved = (repair.repaired || []).filter(function (r) { return r.resolved; });
@@ -221,12 +225,12 @@
         chrome.runtime.sendMessage({
           action: 'fillSummary',
           summary: {
-            written: results.filled,
-            verifiedOk: verifiedOk,
-            repaired: repairedResolved.length,
+            written: c.attempted,        // fields we wrote a value into
+            verifiedOk: c.verified,      // fields confirmed landed (written + repaired)
+            repaired: c.repaired,
+            skipped: c.skipped,
+            failed: c.failed,
             repairPasses: repair.passes || 0,
-            skipped: results.skipped,
-            failed: results.failed,
             needsReview: review,
             missingSections: missingSections,
             messages: validation.messages || [],

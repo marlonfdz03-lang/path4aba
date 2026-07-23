@@ -2119,8 +2119,14 @@ function renderFillSummary(summary) {
   // Summary line: N written · M verified · R repaired on retry · S still need your review.
   const head = document.createElement('div');
   head.style.cssText = `font-weight:600;margin-bottom:4px;color:${S > 0 ? '#991b1b' : '#166534'};`;
-  const parts = [`${summary.written || 0} written`, `${summary.verifiedOk || 0} verified`];
-  if (repaired > 0) parts.push(`${repaired} repaired on retry`);
+  // "repaired on retry" is always shown (even 0) so "didn't run" reads differently from "nothing
+  // to fix". failed is shown only when non-zero.
+  const parts = [
+    `${summary.written || 0} written`,
+    `${summary.verifiedOk || 0} verified`,
+    `${repaired} repaired on retry`,
+  ];
+  if ((summary.failed || 0) > 0) parts.push(`${summary.failed} failed`);
   parts.push(`${S} still need your review`);
   head.textContent = 'Fill summary: ' + parts.join(' · ');
   box.appendChild(head);

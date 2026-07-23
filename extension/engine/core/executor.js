@@ -41,21 +41,28 @@ window.FormEngineExecutor = {
       preFillHadSelections = true;
     }
 
+    // Per-action pre-repair classification, so the final buckets sum exactly to the plan:
+    //   'skipped'  = deliberately not written ('unknown'/blank)
+    //   'verified' = wrote and verified ok on the first pass
+    //   'failed'   = had a value that never landed (repair may later reclassify to 'repaired')
+    const actionOutcomes = [];
     for (const action of plan) {
       try {
         const outcome = await this.fillField(action);
-        if (outcome.status === 'filled') results.filled++;
-        else if (outcome.status === 'skipped') results.skipped++;
-        else results.failed++;
+        let cls;
+        if (outcome.status === 'skipped') cls = 'skipped';
+        else if (outcome.status === 'failed') cls = 'failed';
+        else cls = (outcome.verification && outcome.verification.ok) ? 'verified' : 'failed';
+        actionOutcomes.push({ fieldId: action.fieldId, cls });
         if (outcome.review) results.needsReview.push(outcome.review);
         if (outcome.verification) results.verifications.push(outcome.verification);
-        // Conditional children (Issue 1c) can add their own review/verification entries.
+        // Conditional children (Issue 1c) add their own review/verification entries but are NOT
+        // plan actions, so they don't affect the plan-action bucket totals.
         if (outcome.extraReviews) outcome.extraReviews.forEach((r) => results.needsReview.push(r));
         if (outcome.extraVerifications) outcome.extraVerifications.forEach((v) => results.verifications.push(v));
-        if (outcome.status === 'filled' && outcome.childFilled) results.filled++;
       } catch (err) {
         console.error('[Path4ABA Executor] Failed:', action.fieldId, err.message);
-        results.failed++;
+        actionOutcomes.push({ fieldId: action.fieldId, cls: 'failed' });
         results.needsReview.push({ stableId: action.fieldId, label: action.fieldId, reason: 'NEEDS_REVIEW' });
       }
       await this.wait(300);
@@ -82,6 +89,27 @@ window.FormEngineExecutor = {
     } catch (err) {
       if (this.DEBUG) console.warn('[Path4ABA Executor] repair pass failed:', err.message);
     }
+
+    // Final bucket accounting (Issue 1): every plan action lands in exactly one bucket and the
+    // four sum to the plan length. A field the repair pass fixed moves from 'failed' -> 'repaired'.
+    const repairedIds = new Set((results.repair.repaired || []).filter((r) => r.resolved).map((r) => r.stableId));
+    let written = 0, repaired = 0, skipped = 0, failed = 0;
+    for (const rec of actionOutcomes) {
+      if (rec.cls === 'skipped') skipped++;
+      else if (rec.cls === 'verified') written++;
+      else if (repairedIds.has(rec.fieldId)) repaired++;
+      else failed++;
+    }
+    results.counts = {
+      written, repaired, skipped, failed,
+      attempted: written + repaired + failed, // fields we wrote a value into
+      verified: written + repaired,           // fields confirmed landed
+      total: actionOutcomes.length,           // === plan actions; equals written+repaired+skipped+failed
+    };
+    // Legacy fields kept for any existing readers.
+    results.filled = written + repaired;
+    results.skipped = skipped;
+    results.failed = failed;
 
     // Issue 1d: conditional-pair audit. DESTRUCTIVE (toggles radios to observe what each reveals),
     // so it is HARD-GATED behind an explicit opt-in that NO code path ever sets — a DEBUG flag
@@ -496,24 +524,71 @@ window.FormEngineExecutor = {
     return this.isBlank(val) || this.verifyAngularState(el).invalid;
   },
 
-  // Next unused rung of the text-write ladder. 'primary' is pre-marked (done in the main fill),
-  // so repair uses 'keyboard' then 'accessor' — never the same strategy twice.
-  nextRung(usedSet) {
-    for (const rung of ['primary', 'keyboard', 'accessor']) {
+  // Next unused rung of the write ladder for a field family. 'primary' is pre-marked (done in the
+  // main fill), so repair escalates through the remaining rungs — never the same strategy twice.
+  //   text  : primary -> keyboardCommit -> accessor-only
+  //   radio : primary(input.click) -> label/container click -> accessor-only
+  nextRung(family, usedSet) {
+    const ladder = family === 'radio'
+      ? ['primary', 'labelclick', 'accessor']
+      : ['primary', 'keyboard', 'accessor'];
+    for (const rung of ladder) {
       if (!usedSet.has(rung)) return rung;
     }
     return null;
   },
 
-  repairWrite(el, action, rung) {
+  repairWrite(el, action, family, rung) {
+    if (family === 'radio') {
+      if (rung === 'labelclick') return this.labelClickRadio(el, action.value);
+      if (rung === 'accessor') return this.radioAccessorWrite(el, action.value);
+      return;
+    }
     if (rung === 'keyboard') return this.keyboardCommit(el, action.value);
     if (rung === 'accessor') return this.accessorWrite(el, action.value);
     return this.setAngularValue(el, action.value);
   },
 
-  // Auto-repair pass: after the main fill, retry ONLY planned text values the host still flags as
-  // missing, escalating through the write ladder. Never invents content, never touches non-text
-  // fields, never retries 'unknown'/absent values, stops as soon as it stops making progress.
+  // Radio repair retry 1: click the button's label / container rather than the hidden input.
+  // Re-applies the PLANNED option — never invents a selection to clear a badge.
+  labelClickRadio(el, value) {
+    const group = el.closest('mat-radio-group') || el;
+    for (const btn of group.querySelectorAll('mat-radio-button')) {
+      if (btn.innerText && btn.innerText.trim() === value) {
+        const target = btn.querySelector('label') || btn.querySelector('.mat-radio-container') ||
+          btn.querySelector('.mat-radio-label') || btn;
+        target.click();
+        return true;
+      }
+    }
+    return false;
+  },
+
+  // Radio repair retry 2: drive the radio group's Ivy ControlValueAccessor directly (guarded) with
+  // the PLANNED value — same mechanism as accessorWrite / the audit's clearRadio.
+  radioAccessorWrite(el, value) {
+    const group = el.closest('mat-radio-group') || el;
+    const ctx = group.__ngContext__;
+    if (!ctx || !Array.isArray(ctx)) return false;
+    for (let i = 0; i < ctx.length; i++) {
+      const item = ctx[i];
+      if (item && typeof item === 'object' && typeof item.writeValue === 'function' &&
+          ('_value' in item || '_radios' in item || 'selected' in item)) {
+        try {
+          item.writeValue(value);
+          if (typeof item._controlValueAccessorChangeFn === 'function') item._controlValueAccessorChangeFn(value);
+          else if (typeof item.onChange === 'function') item.onChange(value);
+        } catch (e) { return false; }
+        return true;
+      }
+    }
+    return false;
+  },
+
+  // Auto-repair pass: after the main fill, retry ONLY planned values the host still flags as
+  // missing, escalating through the write ladder. Covers text-like fields and radios (each has a
+  // distinct alternate strategy). Never invents content, never retries 'unknown'/absent values,
+  // never selects a radio option that wasn't planned, stops as soon as it stops making progress.
   // Returns { passes, repaired: [...], stillMissing: [...] }. Callers wrap this in try/catch so a
   // repair failure can never break a successful fill.
   async runRepairPass(plan, initialValidation) {
@@ -540,19 +615,21 @@ window.FormEngineExecutor = {
         const { el, label } = this.resolveActionEl(action);
         if (!el) continue;
         const strategy = this.detectStrategy(el, action);
-        if (!TEXT.has(strategy)) continue;            // only text-like fields have an alt strategy
+        const family = TEXT.has(strategy) ? 'text' : (strategy === 'radio' ? 'radio' : null);
+        if (!family) continue;                         // only text-like + radio have alt strategies
         if (!this.stillMissing(el, strategy)) continue; // it landed — leave it alone
         if (!used[action.fieldId]) used[action.fieldId] = new Set(['primary']);
-        const rung = this.nextRung(used[action.fieldId]);
+        const rung = this.nextRung(family, used[action.fieldId]);
         if (!rung) continue;                           // strategies exhausted for this field
         used[action.fieldId].add(rung);
         try {
-          this.repairWrite(el, action, rung);
+          this.repairWrite(el, action, family, rung);
           didWrite = true;
           await this.wait(80);
           const resolved = !this.stillMissing(el, strategy);
-          repair.repaired.push({ stableId: action.fieldId, label, attempt: pass + 1, strategyUsed: rung, resolved });
-          if (this.DEBUG) console.log('[Path4ABA Repair]', action.fieldId, rung, resolved ? 'resolved' : 'still missing');
+          const strategyUsed = (family === 'radio' ? 'radio:' : '') + rung;
+          repair.repaired.push({ stableId: action.fieldId, label, attempt: pass + 1, strategyUsed, resolved });
+          if (this.DEBUG) console.log('[Path4ABA Repair]', action.fieldId, strategyUsed, resolved ? 'resolved' : 'still missing');
         } catch (e) {
           if (this.DEBUG) console.warn('[Path4ABA Repair] write failed:', action.fieldId, e.message);
         }
@@ -743,21 +820,21 @@ window.FormEngineExecutor = {
   // Returns an outcome object: { status: 'filled'|'skipped'|'failed', review?, verification? }.
   async fillField(action) {
     const norm = window.__p4NormalizedForm;
-    if (!norm?.fieldIndex) {
-      if (this.DEBUG) console.warn('[Path4ABA Executor] NormalizedForm not available');
-      return { status: 'failed', review: { stableId: action.fieldId, label: action.fieldId, reason: 'NEEDS_REVIEW' } };
-    }
-
-    const fieldData = norm.fieldIndex[action.fieldId];
+    const fieldData = norm && norm.fieldIndex ? norm.fieldIndex[action.fieldId] : null;
     const label = (fieldData && fieldData.questionText) || action.fieldId;
-    if (!fieldData) {
-      if (this.DEBUG) console.warn('[Path4ABA Executor] Field not in index:', action.fieldId);
-      return { status: 'skipped', review: { stableId: action.fieldId, label, reason: 'NEEDS_REVIEW' } };
-    }
 
-    // Rule 5: never write a guess. Skip unknown/null/empty entirely — no click, no clearing.
+    // Rule 5: deliberate skip — an 'unknown'/blank planned value is never written (audit safety).
+    // This is the ONLY path that yields 'skipped'; everything else with a real value must land in
+    // 'filled' or 'failed' so the buckets sum to the plan.
     if (this.isSkippable(action.value)) {
       return { status: 'skipped', review: { stableId: action.fieldId, label, reason: 'NEEDS_REVIEW' } };
+    }
+
+    // A real planned value we could not resolve to a field -> it never landed -> 'failed' (NOT a
+    // deliberate skip), so it counts as failed and surfaces for review.
+    if (!fieldData) {
+      if (this.DEBUG) console.warn('[Path4ABA Executor] Field not in index (had a value):', action.fieldId);
+      return { status: 'failed', review: { stableId: action.fieldId, label, reason: 'NEEDS_REVIEW' } };
     }
 
     const sectionEl = this.getSectionElement(action.sectionId);
