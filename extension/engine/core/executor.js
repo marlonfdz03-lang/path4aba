@@ -51,14 +51,42 @@ window.FormEngineExecutor = {
     //   'skipped'  = deliberately not written ('unknown'/blank)
     //   'verified' = wrote and verified ok on the first pass
     //   'failed'   = had a value that never landed (repair may later reclassify to 'repaired')
+    // Item 2 safeguard: when a Goal/Behavior instance's program/name select has NO matching option,
+    // do NOT populate the rest of that instance. A program-less instance is not a real plan item,
+    // and populating it produces junk AND is the likely trigger for ABA Matrix's own render errors
+    // (a component reading `.program` off a goal that has none). The name select is emitted first
+    // per instance (verified in plan-fill), so marking its section here skips its remaining fields.
+    const skipSections = new Set();
+    const isNameSelect = (fieldId) => /_GoalName$|_BehaviorName$/.test(fieldId || '');
+
     const actionOutcomes = [];
     for (const action of plan) {
       try {
+        if (skipSections.has(action.sectionId)) {
+          // Counted as skipped, but no per-field review entry: the instance's name select already
+          // produced one NO_MATCHING_OPTION entry that flags the whole instance for the RBT.
+          actionOutcomes.push({ fieldId: action.fieldId, cls: 'skipped' });
+          continue;
+        }
+
         const outcome = await this.fillField(action);
+
+        // If this was the instance's program/name select and no option matched, skip the rest of
+        // the instance (leave it program-less rather than filling a phantom goal/behavior).
+        if (isNameSelect(action.fieldId) && outcome.review && outcome.review.reason === 'NO_MATCHING_OPTION') {
+          skipSections.add(action.sectionId);
+        }
+
         let cls;
-        if (outcome.status === 'skipped') cls = 'skipped';
-        else if (outcome.status === 'failed') cls = 'failed';
-        else cls = (outcome.verification && outcome.verification.ok) ? 'verified' : 'failed';
+        if (outcome.status === 'skipped') {
+          // Deliberate skip (unknown/blank, no verification) vs. a real no-match / failed write
+          // (has a verification that did NOT pass) — the latter is a failure, not a skip.
+          cls = (outcome.verification && outcome.verification.ok === false) ? 'failed' : 'skipped';
+        } else if (outcome.status === 'failed') {
+          cls = 'failed';
+        } else {
+          cls = (outcome.verification && outcome.verification.ok) ? 'verified' : 'failed';
+        }
         actionOutcomes.push({ fieldId: action.fieldId, cls });
         if (outcome.review) results.needsReview.push(outcome.review);
         if (outcome.verification) results.verifications.push(outcome.verification);
@@ -116,6 +144,23 @@ window.FormEngineExecutor = {
     results.filled = written + repaired;
     results.skipped = skipped;
     results.failed = failed;
+
+    // Item 1 diagnostic: the host (ABA Matrix) can throw during rendering (e.g. a component reading
+    // `.program` off a program-less Goal Implementation instance). If it does, its section-index
+    // badges may not reflect real form state. Compare the index total against a direct DOM count of
+    // ng-invalid required fields; a mismatch means the index is unreliable in this state.
+    if (this.DEBUG) {
+      const indexTotal = this.totalMissing(results.validation);
+      const direct = results.validation && typeof results.validation.directMissing === 'number'
+        ? results.validation.directMissing : null;
+      if (direct !== null && direct !== indexTotal) {
+        console.warn('[Path4ABA Executor] section index DISAGREES with direct ng-invalid count —',
+          'the index may be stale (host threw during render):',
+          { indexTotal, directMissing: direct });
+      } else if (direct !== null) {
+        console.log('[Path4ABA Executor] validation cross-check OK:', { indexTotal, directMissing: direct });
+      }
+    }
 
     // Issue 1d: conditional-pair audit. DESTRUCTIVE (toggles radios to observe what each reveals),
     // so it is HARD-GATED behind an explicit opt-in that NO code path ever sets — a DEBUG flag

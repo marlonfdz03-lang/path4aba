@@ -186,6 +186,22 @@
         result.invalidFields.push({ stableId: stableId, label: q || null });
       });
 
+      // 5) Direct count of required fields the DOM itself still marks invalid (ng-invalid), counted
+      // independently of the section index. If ABA Matrix threw during rendering, its index badges
+      // can go stale; comparing this direct count against the index total (see executor) reveals it.
+      var directSeen = new Set();
+      var directMissing = 0;
+      document.querySelectorAll('mat-form-field, mat-radio-group').forEach(function (field) {
+        if (field.offsetParent === null) return;
+        if (directSeen.has(field)) return; directSeen.add(field);
+        var required = field.querySelector('.mat-form-field-required-marker, .mat-mdc-form-field-required-marker')
+          || field.querySelector('[required], [aria-required="true"]')
+          || (field.matches('mat-radio-group') && field.getAttribute('aria-required') === 'true');
+        if (!required) return;
+        if (field.classList.contains('ng-invalid') || field.querySelector('.ng-invalid')) directMissing++;
+      });
+      result.directMissing = directMissing;
+
       return result;
     },
 
