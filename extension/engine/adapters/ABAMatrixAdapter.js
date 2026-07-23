@@ -189,13 +189,19 @@
       return result;
     },
 
-    // Issue 1d: DEBUG-ONLY, DESTRUCTIVE audit. For every radio in the form, set each option and
-    // observe (before vs after) whether it reveals additional REQUIRED controls — so we can find
-    // conditional-pair fields before they cause validation errors in production. Detects pairs by
-    // observing the DOM, never by hardcoding which radios have children. Returns
+    // Issue 1d: DESTRUCTIVE audit. For every radio in the form, set each option and observe
+    // (before vs after) whether it reveals additional REQUIRED controls — so we can find
+    // conditional-pair fields before they cause validation errors. Detects pairs by observing the
+    // DOM, never by hardcoding which radios have children. Returns
     //   [{ radio, option, reveals: [{ tag, label, required }] }]
-    // The caller (executor) runs this only under DEBUG and AFTER the real fill, since it toggles
-    // radios and leaves the form probed.
+    //
+    // SAFETY: this method is only ever called behind the executor's hard opt-in gate
+    // (window.__p4AuditConditionals === true) and only when the form had no pre-fill radio data.
+    // It captures each group's original selection and RESTORES it afterward — re-clicking the
+    // original option, or, for the "nothing selected" case, clearing via the Ivy
+    // ControlValueAccessor (writeValue(null) + change fn). A null group with no reachable accessor
+    // is NOT probed (skipped + logged), so the form is never left in a state it cannot be
+    // returned from.
     detectConditionalPairs: async function () {
       var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
       var textOf = function (el) {
@@ -231,18 +237,57 @@
         return textOf(group).split('\n')[0] || 'radio';
       };
 
+      var selectedButton = function (group) {
+        return group.querySelector('mat-radio-button.mat-radio-checked, mat-radio-button.mat-mdc-radio-checked');
+      };
+      var clickButtonInput = function (btn) {
+        if (!btn) return;
+        var input = btn.querySelector('input[type="radio"]') || btn.querySelector('input');
+        if (input) input.click(); else btn.click();
+      };
+      // The radio group's Ivy ControlValueAccessor (property names survive typical prod
+      // minification — the same mechanism the executor's write path relies on).
+      var radioCVA = function (group) {
+        var ctx = group.__ngContext__;
+        if (!ctx || typeof ctx.length !== 'number') return null;
+        for (var i = 0; i < ctx.length; i++) {
+          var it = ctx[i];
+          if (it && typeof it === 'object' && typeof it.writeValue === 'function'
+              && ('_value' in it || '_radios' in it || 'selected' in it)) return it;
+        }
+        return null;
+      };
+      // Restore a group to "nothing selected" (view + model). Returns true only if it worked.
+      var clearRadio = function (group) {
+        var cva = radioCVA(group);
+        if (!cva) return false;
+        try {
+          cva.writeValue(null);
+          if (typeof cva._controlValueAccessorChangeFn === 'function') cva._controlValueAccessorChangeFn(null);
+          else if (typeof cva.onChange === 'function') cva.onChange(null);
+        } catch (e) { return false; }
+        return !selectedButton(group);
+      };
+
       var pairs = [];
       var groups = Array.from(document.querySelectorAll('mat-radio-group'));
       for (var g = 0; g < groups.length; g++) {
         var group = groups[g];
         if (group.offsetParent === null) continue;
+
+        var original = selectedButton(group); // element, or null when nothing is selected
+        // A group that starts empty can only be probed if we can restore it back to empty.
+        if (!original && !radioCVA(group)) {
+          console.warn('[Path4ABA Audit] skip radio group (cannot restore empty selection):', groupLabel(group));
+          continue;
+        }
+
         var scope = group.closest('mat-card, form') || document.body;
         var label = groupLabel(group);
         var buttons = Array.from(group.querySelectorAll('mat-radio-button'));
         for (var b = 0; b < buttons.length; b++) {
           var beforeEls = requiredControls(scope);
-          var input = buttons[b].querySelector('input[type="radio"]') || buttons[b].querySelector('input');
-          if (input) input.click(); else buttons[b].click();
+          clickButtonInput(buttons[b]);
           await wait(400);
           var afterEls = requiredControls(scope);
           var revealed = afterEls.filter(function (el) { return beforeEls.indexOf(el) === -1; });
@@ -250,6 +295,14 @@
             pairs.push({ radio: label, option: textOf(buttons[b]), reveals: revealed.map(describe) });
           }
         }
+
+        // Restore the group's ORIGINAL selection so the form is left byte-identical.
+        if (original) {
+          clickButtonInput(original);
+        } else if (!clearRadio(group)) {
+          console.warn('[Path4ABA Audit] WARNING — could not fully restore empty selection for:', label);
+        }
+        await wait(200);
       }
       return pairs;
     }

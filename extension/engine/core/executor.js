@@ -29,6 +29,18 @@ window.FormEngineExecutor = {
       return results;
     }
 
+    // Guard for the Issue 1d audit: capture whether any radio already had a selection BEFORE we
+    // fill anything. The audit is destructive, so it must never probe a form that already carries
+    // user-entered radio data we didn't write. Fail safe to "has data" on any error.
+    let preFillHadSelections;
+    try {
+      preFillHadSelections = Array.from(document.querySelectorAll('mat-radio-group')).some((g) =>
+        g.offsetParent !== null &&
+        g.querySelector('mat-radio-button.mat-radio-checked, mat-radio-button.mat-mdc-radio-checked'));
+    } catch (e) {
+      preFillHadSelections = true;
+    }
+
     for (const action of plan) {
       try {
         const outcome = await this.fillField(action);
@@ -59,18 +71,23 @@ window.FormEngineExecutor = {
       if (this.DEBUG) console.warn('[Path4ABA Executor] readValidationState failed:', err.message);
     }
 
-    // Issue 1d: conditional-pair audit. DEBUG-ONLY and DESTRUCTIVE (it toggles radios to observe
-    // which reveal required children), so it runs last, after results + validation are captured,
-    // and never in production. Logs the discovered radio→child pairs for developers.
-    if (this.DEBUG) {
+    // Issue 1d: conditional-pair audit. DESTRUCTIVE (toggles radios to observe what each reveals),
+    // so it is HARD-GATED behind an explicit opt-in that NO code path ever sets — a DEBUG flag
+    // alone must never be able to trigger it, because a DEBUG flag left on in a real session would
+    // corrupt a signed clinical note. To run it, set `window.__p4AuditConditionals = true` by hand
+    // from the console. It also refuses to run if the form already had radio selections before the
+    // fill (possible user-entered data), and restores every radio it touches afterward.
+    if (window.__p4AuditConditionals === true) {
       try {
         const adapter = window.ABAMatrixAdapter;
-        if (adapter && typeof adapter.detectConditionalPairs === 'function') {
+        if (preFillHadSelections) {
+          console.warn('[Path4ABA Audit] SKIPPED — the form had radio selections before the fill (possible user-entered data). Not probing.');
+        } else if (adapter && typeof adapter.detectConditionalPairs === 'function') {
           const pairs = await adapter.detectConditionalPairs();
-          console.log('[Path4ABA Executor] conditional-pair audit (DEBUG, form was probed):', pairs);
+          console.log('[Path4ABA Audit] conditional pairs (radios restored to pre-audit state):', pairs);
         }
       } catch (err) {
-        console.warn('[Path4ABA Executor] conditional-pair audit failed:', err.message);
+        console.warn('[Path4ABA Audit] failed:', err.message);
       }
     }
 
