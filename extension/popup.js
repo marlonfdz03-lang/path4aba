@@ -2090,7 +2090,87 @@ chrome.runtime.onMessage.addListener((message) => {
       statusDiv.textContent = message.text || '';
     }
   }
+
+  // Post-fill summary (Rule 7): total written, verified OK, and fields needing review.
+  if (message.action === 'fillSummary') {
+    renderFillSummary(message.summary);
+  }
 });
+
+// Renders the post-fill summary block. Additive only — does not touch the AI Fill button
+// or the existing status line. Uses textContent for all dynamic strings (no HTML injection).
+function renderFillSummary(summary) {
+  const box = document.getElementById('aiFillSummary');
+  if (!box || !summary) return;
+  box.innerHTML = '';
+  box.style.display = 'block';
+
+  const head = document.createElement('div');
+  head.style.cssText = 'font-weight:600;margin-bottom:4px;color:#1e293b;';
+  head.textContent = `Fill summary: ${summary.written || 0} written · ${summary.verifiedOk || 0} verified OK`;
+  box.appendChild(head);
+
+  const review = Array.isArray(summary.needsReview) ? summary.needsReview : [];
+  const missing = Array.isArray(summary.missingSections) ? summary.missingSections : [];
+  const messages = Array.isArray(summary.messages) ? summary.messages : [];
+
+  if (review.length === 0 && missing.length === 0 && messages.length === 0) {
+    const ok = document.createElement('div');
+    ok.style.cssText = 'color:#16a34a;';
+    ok.textContent = '✓ No fields flagged for review.';
+    box.appendChild(ok);
+    return;
+  }
+
+  if (review.length > 0) {
+    const title = document.createElement('div');
+    title.style.cssText = 'margin-top:4px;font-weight:600;color:#b45309;';
+    title.textContent = `Needs review (${review.length}):`;
+    box.appendChild(title);
+
+    const ul = document.createElement('ul');
+    ul.style.cssText = 'margin:2px 0 0;padding-left:16px;';
+    review.forEach((r) => {
+      const li = document.createElement('li');
+      const reason = r.reason ? ` — ${r.reason}` : '';
+      li.textContent = `${r.label || r.stableId || 'field'}${reason}`;
+      ul.appendChild(li);
+    });
+    box.appendChild(ul);
+  }
+
+  if (missing.length > 0) {
+    const title = document.createElement('div');
+    title.style.cssText = 'margin-top:6px;font-weight:600;color:#b45309;';
+    title.textContent = 'Sections still incomplete (per ABA Matrix):';
+    box.appendChild(title);
+
+    const ul = document.createElement('ul');
+    ul.style.cssText = 'margin:2px 0 0;padding-left:16px;';
+    missing.forEach((s) => {
+      const li = document.createElement('li');
+      li.textContent = `${s.name}: ${s.missingCount} missing`;
+      ul.appendChild(li);
+    });
+    box.appendChild(ul);
+  }
+
+  if (messages.length > 0) {
+    const title = document.createElement('div');
+    title.style.cssText = 'margin-top:6px;font-weight:600;color:#b45309;';
+    title.textContent = 'ABA Matrix validation errors:';
+    box.appendChild(title);
+
+    const ul = document.createElement('ul');
+    ul.style.cssText = 'margin:2px 0 0;padding-left:16px;';
+    messages.forEach((m) => {
+      const li = document.createElement('li');
+      li.textContent = m;
+      ul.appendChild(li);
+    });
+    box.appendChild(ul);
+  }
+}
 
 document.getElementById('fillABAMatrixBtn')?.addEventListener('click', () => {
   const noteData = {

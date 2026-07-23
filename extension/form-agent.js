@@ -179,6 +179,39 @@
         'Filled ' + results.filled + ' fields, ' + results.skipped + ' skipped, ' + results.failed + ' failed',
         results.filled > 0 ? 'success' : 'warning'
       );
+      // Post-fill summary for the popup (Rule 7): totals + fields needing review. The needsReview
+      // list combines the executor's skips/mismatches with the host app's own validation state.
+      try {
+        const verifiedOk = (results.verifications || []).filter(function (v) { return v && v.ok; }).length;
+        const review = [];
+        const seenReview = new Set();
+        (results.needsReview || []).forEach(function (r) {
+          const key = (r.stableId || r.label || '') + '|' + (r.reason || '');
+          if (seenReview.has(key)) return;
+          seenReview.add(key);
+          review.push({ stableId: r.stableId || null, label: r.label || r.stableId || 'field', reason: r.reason || 'NEEDS_REVIEW' });
+        });
+        const validation = results.validation || { sections: [], messages: [], invalidFields: [] };
+        (validation.invalidFields || []).forEach(function (f) {
+          const key = (f.stableId || f.label || '') + '|INVALID';
+          if (seenReview.has(key)) return;
+          seenReview.add(key);
+          review.push({ stableId: f.stableId || null, label: f.label || f.stableId || 'field', reason: 'INVALID' });
+        });
+        const missingSections = (validation.sections || []).filter(function (s) { return s.missingCount > 0; });
+        chrome.runtime.sendMessage({
+          action: 'fillSummary',
+          summary: {
+            written: results.filled,
+            verifiedOk: verifiedOk,
+            skipped: results.skipped,
+            failed: results.failed,
+            needsReview: review,
+            missingSections: missingSections,
+            messages: validation.messages || [],
+          },
+        });
+      } catch (e) { /* summary is best-effort; never block the fill */ }
     } else {
       sendStatus('⚠️ Executor failed — see console.', 'warning');
     }

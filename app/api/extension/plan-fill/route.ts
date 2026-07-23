@@ -27,6 +27,15 @@ export async function POST(req: Request) {
   const isBlank = (v: unknown) =>
     v === null || v === undefined || (Array.isArray(v) ? v.length === 0 : String(v).trim() === '')
 
+  // Map a three-state boolean (true | false | 'unknown') to a radio value. 'unknown' (and any
+  // other non-boolean) becomes 'unknown' so the executor SKIPS the field and flags it for
+  // review — a false "No" is a clinical documentation error, never emitted by inference.
+  const threeStateRadio = (v: unknown): 'Yes' | 'No' | 'unknown' => {
+    if (v === true || v === 'Yes' || v === 'yes') return 'Yes'
+    if (v === false || v === 'No' || v === 'no') return 'No'
+    return 'unknown'
+  }
+
   const emptyFields: any[] = []
   for (const section of (normalizedForm.sections || [])) {
     for (const f of (section.fields || [])) {
@@ -57,7 +66,7 @@ export async function POST(req: Request) {
   if (facts.dailyLog) {
     const dl = facts.dailyLog
     const dlMappings = [
-      { fieldId: 'DL_EnvironmentChanges', fieldType: 'radio', value: dl.environmentChanges || 'No' },
+      { fieldId: 'DL_EnvironmentChanges', fieldType: 'radio', value: threeStateRadio(dl.environmentChanges) },
       { fieldId: 'DL_WhoWasPresent', fieldType: 'chip', value: dl.whoWasPresent?.[0] || '' },
       { fieldId: 'DL_PresentationStart', fieldType: 'textarea', value: dl.presentationStart || '' },
       { fieldId: 'DL_EvidencedBy', fieldType: 'text', value: dl.evidencedByStart || '' },
@@ -84,7 +93,7 @@ export async function POST(req: Request) {
       { fieldId: `BR${n}_EvidencedBy`, fieldType: 'textarea', value: b.evidencedBy },
       { fieldId: `BR${n}_BehaviorFunction`, fieldType: 'select', value: normalizedFunction },
       { fieldId: `BR${n}_Antecedent`, fieldType: 'textarea', value: b.antecedent },
-      { fieldId: `BR${n}_AntecedentInterventionsYesNo`, fieldType: 'radio', value: b.hadAntecedentIntervention ? 'Yes' : 'No' },
+      { fieldId: `BR${n}_AntecedentInterventionsYesNo`, fieldType: 'radio', value: threeStateRadio(b.hadAntecedentIntervention) },
       { fieldId: `BR${n}_AntecedentInterventions`, fieldType: 'chip', value: b.antecedentIntervention || '' },
       { fieldId: `BR${n}_ConsequenceInterventions`, fieldType: 'chip', value: b.consequenceIntervention },
       { fieldId: `BR${n}_Interventions`, fieldType: 'chip', value: b.interventions },
@@ -107,7 +116,7 @@ export async function POST(req: Request) {
       { fieldId: `Goal${n}_MedicalBarriers`, fieldType: 'chip', value: s.medicalNecessity },
       { fieldId: `Goal${n}_Activities`, fieldType: 'chip', value: s.activity },
       { fieldId: `Goal${n}_TeachingProcedure`, fieldType: 'textarea', value: s.teachingProcedure },
-      { fieldId: `Goal${n}_PromptsUsed`, fieldType: 'radio', value: s.promptsUsed ? 'Yes' : 'No' },
+      { fieldId: `Goal${n}_PromptsUsed`, fieldType: 'radio', value: threeStateRadio(s.promptsUsed) },
       { fieldId: `Goal${n}_Reinforcers`, fieldType: 'chip', value: s.reinforcers },
       { fieldId: `Goal${n}_Schedule`, fieldType: 'textarea', value: s.schedule || 'Continuous Reinforcement' },
     ]

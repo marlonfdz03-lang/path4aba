@@ -2,38 +2,306 @@
  * Path4ABA Form Engine — Executor (Phase 4, runs in the MAIN world)
  *
  * Fills form fields from a FillPlan. It locates each field's section by sectionId (DL /
- * BR{n} / Goal{n}), finds the DOM control near the field's questionText, and drives it with
- * the MAIN-world window.setMatInput / window.selectMatOption helpers (mat-helpers.js).
+ * BR{n} / Goal{n}), finds the DOM control near the field's questionText, and drives it with a
+ * SUPERSET write path: Angular Ivy's __ngContext__ accessor (guarded) PLUS DOM events
+ * (input/change/blur) that flip ng-dirty/ng-touched. ABA Matrix is Angular (Material + CDK),
+ * NOT React — so no _valueTracker. Selects use the CDK overlay via window.selectMatOption
+ * (mat-helpers.js).
  *
- * Depends on: window.setMatInput, window.selectMatOption (mat-helpers.js),
+ * Depends on: window.selectMatOption (mat-helpers.js),
  *             window.ABAMatrixAdapter (adapter), window.__p4NormalizedForm (fieldIndex).
  * Executes ONLY the plan it is handed — it does not plan.
  */
 window.__FormEngine_v = (window.__FormEngine_v || 0) + 1;
 
 window.FormEngineExecutor = {
-  async execute(plan) {
-    const results = { filled: 0, skipped: 0, failed: 0 };
+  // New diagnostics gated behind this flag (default false); no field VALUES are ever logged.
+  // A property (NOT a top-level `const`) so re-injecting this file stays safe (no redeclare).
+  DEBUG: false,
 
-    if (!window.setMatInput || !window.selectMatOption) {
-      console.error('[Path4ABA Executor] setMatInput/selectMatOption not available — is mat-helpers.js loaded?');
+  async execute(plan) {
+    // needsReview[]: fields we deliberately did NOT write (unknown/blank) or could not fill.
+    // verifications[]: per-field fillAndVerify results (intended vs actual).
+    const results = { filled: 0, skipped: 0, failed: 0, needsReview: [], verifications: [], validation: null };
+
+    if (!window.selectMatOption) {
+      console.error('[Path4ABA Executor] selectMatOption not available — is mat-helpers.js loaded?');
       return results;
     }
 
     for (const action of plan) {
       try {
-        const success = await this.fillField(action);
-        if (success) results.filled++;
-        else results.skipped++;
+        const outcome = await this.fillField(action);
+        if (outcome.status === 'filled') results.filled++;
+        else if (outcome.status === 'skipped') results.skipped++;
+        else results.failed++;
+        if (outcome.review) results.needsReview.push(outcome.review);
+        if (outcome.verification) results.verifications.push(outcome.verification);
       } catch (err) {
         console.error('[Path4ABA Executor] Failed:', action.fieldId, err.message);
         results.failed++;
+        results.needsReview.push({ stableId: action.fieldId, label: action.fieldId, reason: 'NEEDS_REVIEW' });
       }
       await this.wait(300);
     }
 
-    console.log('[Path4ABA Executor] Done:', results);
+    // Rule 6: read the host app's own validation state AFTER the fill completes.
+    try {
+      const adapter = window.ABAMatrixAdapter;
+      if (adapter && typeof adapter.readValidationState === 'function') {
+        results.validation = adapter.readValidationState();
+      }
+    } catch (err) {
+      if (this.DEBUG) console.warn('[Path4ABA Executor] readValidationState failed:', err.message);
+    }
+
+    if (this.DEBUG) console.log('[Path4ABA Executor] Done:', {
+      filled: results.filled, skipped: results.skipped, failed: results.failed,
+      needsReview: results.needsReview.length,
+    });
     return results;
+  },
+
+  // ── Value helpers ──────────────────────────────────────────────────────────
+  isBlank(v) {
+    return v === null || v === undefined || (typeof v === 'string' && v.trim() === '');
+  },
+
+  // Rule 3: a planned value we must never write (skip the field entirely instead).
+  isSkippable(v) {
+    return this.isBlank(v) || v === 'unknown';
+  },
+
+  valuesMatch(actual, intended) {
+    const a = String(actual == null ? '' : actual).trim().toLowerCase();
+    const b = String(intended == null ? '' : intended).trim().toLowerCase();
+    if (!a) return false;
+    return a === b || a.includes(b) || b.includes(a);
+  },
+
+  // ── Rule 3: classify the target by STRUCTURE (never by label / field / section name) ──
+  detectStrategy(el, action) {
+    if (el && el.isContentEditable) return 'contenteditable';
+    const tag = ((el && el.tagName) || '').toLowerCase();
+    if (tag === 'mat-select' || (el && el.closest && el.closest('mat-select'))) return 'select';
+    if (tag === 'mat-radio-group' || tag === 'mat-radio-button') return 'radio';
+    if (tag === 'textarea') return 'text';
+    if (tag === 'input') {
+      const type = (el.getAttribute('type') || 'text').toLowerCase();
+      if (type === 'radio') return 'radio';
+      const cls = el.className || '';
+      if (/mat-chip/i.test(cls) || (el.closest && el.closest('mat-chip-list, mat-chip-grid, mat-chip-list-input'))) return 'chip';
+      const role = (el.getAttribute('role') || '').toLowerCase();
+      if (role === 'combobox' || el.getAttribute('aria-autocomplete') || el.hasAttribute('matautocomplete') || el.getAttribute('aria-haspopup') === 'listbox') return 'autocomplete';
+      return 'text';
+    }
+    // Fall back to the scanner's structural classification.
+    if (action && action.fieldType === 'select') return 'select';
+    if (action && action.fieldType === 'radio') return 'radio';
+    if (action && action.fieldType === 'chip') return 'chip';
+    return 'text';
+  },
+
+  // ── Rule 1: the SINGLE Angular-safe write path for ALL text field writes ──────
+  // ABA Matrix is Angular (Material + CDK), NOT React. This is a SUPERSET of two mechanisms,
+  // both required:
+  //   • __ngContext__ accessor (Angular Ivy's internal element context) — the path that was
+  //     already filling 77/83 fields. Guarded so it's a no-op (never throws) when absent.
+  //   • DOM events (input/change/blur) — what actually flips ng-dirty / ng-touched, fixing the
+  //     6 fields the accessor alone left ng-pristine.
+  // (_valueTracker is intentionally NOT used — that one is genuinely React-only.)
+  setAngularValue(el, value) {
+    if (!el) return;
+    const v = value == null ? '' : String(value);
+
+    el.focus();
+    if (typeof el.click === 'function') el.click();
+    el.value = v;
+
+    // Angular Ivy accessor (guarded — no-op when __ngContext__ is absent, e.g. some prod builds).
+    const ctx = el.__ngContext__;
+    if (ctx && Array.isArray(ctx)) {
+      for (let i = 0; i < ctx.length; i++) {
+        const item = ctx[i];
+        if (item && typeof item === 'object' && typeof item.onChange === 'function' && item._elementRef) {
+          item.onChange(v);
+          if (typeof item.onTouched === 'function') item.onTouched();
+          break;
+        }
+      }
+    }
+
+    el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: false, data: v, inputType: 'insertText' }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+    if (typeof el.blur === 'function') el.blur();
+  },
+
+  // Rule 2 retry fallback: simulate a real keystroke for the FINAL character so Angular's
+  // input pipeline definitely fires when a bulk value-set did not stick (ng-dirty stayed false).
+  keyboardCommit(el, value) {
+    if (!el) return;
+    const v = value == null ? '' : String(value);
+    const last = v.length ? v.slice(-1) : ' ';
+    const head = v.length ? v.slice(0, -1) : '';
+    el.focus();
+    if (typeof el.click === 'function') el.click();
+    el.value = head;
+    el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: false, data: head, inputType: 'insertText' }));
+    el.dispatchEvent(new KeyboardEvent('keydown', { key: last, bubbles: true }));
+    el.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, data: last, inputType: 'insertText' }));
+    el.value = v;
+
+    // Mirror setAngularValue's Ivy accessor (guarded) so the fallback isn't strictly weaker than
+    // the path it rescues. Same position: after the value is set, before the events.
+    const ctx = el.__ngContext__;
+    if (ctx && Array.isArray(ctx)) {
+      for (let i = 0; i < ctx.length; i++) {
+        const item = ctx[i];
+        if (item && typeof item === 'object' && typeof item.onChange === 'function' && item._elementRef) {
+          item.onChange(v);
+          if (typeof item.onTouched === 'function') item.onTouched();
+          break;
+        }
+      }
+    }
+
+    el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: false, data: last, inputType: 'insertText' }));
+    el.dispatchEvent(new KeyboardEvent('keyup', { key: last, bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+    if (typeof el.blur === 'function') el.blur();
+  },
+
+  // Rule 2: read Angular's control state from the ng-* classes — the GROUND TRUTH the host
+  // app's validator uses. Re-reading el.value proves nothing (it always echoes what we wrote).
+  // Resolves the ng-* host: the element itself, or the nearest descendant/ancestor carrying it.
+  verifyAngularState(el) {
+    const carries = (n) => !!(n && n.classList && (
+      n.classList.contains('ng-pristine') || n.classList.contains('ng-dirty') ||
+      n.classList.contains('ng-valid') || n.classList.contains('ng-invalid')));
+    let node = el;
+    if (!carries(node) && el) {
+      const desc = el.querySelector && el.querySelector('.ng-dirty, .ng-pristine, .ng-valid, .ng-invalid');
+      if (desc) node = desc;
+      else {
+        let p = el.parentElement, hops = 0;
+        while (p && hops < 4 && !carries(p)) { p = p.parentElement; hops++; }
+        if (carries(p)) node = p;
+      }
+    }
+    const cl = (node && node.classList) || { contains: () => false };
+    return {
+      dirty: cl.contains('ng-dirty'),
+      touched: cl.contains('ng-touched'),
+      pristine: cl.contains('ng-pristine'),
+      valid: cl.contains('ng-valid'),
+      invalid: cl.contains('ng-invalid'),
+    };
+  },
+
+  isRequired(el) {
+    if (!el) return false;
+    return !!(el.required || (el.getAttribute && el.getAttribute('aria-required') === 'true'));
+  },
+
+  // Re-read a field's current DISPLAYED value/selection (used only for value-mismatch checks).
+  readBack(el, strategy) {
+    if (!el) return '';
+    if (strategy === 'select') {
+      const sel = el.matches?.('mat-select') ? el : (el.closest?.('mat-select') || el);
+      const node = sel.querySelector?.('.mat-select-value-text, .mat-mdc-select-value-text, .mat-select-value');
+      return node ? (node.innerText || '').trim() : '';
+    }
+    if (strategy === 'radio') {
+      const group = el.closest?.('mat-radio-group') || el;
+      const checked = group.querySelector?.('mat-radio-button.mat-radio-checked, mat-radio-button.mat-mdc-radio-checked');
+      return checked ? (checked.innerText || '').trim() : '';
+    }
+    if (strategy === 'chip') {
+      // After Enter the chip input is cleared and the value lives in a chip token — look there.
+      const scope = el.closest?.('mat-form-field, mat-chip-list, mat-chip-grid') || el.parentElement;
+      const chips = scope ? scope.querySelectorAll('mat-chip, mat-chip-row, .mat-chip, .mat-mdc-chip') : [];
+      for (const c of chips) { const t = (c.innerText || '').trim(); if (t) return t; }
+      return el.value || '';
+    }
+    if (strategy === 'contenteditable') return (el.textContent || '').trim();
+    return ('value' in el ? el.value : '') || '';
+  },
+
+  // Rule 2: score a field against Angular state. For text-like writes the GROUND TRUTH is
+  // ng-dirty (the whole point of this fix). For radio/select/chip a positive selection/token
+  // OR ng-dirty counts — so currently-working actuations are never falsely flagged.
+  scoreField(el, action, label, strategy) {
+    const state = this.verifyAngularState(el);
+    const actual = this.readBack(el, strategy);
+    const required = this.isRequired(el);
+    const valueOk = this.valuesMatch(actual, action.value);
+
+    let ok, reason;
+    if (strategy === 'text' || strategy === 'autocomplete' || strategy === 'contenteditable') {
+      if (!state.dirty && !(strategy === 'contenteditable' && valueOk)) { ok = false; reason = 'NOT_DIRTY'; }
+      else if (required && state.invalid) { ok = false; reason = 'INVALID'; }
+      else if (!valueOk) { ok = false; reason = 'VALUE_MISMATCH'; }
+      else { ok = true; reason = null; }
+    } else {
+      if (state.dirty || valueOk) {
+        ok = !(required && state.invalid);
+        reason = ok ? null : 'INVALID';
+      } else { ok = false; reason = 'NOT_DIRTY'; }
+    }
+    return {
+      stableId: action.fieldId, label, intended: action.value, actual,
+      dirty: state.dirty, touched: state.touched, valid: state.valid, ok, reason,
+    };
+  },
+
+  // Rule 2: write a text field the Angular-safe way, wait for change detection, verify against
+  // ng-dirty, and retry ONCE via keyboard simulation if it did not stick.
+  async fillAndVerify(el, action, label, strategy) {
+    const strat = strategy || 'text';
+    this.setAngularValue(el, action.value);
+    await this.wait(80);
+    let v = this.scoreField(el, action, label, strat);
+    if (!v.dirty) {
+      if (this.DEBUG) console.log('[Path4ABA Executor] not dirty — keyboard retry:', action.fieldId);
+      this.keyboardCommit(el, action.value);
+      await this.wait(80);
+      v = this.scoreField(el, action, label, strat);
+    }
+    return v;
+  },
+
+  // contenteditable targets: set textContent + beforeinput/input, then blur.
+  async fillContentEditable(el, action, label) {
+    const v = action.value == null ? '' : String(action.value);
+    el.focus();
+    el.textContent = v;
+    el.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, data: v, inputType: 'insertText' }));
+    el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: false, data: v, inputType: 'insertText' }));
+    el.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+    if (typeof el.blur === 'function') el.blur();
+    await this.wait(80);
+    return this.scoreField(el, action, label, 'contenteditable');
+  },
+
+  // mat-autocomplete / combobox: after typing, click the exact-text overlay option if present,
+  // otherwise commit the typed value with blur.
+  async commitAutocomplete(el, action) {
+    await this.wait(300);
+    const want = String(action.value == null ? '' : action.value).trim().toLowerCase();
+    const options = Array.from(document.querySelectorAll('.cdk-overlay-container mat-option, mat-option'));
+    const match = options.find((o) => (o.innerText || '').trim().toLowerCase() === want);
+    if (match) { match.click(); await this.wait(200); }
+    else { el.dispatchEvent(new FocusEvent('blur', { bubbles: true })); if (typeof el.blur === 'function') el.blur(); }
+  },
+
+  // Package a filled field's verification into an execute() outcome.
+  outcomeFrom(verification, action, label) {
+    const review = verification && !verification.ok
+      ? { stableId: action.fieldId, label, reason: verification.reason || 'NEEDS_REVIEW' }
+      : undefined;
+    return { status: 'filled', verification, review };
   },
 
   getSectionElement(sectionId) {
@@ -203,79 +471,116 @@ window.FormEngineExecutor = {
     return null;
   },
 
+  // Returns an outcome object: { status: 'filled'|'skipped'|'failed', review?, verification? }.
   async fillField(action) {
     const norm = window.__p4NormalizedForm;
     if (!norm?.fieldIndex) {
-      console.warn('[Path4ABA Executor] NormalizedForm not available');
-      return false;
+      if (this.DEBUG) console.warn('[Path4ABA Executor] NormalizedForm not available');
+      return { status: 'failed', review: { stableId: action.fieldId, label: action.fieldId, reason: 'NEEDS_REVIEW' } };
     }
 
     const fieldData = norm.fieldIndex[action.fieldId];
+    const label = (fieldData && fieldData.questionText) || action.fieldId;
     if (!fieldData) {
-      console.warn('[Path4ABA Executor] Field not in index:', action.fieldId);
-      return false;
+      if (this.DEBUG) console.warn('[Path4ABA Executor] Field not in index:', action.fieldId);
+      return { status: 'skipped', review: { stableId: action.fieldId, label, reason: 'NEEDS_REVIEW' } };
+    }
+
+    // Rule 5: never write a guess. Skip unknown/null/empty entirely — no click, no clearing.
+    if (this.isSkippable(action.value)) {
+      return { status: 'skipped', review: { stableId: action.fieldId, label, reason: 'NEEDS_REVIEW' } };
     }
 
     const sectionEl = this.getSectionElement(action.sectionId);
     if (!sectionEl) {
-      console.warn('[Path4ABA Executor] Section not found:', action.sectionId);
-      return false;
+      if (this.DEBUG) console.warn('[Path4ABA Executor] Section not found:', action.sectionId);
+      return { status: 'failed', review: { stableId: action.fieldId, label, reason: 'NEEDS_REVIEW' } };
     }
 
-    const resolvedEl = this.resolveLocator(fieldData.locator, sectionEl, action.fieldType, action.fieldId);
-    // Chips can be conditional (they render after a "Yes" radio) — let them retry below
-    // instead of failing here. All other types require the element up front.
+    let resolvedEl = this.resolveLocator(fieldData.locator, sectionEl, action.fieldType, action.fieldId);
+    // Chips can be conditional (rendered after a "Yes" radio) — retry once before failing.
     if (!resolvedEl && action.fieldType !== 'chip') {
-      console.warn('[Path4ABA Executor] DOM element not found for:', action.fieldId, fieldData.questionText);
-      return false;
+      if (this.DEBUG) console.warn('[Path4ABA Executor] DOM element not found for:', action.fieldId, label);
+      return { status: 'failed', review: { stableId: action.fieldId, label, reason: 'NEEDS_REVIEW' } };
+    }
+    if (!resolvedEl && action.fieldType === 'chip') {
+      await this.wait(500);
+      resolvedEl = this.resolveLocator(fieldData.locator, sectionEl, action.fieldType, action.fieldId);
+      if (!resolvedEl) {
+        if (this.DEBUG) console.warn('[Path4ABA Executor] Chip not found (after retry):', action.fieldId, label);
+        return { status: 'failed', review: { stableId: action.fieldId, label, reason: 'NEEDS_REVIEW' } };
+      }
     }
 
-    switch (action.fieldType) {
-      case 'textarea':
-      case 'input':
-      case 'text':
-        window.setMatInput(resolvedEl, action.value);
-        return true;
+    // Rule 3: choose the actuation strategy from the resolved element's STRUCTURE.
+    const strategy = this.detectStrategy(resolvedEl, action);
+    if (this.DEBUG) console.log('[Path4ABA Executor] strategy:', action.fieldId, '->', strategy);
 
-      case 'select':
+    switch (strategy) {
+      case 'text': {
+        const verification = await this.fillAndVerify(resolvedEl, action, label, 'text');
+        return this.outcomeFrom(verification, action, label);
+      }
+
+      case 'autocomplete': {
+        this.setAngularValue(resolvedEl, action.value);
+        await this.commitAutocomplete(resolvedEl, action);
+        await this.wait(80);
+        let verification = this.scoreField(resolvedEl, action, label, 'autocomplete');
+        if (!verification.dirty && !verification.ok) {
+          this.keyboardCommit(resolvedEl, action.value);
+          await this.wait(80);
+          verification = this.scoreField(resolvedEl, action, label, 'autocomplete');
+        }
+        return this.outcomeFrom(verification, action, label);
+      }
+
+      case 'contenteditable': {
+        const verification = await this.fillContentEditable(resolvedEl, action, label);
+        return this.outcomeFrom(verification, action, label);
+      }
+
+      case 'select': {
+        // mat-select has no native <select> — selectMatOption clicks the CDK overlay option.
         await window.selectMatOption(resolvedEl, action.value);
-        return true;
+        await this.wait(80);
+        const verification = this.scoreField(resolvedEl, action, label, 'select');
+        return this.outcomeFrom(verification, action, label);
+      }
 
       case 'radio': {
         const group = resolvedEl.closest('mat-radio-group') || resolvedEl;
         const buttons = group.querySelectorAll('mat-radio-button');
         for (const btn of buttons) {
           if (btn.innerText?.trim() === action.value) {
-            btn.click();
+            // Rule 3: click the associated input / label — never set checked = true.
+            const input = btn.querySelector('input[type="radio"]') || btn.querySelector('input');
+            const labelEl = btn.querySelector('label');
+            if (input) input.click();
+            else if (labelEl) labelEl.click();
+            else btn.click();
             // Wait for Angular to render any conditional field this choice reveals
             // (e.g. the AntecedentInterventions chip that appears after "Yes").
             await this.wait(1200);
-            return true;
+            const verification = this.scoreField(group, action, label, 'radio');
+            return this.outcomeFrom(verification, action, label);
           }
         }
-        console.warn('[Path4ABA Executor] Radio option not found:', action.value);
-        return false;
+        if (this.DEBUG) console.warn('[Path4ABA Executor] Radio option not found:', action.value);
+        return { status: 'failed', review: { stableId: action.fieldId, label, reason: 'NEEDS_REVIEW' } };
       }
 
       case 'chip': {
-        let el = resolvedEl;
-        if (!el) {
-          // Retry once after a delay — a conditional chip may appear after a radio click.
-          await this.wait(500);
-          el = this.resolveLocator(fieldData.locator, sectionEl, action.fieldType, action.fieldId);
-        }
-        if (!el) {
-          console.warn('[Path4ABA Executor] Chip not found (after retry):', action.fieldId, fieldData.questionText);
-          return false;
-        }
-        window.setMatInput(el, action.value);
+        this.setAngularValue(resolvedEl, action.value);
         await this.wait(150);
-        el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-        return true;
+        resolvedEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        await this.wait(80);
+        const verification = this.scoreField(resolvedEl, action, label, 'chip');
+        return this.outcomeFrom(verification, action, label);
       }
 
       default:
-        return false;
+        return { status: 'failed', review: { stableId: action.fieldId, label, reason: 'NEEDS_REVIEW' } };
     }
   },
 
