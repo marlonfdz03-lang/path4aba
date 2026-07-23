@@ -51,7 +51,10 @@ const FUNCTION_PATTERNS: { re: RegExp; label: string }[] = [
   { re: /attention[-\s]?(maintained|seeking|based)?/i, label: 'Attention' },
   { re: /escape[-\s]?(maintained|motivated)?|avoidance|demand[-\s]avoidance/i, label: 'Escape' },
   { re: /tangible[s]?[-\s]?(maintained|access)?|access[-\s]to[-\s]items?/i, label: 'Tangibles' },
-  { re: /automatic[-\s]?(maintained|reinforcement)?|sensory|self[-\s]stimulat/i, label: 'Automatic Reinforcement' },
+  // Require the FUNCTION context — never bare "automatic"/"sensory", which appear in ubiquitous
+  // sensory reinforcers/activities (sensory bin, sensory break) and were systematically producing
+  // false Automatic derivations for escape/tangible/attention behaviors.
+  { re: /automatic[-\s]?(reinforcement|maintained)|automatically[-\s]?maintained|sensory[-\s]?(reinforcement|maintained|stimulation|seeking|input)|self[-\s]?stimulat|stereotyp/i, label: 'Automatic Reinforcement' },
 ]
 
 type ThreeState = true | false | 'unknown'
@@ -378,7 +381,7 @@ CRITICAL — presentationStart vs presentationEnd:
 
 CRITICAL — For evidencedBy: write ONLY the topography (physical description of HOW the behavior appeared). Never write WHAT triggered it or WHEN it occurred. The antecedent field handles context.
 
-CRITICAL — For behavior function: function must ALWAYS be one of exactly: Attention, Escape, Tangible, Automatic Reinforcement. If the note says 'attention-maintained' use 'Attention'. If 'escape-maintained' use 'Escape'. If 'tangible-motivated' use 'Tangible'. If 'automatic' or 'self-stimulatory' or 'sensory' use 'Automatic Reinforcement'. If you cannot determine the function from the note, use 'Automatic Reinforcement' as the default. A function field must NEVER be empty, null, or missing.
+CRITICAL — For behavior function: function must be one of exactly: Attention, Escape, Tangible, Automatic Reinforcement. If the note says 'attention-maintained' use 'Attention'. If 'escape-maintained' use 'Escape'. If 'tangible-motivated' use 'Tangible'. If 'sensory-maintained' or 'self-stimulatory' or 'stereotypic' use 'Automatic Reinforcement'. Automatic Reinforcement applies ONLY when there is NO social antecedent (no demand, no denied/withheld item, no attention shift, no directed transition). Do NOT default to 'Automatic Reinforcement' when the function is unclear — the system re-derives the function deterministically from the note, so never pad an undetermined function with 'Automatic Reinforcement'.
 
 Return this exact JSON structure:
 {
