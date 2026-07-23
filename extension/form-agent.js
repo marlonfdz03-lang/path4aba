@@ -189,7 +189,14 @@
           const key = (r.stableId || r.label || '') + '|' + (r.reason || '');
           if (seenReview.has(key)) return;
           seenReview.add(key);
-          review.push({ stableId: r.stableId || null, label: r.label || r.stableId || 'field', reason: r.reason || 'NEEDS_REVIEW' });
+          review.push({
+            stableId: r.stableId || null,
+            label: r.label || r.stableId || 'field',
+            reason: r.reason || 'NEEDS_REVIEW',
+            // Carried through for NO_MATCHING_OPTION so the popup can show expected-vs-offered.
+            intended: r.intended,
+            options: r.options,
+          });
         });
         const validation = results.validation || { sections: [], messages: [], invalidFields: [] };
         (validation.invalidFields || []).forEach(function (f) {

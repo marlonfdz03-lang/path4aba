@@ -34,6 +34,12 @@ const VOCAB = {
     'independently', 'without prompts', 'without prompting', 'unprompted', 'no prompts',
     'independent',
   ],
+  // A REPORTABLE event (separate incident report). A treatment-plan behavior handled with
+  // planned interventions is NOT an incident — it belongs in Behavior Reduction, not here.
+  incidentIndicators: [
+    'injury', 'injured', 'first aid', 'medical attention', 'emergency', 'hospital',
+    'bleeding', 'property damage', 'left the premises', 'elopement', 'eloped', 'incident report',
+  ],
 } as const
 
 // Behavior-function phrase patterns (tolerant to phrasing variants). Output strings are the
@@ -73,30 +79,49 @@ function anchorIndex(hay: string, behavior: any): number {
   return -1
 }
 
-// Rule 1: derive the function from tolerant patterns run over the behavior's text segment
+// Rule 6: derive the function from tolerant patterns run over the behavior's text segment
 // (note + the behavior's own extracted fields). If more than one pattern matches, take the
 // one whose match index is closest to the behavior's topography. If none match, 'unknown'.
-function deriveBehaviorFunction(note: string, behavior: any): string {
+// Returns the resolved label plus which pattern matched (regex source only — never note text,
+// which could be PHI) so the caller can DEBUG-log the derivation.
+function deriveBehaviorFunction(note: string, behavior: any): { resolved: string; matchedPattern: string | null } {
   const hay = [
     note || '',
     behavior?.topography || '', behavior?.evidencedBy || '', behavior?.antecedent || '',
     behavior?.interventions || '', behavior?.result || '',
   ].join('\n')
 
-  const matches: { label: string; index: number }[] = []
+  const matches: { label: string; index: number; pattern: string }[] = []
   for (const { re, label } of FUNCTION_PATTERNS) {
     const m = re.exec(hay)
-    if (m) matches.push({ label, index: m.index })
+    if (m) matches.push({ label, index: m.index, pattern: re.source })
   }
-  if (matches.length === 0) return 'unknown'
-  if (matches.length === 1) return matches[0].label
+  if (matches.length === 0) return { resolved: 'unknown', matchedPattern: null }
+  if (matches.length === 1) return { resolved: matches[0].label, matchedPattern: matches[0].pattern }
 
   const anchor = anchorIndex(hay, behavior)
   if (anchor >= 0) {
     matches.sort((a, b) => Math.abs(a.index - anchor) - Math.abs(b.index - anchor))
   }
   // Deterministic tiebreak when there's no topography anchor: FUNCTION_PATTERNS order.
-  return matches[0].label
+  return { resolved: matches[0].label, matchedPattern: matches[0].pattern }
+}
+
+// Issue 1: an "incident" is a REPORTABLE event, not a treatment-plan behavior. true only when a
+// reportable indicator is present and not negated; false when the note documents only handled
+// behaviors; 'unknown' when an indicator is present but no detail exists to fill the required
+// "specify incident" child field (so plan-fill/executor skip it rather than emit a broken Yes).
+const NEG_INCIDENT = /\b(no|without|denied|denies|free of)\s+(\w+\s+){0,3}(injur|incident|emergenc|bleeding|property damage|first[-\s]aid|medical attention|elopement)/i
+function inferIncidents(note: string, dailyLog: any): ThreeState {
+  const text = note || ''
+  const hasIndicator = containsAny(text, VOCAB.incidentIndicators)
+  if (hasIndicator && !NEG_INCIDENT.test(text)) {
+    const detail = String(dailyLog?.incidentDetail || '').trim()
+    return detail ? true : 'unknown'
+  }
+  // No reportable indicator (or only a negated one): a documented, handled behavior is NOT an
+  // incident. A behavior in Behavior Reduction must NEVER by itself set incidents = true.
+  return false
 }
 
 // Rule 2: was an antecedent-based procedure used for this behavior? Classify the behavior's
@@ -113,18 +138,52 @@ function inferAntecedentInterventionUsed(behavior: any): ThreeState {
   return 'unknown'
 }
 
-// Rule 2: were prompts used for this goal? Prompt indicator present -> true; an independence
-// indicator with no prompt indicator -> false; neither present -> 'unknown'.
-function inferPromptsUsed(skill: any): ThreeState {
-  const text = [
+// The text segment that describes a goal's teaching (used by both prompt inferences).
+function goalText(skill: any): string {
+  return [
     skill?.teachingProcedure || '', skill?.promptDetail || '', skill?.activity || '',
     skill?.name || '',
   ].join(' ').trim()
+}
+
+// Rule 2: were prompts used for this goal? Prompt indicator present -> true; an independence
+// indicator with no prompt indicator -> false; neither present -> 'unknown'.
+function inferPromptsUsed(skill: any): ThreeState {
+  const text = goalText(skill)
   const hasPrompt = containsAny(text, VOCAB.promptIndicators)
   const hasIndependence = containsAny(text, VOCAB.independenceIndicators)
   if (hasPrompt) return true
   if (hasIndependence) return false
   return 'unknown'
+}
+
+// Issue 1c: the canonical ABA prompt hierarchy. Ordered most-specific-first so the specific
+// phrase wins (e.g. "partial physical" is checked before generic "physical guidance").
+// Qualifiers ("minimal", "with", "using") don't block a match — we test for the indicator
+// substring, not an exact phrase, so "minimal verbal prompting" -> "Verbal".
+const PROMPT_TYPE_RULES: { canonical: string; re: RegExp }[] = [
+  { canonical: 'Verbal', re: /verbal|using words/i },
+  { canonical: 'Gestural', re: /gestural|pointing/i },
+  { canonical: 'Model', re: /model(?:ing|ling|ed|led)?|demonstrat/i },
+  { canonical: 'Proximity', re: /proximity/i },
+  { canonical: 'Partial Physical', re: /partial\s+physical/i },
+  { canonical: 'Full Physical', re: /hand[-\s]?over[-\s]?hand|full physical/i },
+  { canonical: 'Visual', re: /visual(?:\s+(?:support|supports|schedule|prompt|cue))?|picture|\bcards?\b/i },
+]
+
+// Issue 1c: map the goal's prompt indicators to canonical prompt-hierarchy names. Returns a
+// deduped list in canonical order. Empty when no prompt type can be identified.
+function derivePromptTypes(skill: any): string[] {
+  const text = goalText(skill)
+  if (!text) return []
+  const found = new Set<string>()
+  for (const rule of PROMPT_TYPE_RULES) {
+    if (rule.re.test(text)) found.add(rule.canonical)
+  }
+  // Generic "physical guidance" -> Full Physical, but NOT when part of "partial physical guidance".
+  const cleaned = text.replace(/partial\s+physical\s+guidance/gi, ' ')
+  if (/physical guidance/i.test(cleaned)) found.add('Full Physical')
+  return PROMPT_TYPE_RULES.map((r) => r.canonical).filter((c) => found.has(c))
 }
 
 // Rule 2: environmental changes are true/false only when the note states it explicitly;
@@ -250,18 +309,29 @@ Return this exact JSON structure:
     // Override the LLM's guesses with tolerant, note-grounded derivations. Fields that
     // cannot be determined become 'unknown' so the executor skips them (never a false "No").
     if (Array.isArray(facts.behaviors)) {
-      for (const b of facts.behaviors) {
-        b.function = deriveBehaviorFunction(note, b)
+      for (let i = 0; i < facts.behaviors.length; i++) {
+        const b = facts.behaviors[i]
+        const fn = deriveBehaviorFunction(note, b)
+        b.function = fn.resolved
         b.hadAntecedentIntervention = inferAntecedentInterventionUsed(b)
+        // Issue 2: prove the derivation ran and what it resolved to (no note text / PHI logged).
+        if (DEBUG) {
+          console.log('[extract-facts] function derivation —',
+            { behaviorIndex: i, matchedPattern: fn.matchedPattern, resolvedFunction: fn.resolved })
+        }
       }
     }
     if (Array.isArray(facts.skills)) {
       for (const s of facts.skills) {
         s.promptsUsed = inferPromptsUsed(s)
+        // Issue 1c: the "which prompts" child needs a value. Populate it from the same text so
+        // plan-fill can fill the conditional field revealed by promptsUsed = Yes.
+        s.promptTypes = derivePromptTypes(s)
       }
     }
     if (facts.dailyLog) {
       facts.dailyLog.environmentChanges = inferEnvironmentalChanges(note, facts.dailyLog)
+      facts.dailyLog.incidents = inferIncidents(note, facts.dailyLog)
     }
 
     if (DEBUG) {
@@ -269,9 +339,12 @@ Return this exact JSON structure:
       const fnUnknown = (facts.behaviors || []).filter((b: any) => b.function === 'unknown').length
       const aiUnknown = (facts.behaviors || []).filter((b: any) => b.hadAntecedentIntervention === 'unknown').length
       const pUnknown = (facts.skills || []).filter((s: any) => s.promptsUsed === 'unknown').length
+      const pTypesEmpty = (facts.skills || []).filter((s: any) => s.promptsUsed === true && (!s.promptTypes || s.promptTypes.length === 0)).length
       console.log('[extract-facts] three-state unknowns —',
         'function:', fnUnknown, 'antecedentIntervention:', aiUnknown,
-        'prompts:', pUnknown, 'env:', facts.dailyLog?.environmentChanges)
+        'prompts:', pUnknown, 'env:', facts.dailyLog?.environmentChanges,
+        'incidents:', facts.dailyLog?.incidents,
+        '| promptsUsed=true but no promptTypes:', pTypesEmpty)
     }
 
     return NextResponse.json({ facts })

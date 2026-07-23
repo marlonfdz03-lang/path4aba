@@ -42,23 +42,31 @@
     el.dispatchEvent(new Event('blur', { bubbles: true }));
   }
 
+  // Returns { options: string[], matched: boolean, exact: boolean } so the caller can detect a
+  // NO_MATCHING_OPTION situation and report the available options (Issue 3). Never leaves a
+  // partial state: when nothing matches, the panel is closed without selecting anything.
   async function selectMatOption(selectEl, value) {
-    if (!selectEl || !value) return;
+    if (!selectEl || !value) return { options: [], matched: false, exact: false };
     selectEl.click();
     await waitMs(500);
     const options = document.querySelectorAll('mat-option');
+    const optionTexts = Array.from(options)
+      .map(function (o) { return o.innerText ? o.innerText.trim() : ''; })
+      .filter(Boolean);
     if (!options.length) {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       await waitMs(200);
-      return;
+      return { options: [], matched: false, exact: false };
     }
 
     const valueLower = String(value).toLowerCase().trim();
 
+    let exact = true;
     let match = Array.from(options).find(function (opt) {
       return opt.innerText && opt.innerText.trim().toLowerCase() === valueLower;
     });
     if (!match) {
+      exact = false;
       match = Array.from(options).find(function (opt) {
         const o = opt.innerText ? opt.innerText.trim().toLowerCase() : '';
         return o.includes(valueLower) || valueLower.includes(o);
@@ -90,6 +98,7 @@
       document.documentElement.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     }
     await waitMs(200);
+    return { options: optionTexts, matched: !!match, exact: exact };
   }
 
   window.setMatInput = setMatInput;

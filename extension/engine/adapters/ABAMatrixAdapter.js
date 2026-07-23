@@ -187,6 +187,71 @@
       });
 
       return result;
+    },
+
+    // Issue 1d: DEBUG-ONLY, DESTRUCTIVE audit. For every radio in the form, set each option and
+    // observe (before vs after) whether it reveals additional REQUIRED controls — so we can find
+    // conditional-pair fields before they cause validation errors in production. Detects pairs by
+    // observing the DOM, never by hardcoding which radios have children. Returns
+    //   [{ radio, option, reveals: [{ tag, label, required }] }]
+    // The caller (executor) runs this only under DEBUG and AFTER the real fill, since it toggles
+    // radios and leaves the form probed.
+    detectConditionalPairs: async function () {
+      var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+      var textOf = function (el) {
+        return (el && (el.innerText || el.textContent) || '').replace(/\s+/g, ' ').trim();
+      };
+
+      // Value-bearing controls in a scope that are REQUIRED (required attr / aria-required, or a
+      // mat-form-field required marker), and currently visible.
+      var requiredControls = function (scope) {
+        var out = [];
+        if (!scope) return out;
+        scope.querySelectorAll('textarea, input:not([type="hidden"]):not([type="radio"]), mat-select').forEach(function (el) {
+          if (el.offsetParent === null) return;
+          var ff = el.closest('mat-form-field');
+          var required = !!(el.required
+            || (el.getAttribute && el.getAttribute('aria-required') === 'true')
+            || (ff && ff.querySelector('.mat-form-field-required-marker, .mat-mdc-form-field-required-marker')));
+          if (required) out.push(el);
+        });
+        return out;
+      };
+      var describe = function (el) {
+        var ff = el.closest('mat-form-field');
+        var lbl = ff && ff.querySelector('mat-label, label, strong, b, p');
+        return { tag: (el.tagName || '').toLowerCase(), label: (lbl && textOf(lbl)) || null, required: true };
+      };
+      var groupLabel = function (group) {
+        var prev = group.previousElementSibling;
+        for (var d = 0; d < 3 && prev; d++, prev = prev.previousElementSibling) {
+          var t = textOf(prev);
+          if (t && t.length > 3) return t.split('\n')[0];
+        }
+        return textOf(group).split('\n')[0] || 'radio';
+      };
+
+      var pairs = [];
+      var groups = Array.from(document.querySelectorAll('mat-radio-group'));
+      for (var g = 0; g < groups.length; g++) {
+        var group = groups[g];
+        if (group.offsetParent === null) continue;
+        var scope = group.closest('mat-card, form') || document.body;
+        var label = groupLabel(group);
+        var buttons = Array.from(group.querySelectorAll('mat-radio-button'));
+        for (var b = 0; b < buttons.length; b++) {
+          var beforeEls = requiredControls(scope);
+          var input = buttons[b].querySelector('input[type="radio"]') || buttons[b].querySelector('input');
+          if (input) input.click(); else buttons[b].click();
+          await wait(400);
+          var afterEls = requiredControls(scope);
+          var revealed = afterEls.filter(function (el) { return beforeEls.indexOf(el) === -1; });
+          if (revealed.length) {
+            pairs.push({ radio: label, option: textOf(buttons[b]), reveals: revealed.map(describe) });
+          }
+        }
+      }
+      return pairs;
     }
   };
 

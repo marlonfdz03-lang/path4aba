@@ -36,6 +36,18 @@ export async function POST(req: Request) {
     return 'unknown'
   }
 
+  // Issue 1 (generalized): a radio whose "Yes" branch reveals a REQUIRED conditional field must
+  // NOT be set to Yes unless that child can also be filled — otherwise the Yes leaves an empty
+  // required child that fails validation. When the child can't be supplied, downgrade Yes ->
+  // 'unknown' so the executor SKIPS the radio (needsReview) instead of emitting a broken Yes.
+  // ('No' has no conditional child and is unaffected.) The DL specify-incident / specify-medical
+  // -concern / describe-environmental-change detail boxes are conditional fields not present in
+  // the pre-Yes scan, so they are not fillable from this plan -> childFillable is false for them.
+  const radioWithConditional = (v: unknown, childFillable: boolean): 'Yes' | 'No' | 'unknown' => {
+    const r = threeStateRadio(v)
+    return r === 'Yes' && !childFillable ? 'unknown' : r
+  }
+
   const emptyFields: any[] = []
   for (const section of (normalizedForm.sections || [])) {
     for (const f of (section.fields || [])) {
@@ -66,15 +78,15 @@ export async function POST(req: Request) {
   if (facts.dailyLog) {
     const dl = facts.dailyLog
     const dlMappings = [
-      { fieldId: 'DL_EnvironmentChanges', fieldType: 'radio', value: threeStateRadio(dl.environmentChanges) },
+      { fieldId: 'DL_EnvironmentChanges', fieldType: 'radio', value: radioWithConditional(dl.environmentChanges, false) },
       { fieldId: 'DL_WhoWasPresent', fieldType: 'chip', value: dl.whoWasPresent?.[0] || '' },
       { fieldId: 'DL_PresentationStart', fieldType: 'textarea', value: dl.presentationStart || '' },
       { fieldId: 'DL_EvidencedBy', fieldType: 'text', value: dl.evidencedByStart || '' },
       { fieldId: 'DL_PresentationEnd', fieldType: 'textarea', value: dl.presentationEnd || '' },
       { fieldId: 'DL_EvidencedBy2', fieldType: 'textarea', value: dl.evidencedByEnd || '' },
       { fieldId: 'DL_Participation', fieldType: 'textarea', value: dl.participation || '' },
-      { fieldId: 'DL_Incidents', fieldType: 'radio', value: dl.incidents || 'No' },
-      { fieldId: 'DL_MedicalConcerns', fieldType: 'radio', value: dl.medicalConcerns || 'No' },
+      { fieldId: 'DL_Incidents', fieldType: 'radio', value: radioWithConditional(dl.incidents, false) },
+      { fieldId: 'DL_MedicalConcerns', fieldType: 'radio', value: radioWithConditional(dl.medicalConcerns, false) },
       { fieldId: 'DL_RelevantInformation', fieldType: 'textarea', value: dl.relevantInformation || '' },
     ]
     dlMappings.forEach((m) => {
@@ -111,18 +123,30 @@ export async function POST(req: Request) {
   // Skill deterministic mappings
   facts.skills?.forEach((s: any, i: number) => {
     const n = i + 1
-    const goalMappings = [
+    // Issue 1c: promptsUsed = Yes reveals a required "which prompts" child. Prompts are clinically
+    // significant, so — unlike incidents — we do NOT downgrade Yes; instead we attach the prompt
+    // types so the executor fills that conditional child. If promptTypes is empty the Yes still
+    // stands and the executor routes the empty child to needsReview (never left silently blank).
+    const promptsRadio = threeStateRadio(s.promptsUsed)
+    const promptTypes: string[] = Array.isArray(s.promptTypes) ? s.promptTypes : []
+    const goalMappings: any[] = [
       { fieldId: `Goal${n}_GoalName`, fieldType: 'select', value: s.name },
       { fieldId: `Goal${n}_MedicalBarriers`, fieldType: 'chip', value: s.medicalNecessity },
       { fieldId: `Goal${n}_Activities`, fieldType: 'chip', value: s.activity },
       { fieldId: `Goal${n}_TeachingProcedure`, fieldType: 'textarea', value: s.teachingProcedure },
-      { fieldId: `Goal${n}_PromptsUsed`, fieldType: 'radio', value: threeStateRadio(s.promptsUsed) },
+      {
+        fieldId: `Goal${n}_PromptsUsed`, fieldType: 'radio', value: promptsRadio,
+        conditional: promptsRadio === 'Yes' ? { value: promptTypes.join(', '), types: promptTypes } : undefined,
+      },
       { fieldId: `Goal${n}_Reinforcers`, fieldType: 'chip', value: s.reinforcers },
       { fieldId: `Goal${n}_Schedule`, fieldType: 'textarea', value: s.schedule || 'Continuous Reinforcement' },
     ]
     goalMappings.forEach((m) => {
       if (m.value && (m.fieldType === 'radio' || emptyFields.find((f) => f.fieldId === m.fieldId))) {
-        deterministicActions.push({ fieldId: m.fieldId, sectionId: `Goal${n}`, fieldType: m.fieldType, value: m.value, confidence: 1 })
+        deterministicActions.push({
+          fieldId: m.fieldId, sectionId: `Goal${n}`, fieldType: m.fieldType, value: m.value, confidence: 1,
+          ...(m.conditional ? { conditional: m.conditional } : {}),
+        })
       }
     })
   })

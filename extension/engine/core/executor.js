@@ -37,6 +37,10 @@ window.FormEngineExecutor = {
         else results.failed++;
         if (outcome.review) results.needsReview.push(outcome.review);
         if (outcome.verification) results.verifications.push(outcome.verification);
+        // Conditional children (Issue 1c) can add their own review/verification entries.
+        if (outcome.extraReviews) outcome.extraReviews.forEach((r) => results.needsReview.push(r));
+        if (outcome.extraVerifications) outcome.extraVerifications.forEach((v) => results.verifications.push(v));
+        if (outcome.status === 'filled' && outcome.childFilled) results.filled++;
       } catch (err) {
         console.error('[Path4ABA Executor] Failed:', action.fieldId, err.message);
         results.failed++;
@@ -53,6 +57,21 @@ window.FormEngineExecutor = {
       }
     } catch (err) {
       if (this.DEBUG) console.warn('[Path4ABA Executor] readValidationState failed:', err.message);
+    }
+
+    // Issue 1d: conditional-pair audit. DEBUG-ONLY and DESTRUCTIVE (it toggles radios to observe
+    // which reveal required children), so it runs last, after results + validation are captured,
+    // and never in production. Logs the discovered radio→child pairs for developers.
+    if (this.DEBUG) {
+      try {
+        const adapter = window.ABAMatrixAdapter;
+        if (adapter && typeof adapter.detectConditionalPairs === 'function') {
+          const pairs = await adapter.detectConditionalPairs();
+          console.log('[Path4ABA Executor] conditional-pair audit (DEBUG, form was probed):', pairs);
+        }
+      } catch (err) {
+        console.warn('[Path4ABA Executor] conditional-pair audit failed:', err.message);
+      }
     }
 
     if (this.DEBUG) console.log('[Path4ABA Executor] Done:', {
@@ -286,14 +305,106 @@ window.FormEngineExecutor = {
   },
 
   // mat-autocomplete / combobox: after typing, click the exact-text overlay option if present,
-  // otherwise commit the typed value with blur.
+  // otherwise commit the typed value with blur. Returns { options, matched } so the caller can
+  // detect a NO_MATCHING_OPTION situation (Issue 3).
   async commitAutocomplete(el, action) {
     await this.wait(300);
     const want = String(action.value == null ? '' : action.value).trim().toLowerCase();
-    const options = Array.from(document.querySelectorAll('.cdk-overlay-container mat-option, mat-option'));
-    const match = options.find((o) => (o.innerText || '').trim().toLowerCase() === want);
-    if (match) { match.click(); await this.wait(200); }
-    else { el.dispatchEvent(new FocusEvent('blur', { bubbles: true })); if (typeof el.blur === 'function') el.blur(); }
+    const optionEls = Array.from(document.querySelectorAll('.cdk-overlay-container mat-option, mat-option'));
+    const options = optionEls.map((o) => (o.innerText || '').trim()).filter(Boolean);
+    const match = optionEls.find((o) => (o.innerText || '').trim().toLowerCase() === want);
+    if (match) { match.click(); await this.wait(200); return { options: options, matched: true }; }
+    el.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+    if (typeof el.blur === 'function') el.blur();
+    return { options: options, matched: false };
+  },
+
+  // Snapshot the set of value-bearing controls currently in a section (Issue 1c/1d): used to
+  // diff before/after a radio is set so a newly-revealed conditional child can be detected.
+  controlSnapshot(section) {
+    const set = new Set();
+    if (!section || !section.querySelectorAll) return set;
+    section.querySelectorAll('textarea, input:not([type="hidden"]):not([type="radio"]), mat-select').forEach((el) => set.add(el));
+    return set;
+  },
+
+  // Issue 1c: after a "Yes" reveals a required child, fill it with the value the plan supplied
+  // (action.conditional). Runs ONLY when the plan marked this radio as conditional, so radios
+  // without a supplied child value are untouched. Detects the child's control type structurally
+  // and uses the matching write strategy. Adds its result to the outcome's extra* arrays.
+  async fillRevealedChild(section, before, action, label, outcome) {
+    const after = this.controlSnapshot(section);
+    const revealed = [];
+    after.forEach((el) => { if (!before.has(el) && el.offsetParent !== null) revealed.push(el); });
+    if (!revealed.length) return; // nothing was revealed — nothing to do
+
+    const childLabel = label + ' → details';
+    const childId = (action.fieldId || 'field') + '_child';
+    const cond = action.conditional || {};
+    const values = (Array.isArray(cond.types) && cond.types.length)
+      ? cond.types
+      : String(cond.value == null ? '' : cond.value).split(',').map((s) => s.trim()).filter(Boolean);
+
+    // Prefer a required revealed control; else the first revealed value-bearing control.
+    const target = revealed.find((el) => this.isRequired(el)) || revealed[0];
+
+    outcome.extraReviews = outcome.extraReviews || [];
+    outcome.extraVerifications = outcome.extraVerifications || [];
+
+    if (!values.length) {
+      // A required child was revealed but the plan had no value — flag it, never leave it blank.
+      outcome.extraReviews.push({ stableId: childId, label: childLabel, reason: 'NEEDS_REVIEW' });
+      return;
+    }
+
+    const childAction = { fieldId: childId, value: values.join(', ') };
+    const strategy = this.detectStrategy(target, childAction);
+    let verification;
+
+    if (strategy === 'select' || strategy === 'autocomplete') {
+      // Select each value (multi-selects accumulate across re-opens; single-selects end on last).
+      let lastInfo = null;
+      for (const v of values) {
+        lastInfo = await window.selectMatOption(target, v);
+        await this.wait(80);
+      }
+      verification = (lastInfo && lastInfo.matched)
+        ? this.scoreField(target, childAction, childLabel, 'select')
+        : { stableId: childId, label: childLabel, intended: childAction.value, actual: '', dirty: false, touched: false, valid: false, ok: false, reason: 'NO_MATCHING_OPTION', options: (lastInfo && lastInfo.options) || [] };
+    } else if (strategy === 'chip') {
+      for (const v of values) {
+        this.setAngularValue(target, v);
+        await this.wait(150);
+        target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        await this.wait(80);
+      }
+      verification = this.scoreField(target, childAction, childLabel, 'chip');
+    } else {
+      verification = await this.fillAndVerify(target, childAction, childLabel, 'text');
+    }
+
+    outcome.extraVerifications.push(verification);
+    if (verification.ok) {
+      outcome.childFilled = true;
+    } else {
+      outcome.extraReviews.push({
+        stableId: childId, label: childLabel, reason: verification.reason || 'NEEDS_REVIEW',
+        intended: verification.intended, options: verification.options,
+      });
+    }
+  },
+
+  // Issue 3: a select/autocomplete whose intended value has no option among those offered. Do
+  // NOT leave a partial state — report it for review with the intended value AND the available
+  // option texts so the RBT sees expected-vs-offered.
+  noMatchingOption(action, label, options) {
+    const opts = Array.isArray(options) ? options : [];
+    if (this.DEBUG) console.log('[Path4ABA Executor] NO_MATCHING_OPTION:', action.fieldId, '— options offered:', opts.length);
+    return {
+      status: 'skipped',
+      review: { stableId: action.fieldId, label, reason: 'NO_MATCHING_OPTION', intended: action.value, options: opts },
+      verification: { stableId: action.fieldId, label, intended: action.value, actual: '', dirty: false, touched: false, valid: false, ok: false, reason: 'NO_MATCHING_OPTION' },
+    };
   },
 
   // Package a filled field's verification into an execute() outcome.
@@ -524,8 +635,15 @@ window.FormEngineExecutor = {
 
       case 'autocomplete': {
         this.setAngularValue(resolvedEl, action.value);
-        await this.commitAutocomplete(resolvedEl, action);
+        const acInfo = await this.commitAutocomplete(resolvedEl, action);
         await this.wait(80);
+        // Options were offered but none matched -> strict pick-list with no match: clear the
+        // typed value (never leave a partial) and flag it. NO options offered -> treat as a
+        // free-text autocomplete and keep the committed value.
+        if (!acInfo.matched && acInfo.options.length > 0) {
+          this.setAngularValue(resolvedEl, '');
+          return this.noMatchingOption(action, label, acInfo.options);
+        }
         let verification = this.scoreField(resolvedEl, action, label, 'autocomplete');
         if (!verification.dirty && !verification.ok) {
           this.keyboardCommit(resolvedEl, action.value);
@@ -541,15 +659,24 @@ window.FormEngineExecutor = {
       }
 
       case 'select': {
-        // mat-select has no native <select> — selectMatOption clicks the CDK overlay option.
-        await window.selectMatOption(resolvedEl, action.value);
+        // mat-select has no native <select> — selectMatOption clicks the CDK overlay option and
+        // returns { options, matched } so we can flag a no-match instead of leaving it empty.
+        const info = await window.selectMatOption(resolvedEl, action.value);
         await this.wait(80);
+        if (!info || !info.matched) {
+          return this.noMatchingOption(action, label, (info && info.options) || []);
+        }
         const verification = this.scoreField(resolvedEl, action, label, 'select');
         return this.outcomeFrom(verification, action, label);
       }
 
       case 'radio': {
         const group = resolvedEl.closest('mat-radio-group') || resolvedEl;
+        // Issue 1c: only when the plan marked this radio conditional do we snapshot the section
+        // (to fill the child a "Yes" reveals). No conditional -> zero change from prior behavior.
+        const section = (action.conditional && action.value === 'Yes')
+          ? (group.closest('mat-card, form') || group.parentElement) : null;
+        const before = section ? this.controlSnapshot(section) : null;
         const buttons = group.querySelectorAll('mat-radio-button');
         for (const btn of buttons) {
           if (btn.innerText?.trim() === action.value) {
@@ -563,7 +690,9 @@ window.FormEngineExecutor = {
             // (e.g. the AntecedentInterventions chip that appears after "Yes").
             await this.wait(1200);
             const verification = this.scoreField(group, action, label, 'radio');
-            return this.outcomeFrom(verification, action, label);
+            const outcome = this.outcomeFrom(verification, action, label);
+            if (before) await this.fillRevealedChild(section, before, action, label, outcome);
+            return outcome;
           }
         }
         if (this.DEBUG) console.warn('[Path4ABA Executor] Radio option not found:', action.value);

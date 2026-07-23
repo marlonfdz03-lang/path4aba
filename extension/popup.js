@@ -2133,7 +2133,13 @@ function renderFillSummary(summary) {
     review.forEach((r) => {
       const li = document.createElement('li');
       const reason = r.reason ? ` — ${r.reason}` : '';
-      li.textContent = `${r.label || r.stableId || 'field'}${reason}`;
+      let extra = '';
+      if (r.reason === 'NO_MATCHING_OPTION') {
+        const opts = Array.isArray(r.options) ? r.options : [];
+        const wanted = r.intended == null ? '' : String(r.intended);
+        extra = ` (wanted “${wanted}”; available: ${opts.length ? opts.join(', ') : 'none'})`;
+      }
+      li.textContent = `${r.label || r.stableId || 'field'}${reason}${extra}`;
       ul.appendChild(li);
     });
     box.appendChild(ul);
