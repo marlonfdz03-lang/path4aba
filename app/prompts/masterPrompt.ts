@@ -866,4 +866,32 @@ CONTEXTUAL CLINICAL FACTORS (appended dynamically when triggered)
 ═══════════════════════════════════════
 
 When the system appends CONTEXTUAL CLINICAL FACTORS below this prompt, treat them as binding clinical constraints on the note. Weave every triggered factor naturally into the narrative — never list them separately or announce them. The note must still read as one continuous clinical paragraph with exactly 5 ABCs. Observable language rules still apply: no mentalistic language, no "refused", no "bad day".
+
+═══════════════════════════════════════
+VARIABILITY EXPANSIONS — WIDEN THE ROTATIONS (append to the pools above)
+═══════════════════════════════════════
+
+1. EXPANDED INTERVENTION LIBRARY — rotate these ALONGSIDE the approved interventions already listed (only ever use interventions consistent with the client profile):
+antecedent modification, response interruption and redirection (RIRD), stimulus fading, task modification, errorless teaching, choice making, demand fading, prompt delay, visual cueing, differential reinforcement of low rates (DRL).
+RULE: Never use the same intervention in more than 2 ABCs within the same note.
+
+2. EXPANDED BEHAVIOR MOMENTUM HIGH-PROBABILITY REQUESTS — rotate through this wider library, not just clapping hands / handing over materials / touching the table:
+pointing to a picture card, placing a block in a bin, pushing a button on a toy, waving hello, high five, picking up a dropped item, naming a color, pointing to body parts, opening a container, pressing a button, handing over a spoon, placing feet on the floor, repeating a word, turning a page, putting on a shoe, tapping knees.
+RULE: Never repeat the same high-probability requests between ABCs in the same note.
+
+3. EXPANDED CLIENT-OUTCOME ROTATION — add these to the outcomes you rotate through:
+"accepted only the first step before requiring redirection", "tolerated the activity briefly before disengaging", "remained intermittently off-task despite support", "required continued prompting to maintain engagement", "accepted the transition but needed additional cues", "initiated but did not complete the full task", "demonstrated variable response across trials".
+RULE: Not every ABC should end with the client succeeding — at least 2 of the 5 ABCs must show a partial or variable outcome.
+
+4. EXPANDED CLOSING STRUCTURES — rotate these in addition to the closing styles above:
+- "By the close of the session, [client] showed [specific behavior] with [prompt level], and [skill area] remained an area requiring continued therapeutic support."
+- "The session concluded with [client] demonstrating [specific observable behavior], though [challenge area] continued to require structured prompting."
+- "At session end, [client]'s behavioral regulation improved in [context] but remained variable during [other context]."
+- "As the session drew to a close, [client] required [prompt level] across [activity type], with emerging independence noted in [specific skill]."
+- "The final portion of the session showed [client] responding to [intervention] with [outcome], suggesting continued need for [support type]."
+RULE: Never use the same closing structure in consecutive notes — rotate through all available closings.
+
+5. EXPANDED REINFORCER ROTATION — add these approved non-food reinforcers to the rotation:
+sensory break, movement activity, bubbles, music access, choice of next activity, drawing materials, gross motor game, preferred song, stickers, computer time, spinning top.
+RULE: Each note must use at least 3 different reinforcers, and never the same combination twice across notes.
 `;
