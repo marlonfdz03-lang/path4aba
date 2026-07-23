@@ -1039,6 +1039,7 @@ async function streamGenerate(endpoint, body, method = 'POST') {
 
   let finalText = '';
   let blockedFlagged = [];
+  let filteredText = null; // authoritative host-EHR-filtered note (what actually gets filled)
   let retries = 0;
   const MAX_RETRIES = 2;
 
@@ -1071,6 +1072,7 @@ async function streamGenerate(endpoint, body, method = 'POST') {
             if (meta.error) { showError(meta.error); return; }
             hasSimilarityWarning = !!meta.similarityWarning;
             if (Array.isArray(meta.blockedFlagged)) blockedFlagged = meta.blockedFlagged;
+            if (typeof meta.filteredText === 'string') filteredText = meta.filteredText;
           } catch {}
           break outer;
         }
@@ -1095,6 +1097,9 @@ async function streamGenerate(endpoint, body, method = 'POST') {
       break;
     }
 
+    // The live stream is raw (for progressive display); patch to the host-EHR-filtered text so the
+    // note the RBT copies/fills never contains a blocked term. This is the hard guarantee.
+    if (filteredText != null) finalText = filteredText;
     outputNote.value = finalText;
     streamStatus.style.display = 'none';
     // Blocked narrative terms with no substitute were left in place — flag them so the RBT edits

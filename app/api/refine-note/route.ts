@@ -94,12 +94,12 @@ export async function POST(req: NextRequest) {
               { role: 'user', content: userMessage(originalNote) }
             ]
           });
-          // Accumulate (not streamed live) — the note is post-filtered for host-EHR-blocked terms
-          // and the FILTERED text is sent at the end. Clients buffer before display.
+          // Stream raw tokens live for progressive display; filter at completion and send the
+          // filtered text in __META__ so clients patch the displayed note.
           let refinedNote = '';
           for await (const chunk of stream1) {
             const delta = chunk.choices[0]?.delta?.content || '';
-            if (delta) { refinedNote += delta; }
+            if (delta) { refinedNote += delta; controller.enqueue(encoder.encode(delta)); }
           }
 
           let finalNote = refinedNote;
@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
             let regenNote = '';
             for await (const chunk of stream2) {
               const delta = chunk.choices[0]?.delta?.content || '';
-              if (delta) { regenNote += delta; }
+              if (delta) { regenNote += delta; controller.enqueue(encoder.encode(delta)); }
             }
             finalNote = regenNote;
             similarityWarning = previousTexts.some(prev => calculateSimilarity(regenNote, prev) > 0.55);
@@ -141,8 +141,7 @@ export async function POST(req: NextRequest) {
             }
           } catch { /* best-effort; seeded list still applies */ }
           const { text: cleaned, flagged } = filterBlockedNarrative(finalNote, learned);
-          controller.enqueue(encoder.encode(cleaned));
-          controller.enqueue(encoder.encode(`\n__META__${JSON.stringify({ similarityWarning, blockedFlagged: flagged })}`));
+          controller.enqueue(encoder.encode(`\n__META__${JSON.stringify({ similarityWarning, blockedFlagged: flagged, filteredText: cleaned })}`));
         } catch (e) {
           controller.enqueue(encoder.encode(`\n__META__${JSON.stringify({ error: 'Stream error' })}`));
         } finally {

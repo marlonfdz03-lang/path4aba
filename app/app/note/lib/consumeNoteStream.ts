@@ -2,7 +2,7 @@
 // parsing the inline __REGEN__ marker (clear & restart) and the trailing
 // __META__{...} JSON tail. App-only helper — not imported by any website file.
 
-export type NoteStreamMeta = { similarityWarning?: boolean; error?: string };
+export type NoteStreamMeta = { similarityWarning?: boolean; error?: string; blockedFlagged?: string[]; filteredText?: string };
 
 export type NoteStreamHandlers = {
   onText: (fullText: string) => void; // called as the note streams in
@@ -31,7 +31,14 @@ export async function consumeNoteStream(
         handlers.onText(fullText);
       }
       try {
-        handlers.onMeta(JSON.parse(parts[1]) as NoteStreamMeta);
+        const meta = JSON.parse(parts[1]) as NoteStreamMeta;
+        handlers.onMeta(meta);
+        // The live stream is raw; patch the display + returned text to the host-EHR-filtered
+        // version so nothing unfiltered is copied or saved.
+        if (typeof meta.filteredText === "string") {
+          fullText = meta.filteredText;
+          handlers.onText(fullText);
+        }
       } catch {
         /* malformed meta — ignore */
       }

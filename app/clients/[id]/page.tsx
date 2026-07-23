@@ -482,7 +482,7 @@ export default function ClientProfilePage() {
         if (chunk.includes("__META__")) {
           const parts = chunk.split("__META__");
           if (parts[0]) { fullText += parts[0]; setGeneratedNote(fullText); }
-          try { const meta = JSON.parse(parts[1]); if (meta.error) { setStatus(meta.error); return; } setSimilarityWarning(!!meta.similarityWarning); } catch {}
+          try { const meta = JSON.parse(parts[1]); if (meta.error) { setStatus(meta.error); return; } setSimilarityWarning(!!meta.similarityWarning); if (typeof meta.filteredText === "string") { fullText = meta.filteredText; setGeneratedNote(fullText); } } catch {}
           break outer;
         }
         if (chunk.includes("__REGEN__")) {
@@ -611,7 +611,7 @@ export default function ClientProfilePage() {
         if (chunk.includes("__META__")) {
           const parts = chunk.split("__META__");
           if (parts[0]) { fullText += parts[0]; setPerfectedNote(fullText); }
-          try { const meta = JSON.parse(parts[1]); if (meta.error) { setPerfectStatus(meta.error); return; } setPerfectSimilarityWarning(!!meta.similarityWarning); } catch {}
+          try { const meta = JSON.parse(parts[1]); if (meta.error) { setPerfectStatus(meta.error); return; } setPerfectSimilarityWarning(!!meta.similarityWarning); if (typeof meta.filteredText === "string") { fullText = meta.filteredText; setPerfectedNote(fullText); } } catch {}
           break outer2;
         }
         if (chunk.includes("__REGEN__")) {

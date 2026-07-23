@@ -22,15 +22,15 @@ export async function POST(req: NextRequest) {
     const readable = new ReadableStream({
       async start(controller) {
         try {
-          // The note text is post-filtered for host-EHR-blocked terms (e.g. "sensory") inside
-          // generateSmartNote, so we send the FILTERED result.note rather than the raw live deltas.
-          // Only the regen control signal is forwarded live for UX (clients buffer before display).
-          const result = await generateSmartNote(input, userId, (chunk) => {
-            if (chunk.includes('__REGEN__')) controller.enqueue(encoder.encode('\n__REGEN__\n'));
+          // Stream raw tokens live for progressive display. The note is post-filtered for
+          // host-EHR-blocked terms (e.g. "sensory") inside generateSmartNote (and saved filtered),
+          // so we ALSO send the FILTERED final text in __META__ — clients patch the displayed note
+          // at completion, so nothing unfiltered reaches the fill even though the live stream is raw.
+          const result = await generateSmartNote(input, userId, (text) => {
+            controller.enqueue(encoder.encode(text));
           });
-          controller.enqueue(encoder.encode(result.note));
           controller.enqueue(encoder.encode(
-            `\n__META__${JSON.stringify({ similarityWarning: result.similarityWarning || false, blockedFlagged: result.blockedFlagged || [] })}`
+            `\n__META__${JSON.stringify({ similarityWarning: result.similarityWarning || false, blockedFlagged: result.blockedFlagged || [], filteredText: result.note })}`
           ));
         } catch (e: any) {
           controller.enqueue(encoder.encode(
