@@ -71,6 +71,18 @@ window.FormEngineExecutor = {
       if (this.DEBUG) console.warn('[Path4ABA Executor] readValidationState failed:', err.message);
     }
 
+    // Post-fill auto-repair (additive). Retries ONLY planned text values the host still flags as
+    // missing. Fully guarded: any failure here logs behind DEBUG and leaves the normal fill
+    // results untouched — a failed repair must never break a successful fill.
+    results.repair = { passes: 0, repaired: [], stillMissing: [] };
+    try {
+      const repair = await this.runRepairPass(plan, results.validation);
+      results.repair = { passes: repair.passes, repaired: repair.repaired, stillMissing: repair.stillMissing };
+      if (repair.finalValidation) results.validation = repair.finalValidation;
+    } catch (err) {
+      if (this.DEBUG) console.warn('[Path4ABA Executor] repair pass failed:', err.message);
+    }
+
     // Issue 1d: conditional-pair audit. DESTRUCTIVE (toggles radios to observe what each reveals),
     // so it is HARD-GATED behind an explicit opt-in that NO code path ever sets — a DEBUG flag
     // alone must never be able to trigger it, because a DEBUG flag left on in a real session would
@@ -430,6 +442,135 @@ window.FormEngineExecutor = {
       ? { stableId: action.fieldId, label, reason: verification.reason || 'NEEDS_REVIEW' }
       : undefined;
     return { status: 'filled', verification, review };
+  },
+
+  // ── Post-fill auto-repair (additive) ─────────────────────────────────────────
+  // Third distinct text-write mechanism (the 'accessor-only' rung of the repair ladder): set the
+  // value and drive Angular Ivy's accessor directly, WITHOUT the synthetic 'input' event that
+  // setAngularValue/keyboardCommit rely on. For a field where the event path is being ignored but
+  // the accessor still works, this can make the value finally land in the FormControl.
+  accessorWrite(el, value) {
+    if (!el) return;
+    const v = value == null ? '' : String(value);
+    el.focus();
+    el.value = v;
+    const ctx = el.__ngContext__;
+    if (ctx && Array.isArray(ctx)) {
+      for (let i = 0; i < ctx.length; i++) {
+        const item = ctx[i];
+        if (item && typeof item === 'object' && typeof item.onChange === 'function' && item._elementRef) {
+          item.onChange(v);
+          if (typeof item.onTouched === 'function') item.onTouched();
+          break;
+        }
+      }
+    }
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+    if (typeof el.blur === 'function') el.blur();
+  },
+
+  // Total missing across the host's section index (null counts = unknown, not counted).
+  totalMissing(validation) {
+    if (!validation || !Array.isArray(validation.sections)) return 0;
+    return validation.sections.reduce((n, s) =>
+      n + (typeof s.missingCount === 'number' && s.missingCount > 0 ? s.missingCount : 0), 0);
+  },
+
+  // Re-resolve a plan action's DOM element (same locator path fillField uses).
+  resolveActionEl(action) {
+    const norm = window.__p4NormalizedForm;
+    const fieldData = norm && norm.fieldIndex && norm.fieldIndex[action.fieldId];
+    if (!fieldData) return { el: null, label: action.fieldId };
+    const sectionEl = this.getSectionElement(action.sectionId);
+    if (!sectionEl) return { el: null, label: fieldData.questionText || action.fieldId };
+    const el = this.resolveLocator(fieldData.locator, sectionEl, action.fieldType, action.fieldId);
+    return { el, label: fieldData.questionText || action.fieldId };
+  },
+
+  // A field "failed to land" when it reads blank OR Angular still flags it invalid. The invalid
+  // case is the key one: the DOM may SHOW the value while the FormControl never received it.
+  stillMissing(el, strategy) {
+    if (!el) return false;
+    const val = this.readBack(el, strategy);
+    return this.isBlank(val) || this.verifyAngularState(el).invalid;
+  },
+
+  // Next unused rung of the text-write ladder. 'primary' is pre-marked (done in the main fill),
+  // so repair uses 'keyboard' then 'accessor' — never the same strategy twice.
+  nextRung(usedSet) {
+    for (const rung of ['primary', 'keyboard', 'accessor']) {
+      if (!usedSet.has(rung)) return rung;
+    }
+    return null;
+  },
+
+  repairWrite(el, action, rung) {
+    if (rung === 'keyboard') return this.keyboardCommit(el, action.value);
+    if (rung === 'accessor') return this.accessorWrite(el, action.value);
+    return this.setAngularValue(el, action.value);
+  },
+
+  // Auto-repair pass: after the main fill, retry ONLY planned text values the host still flags as
+  // missing, escalating through the write ladder. Never invents content, never touches non-text
+  // fields, never retries 'unknown'/absent values, stops as soon as it stops making progress.
+  // Returns { passes, repaired: [...], stillMissing: [...] }. Callers wrap this in try/catch so a
+  // repair failure can never break a successful fill.
+  async runRepairPass(plan, initialValidation) {
+    const repair = { passes: 0, repaired: [], stillMissing: [], finalValidation: initialValidation };
+    const TEXT = new Set(['text', 'autocomplete', 'contenteditable']);
+    const readVS = () => {
+      try {
+        const a = window.ABAMatrixAdapter;
+        return (a && typeof a.readValidationState === 'function') ? a.readValidationState() : null;
+      } catch (e) { return null; }
+    };
+
+    let validation = initialValidation || readVS();
+    let prevMissing = this.totalMissing(validation);
+    const used = {}; // fieldId -> Set of strategies already used
+
+    for (let pass = 0; pass < 3 && prevMissing > 0; pass++) {
+      repair.passes = pass + 1;
+      let didWrite = false;
+
+      for (const action of plan) {
+        // Hard rules: never write an unknown/blank planned value; only planned values are eligible.
+        if (this.isSkippable(action.value)) continue;
+        const { el, label } = this.resolveActionEl(action);
+        if (!el) continue;
+        const strategy = this.detectStrategy(el, action);
+        if (!TEXT.has(strategy)) continue;            // only text-like fields have an alt strategy
+        if (!this.stillMissing(el, strategy)) continue; // it landed — leave it alone
+        if (!used[action.fieldId]) used[action.fieldId] = new Set(['primary']);
+        const rung = this.nextRung(used[action.fieldId]);
+        if (!rung) continue;                           // strategies exhausted for this field
+        used[action.fieldId].add(rung);
+        try {
+          this.repairWrite(el, action, rung);
+          didWrite = true;
+          await this.wait(80);
+          const resolved = !this.stillMissing(el, strategy);
+          repair.repaired.push({ stableId: action.fieldId, label, attempt: pass + 1, strategyUsed: rung, resolved });
+          if (this.DEBUG) console.log('[Path4ABA Repair]', action.fieldId, rung, resolved ? 'resolved' : 'still missing');
+        } catch (e) {
+          if (this.DEBUG) console.warn('[Path4ABA Repair] write failed:', action.fieldId, e.message);
+        }
+      }
+
+      if (!didWrite) break;                            // nothing left we can retry
+      const v = readVS();
+      if (v) validation = v;
+      const missing = this.totalMissing(validation);
+      if (missing >= prevMissing) break;               // no progress — do not loop on the unfixable
+      prevMissing = missing;
+    }
+
+    repair.finalValidation = validation;
+    // The RBT's to-do list = the host's remaining invalid fields after repair.
+    repair.stillMissing = ((validation && validation.invalidFields) || [])
+      .map((f) => ({ stableId: f.stableId || null, label: f.label || f.stableId || 'field' }));
+    return repair;
   },
 
   getSectionElement(sectionId) {

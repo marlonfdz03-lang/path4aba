@@ -2105,34 +2105,47 @@ function renderFillSummary(summary) {
   box.innerHTML = '';
   box.style.display = 'block';
 
-  const head = document.createElement('div');
-  head.style.cssText = 'font-weight:600;margin-bottom:4px;color:#1e293b;';
-  head.textContent = `Fill summary: ${summary.written || 0} written · ${summary.verifiedOk || 0} verified OK`;
-  box.appendChild(head);
-
   const review = Array.isArray(summary.needsReview) ? summary.needsReview : [];
   const missing = Array.isArray(summary.missingSections) ? summary.missingSections : [];
   const messages = Array.isArray(summary.messages) ? summary.messages : [];
+  const repaired = summary.repaired || 0;
+  const S = review.length; // fields that genuinely still need the RBT
 
-  if (review.length === 0 && missing.length === 0 && messages.length === 0) {
+  // The whole box turns into a warning when anything still needs review, so it can't read as
+  // "mostly clean" at a glance.
+  box.style.background = S > 0 ? '#fef2f2' : '#f0fdf4';
+  box.style.border = S > 0 ? '2px solid #dc2626' : '1px solid #bbf7d0';
+
+  // Summary line: N written · M verified · R repaired on retry · S still need your review.
+  const head = document.createElement('div');
+  head.style.cssText = `font-weight:600;margin-bottom:4px;color:${S > 0 ? '#991b1b' : '#166534'};`;
+  const parts = [`${summary.written || 0} written`, `${summary.verifiedOk || 0} verified`];
+  if (repaired > 0) parts.push(`${repaired} repaired on retry`);
+  parts.push(`${S} still need your review`);
+  head.textContent = 'Fill summary: ' + parts.join(' · ');
+  box.appendChild(head);
+
+  if (S === 0 && missing.length === 0 && messages.length === 0) {
     const ok = document.createElement('div');
-    ok.style.cssText = 'color:#16a34a;';
-    ok.textContent = '✓ No fields flagged for review.';
+    ok.style.cssText = 'color:#16a34a;font-weight:600;';
+    ok.textContent = '✓ Nothing left for you to review.';
     box.appendChild(ok);
     return;
   }
 
-  if (review.length > 0) {
-    const title = document.createElement('div');
-    title.style.cssText = 'margin-top:4px;font-weight:600;color:#b45309;';
-    title.textContent = `Needs review (${review.length}):`;
-    box.appendChild(title);
+  // ── Prominent "still need your review" block — the RBT must not miss this ──
+  if (S > 0) {
+    const banner = document.createElement('div');
+    banner.style.cssText = 'margin-top:6px;padding:8px;border-radius:6px;background:#dc2626;color:#fff;font-weight:700;font-size:12px;';
+    banner.textContent = `⚠ ${S} field${S === 1 ? '' : 's'} still need your review — do NOT sign until you fill ${S === 1 ? 'it' : 'them'} in:`;
+    box.appendChild(banner);
 
     const ul = document.createElement('ul');
-    ul.style.cssText = 'margin:2px 0 0;padding-left:16px;';
+    ul.style.cssText = 'margin:6px 0 2px;padding-left:18px;color:#7f1d1d;font-weight:600;';
     review.forEach((r) => {
       const li = document.createElement('li');
-      const reason = r.reason ? ` — ${r.reason}` : '';
+      li.style.cssText = 'margin-bottom:2px;';
+      const reason = r.reason && r.reason !== 'INVALID' && r.reason !== 'NEEDS_REVIEW' ? ` — ${r.reason}` : '';
       let extra = '';
       if (r.reason === 'NO_MATCHING_OPTION') {
         const opts = Array.isArray(r.options) ? r.options : [];

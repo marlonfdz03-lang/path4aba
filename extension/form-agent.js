@@ -183,27 +183,39 @@
       // list combines the executor's skips/mismatches with the host app's own validation state.
       try {
         const verifiedOk = (results.verifications || []).filter(function (v) { return v && v.ok; }).length;
+        const repair = results.repair || { passes: 0, repaired: [], stillMissing: [] };
+        // Fields the repair pass genuinely fixed on retry (resolved === true).
+        const repairedResolved = (repair.repaired || []).filter(function (r) { return r.resolved; });
+        const repairedIds = new Set(repairedResolved.map(function (r) { return r.stableId; }).filter(Boolean));
+
         const review = [];
         const seenReview = new Set();
-        (results.needsReview || []).forEach(function (r) {
-          const key = (r.stableId || r.label || '') + '|' + (r.reason || '');
+        var addReview = function (item, key) {
           if (seenReview.has(key)) return;
+          // A field the repair pass fixed is no longer a review item.
+          if (item.stableId && repairedIds.has(item.stableId)) return;
           seenReview.add(key);
-          review.push({
+          review.push(item);
+        };
+        (results.needsReview || []).forEach(function (r) {
+          addReview({
             stableId: r.stableId || null,
             label: r.label || r.stableId || 'field',
             reason: r.reason || 'NEEDS_REVIEW',
             // Carried through for NO_MATCHING_OPTION so the popup can show expected-vs-offered.
             intended: r.intended,
             options: r.options,
-          });
+          }, (r.stableId || r.label || '') + '|' + (r.reason || ''));
         });
         const validation = results.validation || { sections: [], messages: [], invalidFields: [] };
         (validation.invalidFields || []).forEach(function (f) {
-          const key = (f.stableId || f.label || '') + '|INVALID';
-          if (seenReview.has(key)) return;
-          seenReview.add(key);
-          review.push({ stableId: f.stableId || null, label: f.label || f.stableId || 'field', reason: 'INVALID' });
+          addReview({ stableId: f.stableId || null, label: f.label || f.stableId || 'field', reason: 'INVALID' },
+            (f.stableId || f.label || '') + '|INVALID');
+        });
+        // The host's own remaining-invalid list after repair (the RBT's real to-do list).
+        (repair.stillMissing || []).forEach(function (f) {
+          addReview({ stableId: f.stableId || null, label: f.label || f.stableId || 'field', reason: 'INVALID' },
+            (f.stableId || f.label || '') + '|INVALID');
         });
         const missingSections = (validation.sections || []).filter(function (s) { return s.missingCount > 0; });
         chrome.runtime.sendMessage({
@@ -211,6 +223,8 @@
           summary: {
             written: results.filled,
             verifiedOk: verifiedOk,
+            repaired: repairedResolved.length,
+            repairPasses: repair.passes || 0,
             skipped: results.skipped,
             failed: results.failed,
             needsReview: review,
