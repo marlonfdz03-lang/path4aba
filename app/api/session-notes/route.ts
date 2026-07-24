@@ -13,7 +13,7 @@ export async function GET(req: Request) {
 
   const notes = await prisma.session_notes.findMany({
     where: { client_id: clientId },
-    select: { id: true, note_text: true, created_at: true },
+    select: { id: true, note_text: true, created_at: true, status: true },
     orderBy: { created_at: 'desc' },
   })
 
@@ -49,6 +49,8 @@ export async function POST(req: Request) {
       behaviors_addressed: behaviorsAddressed || [],
       skills_addressed: skillsAddressed || [],
       interventions_used: interventionsUsed || [],
+      // Saved via the web note UI — authoritative unless a later 'used' row (EHR push) exists.
+      status: 'saved',
     },
   })
   return NextResponse.json({ ok: true })

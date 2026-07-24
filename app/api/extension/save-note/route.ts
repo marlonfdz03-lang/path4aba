@@ -57,6 +57,9 @@ export async function POST(req: Request) {
       user_id: userId,
       note_text,
       session_date: session_date || new Date().toISOString().split('T')[0],
+      // Saved by the extension = the note pushed into the EHR for this session — the authoritative
+      // "used" record, the strongest answer to "which note was used for this date".
+      status: 'used',
     },
     select: { id: true },
   })

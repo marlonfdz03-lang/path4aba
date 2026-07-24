@@ -49,6 +49,10 @@ model session_notes {
   reviewed_by         String?
   reviewed_at         DateTime? @db.Timestamptz(6)
   review_comment      String?
+  // Authoritative lifecycle marker for "which note was used for this date":
+  // 'saved' (kept via the web note UI) | 'used' (pushed into the EHR by the extension) | 'draft'
+  // (reserved). NULL = legacy row written before this marker existed (provenance unknown).
+  status              String?
   created_at          DateTime? @default(now()) @db.Timestamptz(6)
   client              clients?  @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }
