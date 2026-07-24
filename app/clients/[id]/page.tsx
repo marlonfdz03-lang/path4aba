@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { getClientProfiles } from "@/lib/clientStorage";
+import { nextSessionClause } from "@/lib/nextSessionDate";
 import { saveNote, getNotesByClientId, deleteNote } from "@/lib/noteStorage";
 import { DataTab } from "./DataTab";
 import { CatalogDiffPanel } from "./CatalogDiffPanel";
@@ -455,7 +456,8 @@ export default function ClientProfilePage() {
       },
       clinicalEvents: [
         medicationConsumed ? "Medication consumed today." : "",
-        nextApptDate ? `Next scheduled appointment: ${nextApptDate}.` : "",
+        // Only emit the next-session date when it is strictly AFTER the session date; otherwise omit.
+        nextSessionClause(nextApptDate, date),
       ].filter(Boolean).join(" "),
       complianceLevel: complianceLevel !== "typical" ? complianceLevel : undefined,
       environmentalChangeDescription: environmentalChange && environmentalChangeDesc ? environmentalChangeDesc : undefined,

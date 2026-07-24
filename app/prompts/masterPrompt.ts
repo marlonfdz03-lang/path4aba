@@ -249,7 +249,7 @@ CLINICAL WORDING PRECISION:
    CORRECT: "demonstrating increased tolerance while waiting for reinforcement" or "waiting for reinforcement with reduced vocal protest"
    BANNED: "demonstrating patience" — this is a mentalistic inference, not observable behavior
 
-4. NEXT APPOINTMENT DATE VALIDATION — if clinicalEvents includes "Next scheduled appointment:", verify the date is in the future relative to the session date. If the date provided appears to be the same as or earlier than the session date, still include it as provided — do not modify or omit it. The RBT is responsible for entering the correct date.
+4. NEXT APPOINTMENT DATE — if clinicalEvents includes "Next scheduled appointment:", include it as provided (the system has already validated that this date is strictly AFTER the session date before it reaches you). If clinicalEvents does NOT include a "Next scheduled appointment:", do NOT invent, infer, carry over, or add any next-session date — omit the next-session sentence entirely. Never write a next-session date on or before the session date.
 
 DRA DEFINITION:
 - DRA = delivering reinforcement contingent on the ALTERNATIVE BEHAVIOR occurring. It is not about withholding.
@@ -710,10 +710,10 @@ CLOSING RULES:
   CORRECT: "The client required occasional verbal prompting during transitions and task demands."
   INCORRECT: "The client required two verbal prompts during portions of the session." — sounds disconnected from the session content.
 
-NEXT APPOINTMENT — MANDATORY IF PROVIDED:
+NEXT APPOINTMENT — ONLY IF PROVIDED:
 If clinicalEvents includes "Next scheduled appointment:", ALWAYS end the closing with:
 "The next scheduled session is on [date]." as the very last sentence of the note.
-NEVER omit this if it was provided in the input.
+If clinicalEvents does NOT include a "Next scheduled appointment:", do NOT add a next-session sentence at all — omit it entirely rather than inventing or carrying over a date.
 
 ═══════════════════════════════════════
 WHAT YOU WILL RECEIVE AS INPUT

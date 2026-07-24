@@ -10,6 +10,7 @@ import {
 import { filterBlockedNarrative, type BlockedTerm } from '@/lib/blockedNarrativeTerms';
 import { findInterventionViolations } from '@/lib/interventionPolicy';
 import { findFunctionAntecedentContradictions } from '@/lib/functionPatterns';
+import { stripInvalidNextSession } from '@/lib/nextSessionDate';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -371,7 +372,10 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     })),
     activitiesUsed: input.activitiesUsed,
     reinforcersUsed: input.reinforcersUsed,
-    clinicalEvents: input.clinicalEvents || '',
+    // Server-side guard: drop any "Next scheduled appointment:" clause whose date is not strictly
+    // after the session date, so a past/equal next-session date never reaches the note regardless
+    // of which form (or future caller) built clinicalEvents.
+    clinicalEvents: stripInvalidNextSession(input.clinicalEvents || '', input.sessionInfo.date),
     knowledgeBase: {
       topographyVariants: topographies.map(t => ({
         description: t.description,

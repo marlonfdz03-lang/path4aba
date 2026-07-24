@@ -4,6 +4,8 @@
 // website's inline version in app/clients/[id]/page.tsx. It mirrors that logic
 // so generated notes come out equivalent.
 
+import { nextSessionClause } from "@/lib/nextSessionDate";
+
 export type NoteFormValues = {
   clientId: string;
   date: string;
@@ -113,7 +115,8 @@ export function buildSessionInput(
 
     clinicalEvents: [
       form.medicationChange ? "Medication consumed today." : "",
-      form.nextAppt ? `Next scheduled appointment: ${form.nextAppt}.` : "",
+      // Only emit the next-session date when it is strictly AFTER the session date; otherwise omit.
+      nextSessionClause(form.nextAppt, form.date),
     ].filter(Boolean).join(" "),
 
     complianceLevel: form.compliance !== "typical" ? form.compliance : undefined,
