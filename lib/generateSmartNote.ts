@@ -280,19 +280,25 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
 
     const absenceNote = `Scheduled ${setting} ABA session on ${date} was not held. ${caregiver} reported that the client was unable to attend due to ${reason || 'an unplanned absence'}. A total of ${totalHours} hour${totalHours !== 1 ? 's' : ''} of authorized ABA services were not rendered during this period. Clinical literature and ABA research support that interruptions in consistent service delivery can adversely affect behavioral progress, including increased frequency and intensity of targeted maladaptive behaviors and reduced maintenance of acquired replacement skills. The treating BCBA has been notified of the missed service hours. This note documents the absence in accordance with the current treatment plan and insurance authorization requirements. Makeup hours will be scheduled as clinically indicated and as authorized under the current service plan.`;
 
-    // Save absence note to DB
+    // Save absence note to DB — same idempotency guard as the main note (skip a byte-identical re-save).
     try {
-      await prisma.session_notes.create({
-        data: {
-          client_id: input.clientId,
-          user_id: UUID_RE.test(rbtId ?? '') ? (rbtId as string) : null,
-          note_text: absenceNote,
-          session_date: date,
-          behaviors_addressed: [],
-          skills_addressed: [],
-          interventions_used: [],
-        },
+      const existingDup = await prisma.session_notes.findFirst({
+        where: { client_id: input.clientId, note_text: absenceNote },
+        select: { id: true },
       });
+      if (!existingDup) {
+        await prisma.session_notes.create({
+          data: {
+            client_id: input.clientId,
+            user_id: UUID_RE.test(rbtId ?? '') ? (rbtId as string) : null,
+            note_text: absenceNote,
+            session_date: date,
+            behaviors_addressed: [],
+            skills_addressed: [],
+            interventions_used: [],
+          },
+        });
+      }
     } catch (saveError) {
       console.warn('[generateSmartNote] absence note save failed:', saveError);
     }
@@ -505,19 +511,30 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   // "review before using" — we never auto-rewrite, because a wrong function needs a human decision.
   const coherenceFlags = findFunctionAntecedentContradictions(note);
 
-  // Step 8: Always save to session_notes. FK violation = localStorage-only client → logged, not thrown.
+  // Step 8: Save to session_notes. Idempotency guard — never write a byte-identical duplicate. This
+  // auto-save previously bypassed the dedup guards on /api/session-notes and /api/extension/save-note,
+  // so the clients page (generate auto-saves here + explicit Save) wrote the same note twice. A
+  // DIFFERENT note on the same date is still allowed — only an exact re-save is skipped. (A DB unique
+  // index on (client_id, md5(note_text)) is the hard guarantee; this closes the app-level race window.)
+  // FK violation = localStorage-only client → logged, not thrown.
   try {
-    await prisma.session_notes.create({
-      data: {
-        client_id: input.clientId,
-        user_id: UUID_RE.test(rbtId ?? '') ? (rbtId as string) : null,
-        note_text: note,
-        session_date: input.sessionInfo.date || null,
-        behaviors_addressed: input.behaviorsObserved.map((b) => b.name),
-        skills_addressed: input.replacementSkillsAddressed.map((s) => s.name),
-        interventions_used: resolvedProfile.approvedInterventions || [],
-      },
+    const existingDup = await prisma.session_notes.findFirst({
+      where: { client_id: input.clientId, note_text: note },
+      select: { id: true },
     });
+    if (!existingDup) {
+      await prisma.session_notes.create({
+        data: {
+          client_id: input.clientId,
+          user_id: UUID_RE.test(rbtId ?? '') ? (rbtId as string) : null,
+          note_text: note,
+          session_date: input.sessionInfo.date || null,
+          behaviors_addressed: input.behaviorsObserved.map((b) => b.name),
+          skills_addressed: input.replacementSkillsAddressed.map((s) => s.name),
+          interventions_used: resolvedProfile.approvedInterventions || [],
+        },
+      });
+    }
   } catch (saveError) {
     console.warn('[generateSmartNote] session_notes insert failed (localStorage-only client or missing table):', saveError);
   }
