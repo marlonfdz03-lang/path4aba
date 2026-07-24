@@ -95,6 +95,9 @@ function NoteForm() {
   const [summary, setSummary] = useState<
     { behaviors: string[]; skills: string[]; interventions: string[] } | null
   >(null);
+  // Persistence is explicit-save-only (generation no longer auto-saves), so the note is written to
+  // the client's record only when the RBT clicks Save.
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   // Default the date on the client (device clock) to avoid an SSR mismatch.
   useEffect(() => setDate(todayISO()), []);
@@ -162,12 +165,36 @@ function NoteForm() {
     selectedBehaviors.length >= 1 &&
     selectedSkills.length >= 1;
 
+  async function handleSave() {
+    if (!generatedNote.trim() || saveState === "saving" || saveState === "saved") return;
+    setSaveState("saving");
+    try {
+      const res = await fetch("/api/session-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId,
+          noteText: generatedNote,
+          sessionDate: date,
+          behaviorsAddressed: selectedBehaviors,
+          skillsAddressed: selectedSkills,
+          interventionsUsed: summary?.interventions ?? [],
+        }),
+      });
+      // 409 = the exact note is already saved (duplicate guard) — treat as saved, not an error.
+      setSaveState(res.ok || res.status === 409 ? "saved" : "error");
+    } catch {
+      setSaveState("error");
+    }
+  }
+
   async function handleGenerate() {
     if (!canGenerate || generating) return;
     setGenError("");
     setSimilarityWarning(false);
     setGeneratedNote("");
     setSummary(null);
+    setSaveState("idle");
     setGenerating(true);
     setStatus("Generating note…");
 
@@ -301,9 +328,25 @@ function NoteForm() {
               <div className="app-result-box">
                 <div className="app-result-box__head">
                   <span className="app-result-box__label">Generated note</span>
-                  <CopyButton text={generatedNote} />
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <button
+                      type="button"
+                      className="app-btn app-btn--primary"
+                      onClick={handleSave}
+                      disabled={saveState === "saving" || saveState === "saved"}
+                    >
+                      {saveState === "saved" ? "Saved ✓" : saveState === "saving" ? "Saving…" : "Save note"}
+                    </button>
+                    <CopyButton text={generatedNote} />
+                  </div>
                 </div>
                 <div className="app-note-text">{generatedNote}</div>
+                {saveState === "idle" && (
+                  <p className="app-result-none">Not saved yet — click Save to add it to this client's record.</p>
+                )}
+                {saveState === "error" && (
+                  <p className="app-warning">Could not save the note. Please try again.</p>
+                )}
               </div>
 
               {/* Boxes 2–4 — summary sections */}

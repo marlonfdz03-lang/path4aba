@@ -12,8 +12,6 @@ import { findInterventionViolations } from '@/lib/interventionPolicy';
 import { findFunctionAntecedentContradictions } from '@/lib/functionPatterns';
 import { stripInvalidNextSession } from '@/lib/nextSessionDate';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 const openai = new OpenAI({
   apiKey: process.env.AZURE_OPENAI_API_KEY || 'azure-openai',
   baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/deployments/gpt-4o`,
@@ -280,28 +278,8 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
 
     const absenceNote = `Scheduled ${setting} ABA session on ${date} was not held. ${caregiver} reported that the client was unable to attend due to ${reason || 'an unplanned absence'}. A total of ${totalHours} hour${totalHours !== 1 ? 's' : ''} of authorized ABA services were not rendered during this period. Clinical literature and ABA research support that interruptions in consistent service delivery can adversely affect behavioral progress, including increased frequency and intensity of targeted maladaptive behaviors and reduced maintenance of acquired replacement skills. The treating BCBA has been notified of the missed service hours. This note documents the absence in accordance with the current treatment plan and insurance authorization requirements. Makeup hours will be scheduled as clinically indicated and as authorized under the current service plan.`;
 
-    // Save absence note to DB — same idempotency guard as the main note (skip a byte-identical re-save).
-    try {
-      const existingDup = await prisma.session_notes.findFirst({
-        where: { client_id: input.clientId, note_text: absenceNote },
-        select: { id: true },
-      });
-      if (!existingDup) {
-        await prisma.session_notes.create({
-          data: {
-            client_id: input.clientId,
-            user_id: UUID_RE.test(rbtId ?? '') ? (rbtId as string) : null,
-            note_text: absenceNote,
-            session_date: date,
-            behaviors_addressed: [],
-            skills_addressed: [],
-            interventions_used: [],
-          },
-        });
-      }
-    } catch (saveError) {
-      console.warn('[generateSmartNote] absence note save failed:', saveError);
-    }
+    // No auto-save (persistence is explicit-save-only, same as the main note path) — the absence note
+    // is written to session_notes only when the RBT saves it, so it can't accumulate on regeneration.
 
     if (onChunk) onChunk(absenceNote);
 
@@ -511,33 +489,12 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   // "review before using" — we never auto-rewrite, because a wrong function needs a human decision.
   const coherenceFlags = findFunctionAntecedentContradictions(note);
 
-  // Step 8: Save to session_notes. Idempotency guard — never write a byte-identical duplicate. This
-  // auto-save previously bypassed the dedup guards on /api/session-notes and /api/extension/save-note,
-  // so the clients page (generate auto-saves here + explicit Save) wrote the same note twice. A
-  // DIFFERENT note on the same date is still allowed — only an exact re-save is skipped. (A DB unique
-  // index on (client_id, md5(note_text)) is the hard guarantee; this closes the app-level race window.)
-  // FK violation = localStorage-only client → logged, not thrown.
-  try {
-    const existingDup = await prisma.session_notes.findFirst({
-      where: { client_id: input.clientId, note_text: note },
-      select: { id: true },
-    });
-    if (!existingDup) {
-      await prisma.session_notes.create({
-        data: {
-          client_id: input.clientId,
-          user_id: UUID_RE.test(rbtId ?? '') ? (rbtId as string) : null,
-          note_text: note,
-          session_date: input.sessionInfo.date || null,
-          behaviors_addressed: input.behaviorsObserved.map((b) => b.name),
-          skills_addressed: input.replacementSkillsAddressed.map((s) => s.name),
-          interventions_used: resolvedProfile.approvedInterventions || [],
-        },
-      });
-    }
-  } catch (saveError) {
-    console.warn('[generateSmartNote] session_notes insert failed (localStorage-only client or missing table):', saveError);
-  }
+  // Step 8: NO auto-save. Generation (and every regeneration) used to persist a row here, so a single
+  // session date accumulated one row per generation — the RBT could not tell which version was used,
+  // and there was no authoritative note. Persistence is now EXPLICIT-SAVE-ONLY: the note is written to
+  // session_notes only when the RBT saves it (/api/session-notes on the web + note page, or
+  // /api/extension/save-note from the extension), each of which already guards against exact duplicates.
+  // A regeneration therefore never adds a row and never silently replaces a note the RBT already saved.
 
   return {
     note,
