@@ -4,6 +4,7 @@ import { NOTE_PERFECTOR_PROMPT } from '@/app/prompts/notePerfectorPrompt';
 import { prisma } from '@/lib/prisma';
 import { filterBlockedNarrative, type BlockedTerm } from '@/lib/blockedNarrativeTerms';
 import { findInterventionViolations } from '@/lib/interventionPolicy';
+import { isValidNextSessionDate, stripInvalidNextSession, stripInvalidNextSessionSentence } from '@/lib/nextSessionDate';
 
 export const runtime = 'nodejs';
 
@@ -24,7 +25,7 @@ function calculateSimilarity(text1: string, text2: string): number {
 
 export async function POST(req: NextRequest) {
   try {
-    const { originalNote, clientProfile, clientId, nextAppointmentDate, clinicalEvents } = await req.json();
+    const { originalNote, clientProfile, clientId, nextAppointmentDate, clinicalEvents, sessionDate } = await req.json();
 
     if (!originalNote || originalNote.trim().length < 50) {
       return NextResponse.json({ error: 'Note is too short to refine' }, { status: 400 });
@@ -70,10 +71,14 @@ export async function POST(req: NextRequest) {
       }
 
       if (clinicalEvents && typeof clinicalEvents === 'string' && clinicalEvents.trim()) {
-        parts.push('', 'CLINICAL EVENTS THIS SESSION:', clinicalEvents.trim());
+        // Drop any "Next scheduled appointment:" clause whose date is not strictly after the session date.
+        const cleanedEvents = stripInvalidNextSession(clinicalEvents, sessionDate).trim();
+        if (cleanedEvents) parts.push('', 'CLINICAL EVENTS THIS SESSION:', cleanedEvents);
       }
 
-      if (nextAppointmentDate) {
+      // Only ask the refiner to add a next-session date when it is strictly AFTER the session date;
+      // otherwise omit it entirely rather than let a past/equal date survive the rewrite.
+      if (isValidNextSessionDate(nextAppointmentDate, sessionDate)) {
         parts.push('', `Next appointment: ${nextAppointmentDate} — mention this at the end of the note.`);
       }
 
@@ -161,6 +166,11 @@ export async function POST(req: NextRequest) {
               return;
             }
           }
+
+          // Strip a "The next scheduled session is on <date>." closing sentence carried over from the
+          // original note whose date is not strictly after the session date — so a wrong date the RBT
+          // is one click from signing cannot survive the rewrite (the hole we closed on generation).
+          finalNote = stripInvalidNextSessionSentence(finalNote, sessionDate);
 
           // Strip host-EHR-blocked narrative terms (e.g. "sensory"), merging any per-client terms
           // the extension learned from host validation messages.

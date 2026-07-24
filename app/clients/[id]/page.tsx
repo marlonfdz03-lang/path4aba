@@ -574,6 +574,7 @@ export default function ClientProfilePage() {
       originalNote: pastedNote,
       clientId: client.id,
       nextAppointmentDate: nextApptDate || "",
+      sessionDate: date || "",
       clientProfile: {
         approvedInterventions: client.clinicalProfile?.interventions?.map((i: any) => typeof i === "string" ? i : i.name) || [],
         prohibitedInterventions: ["Punishment", "ResponseCost", "Restraint", "StandaloneExtinction", "TimeOut", "Overcorrection", "Aversive"],
