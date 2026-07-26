@@ -100,22 +100,54 @@ export function normalizeApproved(approved: string[] | undefined | null): Set<st
   return set
 }
 
+// ROLE-AWARENESS: the profile separates reduction interventions (approvedInterventions) from skill
+// programs (skillAcquisition / replacementBehaviors). A procedure like FCT is a replacement SKILL, so
+// it is valid documented as a skill being taught but INVALID documented as a behavior-reduction
+// intervention unless it is also an approved reduction intervention. A reduction assertion follows the
+// ABC pattern "the RBT implemented [X]"; a skill assertion is a teaching sentence ("targeted X",
+// "practiced X"). Conservative on purpose — only a clear implement/reduce cue with no skill cue counts.
+const REDUCTION_CUE = /\bimplement(?:ed|s|ing)?\b|\bto (?:reduce|decrease|interrupt|manage)\b/i
+const SKILL_CUE = /\btarget(?:ed|ing|s)?\b|\bpractic(?:e|ed|ing|es)\b|\btaught\b|\bteaching\b|\bacquisition\b/i
+function assertedAsReductionIntervention(note: string, re: RegExp): boolean {
+  for (const sentence of String(note || '').split(/(?<=[.!?;])\s+|\n+/)) {
+    if (!re.test(sentence)) continue
+    if (SKILL_CUE.test(sentence)) continue // a skill-teaching sentence — not a reduction assertion
+    if (REDUCTION_CUE.test(sentence)) return true
+  }
+  return false
+}
+
 // The compliance gate. Returns the interventions the note documents that it must not:
 //   prohibited — always disallowed (RIRD, punishment, restraint, …), even with no
 //                approved list captured, so the demonstrated RIRD case is caught either way.
-//   unapproved — only computed when an approved list IS captured: a catalog intervention
-//                the note asserts that is absent from the client's approved set. With no
-//                approved list we cannot know the plan, so we do NOT block every note —
-//                only the always-prohibited set applies (documented on the caller side).
+//   unapproved — only computed when an approved list IS captured: a catalog intervention the note
+//                asserts that is in NEITHER the approved reduction list NOR the skill list.
+//   skillAsReduction — a procedure that is a SKILL program (not an approved reduction intervention)
+//                but is documented AS a behavior-reduction intervention (e.g. FCT). Role-aware; only
+//                computed when a skill list is provided. A skill documented as a skill is NOT flagged.
 export function findInterventionViolations(
   note: string,
   approved: string[] | undefined | null,
-): { detected: string[]; prohibited: string[]; unapproved: string[] } {
+  skillPrograms?: string[] | undefined | null,
+): { detected: string[]; prohibited: string[]; unapproved: string[]; skillAsReduction: string[] } {
   const detected = detectInterventions(note)
   const prohibited = detected.filter((d) => PROHIBITED_INTERVENTIONS.has(d))
   const approvedSet = normalizeApproved(approved)
-  const unapproved = approvedSet.size
-    ? detected.filter((d) => !approvedSet.has(d) && !PROHIBITED_INTERVENTIONS.has(d))
-    : []
-  return { detected, prohibited, unapproved }
+  const skillSet = normalizeApproved(skillPrograms)
+  const unapproved: string[] = []
+  const skillAsReduction: string[] = []
+  if (approvedSet.size) {
+    for (const d of detected) {
+      if (PROHIBITED_INTERVENTIONS.has(d) || approvedSet.has(d)) continue // approved reduction — OK
+      if (skillSet.has(d)) {
+        // It is a skill program, not an approved reduction intervention. Only a violation if the note
+        // documents it AS a reduction intervention; documented as a skill, it passes.
+        const entry = INTERVENTION_CATALOG.find((e) => e.canonical === d)
+        if (entry && assertedAsReductionIntervention(note, entry.re)) skillAsReduction.push(d)
+      } else {
+        unapproved.push(d)
+      }
+    }
+  }
+  return { detected, prohibited, unapproved, skillAsReduction }
 }

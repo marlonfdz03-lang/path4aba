@@ -479,17 +479,24 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   // list captured we cannot know the plan, so only the always-prohibited set applies — we never
   // block every note for a client whose approved interventions were never synced.
   const approvedInterventions: string[] = resolvedProfile.approvedInterventions || [];
-  let violations = findInterventionViolations(note, approvedInterventions);
-  const violatingNames = () => [...new Set([...violations.prohibited, ...violations.unapproved])];
+  // Skill programs (replacement skills). Role-awareness: a skill like FCT is valid documented as a
+  // skill being taught, but INVALID documented as a behavior-reduction intervention unless it is also
+  // an approved reduction intervention.
+  const skillPrograms: string[] = resolvedProfile.activePrograms?.replacementSkills || [];
+  let violations = findInterventionViolations(note, approvedInterventions, skillPrograms);
+  const violatingNames = () => [...new Set([...violations.prohibited, ...violations.unapproved, ...violations.skillAsReduction])];
   if (violatingNames().length > 0) {
     const bad = violatingNames();
+    const roleNote = violations.skillAsReduction.length
+      ? ` NOTE: ${violations.skillAsReduction.join(', ')} ${violations.skillAsReduction.length === 1 ? 'is a skill program' : 'are skill programs'}, not an approved reduction intervention — document ${violations.skillAsReduction.length === 1 ? 'it' : 'them'} ONLY as a skill being taught, never as a behavior-reduction intervention.`
+      : '';
     const approvedClause = approvedInterventions.length
       ? `ONLY these approved interventions: ${approvedInterventions.join(', ')}`
       : `ONLY interventions named in the session data's approved list`;
     if (onChunk) onChunk('\n__REGEN__\n');
-    const violationInstruction = `\n\nCOMPLIANCE VIOLATION — REGENERATE: the previous note documented ${bad.join(', ')}, which ${bad.length === 1 ? 'is' : 'are'} NOT in this client's approved treatment plan. An RBT may only document interventions the BCBA has approved. Rewrite the entire note using ${approvedClause}. Never mention ${bad.join(', ')}, response interruption and redirection (RIRD), or any intervention outside the approved list.`;
+    const violationInstruction = `\n\nCOMPLIANCE VIOLATION — REGENERATE: the previous note documented ${bad.join(', ')}, which ${bad.length === 1 ? 'is' : 'are'} NOT permitted as documented for this client.${roleNote} An RBT may only document reduction interventions the BCBA has approved. Rewrite the entire note using ${approvedClause}. Never mention response interruption and redirection (RIRD) or any intervention outside the approved list.`;
     note = applyBlockedFilter(await callOpenAI(MASTER_RBT_NOTE_PROMPT + contextualFactors + violationInstruction));
-    violations = findInterventionViolations(note, approvedInterventions);
+    violations = findInterventionViolations(note, approvedInterventions, skillPrograms);
     if (violatingNames().length > 0) {
       const still = violatingNames();
       throw new Error(
