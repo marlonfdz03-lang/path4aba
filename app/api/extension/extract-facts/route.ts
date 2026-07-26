@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getExtensionAuth } from '@/lib/extensionAuth'
 import OpenAI from 'openai'
-import { FUNCTION_PATTERNS, inferFunctionFromAntecedent } from '@/lib/functionPatterns'
+import { inferFunctionFromAntecedent, segmentNoteByBehavior, deriveBehaviorFunction } from '@/lib/functionPatterns'
 
 // New diagnostics are gated behind this flag (default false) so nothing is logged in
 // production. No field VALUES (PHI) are ever logged even when true — counts/labels only.
@@ -64,146 +64,8 @@ function containsAny(text: string, terms: readonly string[]): boolean {
   return terms.some((t) => new RegExp(`(^|[^a-z0-9])${esc(t.toLowerCase())}([^a-z0-9]|$)`, 'i').test(hay))
 }
 
-// Locate this behavior in the note so the function match can be anchored to it. Returns the
-// index of the topography (preferred) / name / evidencedBy within `hay`, or -1 if none found.
-function anchorIndex(hay: string, behavior: any): number {
-  const low = hay.toLowerCase()
-  for (const raw of [behavior?.topography, behavior?.name, behavior?.evidencedBy]) {
-    const needle = String(raw || '').toLowerCase().trim().slice(0, 40)
-    if (needle) {
-      const idx = low.indexOf(needle)
-      if (idx >= 0) return idx
-    }
-  }
-  return -1
-}
-
-// Split a note into sentences (also breaking on newlines/semicolons).
-function splitSentences(note: string): string[] {
-  return (note || '').split(/(?<=[.!?])\s+|[\n;]+/).map((s) => s.trim()).filter(Boolean)
-}
-
-// Significant (topography-ish) words used to attribute a sentence to a behavior. Lowercased,
-// >=4 chars, minus common clinical/filler words so generic terms don't cause misattribution.
-const SEGMENT_STOPWORDS = new Set([
-  'the', 'and', 'was', 'were', 'with', 'that', 'this', 'client', 'behavior', 'behaviors',
-  'during', 'into', 'from', 'their', 'they', 'them', 'been', 'when', 'which', 'while', 'after',
-  'before', 'consistent', 'maintained', 'seeking', 'session', 'appropriate', 'response',
-  'responded', 'engaged', 'presented', 'staff', 'adult', 'task', 'used', 'such',
-])
-function significantWords(s: string): string[] {
-  return ((s || '').toLowerCase().match(/[a-z]{4,}/g) || []).filter((w) => !SEGMENT_STOPWORDS.has(w))
-}
-
-// Issue 2 fix: split the note into PER-BEHAVIOR prose segments. Each sentence is attributed to
-// the behavior whose extracted keywords (topography/evidencedBy/name) it best overlaps; a
-// sentence with no overlap (e.g. a trailing "...consistent with X-maintained behavior" clause
-// that repeats no topography words) is attached to the most recently attributed behavior. This
-// keeps each behavior's function phrase in its OWN segment instead of running every pattern over
-// the whole note (which cross-contaminates when the LLM's topography isn't verbatim in the note).
-function segmentNoteByBehavior(note: string, behaviors: any[]): string[] {
-  const sentences = splitSentences(note)
-  const kwSets = behaviors.map((b) => new Set([
-    ...significantWords(b?.topography), ...significantWords(b?.evidencedBy), ...significantWords(b?.name),
-  ]))
-  const segments: string[][] = behaviors.map(() => [])
-  if (!sentences.length || !behaviors.length) return behaviors.map(() => note || '')
-
-  let last = 0
-  for (const sentence of sentences) {
-    const words = significantWords(sentence)
-    let best = -1
-    let bestScore = 0
-    kwSets.forEach((kw, bi) => {
-      const score = words.reduce((n, w) => n + (kw.has(w) ? 1 : 0), 0)
-      if (score > bestScore) { bestScore = score; best = bi }
-    })
-    if (best >= 0) { segments[best].push(sentence); last = best }
-    else { segments[last].push(sentence) }
-  }
-  // A behavior that captured no sentence falls back to the whole note (better a shot than blank).
-  return segments.map((arr) => (arr.length ? arr.join(' ') : (note || '')))
-}
-
-// A SOCIAL/environmental antecedent — a demand or instruction, a denied/delayed tangible, a shift
-// in adult attention, or a DIRECTED transition. Kept to clear FUNCTIONAL triggers (not bare words
-// like "task"/"transition", which also appear in automatic-context antecedents like "during a
-// repetitive task"). Its presence is evidence AGAINST an automatic function.
-const SOCIAL_ANTECEDENT = new RegExp([
-  'demand', 'task demand', 'non[- ]preferred',
-  'presented with (a |an )?(task|demand|instruction|worksheet|activity|direction)',
-  'instruction', 'instructed', 'directed to', 'direction to', 'told to', 'asked to',
-  'prompted to', 'request(ed)? to (complete|do|stop|finish|start|begin)',
-  'transition (from|to)', 'transition away', 'transitioning (from|to)',
-  'clean[- ]?up', 'cleaning up', 'put(ting)? away', 'told .* (ending|ended|to stop|to finish)',
-  'denied', 'removed', 'taken away', 'withheld', 'out of reach', 'unavailable', 'restricted',
-  'blocked access', 'access .* (denied|removed|restricted|ended)',
-  'preferred (item|toy|activity)[^.]{0,30}(denied|removed|delayed|withheld|restricted|unavailable|taken|ended)',
-  'attention (was )?(directed|shifted|removed|diverted)', 'attention (to|toward) (another|other)',
-  'adult (attention|engaged|attending|turned away)', 'another (person|child|peer|student|adult)',
-].join('|'), 'i')
-
-// An AUTOMATIC-consistent antecedent — one describing the ABSENCE of a social trigger, or an
-// automatic CONTEXT/timing (a repetitive task, a plain transition period, sensory/independent
-// activity). If present, an automatic derivation is coherent and the sanity rule does NOT fire.
-const AUTOMATIC_ANTECEDENT = new RegExp([
-  'no (clear |observable )?(external |environmental |social )?antecedent',
-  'no (clear |observable )?(social )?(trigger|cue)',
-  'absence of (a |clear )?(social|environmental)',
-  'unstructured (time|period|activity)', 'independent (activity|engagement|play)',
-  // Time-marker transition only ("during transitions between activities"). A DIRECTED transition
-  // ("transition from a fine motor task") is a demand and must NOT test automatic-consistent, so
-  // the bare 'during (a )?transition' and the bare activity noun 'fine motor' are deliberately gone
-  // (that pairing is exactly what let a transition-demand antecedent read as automatic).
-  'between activities',
-  'monotonous', 'repetitive task', '(prolonged |extended )?waiting (period)?',
-  'low[- ]stimulation', 'minimal (environmental )?stimulation', 'minimal adult',
-  'self[- ]stimulat', 'sensory', 'seated activity',
-  'across (all )?conditions', 'regardless of (social )?(consequence|antecedent)',
-].join('|'), 'i')
-
-// Rule 6: derive the function from tolerant patterns run over the behavior's PROSE SEGMENT (plus
-// the behavior's own fields as backup). If more than one pattern matches, take the one whose match
-// index is closest to the topography. If none match, 'unknown'. Returns the resolved label, which
-// pattern matched (regex source), the raw segment, and any clinical conflict (see the sanity rule).
-function deriveBehaviorFunction(segment: string, behavior: any):
-  { resolved: string; matchedPattern: string | null; segment: string; conflict: { derived: string; antecedent: string } | null } {
-  const hay = [
-    segment || '',
-    behavior?.topography || '', behavior?.evidencedBy || '', behavior?.antecedent || '',
-    behavior?.interventions || '', behavior?.result || '',
-  ].join('\n')
-
-  const matches: { label: string; index: number; pattern: string }[] = []
-  for (const { re, label } of FUNCTION_PATTERNS) {
-    const m = re.exec(hay)
-    if (m) matches.push({ label, index: m.index, pattern: re.source })
-  }
-
-  let resolved = 'unknown'
-  let matchedPattern: string | null = null
-  if (matches.length === 1) {
-    resolved = matches[0].label; matchedPattern = matches[0].pattern
-  } else if (matches.length > 1) {
-    const anchor = anchorIndex(hay, behavior)
-    if (anchor >= 0) matches.sort((a, b) => Math.abs(a.index - anchor) - Math.abs(b.index - anchor))
-    // Deterministic tiebreak when there's no topography anchor: FUNCTION_PATTERNS order.
-    resolved = matches[0].label; matchedPattern = matches[0].pattern
-  }
-
-  // CLINICAL SANITY RULE (applied AFTER pattern matching): automatic reinforcement is defined by
-  // the ABSENCE of a social antecedent. If the patterns resolved to Automatic Reinforcement but the
-  // antecedent clearly describes a social event, the matcher likely grabbed text from the wrong
-  // behavior — do NOT write a clinically incoherent function. Return 'unknown' and flag the
-  // conflict (derived function + antecedent) for review. Note: keyed on the ANTECEDENT, never on a
-  // fixed list of topography labels.
-  const antecedent = String(behavior?.antecedent || '')
-  if (resolved === 'Automatic Reinforcement' && !AUTOMATIC_ANTECEDENT.test(antecedent) && SOCIAL_ANTECEDENT.test(antecedent)) {
-    return { resolved: 'unknown', matchedPattern, segment: segment || '', conflict: { derived: 'Automatic Reinforcement', antecedent } }
-  }
-
-  return { resolved, matchedPattern, segment: segment || '', conflict: null }
-}
+// Note→per-behavior function derivation (segmentNoteByBehavior, deriveBehaviorFunction) now lives in
+// the shared lib/behaviorFunction module so generation can enforce the same approved-function rule.
 
 // Remove client + caregiver names from a text before it is DEBUG-logged (no PHI in logs).
 function stripNames(text: string, clientName?: string, caregivers?: string[]): string {

@@ -109,3 +109,188 @@ export function findFunctionAntecedentContradictions(note: string): string[] {
   }
   return flags
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PER-BEHAVIOR FUNCTION DERIVATION FROM NOTE PROSE + THE APPROVED-FUNCTION CONSTRAINT.
+//
+// Kept in this module (not a separate file) so both extract-facts AND generateSmartNote import the
+// one implementation, and so the regression test's .ts import resolves without a cross-lib specifier.
+//
+// THE RULE: a function assigned to a behavior must be a member of that behavior's assessment-approved
+// set (clinical_profile.maladaptiveBehaviors[].functions). A function outside the approved set is a
+// violation, not a choice. If the derived/written function is unapproved, prefer an approved function
+// the antecedent supports; if none fits, leave it blank for review rather than assert an unapproved one.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SEGMENT_STOPWORDS = new Set([
+  'the', 'and', 'was', 'were', 'with', 'that', 'this', 'client', 'behavior', 'behaviors',
+  'during', 'into', 'from', 'their', 'they', 'them', 'been', 'when', 'which', 'while', 'after',
+  'before', 'consistent', 'maintained', 'seeking', 'session', 'appropriate', 'response',
+  'responded', 'engaged', 'presented', 'staff', 'adult', 'task', 'used', 'such',
+])
+export function significantWords(s: string): string[] {
+  return ((s || '').toLowerCase().match(/[a-z]{4,}/g) || []).filter((w) => !SEGMENT_STOPWORDS.has(w))
+}
+
+export function splitSentences(note: string): string[] {
+  return (note || '').split(/(?<=[.!?])\s+|[\n;]+/).map((s) => s.trim()).filter(Boolean)
+}
+
+function anchorIndex(hay: string, behavior: any): number {
+  const low = hay.toLowerCase()
+  for (const raw of [behavior?.topography, behavior?.name, behavior?.evidencedBy]) {
+    const needle = String(raw || '').toLowerCase().trim().slice(0, 40)
+    if (needle) {
+      const idx = low.indexOf(needle)
+      if (idx >= 0) return idx
+    }
+  }
+  return -1
+}
+
+// Split the note into PER-BEHAVIOR prose segments (each sentence attributed to the behavior whose
+// topography/name it best overlaps; a topography-less trailing clause attaches to the most recent).
+export function segmentNoteByBehavior(note: string, behaviors: any[]): string[] {
+  const sentences = splitSentences(note)
+  const kwSets = behaviors.map((b) => new Set([
+    ...significantWords(b?.topography), ...significantWords(b?.evidencedBy), ...significantWords(b?.name),
+  ]))
+  const segments: string[][] = behaviors.map(() => [])
+  if (!sentences.length || !behaviors.length) return behaviors.map(() => note || '')
+
+  let last = 0
+  for (const sentence of sentences) {
+    const words = significantWords(sentence)
+    let best = -1
+    let bestScore = 0
+    kwSets.forEach((kw, bi) => {
+      const score = words.reduce((n, w) => n + (kw.has(w) ? 1 : 0), 0)
+      if (score > bestScore) { bestScore = score; best = bi }
+    })
+    if (best >= 0) { segments[best].push(sentence); last = best }
+    else { segments[last].push(sentence) }
+  }
+  return segments.map((arr) => (arr.length ? arr.join(' ') : (note || '')))
+}
+
+// A SOCIAL/environmental antecedent — demand/instruction, denied/delayed tangible, attention shift,
+// or DIRECTED transition. Its presence is evidence AGAINST an automatic function (sanity rule below).
+export const SOCIAL_ANTECEDENT = new RegExp([
+  'demand', 'task demand', 'non[- ]preferred',
+  'presented with (a |an )?(task|demand|instruction|worksheet|activity|direction)',
+  'instruction', 'instructed', 'directed to', 'direction to', 'told to', 'asked to',
+  'prompted to', 'request(ed)? to (complete|do|stop|finish|start|begin)',
+  'transition (from|to)', 'transition away', 'transitioning (from|to)',
+  'clean[- ]?up', 'cleaning up', 'put(ting)? away', 'told .* (ending|ended|to stop|to finish)',
+  'denied', 'removed', 'taken away', 'withheld', 'out of reach', 'unavailable', 'restricted',
+  'blocked access', 'access .* (denied|removed|restricted|ended)',
+  'preferred (item|toy|activity)[^.]{0,30}(denied|removed|delayed|withheld|restricted|unavailable|taken|ended)',
+  'attention (was )?(directed|shifted|removed|diverted)', 'attention (to|toward) (another|other)',
+  'adult (attention|engaged|attending|turned away)', 'another (person|child|peer|student|adult)',
+].join('|'), 'i')
+
+// An AUTOMATIC-consistent antecedent — absence of a social trigger, or an automatic context/timing.
+// A DIRECTED transition and a bare activity noun are deliberately NOT here (the bare-noun bug).
+export const AUTOMATIC_ANTECEDENT = new RegExp([
+  'no (clear |observable )?(external |environmental |social )?antecedent',
+  'no (clear |observable )?(social )?(trigger|cue)',
+  'absence of (a |clear )?(social|environmental)',
+  'unstructured (time|period|activity)', 'independent (activity|engagement|play)',
+  'between activities',
+  'monotonous', 'repetitive task', '(prolonged |extended )?waiting (period)?',
+  'low[- ]stimulation', 'minimal (environmental )?stimulation', 'minimal adult',
+  'self[- ]stimulat', 'sensory', 'seated activity',
+  'across (all )?conditions', 'regardless of (social )?(consequence|antecedent)',
+].join('|'), 'i')
+
+// Derive the function from FUNCTION_PATTERNS over the behavior's PROSE SEGMENT (plus its own fields).
+// Returns the resolved label ('Attention'|'Escape'|'Tangibles'|'Automatic Reinforcement'|'unknown'),
+// the matched pattern, the raw segment, and any Automatic-vs-social conflict.
+export function deriveBehaviorFunction(segment: string, behavior: any):
+  { resolved: string; matchedPattern: string | null; segment: string; conflict: { derived: string; antecedent: string } | null } {
+  const hay = [
+    segment || '',
+    behavior?.topography || '', behavior?.evidencedBy || '', behavior?.antecedent || '',
+    behavior?.interventions || '', behavior?.result || '',
+  ].join('\n')
+
+  const matches: { label: string; index: number; pattern: string }[] = []
+  for (const { re, label } of FUNCTION_PATTERNS) {
+    const m = re.exec(hay)
+    if (m) matches.push({ label, index: m.index, pattern: re.source })
+  }
+
+  let resolved = 'unknown'
+  let matchedPattern: string | null = null
+  if (matches.length === 1) {
+    resolved = matches[0].label; matchedPattern = matches[0].pattern
+  } else if (matches.length > 1) {
+    const anchor = anchorIndex(hay, behavior)
+    if (anchor >= 0) matches.sort((a, b) => Math.abs(a.index - anchor) - Math.abs(b.index - anchor))
+    resolved = matches[0].label; matchedPattern = matches[0].pattern
+  }
+
+  const antecedent = String(behavior?.antecedent || '')
+  if (resolved === 'Automatic Reinforcement' && !AUTOMATIC_ANTECEDENT.test(antecedent) && SOCIAL_ANTECEDENT.test(antecedent)) {
+    return { resolved: 'unknown', matchedPattern, segment: segment || '', conflict: { derived: 'Automatic Reinforcement', antecedent } }
+  }
+
+  return { resolved, matchedPattern, segment: segment || '', conflict: null }
+}
+
+// Assessment stores functions as lowercase canonical ('attention'|'escape'|'tangible'|'automatic').
+// FUNCTION_PATTERNS / the ABA-Matrix form use display labels. Map between them.
+export function functionToCanonical(label: string | null | undefined): string | null {
+  const s = String(label || '').toLowerCase()
+  if (!s || s === 'unknown') return null
+  if (s.includes('attention')) return 'attention'
+  if (s.includes('escape') || s.includes('avoidance')) return 'escape'
+  if (s.includes('tangible')) return 'tangible'
+  if (s.includes('automatic') || s.includes('sensory')) return 'automatic'
+  return null
+}
+const LABEL_BY_CANONICAL: Record<string, string> = {
+  attention: 'Attention', escape: 'Escape', tangible: 'Tangibles', automatic: 'Automatic Reinforcement',
+}
+
+// Display label for a function value that may be canonical ('escape') or already a label ('Escape').
+export function functionDisplayLabel(fn: string): string {
+  const c = functionToCanonical(fn)
+  return c ? LABEL_BY_CANONICAL[c] : fn
+}
+
+export function normalizeApprovedFunctions(approved: string[] | undefined | null): Set<string> {
+  const set = new Set<string>()
+  for (const a of Array.isArray(approved) ? approved : []) {
+    const c = functionToCanonical(a)
+    if (c) set.add(c)
+  }
+  return set
+}
+
+export type ConstrainResult = {
+  fn: string | null // approved label to use, or null = leave blank for review
+  status: 'approved' | 'corrected' | 'unapproved' | 'unconstrained' | 'unknown'
+  from?: string // the original candidate when corrected/unapproved
+}
+
+// Constrain a candidate function to the behavior's approved set. If the candidate is approved, keep
+// it. If not, prefer an approved function the ANTECEDENT supports; if none fits, return null (blank +
+// review) rather than assert an unapproved function. With no approved set captured, do not block.
+export function constrainFunctionToApproved(
+  candidate: string | null | undefined,
+  approvedFunctions: string[] | undefined | null,
+  antecedent?: string,
+): ConstrainResult {
+  const approved = normalizeApprovedFunctions(approvedFunctions)
+  const cand = functionToCanonical(candidate)
+  if (!approved.size) return { fn: candidate ?? null, status: 'unconstrained' }
+  if (!cand) return { fn: candidate ?? null, status: 'unknown' } // nothing asserted to constrain
+  if (approved.has(cand)) return { fn: LABEL_BY_CANONICAL[cand], status: 'approved' }
+
+  const inferred = functionToCanonical(inferFunctionFromAntecedent(String(antecedent || '')))
+  if (inferred && approved.has(inferred)) {
+    return { fn: LABEL_BY_CANONICAL[inferred], status: 'corrected', from: LABEL_BY_CANONICAL[cand] }
+  }
+  return { fn: null, status: 'unapproved', from: LABEL_BY_CANONICAL[cand] }
+}

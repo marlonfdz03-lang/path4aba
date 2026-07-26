@@ -9,7 +9,11 @@ import {
 } from '@/lib/clinicalFilters';
 import { filterBlockedNarrative, type BlockedTerm } from '@/lib/blockedNarrativeTerms';
 import { findInterventionViolations } from '@/lib/interventionPolicy';
-import { findFunctionAntecedentContradictions } from '@/lib/functionPatterns';
+import {
+  findFunctionAntecedentContradictions,
+  segmentNoteByBehavior, deriveBehaviorFunction, functionToCanonical,
+  normalizeApprovedFunctions, functionDisplayLabel,
+} from '@/lib/functionPatterns';
 import { stripInvalidNextSession } from '@/lib/nextSessionDate';
 
 const openai = new OpenAI({
@@ -37,6 +41,9 @@ export interface SessionInput {
     frequency: number;
     antecedentContext: string;
     function: string;
+    // The assessment-approved function set for THIS behavior (clinical_profile.maladaptiveBehaviors[].functions).
+    // The written function must be one of these; the gate enforces it. Empty/absent = no constraint.
+    allowedFunctions?: string[];
   }[];
   replacementSkillsAddressed: {
     name: string;
@@ -375,7 +382,16 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
 
   // Step 6: Generate the note using the master prompt + contextual clinical factors
   const contextualFactors = buildContextualFactors(input);
-  const userPrompt = `Generate a clinical ABA session note using this session data:\n\n${JSON.stringify(sessionContext, null, 2)}\n\nRemember: ONE continuous paragraph, EXACTLY 5 ABCs, no mentalistic language, no prohibited interventions, all activities in parentheses format, every behavior must have an intervention.`;
+  // Per-behavior approved-function constraint (from the assessment). The written function for each
+  // behavior MUST be in its approved set; the post-generation gate enforces it.
+  const approvedFunctionLines = input.behaviorsObserved
+    .filter((b) => Array.isArray(b.allowedFunctions) && b.allowedFunctions.length)
+    .map((b) => `- ${b.name}: ${b.allowedFunctions!.map(functionDisplayLabel).join(' or ')}`)
+    .join('\n');
+  const approvedFunctionConstraint = approvedFunctionLines
+    ? `\n\nAPPROVED BEHAVIOR FUNCTIONS — HARD CONSTRAINT (do not violate): the assessment approved ONLY these functions per behavior. Assign each behavior a function from its approved set, and write an antecedent consistent with that function. NEVER assign a function outside a behavior's approved set:\n${approvedFunctionLines}`
+    : '';
+  const userPrompt = `Generate a clinical ABA session note using this session data:\n\n${JSON.stringify(sessionContext, null, 2)}${approvedFunctionConstraint}\n\nRemember: ONE continuous paragraph, EXACTLY 5 ABCs, no mentalistic language, no prohibited interventions, all activities in parentheses format, every behavior must have an intervention.`;
 
   async function callOpenAI(systemContent: string): Promise<string> {
     if (onChunk) {
@@ -483,11 +499,51 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     }
   }
 
+  // Step 7c2: APPROVED-FUNCTION GATE. The function written for each behavior must be a member of that
+  // behavior's assessment-approved set (allowedFunctions, from clinical_profile). We derive the written
+  // function per behavior from the note; if any behavior asserts a function the assessment did NOT
+  // approve for it (e.g. "Throwing Objects" written as Automatic when the assessment approved only
+  // Escape/Tangible/Attention), regenerate ONCE naming the violation; if it still violates, surface a
+  // coherence flag rather than return a note asserting an unapproved function. With no approved set
+  // captured for a behavior, it is not constrained (we enforce only what the assessment specifies).
+  const findFunctionViolations = (text: string): { name: string; wrote: string; approved: string[] }[] => {
+    const gated = input.behaviorsObserved.filter((b) => Array.isArray(b.allowedFunctions) && b.allowedFunctions.length);
+    if (!gated.length) return [];
+    const segments = segmentNoteByBehavior(text, input.behaviorsObserved);
+    const out: { name: string; wrote: string; approved: string[] }[] = [];
+    input.behaviorsObserved.forEach((b, i) => {
+      const approved = b.allowedFunctions || [];
+      if (!approved.length) return;
+      const wrote = deriveBehaviorFunction(segments[i], b).resolved;
+      const canonical = functionToCanonical(wrote);
+      if (canonical && !normalizeApprovedFunctions(approved).has(canonical)) {
+        out.push({ name: b.name, wrote, approved });
+      }
+    });
+    return out;
+  };
+  let functionViolations = findFunctionViolations(note);
+  if (functionViolations.length > 0) {
+    if (onChunk) onChunk('\n__REGEN__\n');
+    const detail = functionViolations
+      .map((v) => `${v.name} (written as ${v.wrote}; approved: ${v.approved.map(functionDisplayLabel).join(', ')})`)
+      .join('; ');
+    const functionInstruction = `\n\nBEHAVIOR-FUNCTION VIOLATION — REGENERATE: the note assigned a behavior a function the assessment did NOT approve for it — ${detail}. For EACH behavior, assign ONLY a function from its approved set, and write an antecedent consistent with that approved function. Never write a function outside a behavior's approved set.`;
+    note = applyBlockedFilter(await callOpenAI(MASTER_RBT_NOTE_PROMPT + contextualFactors + functionInstruction));
+    functionViolations = findFunctionViolations(note);
+  }
+
   // Step 7d: Function↔antecedent coherence flags. Automatic reinforcement requires the ABSENCE of a
   // social antecedent; a clause asserting automatic function while describing a demand, directed
   // transition, item removal, or attention shift is contradictory. We surface these to the RBT as
   // "review before using" — we never auto-rewrite, because a wrong function needs a human decision.
   const coherenceFlags = findFunctionAntecedentContradictions(note);
+  // Any approved-function violation that survived the regeneration is surfaced (not auto-corrected).
+  for (const v of functionViolations) {
+    coherenceFlags.push(
+      `"${v.name}" was written as ${v.wrote}, which the assessment did not approve for it (approved: ${v.approved.map(functionDisplayLabel).join(', ')}) — verify before using.`,
+    );
+  }
 
   // Step 8: NO auto-save. Generation (and every regeneration) used to persist a row here, so a single
   // session date accumulated one row per generation — the RBT could not tell which version was used,

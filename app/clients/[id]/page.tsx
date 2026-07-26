@@ -423,6 +423,9 @@ export default function ClientProfilePage() {
           frequency: 1,
           antecedentContext: "",
           function: functions[0] || "",
+          // Full assessment-approved set for this behavior — the generation gate enforces the written
+          // function stays within it (not just functions[0]).
+          allowedFunctions: functions,
         };
       }),
       replacementSkillsAddressed: selectedSkills.map((name) => ({ name, promptLevel: "", clientResponse: "", successful: true })),

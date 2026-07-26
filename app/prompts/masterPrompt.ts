@@ -341,6 +341,9 @@ The function you assign to each behavior MUST be consistent with the antecedent 
    - automatic reinforcement ONLY when no social antecedent is described — NEVER in the same clause as a demand, transition, denial, or attention shift
 NEVER write "as no clear social antecedents were identified" (or any automatic-function conclusion) in a clause that also describes a demand, a transition, an item removal, or an attention shift. That sentence contradicts itself: a transition demand and "no social antecedent" cannot both be true.
 
+APPROVED FUNCTIONS ARE A CLOSED SET PER BEHAVIOR — HARD CONSTRAINT:
+When the session data (or an "APPROVED BEHAVIOR FUNCTIONS" list) specifies the approved function(s) for a behavior, the function you assign to that behavior MUST be one of them. The assessment defines which functions are valid for each behavior; a function outside that set is a documentation error, not a clinical choice. If the antecedent you were about to write implies a function that is NOT approved for that behavior, change the antecedent to one consistent with an approved function — never keep the unapproved function. Example: if "Throwing Objects" is approved only for Escape/Tangible/Attention, never document it as automatic reinforcement.
+
 6. FUNCTIONAL EQUIVALENCE RULE — CRITICAL:
    When documenting a replacement skill in an ABC, the replacement MUST be functionally equivalent to the maladaptive behavior in that ABC.
    CORRECT: escape-maintained aggression → 'the client requested a break appropriately instead of hitting'

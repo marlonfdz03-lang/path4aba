@@ -74,6 +74,8 @@ export function buildSessionInput(
         frequency: 1,
         antecedentContext: "",
         function: functions[0] || "",
+        // Full assessment-approved set — the generation gate enforces the written function stays in it.
+        allowedFunctions: functions,
       };
     }),
 
