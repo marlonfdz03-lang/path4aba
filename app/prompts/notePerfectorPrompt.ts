@@ -375,12 +375,11 @@ If you only see 2 skills but 4 were provided, you have failed this requirement.
 
 For each skill you must write:
 1. What activity was used
-2. What teaching procedure (DTT, FCT, Modeling, etc.)
+2. How the skill was practiced — name a teaching procedure ONLY if the client's approved plan declares it for that program or the RBT's input explicitly states it; otherwise describe what was presented, with no procedure label
 3. What the client did
 4. Medical necessity sentence
 
-If you are unsure how a specific skill was practiced, write:
-"[Skill name] was also addressed during the session through structured teaching opportunities using [teaching procedure] with verbal and gestural prompts; the client demonstrated emerging responses with continued support."
+If it is unclear how a specific skill was practiced, document only what the RBT's input supports — describe the activity and the client's response. Never complete the gap with a procedure name the sources do not declare.
 
 BANNED: Omitting any skill from the provided list.
 BANNED: Combining multiple skills into one sentence without individual detail.
@@ -430,23 +429,14 @@ RULES:
 - The clinical justification must still be specific to the skill and its function
 - Must still appear immediately after each skill description
 
-TEACHING PROCEDURE — MANDATORY PER SKILL:
-For each skill acquisition target, you MUST explicitly mention the teaching procedure used.
-Use ONLY these exact terms (they must appear verbatim in the note):
-- "Discrete Trial Teaching (DTT)"
-- "Functional Communication Training (FCT)"
-- "Modeling and visual supports"
-- "Modeling and gestural prompts"
-- "Activity schedules"
-- "Modeling"
+TEACHING PROCEDURE — NAME ONLY IF A SOURCE DECLARES IT:
+Name a teaching procedure for a skill ONLY when the client's approved plan declares it for that specific program, or the RBT's input explicitly states it. When neither source declares it, describe what was presented and how the client responded, with NO taxonomic procedure label. Do not invent, infer, or default to any procedure — never write "DTT", "FCT", or any procedure label the sources did not provide.
+This rule governs EVERY place a template shows "[teaching procedure]" or "[procedure]": fill it only when a source declares the method; otherwise omit the label and describe what was practiced.
+A description of how a skill was practiced WITHOUT a named procedure is correct output when the plan does not declare one — it is not a quality defect.
 
-CORRECT examples:
-- "The RBT implemented Discrete Trial Teaching (DTT) to practice Manding for Attention Response by presenting structured trials..."
-- "Following Instructions Response Chain was targeted using Modeling and visual supports, where the RBT demonstrated the expected behavior..."
-- "Help Request Response was practiced through Functional Communication Training (FCT) by modeling appropriate verbal requests..."
-
-BANNED: Describing how a skill was practiced without naming the teaching procedure.
-BANNED: Using vague terms like "structured teaching", "prompting hierarchy", "behavior momentum" as the teaching procedure name.
+Examples:
+- When the plan or RBT input declares the method: "The RBT implemented [the declared method] to practice Manding for Attention Response by presenting structured opportunities; the client responded with [observable response]."
+- When no method is declared (correct form — no label): "Manding for Attention Response was addressed during (structured table activity); the RBT presented the target and the client responded with [observable response] following [prompt level] support."
 
 10. LENGTH:
 - Minimum 450 words. No maximum — longer notes with more clinical detail are always preferred.
