@@ -43,7 +43,30 @@ export const INTERVENTION_CATALOG: { canonical: string; re: RegExp }[] = [
   { canonical: 'Errorless Teaching', re: /errorless (?:teaching|learning)/i },
   { canonical: 'Task Modification', re: /task modification/i },
   { canonical: 'Antecedent Modification', re: /antecedent modification/i },
+  // Long-tail interventions real plans prescribe. Added so the allowlist can NAME them: a procedure
+  // the gate cannot name passes by default, which defeats the closed set. Each matches a named
+  // procedure or acronym, never a bare noun.
+  { canonical: 'Token Economy', re: /token economy|token (?:board|system)/i },
+  { canonical: 'Incidental Teaching', re: /incidental teaching/i },
+  { canonical: 'Behavioral Skills Training', re: /\bBST\b|behavio(?:u)?ral skills training/i },
+  { canonical: 'Chaining', re: /\bchaining\b|(?:forward|backward|total[- ]?task) chaining/i },
+  { canonical: 'Task Analysis', re: /task analysis/i },
+  { canonical: 'Compliance Training', re: /compliance training/i },
+  { canonical: 'Social Skills Training', re: /\bSST\b|social skills training/i },
+  { canonical: 'Competing Stimuli', re: /competing stimuli|competing stimulus|matched stimulation/i },
+  { canonical: 'Generalization Training', re: /generali[sz]ation training/i },
 ]
+
+// DELIBERATELY EXCLUDED from the catalog (AGENTS.md bare-noun failure class). Each appears in ordinary
+// session prose, so matching it would flag innocent narrative rather than an asserted procedure — the
+// same trap that keeps generic "redirection" out of the RIRD entry. Do NOT add any of these without an
+// assertion-only pattern that excludes the everyday usage; a bare add WILL flag clean notes:
+//   Modeling   — "the RBT modeled the target response"
+//   Shaping    — "shaping the client's approximations", "was shaping up"
+//   Prompting  — "required additional prompting", "prompt hierarchy"
+//   Redirection— "before requiring redirection" (already excluded for RIRD)
+//   Choices    — "offered choices", "the client made a choice"
+//   Visual Supports / Visual Prompt — "visual supports were available in the room"
 
 // Interventions that must NEVER appear in a documented ABA session note, regardless of
 // whether an approved list was captured for the client. RIRD is included per the
