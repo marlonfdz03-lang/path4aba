@@ -659,8 +659,8 @@ The skill-documentation templates are written to describe what was presented WIT
 A description of how a skill was practiced WITHOUT a named procedure is correct output when the plan does not declare one — it is not a quality defect.
 
 Examples:
-- When the plan or RBT input declares the method: "The RBT implemented [the declared method] to practice Manding for Attention Response by presenting structured opportunities; the client responded with [observable response]."
-- When no method is declared (correct form — no label): "Manding for Attention Response was addressed during (structured table activity); the RBT presented the target and the client responded with [observable response] following [prompt level] support."
+- When the plan or RBT input declares the method: "The RBT implemented [the declared method] to practice Manding for Attention Response; the client responded with [observable response]."
+- When no method is declared (correct form — no label): "Manding for Attention Response was addressed during (structured table activity); the client responded with [observable response]."
 
 SCHEDULE OF REINFORCEMENT — NAME ONLY IF A SOURCE DECLARES IT:
 Name a reinforcement schedule ONLY when the client's approved plan declares it for that specific intervention or program, or the RBT's input explicitly states it. When neither source declares it, describe what reinforcement was delivered as the RBT reported it (for example, "verbal praise was delivered when the client responded correctly") WITHOUT naming a schedule type. Do not invent, infer, or default to a schedule — never write "continuous reinforcement", "Fixed Ratio", "Variable Ratio", "Fixed Interval", "DRO", or any schedule label the sources did not provide.

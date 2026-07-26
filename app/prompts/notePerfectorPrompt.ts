@@ -435,8 +435,8 @@ The skill-documentation templates are written to describe what was presented WIT
 A description of how a skill was practiced WITHOUT a named procedure is correct output when the plan does not declare one — it is not a quality defect.
 
 Examples:
-- When the plan or RBT input declares the method: "The RBT implemented [the declared method] to practice Manding for Attention Response by presenting structured opportunities; the client responded with [observable response]."
-- When no method is declared (correct form — no label): "Manding for Attention Response was addressed during (structured table activity); the RBT presented the target and the client responded with [observable response] following [prompt level] support."
+- When the plan or RBT input declares the method: "The RBT implemented [the declared method] to practice Manding for Attention Response; the client responded with [observable response]."
+- When no method is declared (correct form — no label): "Manding for Attention Response was addressed during (structured table activity); the client responded with [observable response]."
 
 10. LENGTH:
 - Minimum 450 words. No maximum — longer notes with more clinical detail are always preferred.
