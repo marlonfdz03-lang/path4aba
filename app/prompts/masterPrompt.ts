@@ -662,15 +662,9 @@ Examples:
 - When the plan or RBT input declares the method: "The RBT implemented [the declared method] to practice Manding for Attention Response by presenting structured opportunities; the client responded with [observable response]."
 - When no method is declared (correct form — no label): "Manding for Attention Response was addressed during (structured table activity); the RBT presented the target and the client responded with [observable response] following [prompt level] support."
 
-SCHEDULE OF REINFORCEMENT — MANDATORY PER SKILL:
-For each skill, mention the reinforcement schedule used. Use ONLY these terms:
-- "continuous reinforcement" — for every correct response
-- "Fixed Ratio (FR)" — after a set number of responses
-- "Variable Ratio (VR)" — after variable number of responses
-- "Fixed Interval (FI)" — after a set time period
-- "Differential Reinforcement of Other Behavior (DRO)" — reinforcing absence of behavior
-
-Most RBT sessions use "continuous reinforcement" during acquisition phase.
+SCHEDULE OF REINFORCEMENT — NAME ONLY IF A SOURCE DECLARES IT:
+Name a reinforcement schedule ONLY when the client's approved plan declares it for that specific intervention or program, or the RBT's input explicitly states it. When neither source declares it, describe what reinforcement was delivered as the RBT reported it (for example, "verbal praise was delivered following each correct response") WITHOUT naming a schedule type. Do not invent, infer, or default to a schedule — never write "continuous reinforcement", "Fixed Ratio", "Variable Ratio", "Fixed Interval", "DRO", or any schedule label the sources did not provide.
+A description of the reinforcement delivered WITHOUT a named schedule is correct output when no source declares one — it is not a quality defect. Do NOT substitute a generic stand-in ("with consistent reinforcement", "on an intermittent basis", "reinforced regularly") — that is the same clinical claim without the label.
 
 CLOSING — VARY THE STRUCTURE (2-3 sentences):
 Do NOT always end with the same sentence pattern. Rotate between these closing styles:
