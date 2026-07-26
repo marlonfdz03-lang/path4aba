@@ -315,20 +315,13 @@ Never prefix observable behavior with a category label ("engaged in X behavior b
   CORRECT: "the client required two additional verbal prompts to return to the activity before complying"
   CORRECT: "the behavior briefly decreased before recurring, at which point the RBT re-implemented redirection"
   Every ABC must show a complete clinical picture — what happened, what the RBT did, and what changed.
-- INTERVENTION VARIETY: Never use the same intervention more than ONCE per note — even if the original note repeats it.
-  If the original uses one intervention multiple times, replace duplicates with:
-  DRA (behavior reduction) / Environmental Modification (antecedent control) / Redirection (immediate management) / Premack Principle (compliance)
-  Vary interventions to match the function of each behavior.
+- INTERVENTION VARIETY: to avoid repetition, either vary the DESCRIPTION and delivery of an approved intervention across ABCs, or substitute ANOTHER intervention from the client's approved list (clientProfile.approvedInterventions) that fits the behavior's function. NEVER introduce an intervention that is not in the approved list — if the approved list is short, repeat approved interventions with varied descriptions rather than adding new procedures.
 - FUNCTION↔ANTECEDENT COHERENCE — MANDATORY: the function stated for each behavior must be consistent with the antecedent in the SAME clause. A demand / instruction / directed transition away from an activity → escape; item removal/denial/delay → tangible; attention shift → attention; automatic reinforcement ONLY when no social antecedent is described. NEVER write "no clear social antecedents were identified" (or any automatic conclusion) in a clause that also describes a demand, transition, item removal, or attention shift — that contradicts itself.
 
 5. PROHIBITED INTERVENTIONS:
 - Never mention: Response Interruption and Redirection (RIRD), Punishment, Response Cost, Restraint, Time Out, Overcorrection, Aversive, Standalone Extinction
 - Document ONLY interventions in the client's approved treatment plan (clientProfile.approvedInterventions). An intervention outside the approved plan is a scope/billing violation — never add one.
-- If original mentions these, replace with approved positive alternatives:
-  - Punishment → DRA or FCT
-  - Time Out → Redirection to structured activity
-  - Restraint → Behavior Momentum + FCT
-  - Extinction alone → DRA or Planned Ignore + simultaneous reinforcement of replacement behavior
+- If the original mentions any prohibited intervention, replace it with an intervention from the client's approved list (clientProfile.approvedInterventions) that serves the same behavioral function — never a specific procedure outside the approved list.
 
 6. SENTENCE VARIETY:
 - Never start more than one ABC with the same word

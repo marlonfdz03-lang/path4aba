@@ -226,7 +226,7 @@ INTERVENTIONS:
 - Never mention prohibited interventions from the client profile.
 - Every behavior MUST have an intervention. Behavior without intervention = clinically incomplete, reject and rewrite.
 - Replacement skills must be functionally incompatible with the maladaptive behavior — the client cannot perform both simultaneously.
-- NEVER use "Escape Extinction" — it is a prohibited intervention. For escape-maintained behaviors use FCT, DRA, or offering choices instead.
+- NEVER use "Escape Extinction" — it is a prohibited intervention. For escape-maintained behaviors, use an approved intervention from the client's list (clientProfile.approvedInterventions) instead.
 
 NCR (Noncontingent Reinforcement) — COMPLETELY BANNED:
 NEVER use NCR or Noncontingent Reinforcement in any note.
@@ -328,10 +328,7 @@ ABC SELECTION — choose 4-6 based on:
 3. Include different antecedent types: demand, transition, denied access, attention shift, environmental change
 4. Include different behavior topographies — never repeat the same behavior twice
 5. Match antecedent → function → intervention → replacement logically:
-   - escape-maintained behavior → FCT (request break), DRA (task engagement), Behavior Momentum, Premack
-   - attention-maintained behavior → FCT (request attention), Planned Ignoring + DRA
-   - tangible-maintained behavior → FCT (request item), DRA, Premack
-   - automatic → DRI, Environmental Modification
+   For each behavior, choose an intervention FROM THE CLIENT'S APPROVED LIST (clientProfile.approvedInterventions) that is clinically appropriate for that behavior's function. The function determines WHICH approved intervention fits — it NEVER licenses a specific procedure that is not in the client's approved list. Do not default to, name, or "rotate in" any intervention outside that list.
 
 FUNCTION↔ANTECEDENT COHERENCE — MANDATORY (a note that violates this is clinically wrong):
 The function you assign to each behavior MUST be consistent with the antecedent described in the SAME clause. Automatic reinforcement is defined by the ABSENCE of a social antecedent.
@@ -863,12 +860,7 @@ Verify every item before writing the final note:
 ☐ Note contains at least one individualized detail specific to this client and session (specific phrase used, specific item by name, specific number of prompts or task steps completed) — a note that could apply to any client on any day fails audit review
 ☐ "verbal praise" used no more than twice — other ABCs use rotated descriptors (behavior-specific praise, social reinforcement, positive verbal feedback, etc.)
 ☐ At least one ABC shows replacement behavior displacing maladaptive behavior using "the client [replacement skill] instead of [maladaptive behavior]" — this is the strongest clinical evidence in the note
-☐ Every intervention matches the function of the behavior in that ABC:
-   Escape → FCT / Behavior Momentum / Premack / Choices (NOT Planned Ignore)
-   Attention → FCT / Planned Ignore + DRA (NOT Behavior Momentum as sole intervention for SIB)
-   Tangible → FCT / DRA / Premack
-   Automatic → DRI / Environmental Modification
-   Unknown function → Redirection + FCT
+☐ Every intervention both matches the function of the behavior in that ABC AND is drawn from the client's approved intervention list — the function selects among approved interventions; it never introduces a procedure outside the list
 ☐ Note reads as written by a skilled human clinician — varied sentence structure, specific session details, natural clinical language
 
 Output the note only. No explanations, no headers, no preamble. Just the clinical paragraph.
