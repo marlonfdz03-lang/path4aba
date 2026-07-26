@@ -2163,7 +2163,7 @@ function renderFillSummary(summary) {
     review.forEach((r) => {
       const li = document.createElement('li');
       li.style.cssText = 'margin-bottom:2px;';
-      const QUIET_REASONS = ['INVALID', 'NEEDS_REVIEW', 'FUNCTION_ANTECEDENT_CONFLICT', 'INFERRED_FROM_ANTECEDENT'];
+      const QUIET_REASONS = ['INVALID', 'NEEDS_REVIEW', 'FUNCTION_ANTECEDENT_CONFLICT', 'INFERRED_FROM_ANTECEDENT', 'FUNCTION_NOT_APPROVED'];
       const reason = r.reason && QUIET_REASONS.indexOf(r.reason) === -1 ? ` — ${r.reason}` : '';
       let extra = '';
       if (r.reason === 'NO_MATCHING_OPTION') {
@@ -2178,6 +2178,12 @@ function renderFillSummary(summary) {
         const fn = r.intended == null ? '' : String(r.intended);
         const ant = r.detail == null ? '' : String(r.detail);
         extra = ` → ${fn}: inferred from antecedent — verify (“${ant}”)`;
+      } else if (r.reason === 'FUNCTION_NOT_APPROVED') {
+        const approved = Array.isArray(r.approved) ? r.approved.join(', ') : '';
+        const from = r.from == null ? '' : String(r.from);
+        extra = r.intended
+          ? ` → corrected to ${r.intended} (the note’s ${from} is not approved for this behavior; approved: ${approved}) — verify`
+          : ` left blank — the note’s ${from} is not approved for this behavior (approved: ${approved}); set it manually`;
       }
       li.textContent = `${r.label || r.stableId || 'field'}${reason}${extra}`;
       ul.appendChild(li);

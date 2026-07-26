@@ -39,7 +39,10 @@
           behaviors: (noteData.behaviors || []).map(function (b) { return b && b.name ? b.name : b; }),
           skills: (noteData.skills || []).map(function (s) { return s && s.name ? s.name : s; }),
           caregivers: noteData.caregivers || [],
-          clientName: noteData.clientName || 'the client'
+          clientName: noteData.clientName || 'the client',
+          // clientId lets extract-facts fetch the assessment's approved-function set per behavior and
+          // refuse to derive a function the assessment never approved for that behavior.
+          clientId: noteData.clientId || null
         },
         function (response) {
           if (chrome.runtime.lastError) {

@@ -140,6 +140,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           skills: message.skills,
           caregivers: message.caregivers,
           clientName: message.clientName,
+          clientId: message.clientId,
         }),
       })
         .then(r => r.json())

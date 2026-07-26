@@ -102,6 +102,16 @@ window.FormEngineExecutor = {
           const lbl = (outcome.verification && outcome.verification.label) || action.fieldId;
           results.needsReview.push({ stableId: action.fieldId, label: lbl, reason: 'INFERRED_FROM_ANTECEDENT', intended: action.review.intended, detail: action.review.antecedent });
         }
+        // The written function was not in the behavior's assessment-approved set: either corrected to
+        // an approved function (filled) or left blank. Surface both so the RBT can verify.
+        if (action.review && action.review.reason === 'FUNCTION_NOT_APPROVED') {
+          const lbl = (outcome.verification && outcome.verification.label) || action.fieldId;
+          results.needsReview.push({
+            stableId: action.fieldId, label: lbl, reason: 'FUNCTION_NOT_APPROVED',
+            intended: action.review.intended, from: action.review.from,
+            approved: action.review.approved, detail: action.review.antecedent,
+          });
+        }
         // Conditional children (Issue 1c) add their own review/verification entries but are NOT
         // plan actions, so they don't affect the plan-action bucket totals.
         if (outcome.extraReviews) outcome.extraReviews.forEach((r) => results.needsReview.push(r));

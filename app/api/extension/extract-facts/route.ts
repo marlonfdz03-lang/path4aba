@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getExtensionAuth } from '@/lib/extensionAuth'
 import OpenAI from 'openai'
-import { inferFunctionFromAntecedent, segmentNoteByBehavior, deriveBehaviorFunction } from '@/lib/functionPatterns'
+import { prisma } from '@/lib/prisma'
+import { inferFunctionFromAntecedent, segmentNoteByBehavior, deriveBehaviorFunction, constrainFunctionToApproved } from '@/lib/functionPatterns'
 
 // New diagnostics are gated behind this flag (default false) so nothing is logged in
 // production. No field VALUES (PHI) are ever logged even when true — counts/labels only.
@@ -216,8 +217,33 @@ export async function POST(req: Request) {
     defaultHeaders: { 'api-key': process.env.AZURE_OPENAI_API_KEY || '' },
   })
 
-  const { note, behaviors, skills, caregivers, clientName } = await req.json()
+  const { note, behaviors, skills, caregivers, clientName, clientId } = await req.json()
   if (!note) return NextResponse.json({ error: 'Missing note' }, { status: 400 })
+
+  // Assessment-approved function set per behavior (clinical_profile.maladaptiveBehaviors[].functions).
+  // The extractor must not derive a function the assessment never approved for a behavior — this is the
+  // authoritative, always-current source, fetched by clientId (single source of truth, no map on the wire).
+  const behaviorFunctionMap = new Map<string, string[]>()
+  if (clientId) {
+    try {
+      const client = await prisma.clients.findUnique({ where: { id: clientId }, select: { clinical_profile: true } })
+      const mal = (client?.clinical_profile as any)?.maladaptiveBehaviors
+      if (Array.isArray(mal)) {
+        for (const b of mal) {
+          const name = String(b?.name || '').trim().toLowerCase()
+          const funcs = Array.isArray(b?.functions) ? b.functions : (Array.isArray(b?.function) ? b.function : [])
+          if (name && funcs.length) behaviorFunctionMap.set(name, funcs)
+        }
+      }
+    } catch { /* best-effort: with no map the constraint simply doesn't fire (unconstrained) */ }
+  }
+  const approvedFunctionsFor = (behaviorName: string): string[] | undefined => {
+    const key = String(behaviorName || '').trim().toLowerCase()
+    if (behaviorFunctionMap.has(key)) return behaviorFunctionMap.get(key)
+    // Loose fallback: a note behavior label that contains (or is contained by) an approved one.
+    for (const [k, v] of behaviorFunctionMap) if (k && (key.includes(k) || k.includes(key))) return v
+    return undefined
+  }
 
   const prompt = `You are a clinical ABA documentation specialist.
 Extract structured clinical facts from this session note.
@@ -331,6 +357,22 @@ Return this exact JSON structure:
             // Automatic derived but antecedent is social AND the antecedent matched no function:
             // stay 'unknown' and flag the conflict (never a silent blank).
             functionReview = { reason: 'FUNCTION_ANTECEDENT_CONFLICT', intended: fn.conflict.derived, antecedent: fn.conflict.antecedent }
+          }
+        }
+        // Approved-function CONSTRAINT: the assessment defines the closed set of functions valid for
+        // this behavior. If the final function is not approved, prefer an approved one the antecedent
+        // supports; if none fits, leave blank + review — never write a function the assessment did not
+        // approve for this behavior (e.g. Throwing Objects must not be filled as Automatic when the
+        // assessment approved only Escape/Tangible/Attention).
+        const approvedForBehavior = approvedFunctionsFor(b.name)
+        if (approvedForBehavior && approvedForBehavior.length) {
+          const c = constrainFunctionToApproved(b.function, approvedForBehavior, b.antecedent)
+          if (c.status === 'corrected') {
+            b.function = c.fn
+            functionReview = { reason: 'FUNCTION_NOT_APPROVED', intended: c.fn, from: c.from, antecedent: String(b.antecedent || ''), approved: approvedForBehavior }
+          } else if (c.status === 'unapproved') {
+            b.function = 'unknown'
+            functionReview = { reason: 'FUNCTION_NOT_APPROVED', intended: null, from: c.from, antecedent: String(b.antecedent || ''), approved: approvedForBehavior }
           }
         }
         if (functionReview) b.functionReview = functionReview
