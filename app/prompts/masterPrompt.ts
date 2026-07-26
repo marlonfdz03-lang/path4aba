@@ -600,19 +600,19 @@ NEVER use the same sentence openers, connectors, or patterns across notes.
 For skill documentation, rotate between these structures (never use the same one twice in the same note, and vary across sessions):
 
 Structure A — Activity first:
-"During [activity], the RBT used [teaching procedure] to address [skill]. [What client did]. [Medical necessity in varied language]."
+"During [activity], the RBT addressed [skill] by presenting targeted opportunities and prompting the client's responses. [What client did]. [Medical necessity in varied language]."
 
 Structure B — Skill first:
-"[Skill] was integrated into [activity] through [teaching procedure]. [Client response]. [Clinical rationale]."
+"[Skill] was embedded into [activity], with the RBT presenting the target and reinforcing appropriate responses. [Client response]. [Clinical rationale]."
 
 Structure C — Client behavior first:
-"The client demonstrated [emerging/initial/variable] [response] when [skill] was practiced during [activity] using [teaching procedure]. [Clinical justification]."
+"The client demonstrated [emerging/initial/variable] [response] when [skill] was practiced during [activity]. [Clinical justification]."
 
 Structure D — Outcome first:
 "To build [functional goal], the RBT targeted [skill] during [activity]. [How it was done]. [Why it matters clinically]."
 
 Structure E — Contextual:
-"Within the natural context of [activity], [skill] was practiced through [teaching procedure]; the client [response]. [Medical rationale]."
+"Within the natural context of [activity], [skill] was practiced as the RBT presented opportunities and prompted responses; the client [response]. [Medical rationale]."
 
 RULES FOR VARIETY:
 - Use a different structure for each skill in the same note
@@ -655,7 +655,7 @@ RULES:
 
 TEACHING PROCEDURE — NAME ONLY IF A SOURCE DECLARES IT:
 Name a teaching procedure for a skill ONLY when the client's approved plan declares it for that specific program, or the RBT's input explicitly states it. When neither source declares it, describe what was presented and how the client responded, with NO taxonomic procedure label. Do not invent, infer, or default to any procedure — never write "DTT", "FCT", or any procedure label the sources did not provide.
-This rule governs EVERY place a template shows "[teaching procedure]" or "[procedure]": fill it only when a source declares the method; otherwise omit the label and describe what was practiced.
+The skill-documentation templates are written to describe what was presented WITHOUT naming a procedure — use them as written. ONLY when the plan or RBT input declares a method for that program may you name it, and only as an OPTIONAL clause that can be dropped without breaking the sentence (for example, insert ", using the method the plan declares," after the skill name). Never make the procedure a required mid-sentence slot.
 A description of how a skill was practiced WITHOUT a named procedure is correct output when the plan does not declare one — it is not a quality defect.
 
 Examples:
@@ -895,9 +895,9 @@ RULE: No two ABCs in the same note may begin with the same word or phrase.
 RULE: Use the literal "consistent with [function]-maintained behavior" phrasing in AT MOST 2 of the 5 ABCs; the behavioral function must still be identifiable in every ABC, just expressed with variety.
 
 3. MAKE THE SKILL ACQUISITION SECTION ORGANIC — do not always follow name -> procedure -> success -> justification. Rotate these structures, using a DIFFERENT one for each skill in the same note:
-- Structure A (context first): "Within the natural context of [activity], [skill] was practiced through [procedure]. [Client response]. [Clinical rationale]."
-- Structure B (client first): "[Client] demonstrated [behavior] when [skill] was targeted during [activity] using [procedure]. [Outcome]."
-- Structure C (outcome first): "To build [functional goal], [skill] was integrated into [activity] through [procedure], resulting in [client response]."
+- Structure A (context first): "Within the natural context of [activity], [skill] was practiced through opportunities embedded in the activity. [Client response]. [Clinical rationale]."
+- Structure B (client first): "[Client] demonstrated [behavior] when [skill] was targeted during [activity]. [Outcome]."
+- Structure C (outcome first): "To build [functional goal], [skill] was integrated into [activity] through repeated practice opportunities, resulting in [client response]."
 
 4. MAKE CLIENT RESPONSES SPECIFIC — replace generic phrasing with concrete observable descriptions such as:
 "independently completed the first step before requiring gestural prompting", "remained engaged for the duration of the activity with a verbal redirect", "resumed participation after a brief pause", "maintained seated behavior through the transition", "participated without additional vocal protests for the remainder of the activity", "required repeated redirections before reengaging with materials".
