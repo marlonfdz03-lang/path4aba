@@ -600,10 +600,10 @@ NEVER use the same sentence openers, connectors, or patterns across notes.
 For skill documentation, rotate between these structures (never use the same one twice in the same note, and vary across sessions):
 
 Structure A — Activity first:
-"During [activity], the RBT addressed [skill] by presenting targeted opportunities and prompting the client's responses. [What client did]. [Medical necessity in varied language]."
+"During [activity], the RBT addressed [skill]. [What client did]. [Medical necessity in varied language]."
 
 Structure B — Skill first:
-"[Skill] was embedded into [activity], with the RBT presenting the target and reinforcing appropriate responses. [Client response]. [Clinical rationale]."
+"[Skill] was addressed during [activity]. [Client response]. [Clinical rationale]."
 
 Structure C — Client behavior first:
 "The client demonstrated [emerging/initial/variable] [response] when [skill] was practiced during [activity]. [Clinical justification]."
@@ -612,7 +612,7 @@ Structure D — Outcome first:
 "To build [functional goal], the RBT targeted [skill] during [activity]. [How it was done]. [Why it matters clinically]."
 
 Structure E — Contextual:
-"Within the natural context of [activity], [skill] was practiced as the RBT presented opportunities and prompted responses; the client [response]. [Medical rationale]."
+"Within the natural context of [activity], [skill] was practiced; the client [response]. [Medical rationale]."
 
 RULES FOR VARIETY:
 - Use a different structure for each skill in the same note
@@ -626,7 +626,7 @@ After the ABCs and before the closing sentences, ALWAYS include a dedicated skil
 This paragraph must:
 - Name each replacement skill/skill acquisition program EXACTLY as written in the treatment plan
 - Describe HOW it was taught as active programming — not as a consequence of a behavior episode
-- Include teaching procedure, prompting level, and client response
+- Include prompting level and client response
 - Be woven naturally into the continuous paragraph — no separate heading
 
 CORRECT example:
@@ -895,9 +895,9 @@ RULE: No two ABCs in the same note may begin with the same word or phrase.
 RULE: Use the literal "consistent with [function]-maintained behavior" phrasing in AT MOST 2 of the 5 ABCs; the behavioral function must still be identifiable in every ABC, just expressed with variety.
 
 3. MAKE THE SKILL ACQUISITION SECTION ORGANIC — do not always follow name -> procedure -> success -> justification. Rotate these structures, using a DIFFERENT one for each skill in the same note:
-- Structure A (context first): "Within the natural context of [activity], [skill] was practiced through opportunities embedded in the activity. [Client response]. [Clinical rationale]."
+- Structure A (context first): "Within the natural context of [activity], [skill] was practiced. [Client response]. [Clinical rationale]."
 - Structure B (client first): "[Client] demonstrated [behavior] when [skill] was targeted during [activity]. [Outcome]."
-- Structure C (outcome first): "To build [functional goal], [skill] was integrated into [activity] through repeated practice opportunities, resulting in [client response]."
+- Structure C (outcome first): "To build [functional goal], [skill] was integrated into [activity], resulting in [client response]."
 
 4. MAKE CLIENT RESPONSES SPECIFIC — replace generic phrasing with concrete observable descriptions such as:
 "independently completed the first step before requiring gestural prompting", "remained engaged for the duration of the activity with a verbal redirect", "resumed participation after a brief pause", "maintained seated behavior through the transition", "participated without additional vocal protests for the remainder of the activity", "required repeated redirections before reengaging with materials".
