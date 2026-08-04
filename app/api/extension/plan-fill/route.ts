@@ -149,13 +149,16 @@ export async function POST(req: Request) {
       { fieldId: `Goal${n}_GoalName`, fieldType: 'select', value: s.name },
       { fieldId: `Goal${n}_MedicalBarriers`, fieldType: 'chip', value: s.medicalNecessity },
       { fieldId: `Goal${n}_Activities`, fieldType: 'chip', value: s.activity },
-      { fieldId: `Goal${n}_TeachingProcedure`, fieldType: 'textarea', value: s.teachingProcedure },
+      // Goal{n}_TeachingProcedure and Goal{n}_Schedule are LEFT BLANK for the RBT: teaching method and
+      // reinforcement schedule are direct session observations the assessment does not specify, so
+      // autofilling them (an LLM guess for teachingProcedure, a hardcoded "Continuous Reinforcement"
+      // for schedule) invents a clinical value into a signed compliance form. Both are also excluded
+      // from the AI candidate set below, so neither the deterministic nor the AI path fills them.
       {
         fieldId: `Goal${n}_PromptsUsed`, fieldType: 'radio', value: promptsRadio,
         conditional: promptsRadio === 'Yes' ? { value: promptTypes.join(', '), types: promptTypes } : undefined,
       },
       { fieldId: `Goal${n}_Reinforcers`, fieldType: 'chip', value: s.reinforcers },
-      { fieldId: `Goal${n}_Schedule`, fieldType: 'textarea', value: s.schedule || 'Continuous Reinforcement' },
     ]
     goalMappings.forEach((m) => {
       if (m.value && (m.fieldType === 'radio' || emptyFields.find((f) => f.fieldId === m.fieldId))) {
@@ -169,7 +172,11 @@ export async function POST(req: Request) {
 
   // Only send the fields NOT handled deterministically to the AI.
   const deterministicIds = new Set(deterministicActions.map((a) => a.fieldId))
-  const remainingFields = emptyFields.filter((f) => !deterministicIds.has(f.fieldId))
+  // Teaching method and reinforcement schedule are intentionally never autofilled (see goalMappings):
+  // exclude them from the AI candidate set so the fallback planner cannot re-invent what we just
+  // removed from the deterministic path. They are left blank for the RBT to complete by observation.
+  const remainingFields = emptyFields.filter((f) =>
+    !deterministicIds.has(f.fieldId) && !/_(TeachingProcedure|Schedule)$/.test(f.fieldId))
 
   const prompt = `You are an ABA documentation form-filling planner. You are given structured ClinicalFacts and a list of EMPTY fields from an ABA Matrix session form. For each field you can confidently fill, output one fill action. Perform NO clinical reasoning — only MATCH the already-extracted facts to the fields.
 
@@ -191,8 +198,7 @@ MATCHING RULES (section IDs encode order):
     AntecedentInterventionsYesNo->hadAntecedentIntervention (Yes/No), STO->hasSTO (Yes/No).
 - Goal{n}_* fields use facts.skills[n-1] (Goal1 = first skill, Goal2 = second, …).
     GoalName->name, MedicalBarriers->medicalNecessity, Activities->activity,
-    TeachingProcedure->teachingProcedure, PromptsUsed->promptsUsed (Yes/No), PromptsDetail->promptDetail,
-    Reinforcers->reinforcers, Schedule->schedule.
+    PromptsUsed->promptsUsed (Yes/No), PromptsDetail->promptDetail, Reinforcers->reinforcers.
 - DL_* fields use facts.dailyLog.
     PresentationStart->presentationStart, PresentationEnd->presentationEnd, Participation->participation,
     EvidencedBy->evidencedByStart (or evidencedByEnd), WhoWasPresent->whoWasPresent,
