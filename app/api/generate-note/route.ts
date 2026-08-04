@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getExtensionAuth } from "@/lib/extensionAuth";
 import { generateSmartNote, SessionInput } from "@/lib/generateSmartNote";
 
 export const runtime = "nodejs";
@@ -15,8 +15,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "sessionInfo.date is required" }, { status: 400 });
     }
 
-    const session = await auth();
-    const userId = (session?.user as any)?.id as string | undefined;
+    // Authentication (Tier 1): accept a NextAuth session cookie (web) OR an extension Bearer token,
+    // and 401 when neither resolves a user — this closes the anonymous-read hole (the route previously
+    // called auth() and discarded the result). getExtensionAuth returns the user IDENTITY, so Tier 2 can
+    // add an rbt_id / bcba_clients OWNERSHIP check on authedUser.id — which is STILL MISSING here: any
+    // authenticated user can currently still generate a note for any clientId. Residual (remediation #12):
+    // extension tokens have no expiry/rotation, so this gates on a credential valid until revoked.
+    const authedUser = await getExtensionAuth();
+    if (!authedUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const userId: string = authedUser.id;
 
     const encoder = new TextEncoder();
     const readable = new ReadableStream({
