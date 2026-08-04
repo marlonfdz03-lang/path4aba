@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { filterBlockedNarrative, type BlockedTerm } from '@/lib/blockedNarrativeTerms';
 import { findInterventionViolations } from '@/lib/interventionPolicy';
 import { isValidNextSessionDate, stripInvalidNextSession, stripInvalidNextSessionSentence } from '@/lib/nextSessionDate';
+import { getExtensionAuth } from '@/lib/extensionAuth';
 
 export const runtime = 'nodejs';
 
@@ -25,6 +26,17 @@ function calculateSimilarity(text1: string, text2: string): number {
 
 export async function POST(req: NextRequest) {
   try {
+    // Authentication (Tier 1): this route previously had NO auth at all — an anonymous caller could POST
+    // any clientId and read that client's last 10 session notes. Gate with getExtensionAuth() (NextAuth
+    // session cookie OR extension Bearer token; the extension calls this route too and omits cookies) and
+    // 401 when neither resolves a user. Authentication only — OWNERSHIP is STILL MISSING (Tier 2):
+    // authedUser.id is available for an rbt_id / bcba_clients check on the clientId. Residual
+    // (remediation #12): extension tokens have no expiry/rotation, so this gates on a long-lived credential.
+    const authedUser = await getExtensionAuth();
+    if (!authedUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { originalNote, clientProfile, clientId, nextAppointmentDate, clinicalEvents, sessionDate } = await req.json();
 
     if (!originalNote || originalNote.trim().length < 50) {
