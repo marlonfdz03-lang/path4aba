@@ -3,6 +3,7 @@ import { getExtensionAuth } from '@/lib/extensionAuth'
 import OpenAI from 'openai'
 import { prisma } from '@/lib/prisma'
 import { inferFunctionFromAntecedent, segmentNoteByBehavior, deriveBehaviorFunction, constrainFunctionToApproved } from '@/lib/functionPatterns'
+import { findInterventionViolations } from '@/lib/interventionPolicy'
 
 // New diagnostics are gated behind this flag (default false) so nothing is logged in
 // production. No field VALUES (PHI) are ever logged even when true — counts/labels only.
@@ -67,6 +68,18 @@ function containsAny(text: string, terms: readonly string[]): boolean {
 
 // Note→per-behavior function derivation (segmentNoteByBehavior, deriveBehaviorFunction) now lives in
 // the shared lib/behaviorFunction module so generation can enforce the same approved-function rule.
+
+// INTERVENTION GATE (autofill safety-net). The note feeding AI Fill can be hand-edited or pasted (the
+// output box is an editable textarea), so it may never have passed the generation/refiner intervention
+// gate. Mirror that gate here at fill time: an intervention FIELD that asserts a prohibited (RIRD, …) or
+// non-approved intervention is scrubbed rather than transcribed into a signed compliance form. Reuses
+// lib/interventionPolicy — same catalog + role-awareness, so coverage matches the generation gate.
+// Returns the violating canonical names found in a single field string (empty = clean).
+function fieldInterventionViolations(text: any, approved: string[], skills: string[]): string[] {
+  if (!text || !String(text).trim()) return []
+  const v = findInterventionViolations(String(text), approved, skills)
+  return [...new Set([...v.prohibited, ...v.unapproved, ...v.skillAsReduction])]
+}
 
 // Remove client + caregiver names from a text before it is DEBUG-logged (no PHI in logs).
 function stripNames(text: string, clientName?: string, caregivers?: string[]): string {
@@ -224,10 +237,16 @@ export async function POST(req: Request) {
   // The extractor must not derive a function the assessment never approved for a behavior — this is the
   // authoritative, always-current source, fetched by clientId (single source of truth, no map on the wire).
   const behaviorFunctionMap = new Map<string, string[]>()
+  // Approved reduction interventions + replacement skill programs, read from the SAME profile fetch —
+  // they feed the intervention gate below (the autofill safety-net). With no profile captured both stay
+  // empty, so only always-prohibited procedures (RIRD, …) are scrubbed and nothing else false-fails.
+  let approvedInterventions: string[] = []
+  let skillPrograms: string[] = []
   if (clientId) {
     try {
       const client = await prisma.clients.findUnique({ where: { id: clientId }, select: { clinical_profile: true } })
-      const mal = (client?.clinical_profile as any)?.maladaptiveBehaviors
+      const profile = (client?.clinical_profile as any) || {}
+      const mal = profile.maladaptiveBehaviors
       if (Array.isArray(mal)) {
         for (const b of mal) {
           const name = String(b?.name || '').trim().toLowerCase()
@@ -235,6 +254,10 @@ export async function POST(req: Request) {
           if (name && funcs.length) behaviorFunctionMap.set(name, funcs)
         }
       }
+      const names = (arr: any): string[] =>
+        (Array.isArray(arr) ? arr : []).map((x: any) => (typeof x === 'string' ? x : x?.name)).filter(Boolean)
+      approvedInterventions = names(profile.interventions)
+      skillPrograms = [...names(profile.replacementBehaviors), ...names(profile.skillAcquisition)]
     } catch { /* best-effort: with no map the constraint simply doesn't fire (unconstrained) */ }
   }
   const approvedFunctionsFor = (behaviorName: string): string[] | undefined => {
@@ -376,6 +399,17 @@ Return this exact JSON structure:
           }
         }
         if (functionReview) b.functionReview = functionReview
+        // Intervention gate: scrub any per-behavior intervention field naming a prohibited/non-approved
+        // intervention BEFORE the antecedent-intervention derivations below read these fields, so an
+        // out-of-plan procedure from ungated note text cannot reach the form (blank + flag for the RBT).
+        const removedIv = new Set<string>()
+        for (const f of ['interventions', 'consequenceIntervention', 'antecedentIntervention'] as const) {
+          const bad = fieldInterventionViolations(b[f], approvedInterventions, skillPrograms)
+          if (bad.length) { b[f] = ''; bad.forEach((x) => removedIv.add(x)) }
+        }
+        if (removedIv.size) {
+          b.interventionReview = { reason: 'INTERVENTION_NOT_APPROVED', removed: [...removedIv], approved: approvedInterventions }
+        }
         b.hadAntecedentIntervention = inferAntecedentInterventionUsed(b)
         // Change 2b: extract the grounded before-behavior clause so plan-fill can fill the
         // conditional "Antecedent Interventions" child (only when an antecedent was used).
