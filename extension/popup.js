@@ -2072,8 +2072,11 @@ function checkABAMatrixPage() {
   chrome.tabs.query({ active: true }, (tabs) => {
     const abaTab = tabs.find(t => t.url && t.url.includes('app.abamatrix.com/session'));
     if (abaTab) {
-      const fillBtn = document.getElementById('fillABAMatrixBtn');
-      if (fillBtn) fillBtn.style.display = 'block';
+      // Legacy "Send to ABA Matrix" (fillABAMatrixBtn) is intentionally NOT shown. It is a separate
+      // autofill that bypasses the gated pipeline — no extract-facts, no approved-function gate — and
+      // invents the reinforcement schedule ("If not specified → Continuous Reinforcement"). Only the
+      // gated "AI Fill (Beta)" path is reachable, so an invented schedule / ungated function cannot
+      // reach a signed compliance form via a mis-click.
       const aiBtn = document.getElementById('aiFillBetaBtn');
       if (aiBtn) aiBtn.style.display = 'block';
     }
@@ -2088,8 +2091,7 @@ let onABAMatrix = false;
 chrome.runtime.onMessage.addListener((message) => {
   if (message.action === 'onABAMatrix') {
     onABAMatrix = true;
-    const fillBtn = document.getElementById('fillABAMatrixBtn');
-    if (fillBtn) fillBtn.style.display = 'block';
+    // Legacy fillABAMatrixBtn stays hidden (see checkABAMatrixPage) — gated Beta path only.
     const aiBtn = document.getElementById('aiFillBetaBtn');
     if (aiBtn) aiBtn.style.display = 'block';
   }
