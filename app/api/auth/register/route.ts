@@ -18,6 +18,13 @@ const SELF_ASSIGNABLE_ROLES = ['rbt', 'bcba', 'bcaba', 'bcba_student', 'bcaba_st
 
 export async function POST(req: Request) {
   try {
+    // STOPGAP (Tier 1): public self-registration is disabled by default. This is a temporary
+    // belt-and-suspenders on top of the role allowlist below — NOT a replacement for it. Re-open
+    // signup by setting PUBLIC_SIGNUP_ENABLED=true; unset or any other value fails CLOSED (403).
+    if (process.env.PUBLIC_SIGNUP_ENABLED !== 'true') {
+      return NextResponse.json({ error: 'Public registration is currently disabled.' }, { status: 403 })
+    }
+
     const { email, password, name, role } = await req.json()
 
     if (!email || !password) {
@@ -25,9 +32,10 @@ export async function POST(req: Request) {
     }
 
     // Only reject when a role was actually supplied and is not self-assignable; an omitted role
-    // defaults to 'rbt' below (a legitimate signup, not an attack signal).
+    // defaults to 'rbt' below (a legitimate signup, not an attack signal). role/email are JSON-encoded
+    // in the log so an attacker-supplied value containing newlines cannot forge additional log lines.
     if (role !== undefined && role !== null && !SELF_ASSIGNABLE_ROLES.includes(role)) {
-      console.warn(`[register] rejected non-self-assignable role="${role}" for email="${email}"`)
+      console.warn(`[register] rejected non-self-assignable role=${JSON.stringify(role)} for email=${JSON.stringify(email)}`)
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
     }
 
