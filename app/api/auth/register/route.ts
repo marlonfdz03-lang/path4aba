@@ -10,12 +10,25 @@ const prisma = new PrismaClient({ adapter } as any)
 
 export const dynamic = 'force-dynamic'
 
+// Roles a user may self-assign at public signup. 'admin' is deliberately absent — it must NEVER be
+// obtainable through any public path (it is set only by the admin-guarded PATCH in app/api/admin/users).
+// An invalid or privileged value is REJECTED (400), never silently downgraded, so an attempt to register
+// as admin surfaces in logs instead of being hidden behind a quiet fallback to 'rbt'.
+const SELF_ASSIGNABLE_ROLES = ['rbt', 'bcba', 'bcaba', 'bcba_student', 'bcaba_student']
+
 export async function POST(req: Request) {
   try {
     const { email, password, name, role } = await req.json()
 
     if (!email || !password) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
+    }
+
+    // Only reject when a role was actually supplied and is not self-assignable; an omitted role
+    // defaults to 'rbt' below (a legitimate signup, not an attack signal).
+    if (role !== undefined && role !== null && !SELF_ASSIGNABLE_ROLES.includes(role)) {
+      console.warn(`[register] rejected non-self-assignable role="${role}" for email="${email}"`)
+      return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
     }
 
     const existing = await prisma.users.findUnique({ where: { email } })
