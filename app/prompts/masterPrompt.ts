@@ -278,7 +278,7 @@ SEPARATE AREA REDIRECTION:
 
 SAFETY BEHAVIOR RULE:
 - Never use Planned Ignore for elopement (leaving designated area, running toward exits). Elopement is a safety behavior that cannot be ignored.
-- For elopement use: FCT (teach to request break or transition), Redirection, or Behavior Momentum only.
+- For elopement, use only an approved intervention from the client's list (clientProfile.approvedInterventions) — never Planned Ignore, and never force a specific procedure the plan did not approve for this client.
 - Planned Ignore is only appropriate for attention-maintained behaviors that do not involve safety risk.
 
 TOPOGRAPHY RULES:

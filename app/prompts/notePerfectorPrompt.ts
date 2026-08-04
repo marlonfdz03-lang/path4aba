@@ -305,11 +305,11 @@ Never prefix observable behavior with a category label ("engaged in X behavior b
 - DRA must name the specific alternative behavior reinforced
 - Behavior Momentum must include examples of high-probability requests
 - Environmental Modification must include two specific changes made
-- FCT is an intervention implemented BY THE RBT, never a behavior performed by the client.
-  INCORRECT: "client used Functional Communication Training"
-  INCORRECT: "effectively using FCT"
-  CORRECT: "the RBT implemented FCT by prompting the client to [specific communication response]"
-  Always reframe FCT as RBT action, not client action.
+- FCT (Functional Communication Training) must be documented according to its ROLE in THIS client's plan:
+  - If FCT is an APPROVED reduction intervention for the client, it may be described as RBT-implemented: "the RBT implemented FCT by prompting the client to [specific communication response]".
+  - If FCT is a replacement SKILL the client is learning (a replacement behavior / skill program), document it as a skill the client is acquiring — e.g. "the client practiced requesting a break using functional communication" — NEVER as a behavior-reduction intervention the RBT implemented "to reduce" the behavior.
+  Do NOT force FCT into an "RBT implemented FCT to reduce the behavior" frame when it is a skill being taught; that documents an approved skill as a reduction procedure the client is not approved for.
+  Never write FCT as an uncontrolled client behavior ("client used FCT effectively").
 - INEFFECTIVE INTERVENTION: When an intervention was not immediately effective, always describe what happened next.
   NEVER end an ABC with "the client continued the behavior" with no follow-up.
   CORRECT: "the client required two additional verbal prompts to return to the activity before complying"
@@ -453,7 +453,7 @@ QUALITY CHECK BEFORE OUTPUTTING
 ☐ Every behavior has intervention with HOW
 ☐ No prohibited interventions
 ☐ No intervention used more than once
-☐ FCT framed as RBT action, not client behavior
+☐ FCT framed per its plan role (RBT-implemented intervention OR client skill being taught), never as an uncontrolled client behavior
 ☐ Varied sentence starters
 ☐ Specific reinforcers named
 ☐ At least one replacement behavior highlight

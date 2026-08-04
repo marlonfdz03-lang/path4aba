@@ -107,7 +107,10 @@ export function normalizeApproved(approved: string[] | undefined | null): Set<st
 // ABC pattern "the RBT implemented [X]"; a skill assertion is a teaching sentence ("targeted X",
 // "practiced X"). Conservative on purpose — only a clear implement/reduce cue with no skill cue counts.
 const REDUCTION_CUE = /\bimplement(?:ed|s|ing)?\b|\bto (?:reduce|decrease|interrupt|manage)\b/i
-const SKILL_CUE = /\btarget(?:ed|ing|s)?\b|\bpractic(?:e|ed|ing|es)\b|\btaught\b|\bteaching\b|\bacquisition\b/i
+// Skill-teaching cues also cover communication-skill language, so an FCT skill program taught by
+// prompting the client to REQUEST/MAND/communicate is read as a skill, not a reduction — the exact
+// framing a role-aware note uses ("prompting the client to request a break", "practiced manding").
+const SKILL_CUE = /\btarget(?:ed|ing|s)?\b|\bpractic(?:e|ed|ing|es)\b|\btaught\b|\bteaching\b|\bacquisition\b|\brequest(?:s|ed|ing)?\b|\bmand(?:s|ed|ing)?\b|\blearn(?:ed|ing|s)?\b|communication training/i
 function assertedAsReductionIntervention(note: string, re: RegExp): boolean {
   for (const sentence of String(note || '').split(/(?<=[.!?;])\s+|\n+/)) {
     if (!re.test(sentence)) continue
