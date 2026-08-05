@@ -694,14 +694,20 @@ export default function ClientProfilePage() {
   async function handleSaveAuthorizedHours(hours: number) {
     setSavingHours(true);
     try {
-      await fetch(`/api/clients/${client.id}/profile`, {
+      const res = await fetch(`/api/clients/${client.id}/profile`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ authorizedHoursPerWeek: hours }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data?.error || 'Failed to save authorized hours. Please try again.');
+        return; // do NOT update local state on a failed save
+      }
       setAuthorizedHoursPerWeek(hours);
-    } catch {}
-    finally { setSavingHours(false); }
+    } catch {
+      alert('Network error saving authorized hours. Please try again.');
+    } finally { setSavingHours(false); }
   }
 
   const isAdmin = (session?.user as any)?.role === 'admin';
@@ -903,15 +909,26 @@ export default function ClientProfilePage() {
                     value={client.clinicalProfile?.gender || ""}
                     onChange={async (e) => {
                       const gender = e.target.value;
-                      await fetch(`/api/clients/${client.id}/profile`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ gender }),
-                      });
-                      setClient((prev: any) => ({
-                        ...prev,
-                        clinicalProfile: { ...prev.clinicalProfile, gender }
-                      }));
+                      try {
+                        const res = await fetch(`/api/clients/${client.id}/profile`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ gender }),
+                        });
+                        if (!res.ok) {
+                          const data = await res.json().catch(() => ({}));
+                          alert(data?.error || 'Failed to save client gender. Please try again.');
+                          setClient((prev: any) => ({ ...prev })); // revert the select to the persisted value
+                          return; // do NOT update local state on a failed save
+                        }
+                        setClient((prev: any) => ({
+                          ...prev,
+                          clinicalProfile: { ...prev.clinicalProfile, gender }
+                        }));
+                      } catch {
+                        alert('Network error saving client gender. Please try again.');
+                        setClient((prev: any) => ({ ...prev })); // revert the select
+                      }
                     }}
                     className="border rounded-lg px-2 py-1 text-[12px]"
                     style={{ borderColor: "var(--border)", color: "var(--text1)" }}
