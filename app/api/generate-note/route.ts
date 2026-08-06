@@ -1,12 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getExtensionAuth } from "@/lib/extensionAuth";
 import { generateSmartNote, SessionInput } from "@/lib/generateSmartNote";
+import { prisma } from "@/lib/prisma";
+import { buildServerSessionInput, isSlimNoteRequest } from "@/lib/buildServerSessionInput";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
-    const input: SessionInput = await req.json();
+    const body: unknown = await req.json();
+
+    // DUAL-ACCEPT (extension migration window): a SLIM payload (session selections only) is built into a
+    // full SessionInput server-side from the authoritative DB profile — so allowedFunctions /
+    // matrixFunctions / approvedInterventions are DERIVED, never client-supplied, and every entry point
+    // gets the same gates. A FAT SessionInput (legacy clients, e.g. an un-updated extension in the wild)
+    // is still accepted verbatim so those users don't break; deprecate once adoption is confirmed.
+    let input: SessionInput;
+    if (isSlimNoteRequest(body)) {
+      if (!body.clientId) {
+        return NextResponse.json({ error: "clientId is required" }, { status: 400 });
+      }
+      const client = await prisma.clients.findUnique({
+        where: { id: body.clientId },
+        select: { clinical_profile: true, diagnosis: true },
+      });
+      if (!client) {
+        return NextResponse.json({ error: "Client not found" }, { status: 404 });
+      }
+      input = buildServerSessionInput(body, (client.clinical_profile as any) || {}, client.diagnosis);
+    } else {
+      input = body as SessionInput;
+    }
 
     if (!input.clientId) {
       return NextResponse.json({ error: "clientId is required" }, { status: 400 });
