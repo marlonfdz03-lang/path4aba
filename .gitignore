@@ -42,3 +42,10 @@ next-env.d.ts
 
 /lib/generated/prisma
 .claude/
+
+# PHI backups — clinical_profile exports. NEVER commit (contains client PHI).
+clinical_profile_backup_*.json
+
+# Assessment test harness inputs — real assessment PDFs + the filled ground-truth
+# template. Both contain client PHI (names/DOB/diagnoses). NEVER commit.
+assessments-local/
