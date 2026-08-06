@@ -113,7 +113,14 @@ export async function POST(req: Request) {
       // Carry the function review meta (FUNCTION_ANTECEDENT_CONFLICT when skipped, or
       // INFERRED_FROM_ANTECEDENT when the value was inferred from the antecedent) so the executor
       // emits an informative review entry — never a silent blank, and inferred values say "verify".
-      { fieldId: `BR${n}_BehaviorFunction`, fieldType: 'select', value: normalizedFunction, review: b.functionReview || undefined },
+      // `approvedFunctions` (this behavior's assessment-approved set) rides along so the executor's
+      // live-net can re-intersect it against the REAL dropdown at fill time: if the planned value isn't
+      // offered but an approved function IS, fill that instead of blanking (self-heals stale/absent
+      // captures). Absent when the assessment approves no set for the behavior — the net then no-ops.
+      // `notedFunction` = the function the NOTE stated for this behavior (pre-constraint). The live-net
+      // prefers it when the real dropdown offers it, so a multi-member intersection fills the function the
+      // prose describes (form ↔ prose coherence), not an arbitrary first-approved one.
+      { fieldId: `BR${n}_BehaviorFunction`, fieldType: 'select', value: normalizedFunction, review: b.functionReview || undefined, approvedFunctions: Array.isArray(b.approvedFunctions) ? b.approvedFunctions : undefined, notedFunction: b.notedFunction || undefined },
       { fieldId: `BR${n}_Antecedent`, fieldType: 'textarea', value: b.antecedent },
       {
         fieldId: `BR${n}_AntecedentInterventionsYesNo`, fieldType: 'radio', value: antYesNo,

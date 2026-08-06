@@ -261,6 +261,7 @@
             programs: cat.programs || [],
             behaviors: cat.behaviors || [],
             functions: cat.functions || [],
+            functionsByBehavior: cat.functionsByBehavior || {},
             blockedTerms: blockedTerms,
             formState: cat.formState || null,
             teachingProcedureRequired: (cat.teachingProcedureRequired === undefined ? null : cat.teachingProcedureRequired),

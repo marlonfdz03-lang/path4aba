@@ -35,6 +35,14 @@ window.FormEngineExecutor = {
     this._catalogPrograms = new Set();
     this._catalogBehaviors = new Set();
     this._catalogFunctions = new Set();
+    // PER-BEHAVIOR function dropdowns. ABA Matrix's "What was the function?" select can offer a
+    // different option set per behavior, but `_catalogFunctions` above unions them all — which made
+    // the server intersect a behavior's approved set against the WRONG (union) dropdown and blank a
+    // recordable function. Capture each behavior's OWN list here, keyed by the behavior name selected
+    // in that instance (tracked in `_sectionBehavior` as each _BehaviorName fills). The union is kept
+    // for backward-compat fallback; consumers prefer the per-behavior list when present.
+    this._catalogFunctionsByBehavior = {}; // behaviorName -> Set(optionText)
+    this._sectionBehavior = {}; // instance prefix (e.g. "BR1") -> behavior name intended for it
     // Form-population state at capture time (BEFORE we fill anything). If ABA Matrix's dropdown is
     // filtered, a form that already has populated Goal/Behavior instances may offer a SMALLER list
     // than an empty one — so recording how many instances were already populated lets us detect
@@ -73,6 +81,13 @@ window.FormEngineExecutor = {
           // produced one NO_MATCHING_OPTION entry that flags the whole instance for the RBT.
           actionOutcomes.push({ fieldId: action.fieldId, cls: 'skipped' });
           continue;
+        }
+
+        // Record which behavior this instance is for BEFORE its function select is captured/filled
+        // (the _BehaviorName action always precedes _BehaviorFunction in the plan). The intended value
+        // is the treatment-plan behavior name — the key the profile's approved/dropdown maps use.
+        if (/_BehaviorName$/.test(action.fieldId || '') && action.value) {
+          this._sectionBehavior[this.instancePrefix(action.fieldId)] = action.value;
         }
 
         const outcome = await this.fillField(action);
@@ -210,6 +225,11 @@ window.FormEngineExecutor = {
       programs: Array.from(this._catalogPrograms || []),
       behaviors: Array.from(this._catalogBehaviors || []),
       functions: Array.from(this._catalogFunctions || []),
+      // Per-behavior dropdowns { behaviorName: [options] }. Empty object when nothing was captured
+      // per-behavior — the server then falls back to the `functions` union (no regression).
+      functionsByBehavior: Object.fromEntries(
+        Object.entries(this._catalogFunctionsByBehavior || {}).map(([k, v]) => [k, Array.from(v || [])]),
+      ),
       formState: this._catalogFormState || null,
       // Per-fill capture of whether the teaching-procedure field is required (see the adapter). Answers
       // "does a blank teaching-procedure block Submit" from real use, per client — no manual test needed.
@@ -262,13 +282,113 @@ window.FormEngineExecutor = {
   // anything itself. Programs from *_GoalName, behaviors from *_BehaviorName, functions from
   // *_BehaviorFunction (the "What was the function?" select — a client's EHR may omit a canonical
   // function like Automatic Reinforcement, which note generation needs to know before asserting it).
-  captureCatalog(fieldId, options) {
+  captureCatalog(action, options) {
     if (!options || !options.length) return;
+    const fieldId = (action && action.fieldId) || '';
     const set = /_GoalName$/.test(fieldId) ? this._catalogPrograms
       : /_BehaviorName$/.test(fieldId) ? this._catalogBehaviors
       : /_BehaviorFunction$/.test(fieldId) ? this._catalogFunctions : null;
     if (!set) return;
-    options.forEach((o) => { const t = String(o == null ? '' : o).trim(); if (t) set.add(t); });
+    const add = (target, o) => { const t = String(o == null ? '' : o).trim(); if (t) target.add(t); };
+    options.forEach((o) => add(set, o));
+    // Additionally file a function dropdown under THIS instance's behavior (per-behavior capture), so
+    // the server can intersect the behavior's approved set against its OWN options, not the union.
+    if (/_BehaviorFunction$/.test(fieldId)) {
+      const behavior = this._sectionBehavior[this.instancePrefix(fieldId)];
+      if (behavior) {
+        const byB = this._catalogFunctionsByBehavior;
+        (byB[behavior] || (byB[behavior] = new Set()));
+        options.forEach((o) => add(byB[behavior], o));
+      }
+    }
+  },
+
+  // The instance prefix shared by an instance's fields — "BR1" for "BR1_BehaviorFunction" and
+  // "BR1_BehaviorName". Used to associate a function dropdown with the behavior name filled in the
+  // same instance (both without relying on sectionId, which the catalog capture doesn't carry).
+  instancePrefix(fieldId) {
+    return String(fieldId || '').split('_Behavior')[0];
+  },
+
+  // Canonicalize a behavior-function label/value. MIRRORS lib/functionPatterns.functionToCanonical
+  // (kept in sync by hand — the extension can't import the TS lib). 'sensory'/'automatic' -> automatic.
+  _canonicalFunction(s) {
+    const t = String(s == null ? '' : s).toLowerCase();
+    if (!t || t === 'unknown') return null;
+    if (t.includes('attention')) return 'attention';
+    if (t.includes('escape') || t.includes('avoidance')) return 'escape';
+    if (t.includes('tangible')) return 'tangible';
+    if (t.includes('automatic') || t.includes('sensory')) return 'automatic';
+    return null;
+  },
+  _functionLabel(canonical) {
+    return { attention: 'Attention', escape: 'Escape', tangible: 'Tangibles', automatic: 'Automatic Reinforcement' }[canonical] || canonical;
+  },
+
+  // The skipped-value review (Bug 3 fix): carry ALL of the plan's review meta through, not just
+  // reason/intended/antecedent, so FUNCTION_NOT_IN_MATRIX keeps unrecordable/matrixFunctions/approved.
+  reconstructSkipReview(action, label) {
+    return action.review
+      ? { ...action.review, stableId: action.fieldId, label, reason: action.review.reason || 'NEEDS_REVIEW', intended: action.review.intended, detail: action.review.antecedent }
+      : { stableId: action.fieldId, label, reason: 'NEEDS_REVIEW' };
+  },
+
+  // LIVE-OPTIONS NET (function fields only). The server picks/blanks a function from the behavior's
+  // CAPTURED dropdown, which can be stale or absent (first-ever fill). The REAL dropdown open right now
+  // is ground truth and can't be stale, so when the planned value isn't offered but an APPROVED function
+  // IS, fill that instead of blanking. Preserves the TRUE config gap: approved ∩ live = empty -> blank +
+  // a precise FUNCTION_NOT_IN_MATRIX flag naming the real dropdown. Returns an outcome, or null when the
+  // net doesn't apply (not a function field, no approved set, or no options offered) so the caller
+  // falls back to its normal no-match handling.
+  async fillFunctionFromLiveOptions(action, resolvedEl, info, label) {
+    if (!/_BehaviorFunction$/.test(action.fieldId || '')) return null;
+    const approved = Array.isArray(action.approvedFunctions) ? action.approvedFunctions : [];
+    if (!approved.length) return null;
+    const liveOptions = (info && info.options) || [];
+    if (!liveOptions.length) return null;
+
+    // canonical -> the first live option label with that function (so we click the dropdown's own text)
+    const liveByCanon = new Map();
+    for (const opt of liveOptions) {
+      const c = this._canonicalFunction(opt);
+      if (c && !liveByCanon.has(c)) liveByCanon.set(c, opt);
+    }
+    const approvedCanon = approved.map((a) => this._canonicalFunction(a)).filter(Boolean);
+    const approvedLabels = approvedCanon.map((c) => this._functionLabel(c));
+    const approvedSet = new Set(approvedCanon);
+    // PREFER THE NOTE'S STATED FUNCTION. The note already describes each behavior with a specific,
+    // approved function ("consistent with escape-maintained"); that is the observed function for this
+    // session. When approved ∩ live-dropdown has multiple members, filling the note's function keeps the
+    // form and the prose coherent — filling a different approved member (e.g. Automatic when the note
+    // said Escape) would contradict the note. Only fall back to first-approved order when the note's
+    // function isn't in the intersection (edge case — generation is nudged toward recordable functions).
+    const notedCanon = this._canonicalFunction(action.notedFunction);
+    const primary = (notedCanon && approvedSet.has(notedCanon) && liveByCanon.has(notedCanon))
+      ? notedCanon
+      : approvedCanon.find((c) => liveByCanon.has(c));
+
+    if (!primary) {
+      // TRUE config gap: NONE of the approved functions is in the real dropdown. Blank + precise flag
+      // (reuses the FUNCTION_NOT_IN_MATRIX render, but with the LIVE dropdown as evidence, not a capture).
+      this.setAngularValue(resolvedEl, '');
+      return {
+        status: 'skipped',
+        review: { stableId: action.fieldId, label, reason: 'FUNCTION_NOT_IN_MATRIX', intended: null, unrecordable: approvedLabels, matrixFunctions: liveOptions, approved },
+        verification: { stableId: action.fieldId, label, intended: '', actual: '', dirty: false, touched: false, valid: false, ok: false, reason: 'FUNCTION_NOT_IN_MATRIX' },
+      };
+    }
+
+    const liveLabel = liveByCanon.get(primary);
+    const retry = await window.selectMatOption(resolvedEl, liveLabel);
+    await this.wait(80);
+    if (!retry || !retry.matched) return null; // couldn't actuate it -> let the caller no-match
+    const scoredAction = { ...action, value: liveLabel };
+    const verification = this.scoreField(resolvedEl, scoredAction, label, 'select');
+    const outcome = this.outcomeFrom(verification, scoredAction, label);
+    // Flag: filled with an approved function the LIVE dropdown offered, not the planned value. Reuses the
+    // FUNCTION_NOT_APPROVED render ("set to X from the approved set — verify"), so no popup change.
+    outcome.review = { stableId: action.fieldId, label, reason: 'FUNCTION_NOT_APPROVED', intended: liveLabel, from: action.value === 'unknown' ? undefined : action.value, approved: approvedLabels };
+    return outcome;
   },
 
   // ── Value helpers ──────────────────────────────────────────────────────────
@@ -961,10 +1081,17 @@ window.FormEngineExecutor = {
     // 'filled' or 'failed' so the buckets sum to the plan. If the plan attached review metadata
     // (e.g. FUNCTION_ANTECEDENT_CONFLICT), surface it — the skip is never a silent blank.
     if (this.isSkippable(action.value)) {
-      const review = action.review
-        ? { stableId: action.fieldId, label, reason: action.review.reason || 'NEEDS_REVIEW', intended: action.review.intended, detail: action.review.antecedent }
-        : { stableId: action.fieldId, label, reason: 'NEEDS_REVIEW' };
-      return { status: 'skipped', review };
+      // A function field WITH an approved set gets one more chance: the server may have blanked it from a
+      // stale/absent capture even though the LIVE dropdown offers an approved function. Let it flow to
+      // the select handler, where the live-net opens the real dropdown and governs fill-vs-blank. Every
+      // other skippable value is a deliberate skip — return its review now (Bug 3 fix: full meta carried
+      // via reconstructSkipReview, so FUNCTION_NOT_IN_MATRIX keeps unrecordable/matrixFunctions/approved).
+      const functionLiveNet = /_BehaviorFunction$/.test(action.fieldId || '')
+        && Array.isArray(action.approvedFunctions) && action.approvedFunctions.length > 0;
+      if (!functionLiveNet) {
+        return { status: 'skipped', review: this.reconstructSkipReview(action, label) };
+      }
+      // else fall through — the select case decides against the real dropdown.
     }
 
     // A real planned value we could not resolve to a field -> it never landed -> 'failed' (NOT a
@@ -1009,7 +1136,7 @@ window.FormEngineExecutor = {
         this.setAngularValue(resolvedEl, action.value);
         const acInfo = await this.commitAutocomplete(resolvedEl, action);
         await this.wait(80);
-        this.captureCatalog(action.fieldId, acInfo.options); // passive catalog capture
+        this.captureCatalog(action, acInfo.options); // passive catalog capture
         // Options were offered but none matched -> strict pick-list with no match: clear the
         // typed value (never leave a partial) and flag it. NO options offered -> treat as a
         // free-text autocomplete and keep the committed value.
@@ -1036,8 +1163,18 @@ window.FormEngineExecutor = {
         // returns { options, matched } so we can flag a no-match instead of leaving it empty.
         const info = await window.selectMatOption(resolvedEl, action.value);
         await this.wait(80);
-        this.captureCatalog(action.fieldId, info && info.options); // passive catalog capture
+        this.captureCatalog(action, info && info.options); // passive catalog capture
         if (!info || !info.matched) {
+          // LIVE-OPTIONS NET (function fields): the planned value isn't offered, but an approved function
+          // may be — fill that against the REAL dropdown instead of blanking (self-heals stale/absent
+          // captures and picks up a genuine config gap from the live options). Returns null when N/A.
+          const net = await this.fillFunctionFromLiveOptions(action, resolvedEl, info, label);
+          if (net) return net;
+          // Flowed here from a server-blanked function field but the net couldn't decide (no live
+          // options) -> keep the server's original review rather than a misleading "wanted unknown".
+          if (this.isSkippable(action.value)) {
+            return { status: 'skipped', review: this.reconstructSkipReview(action, label) };
+          }
           return this.noMatchingOption(action, label, (info && info.options) || []);
         }
         const verification = this.scoreField(resolvedEl, action, label, 'select');

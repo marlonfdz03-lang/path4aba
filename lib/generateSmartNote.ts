@@ -45,10 +45,14 @@ export interface SessionInput {
     // The assessment-approved function set for THIS behavior (clinical_profile.maladaptiveBehaviors[].functions).
     // The written function must be one of these; the gate enforces it. Empty/absent = no constraint.
     allowedFunctions?: string[];
+    // THIS behavior's OWN captured ABA-Matrix dropdown (per-behavior; the server builder resolves it,
+    // falling back to the global union). Preferred over the top-level union for the prompt nudge below.
+    matrixFunctions?: string[];
   }[];
   // The function options the client's ABA Matrix dropdown can record (observedCatalog.aba_matrix.current.functions),
   // captured by the extension at fill time. Absent for most clients (never filled yet). When present, the prompt
   // prefers a function in (approved ∩ dropdown) so the written prose matches what the matrix will record.
+  // This is the GLOBAL UNION across behaviors; per-behavior narrowing lives on behaviorsObserved[].matrixFunctions.
   matrixFunctions?: string[];
   replacementSkillsAddressed: {
     name: string;
@@ -394,8 +398,9 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     .map((b) => {
       // Prefer functions the client's ABA Matrix can record (approved ∩ dropdown). When that intersection
       // is empty (a config gap — the matrix lacks a function the assessment requires) fall back to the
-      // full approved set so the prose still states a clinically valid function.
-      const { allowed } = effectiveAllowedFunctions(b.allowedFunctions, input.matrixFunctions);
+      // full approved set so the prose still states a clinically valid function. Use THIS behavior's own
+      // dropdown (per-behavior); the top-level union is only a fallback for pre-per-behavior captures.
+      const { allowed } = effectiveAllowedFunctions(b.allowedFunctions, b.matrixFunctions ?? input.matrixFunctions);
       const set = allowed.size ? [...allowed].map(functionDisplayLabel) : b.allowedFunctions!.map(functionDisplayLabel);
       return `- ${b.name}: ${set.join(' or ')}`;
     })

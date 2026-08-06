@@ -8,6 +8,7 @@
 
 import type { SessionInput } from "./generateSmartNote";
 import { nextSessionClause } from "./nextSessionDate.ts";
+import { matrixFunctionsForBehavior } from "./functionPatterns.ts";
 
 // The slim payload the clients POST. Everything NOT here is derived from the DB profile.
 export type SlimNoteRequest = {
@@ -74,9 +75,13 @@ export function buildServerSessionInput(
         : [];
 
   // ABA Matrix dropdown functions (captured by the extension at fill time). Absent for most clients.
-  const captured = p.observedCatalog?.aba_matrix?.current?.functions;
+  // `current` is the captured catalog: `functions` is the legacy GLOBAL UNION; `functionsByBehavior`
+  // (when present) holds each behavior's OWN dropdown. Keep the union top-level for anything global;
+  // narrow PER BEHAVIOR below via matrixFunctionsForBehavior (falls back to the union → no regression).
+  const captured = p.observedCatalog?.aba_matrix?.current;
+  const capturedUnion = captured?.functions;
   const matrixFunctions: string[] | undefined =
-    Array.isArray(captured) && captured.length ? captured : undefined;
+    Array.isArray(capturedUnion) && capturedUnion.length ? capturedUnion : undefined;
 
   return {
     clientId: slim.clientId,
@@ -106,6 +111,9 @@ export function buildServerSessionInput(
         function: functions[0] || "",
         // Derived from the assessment — the gate enforces the written function stays in this set.
         allowedFunctions: functions,
+        // This behavior's OWN captured ABA-Matrix dropdown (falls back to the global union, then
+        // undefined). The prompt nudges the note to name a function this behavior can actually record.
+        matrixFunctions: matrixFunctionsForBehavior(captured, name),
       };
     }),
     // Derived from the DB, never client-supplied.

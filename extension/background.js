@@ -125,6 +125,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           programs: message.programs || [],
           behaviors: message.behaviors || [],
           functions: message.functions || [],
+          functionsByBehavior: message.functionsByBehavior || {},
           blockedTerms: message.blockedTerms || [],
           formState: message.formState || null,
           teachingProcedureRequired: (message.teachingProcedureRequired === undefined ? null : message.teachingProcedureRequired),

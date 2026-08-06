@@ -31,11 +31,29 @@ function cleanList(raw: unknown): string[] {
   return out
 }
 
+// Sanitize the per-behavior function map { behaviorName: options[] }: bounded, string keys/values,
+// empty lists and empty keys dropped. Returns undefined when nothing usable (so `current` omits it and
+// consumers fall back to the global `functions` union — no regression).
+function cleanFunctionsByBehavior_(raw: unknown): Record<string, string[]> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const out: Record<string, string[]> = {}
+  let n = 0
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const key = String(k || '').trim().slice(0, MAX_LEN)
+    if (!key) continue
+    const opts = cleanList(v)
+    if (!opts.length) continue
+    out[key] = opts
+    if (++n >= MAX_ITEMS) break
+  }
+  return n ? out : undefined
+}
+
 export async function POST(req: Request) {
   const user = await getExtensionAuth()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { clientId, source, programs, behaviors, functions, blockedTerms, capturedAt, formState, teachingProcedureRequired } = await req.json().catch(() => ({}))
+  const { clientId, source, programs, behaviors, functions, functionsByBehavior, blockedTerms, capturedAt, formState, teachingProcedureRequired } = await req.json().catch(() => ({}))
   // Whether ABA Matrix marks the teaching-procedure field required (Commit 4 auto-capture). Tri-state:
   // true/false observed, null = the fill couldn't tell (field absent) — never coerce null to false.
   const tpRequired: boolean | null = typeof teachingProcedureRequired === 'boolean' ? teachingProcedureRequired : null
@@ -58,8 +76,9 @@ export async function POST(req: Request) {
   const cleanPrograms = cleanList(programs)
   const cleanBehaviors = cleanList(behaviors)
   const cleanFunctions = cleanList(functions)
+  const cleanFunctionsByBehavior = cleanFunctionsByBehavior_(functionsByBehavior)
   const cleanBlocked = cleanList(blockedTerms).map((t) => t.toLowerCase())
-  const hasCatalog = cleanPrograms.length > 0 || cleanBehaviors.length > 0 || cleanFunctions.length > 0
+  const hasCatalog = cleanPrograms.length > 0 || cleanBehaviors.length > 0 || cleanFunctions.length > 0 || !!cleanFunctionsByBehavior
   // Nothing observed -> nothing to persist.
   if (!hasCatalog && cleanBlocked.length === 0) {
     return NextResponse.json({ ok: true, stored: false })
@@ -90,6 +109,9 @@ export async function POST(req: Request) {
         programs: cleanPrograms,
         behaviors: cleanBehaviors,
         functions: cleanFunctions,
+        // Per-behavior dropdowns (each behavior's own function options). Omitted when the capture didn't
+        // provide any — consumers then fall back to the `functions` union (matrixFunctionsForBehavior).
+        ...(cleanFunctionsByBehavior ? { functionsByBehavior: cleanFunctionsByBehavior } : {}),
         capturedAt: typeof capturedAt === 'string' ? capturedAt : new Date().toISOString(),
         capturedBy: user.id,
         formState: cleanFormState,

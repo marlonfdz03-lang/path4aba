@@ -299,6 +299,39 @@ export function effectiveAllowedFunctions(
   return { allowed, approved, matrixKnown: true }
 }
 
+// The client's captured ABA-Matrix catalog is PER-BEHAVIOR: each behavior's "What was the function?"
+// dropdown can offer a different option set (Distractibility → {Automatic Reinforcement, Escape};
+// another behavior → {Attention, Escape, Tangibles}). `functionsByBehavior` holds each behavior's own
+// dropdown; `functions` is the legacy GLOBAL UNION across all of them. Resolve a behavior's dropdown to
+// its OWN list when present, else fall back to the union. BACKWARD COMPAT: every client captured before
+// per-behavior existed has only `functions` (no `functionsByBehavior`), so the fallback fires for every
+// behavior — byte-for-byte the pre-per-behavior behavior, no regression. The name match mirrors
+// extract-facts' approvedFunctionsFor: exact (case-insensitive) first, then a loose contains match.
+export function matrixFunctionsForBehavior(
+  catalog: { functions?: string[]; functionsByBehavior?: Record<string, string[]> } | null | undefined,
+  behaviorName: string,
+): string[] | undefined {
+  const union =
+    Array.isArray(catalog?.functions) && catalog!.functions!.length ? catalog!.functions : undefined
+  const byBehavior = catalog?.functionsByBehavior
+  if (byBehavior && typeof byBehavior === 'object') {
+    const key = String(behaviorName || '').trim().toLowerCase()
+    if (key) {
+      const entries = Object.entries(byBehavior).filter(
+        ([, v]) => Array.isArray(v) && v.length,
+      ) as [string, string[]][]
+      const exact = entries.find(([k]) => String(k).trim().toLowerCase() === key)
+      if (exact) return exact[1]
+      const loose = entries.find(([k]) => {
+        const kk = String(k).trim().toLowerCase()
+        return kk && (key.includes(kk) || kk.includes(key))
+      })
+      if (loose) return loose[1]
+    }
+  }
+  return union
+}
+
 // Constrain a candidate function to the behavior's EFFECTIVE set (approved ∩ ABA-Matrix dropdown).
 // Keep the candidate if it is in the set; else prefer a member the ANTECEDENT supports; else fill the
 // sole/primary member (the field is mandatory in the host form — a blank traps the RBT), flagged for
