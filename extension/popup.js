@@ -2181,8 +2181,13 @@ function renderFillSummary(summary) {
         const approved = Array.isArray(r.approved) ? r.approved.join(', ') : '';
         const from = r.from == null ? '' : String(r.from);
         extra = r.intended
-          ? ` → corrected to ${r.intended} (the note’s ${from} is not approved for this behavior; approved: ${approved}) — verify`
+          ? ` → set to ${r.intended} from the approved set (approved: ${approved}) — verify`
           : ` left blank — the note’s ${from} is not approved for this behavior (approved: ${approved}); set it manually`;
+      } else if (r.reason === 'FUNCTION_NOT_IN_MATRIX') {
+        // Config gap: the assessment requires a function this client's ABA Matrix dropdown can't record.
+        const need = Array.isArray(r.unrecordable) ? r.unrecordable.join(', ') : '';
+        const has = Array.isArray(r.matrixFunctions) ? r.matrixFunctions.join(', ') : '';
+        extra = ` left blank — this client’s ABA Matrix can’t record ${need}, which the assessment requires for this behavior (dropdown offers: ${has}). Ask the BCBA/admin to add ${need} in ABA Matrix.`;
       }
       li.textContent = `${r.label || r.stableId || 'field'}${reason}${extra}`;
       ul.appendChild(li);

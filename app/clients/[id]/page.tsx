@@ -428,6 +428,10 @@ export default function ClientProfilePage() {
           allowedFunctions: functions,
         };
       }),
+      // Functions the client's ABA Matrix dropdown can record (captured by the extension at fill time).
+      // Absent for most clients — the prompt then constrains to the assessment-approved set only. Mirrors
+      // app/app/note/lib/buildSessionInput.ts (see the divergence note there — these two builders drift).
+      matrixFunctions: client.clinicalProfile?.observedCatalog?.aba_matrix?.current?.functions ?? undefined,
       replacementSkillsAddressed: selectedSkills.map((name) => ({ name, promptLevel: "", clientResponse: "", successful: true })),
       activitiesUsed: (location === "school"
         ? (client.clinicalProfile?.schoolActivities || [])

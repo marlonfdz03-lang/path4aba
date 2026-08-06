@@ -45,7 +45,7 @@ export const ANTECEDENT_FUNCTION_PATTERNS: { re: RegExp; label: string }[] = [
   { label: 'Automatic Reinforcement', re: /no (clear |observable )?(social|external|environmental)? ?antecedent|no social (antecedent|trigger|demand)|without (a )?(social )?(demand|antecedent|trigger)|independent (activity|play|engagement)|low[- ]stimulation|unstructured (time|period)|monotonous|repetitive task|self[- ]stimulat/i },
   { label: 'Tangibles', re: /(preferred (item|toy|activity|reinforcer)|item|access|tangible)\b[^.]{0,40}\b(removed|withheld|delayed|denied|restricted|taken away|unavailable|out of reach|ended|blocked)|\b(removed|withheld|delayed|denied|restricted|blocked)\b[^.]{0,40}\b(preferred|item|toy|access|reinforcer)|access (was )?(restricted|denied|removed|delayed|blocked)/i },
   { label: 'Attention', re: /attention (was )?(shifted|directed|diverted|removed|unavailable|redirected|elsewhere)|(shifted|directed|diverted|redirected|removed) (adult |social )?attention|attention (to|toward) (another|other|elsewhere)|adult attention|caregiver('?s)? (conversation|attention)|(caregiver|adult|staff|rbt)[^.]{0,25}(conversation|talking|on the phone)|engaged in (a )?conversation|social (interaction|attention) (removed|withheld|unavailable)|attention (was )?unavailable/i },
-  { label: 'Escape', re: /demand|instruction|instructed|directed to|told to|asked to|prompted to|task (was )?present|presented with (a |an )?(task|demand|instruction|non[- ]preferred|worksheet|activity)|non[- ]preferred|clean[- ]?up|put(ting)? away|transition (away )?from a? ?preferred|transition (from|to|away)|move to the next|difficult (or lengthy )?task|work demand|complete (a |the )?task/i },
+  { label: 'Escape', re: /demand|instruction|instructed|directed to|told to|asked to|prompted to|task (was )?present|presented with (a |an )?(task|demand|instruction|non[- ]preferred|worksheet|activity)|non[- ]preferred|clean[- ]?up|put(ting)? away|transition (away )?from a? ?preferred|transition (from|to|away)|move to the next|difficult (or lengthy )?task|work demand|complete (a |the )?task|(?:fine|gross)[- ]?motor task|(?:presented with|during|completing|working on|engaged in|introduced to) (?:a |an |the )?[a-z]+(?:[- ][a-z]+)? task\b/i },
 ]
 
 export function inferFunctionFromAntecedent(antecedent: string): string | null {
@@ -269,28 +269,65 @@ export function normalizeApprovedFunctions(approved: string[] | undefined | null
 }
 
 export type ConstrainResult = {
-  fn: string | null // approved label to use, or null = leave blank for review
-  status: 'approved' | 'corrected' | 'unapproved' | 'unconstrained' | 'unknown'
-  from?: string // the original candidate when corrected/unapproved
+  fn: string | null // function label to use, or null = leave blank for review
+  // approved: candidate already in the effective set. corrected: swapped for an antecedent-supported
+  // member. defaulted: neither the written function nor the antecedent picked a member, so the sole/
+  // primary recordable approved function was filled (flag for review). not_in_matrix: the assessment
+  // approves function(s) but the client's ABA Matrix dropdown records NONE of them (config gap; blank).
+  // unconstrained: no approved set captured, nothing to enforce. unknown: nothing asserted and no set.
+  status: 'approved' | 'corrected' | 'defaulted' | 'not_in_matrix' | 'unconstrained' | 'unknown'
+  from?: string // the original candidate when corrected/defaulted
+  unrecordable?: string[] // approved functions the matrix cannot record (config-gap detail)
 }
 
-// Constrain a candidate function to the behavior's approved set. If the candidate is approved, keep
-// it. If not, prefer an approved function the ANTECEDENT supports; if none fits, return null (blank +
-// review) rather than assert an unapproved function. With no approved set captured, do not block.
+// The EFFECTIVE set of functions a behavior may be assigned: the assessment-approved set, narrowed to
+// what the client's captured ABA Matrix dropdown can actually record. The catalog is captured by the
+// extension at fill time, so MOST clients (every first note, every un-filled client) have none — when
+// it is absent we do NOT narrow (effective = approved), so the constraint never regresses a client
+// without a catalog. Both inputs are the client's OWN data; nothing here is client- or behavior-specific.
+export function effectiveAllowedFunctions(
+  approvedFunctions: string[] | undefined | null,
+  matrixFunctions?: string[] | undefined | null,
+): { allowed: Set<string>; approved: Set<string>; matrixKnown: boolean } {
+  const approved = normalizeApprovedFunctions(approvedFunctions)
+  const matrixKnown = Array.isArray(matrixFunctions) && matrixFunctions.length > 0
+  if (!matrixKnown) return { allowed: approved, approved, matrixKnown: false }
+  const matrix = normalizeApprovedFunctions(matrixFunctions)
+  // Set iteration preserves insertion order, so `allowed` keeps the assessment's function order —
+  // used to pick a deterministic "primary" when we must default.
+  const allowed = new Set([...approved].filter((f) => matrix.has(f)))
+  return { allowed, approved, matrixKnown: true }
+}
+
+// Constrain a candidate function to the behavior's EFFECTIVE set (approved ∩ ABA-Matrix dropdown).
+// Keep the candidate if it is in the set; else prefer a member the ANTECEDENT supports; else fill the
+// sole/primary member (the field is mandatory in the host form — a blank traps the RBT), flagged for
+// review. If the assessment approves function(s) but the matrix records none, that is a CONFIG GAP: we
+// blank and flag it for the BCBA/admin, never silently. With no approved set captured, do not block.
 export function constrainFunctionToApproved(
   candidate: string | null | undefined,
   approvedFunctions: string[] | undefined | null,
   antecedent?: string,
+  matrixFunctions?: string[] | undefined | null,
 ): ConstrainResult {
-  const approved = normalizeApprovedFunctions(approvedFunctions)
-  const cand = functionToCanonical(candidate)
+  const { allowed, approved, matrixKnown } = effectiveAllowedFunctions(approvedFunctions, matrixFunctions)
   if (!approved.size) return { fn: candidate ?? null, status: 'unconstrained' }
-  if (!cand) return { fn: candidate ?? null, status: 'unknown' } // nothing asserted to constrain
-  if (approved.has(cand)) return { fn: LABEL_BY_CANONICAL[cand], status: 'approved' }
+
+  // Config gap: assessment approves function(s), but the client's ABA Matrix offers none of them.
+  if (matrixKnown && allowed.size === 0) {
+    return { fn: null, status: 'not_in_matrix', unrecordable: [...approved].map((c) => LABEL_BY_CANONICAL[c]) }
+  }
+
+  const cand = functionToCanonical(candidate)
+  if (cand && allowed.has(cand)) return { fn: LABEL_BY_CANONICAL[cand], status: 'approved' }
 
   const inferred = functionToCanonical(inferFunctionFromAntecedent(String(antecedent || '')))
-  if (inferred && approved.has(inferred)) {
-    return { fn: LABEL_BY_CANONICAL[inferred], status: 'corrected', from: LABEL_BY_CANONICAL[cand] }
+  if (inferred && allowed.has(inferred)) {
+    return { fn: LABEL_BY_CANONICAL[inferred], status: 'corrected', from: cand ? LABEL_BY_CANONICAL[cand] : undefined }
   }
-  return { fn: null, status: 'unapproved', from: LABEL_BY_CANONICAL[cand] }
+
+  // Never-blank last resort: fill the primary recordable approved function (sole member when the set is
+  // a singleton — forced, unambiguous), flagged so the RBT verifies. `allowed` is non-empty here.
+  const primary = [...allowed][0]
+  return { fn: LABEL_BY_CANONICAL[primary], status: 'defaulted', from: cand ? LABEL_BY_CANONICAL[cand] : undefined }
 }

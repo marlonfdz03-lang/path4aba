@@ -242,10 +242,15 @@ export async function POST(req: Request) {
   // empty, so only always-prohibited procedures (RIRD, …) are scrubbed and nothing else false-fails.
   let approvedInterventions: string[] = []
   let skillPrograms: string[] = []
+  // The function options the client's ABA Matrix dropdown actually offers, captured by the extension at
+  // fill time. Undefined when never captured (the common case) — the constraint then narrows nothing.
+  let matrixFunctions: string[] | undefined
   if (clientId) {
     try {
       const client = await prisma.clients.findUnique({ where: { id: clientId }, select: { clinical_profile: true } })
       const profile = (client?.clinical_profile as any) || {}
+      const capturedFns = profile?.observedCatalog?.aba_matrix?.current?.functions
+      if (Array.isArray(capturedFns) && capturedFns.length) matrixFunctions = capturedFns
       const mal = profile.maladaptiveBehaviors
       if (Array.isArray(mal)) {
         for (const b of mal) {
@@ -388,13 +393,19 @@ Return this exact JSON structure:
         // assessment approved only Escape/Tangible/Attention).
         const approvedForBehavior = approvedFunctionsFor(b.name)
         if (approvedForBehavior && approvedForBehavior.length) {
-          const c = constrainFunctionToApproved(b.function, approvedForBehavior, b.antecedent)
-          if (c.status === 'corrected') {
+          // Constrain to the EFFECTIVE set (approved ∩ ABA-Matrix dropdown). matrixFunctions is undefined
+          // when no catalog was captured -> constraint narrows nothing (assessment-only, no regression).
+          const c = constrainFunctionToApproved(b.function, approvedForBehavior, b.antecedent, matrixFunctions)
+          if (c.status === 'corrected' || c.status === 'defaulted') {
+            // Filled with an approved+recordable function (antecedent-chosen, or the sole/primary member).
+            // Never blank a mandatory field; flag so the RBT verifies.
             b.function = c.fn
             functionReview = { reason: 'FUNCTION_NOT_APPROVED', intended: c.fn, from: c.from, antecedent: String(b.antecedent || ''), approved: approvedForBehavior }
-          } else if (c.status === 'unapproved') {
+          } else if (c.status === 'not_in_matrix') {
+            // Config gap: the assessment approves function(s) the client's ABA Matrix cannot record.
+            // Blank + a distinct review that surfaces to the BCBA/admin (add the option), never silent.
             b.function = 'unknown'
-            functionReview = { reason: 'FUNCTION_NOT_APPROVED', intended: null, from: c.from, antecedent: String(b.antecedent || ''), approved: approvedForBehavior }
+            functionReview = { reason: 'FUNCTION_NOT_IN_MATRIX', intended: null, unrecordable: c.unrecordable, antecedent: String(b.antecedent || ''), approved: approvedForBehavior, matrixFunctions }
           }
         }
         if (functionReview) b.functionReview = functionReview

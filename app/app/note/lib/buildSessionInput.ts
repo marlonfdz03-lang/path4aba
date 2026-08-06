@@ -36,6 +36,7 @@ export type NoteClientProfile = {
   maladaptiveBehaviors?: unknown[];
   replacementBehaviors?: unknown[];
   skillAcquisition?: unknown[];
+  observedCatalog?: { aba_matrix?: { current?: { functions?: string[] } } };
 };
 
 const PROHIBITED = [
@@ -78,6 +79,10 @@ export function buildSessionInput(
         allowedFunctions: functions,
       };
     }),
+
+    // Functions the client's ABA Matrix dropdown can record (captured by the extension at fill time).
+    // Absent for most clients — the prompt then constrains to the assessment-approved set only.
+    matrixFunctions: profile.observedCatalog?.aba_matrix?.current?.functions ?? undefined,
 
     replacementSkillsAddressed: form.skills.map((name) => ({
       name, promptLevel: "", clientResponse: "", successful: true,

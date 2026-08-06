@@ -12,7 +12,7 @@ import { findInterventionViolations } from '@/lib/interventionPolicy';
 import {
   findFunctionAntecedentContradictions,
   segmentNoteByBehavior, deriveBehaviorFunction, functionToCanonical,
-  normalizeApprovedFunctions, functionDisplayLabel,
+  normalizeApprovedFunctions, functionDisplayLabel, effectiveAllowedFunctions,
 } from '@/lib/functionPatterns';
 import { stripInvalidNextSession } from '@/lib/nextSessionDate';
 
@@ -45,6 +45,10 @@ export interface SessionInput {
     // The written function must be one of these; the gate enforces it. Empty/absent = no constraint.
     allowedFunctions?: string[];
   }[];
+  // The function options the client's ABA Matrix dropdown can record (observedCatalog.aba_matrix.current.functions),
+  // captured by the extension at fill time. Absent for most clients (never filled yet). When present, the prompt
+  // prefers a function in (approved ∩ dropdown) so the written prose matches what the matrix will record.
+  matrixFunctions?: string[];
   replacementSkillsAddressed: {
     name: string;
     promptLevel: string;
@@ -386,7 +390,14 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   // behavior MUST be in its approved set; the post-generation gate enforces it.
   const approvedFunctionLines = input.behaviorsObserved
     .filter((b) => Array.isArray(b.allowedFunctions) && b.allowedFunctions.length)
-    .map((b) => `- ${b.name}: ${b.allowedFunctions!.map(functionDisplayLabel).join(' or ')}`)
+    .map((b) => {
+      // Prefer functions the client's ABA Matrix can record (approved ∩ dropdown). When that intersection
+      // is empty (a config gap — the matrix lacks a function the assessment requires) fall back to the
+      // full approved set so the prose still states a clinically valid function.
+      const { allowed } = effectiveAllowedFunctions(b.allowedFunctions, input.matrixFunctions);
+      const set = allowed.size ? [...allowed].map(functionDisplayLabel) : b.allowedFunctions!.map(functionDisplayLabel);
+      return `- ${b.name}: ${set.join(' or ')}`;
+    })
     .join('\n');
   const approvedFunctionConstraint = approvedFunctionLines
     ? `\n\nAPPROVED BEHAVIOR FUNCTIONS — HARD CONSTRAINT (do not violate): the assessment approved ONLY these functions per behavior. Assign each behavior a function from its approved set, and write an antecedent consistent with that function. NEVER assign a function outside a behavior's approved set:\n${approvedFunctionLines}`
