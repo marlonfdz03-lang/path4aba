@@ -68,60 +68,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 });
 
-// ── ABA Matrix: inject the autofill script on demand, then fill ──────────────
-// Routed through the background service worker (not the popup) so it works from
-// detached popup windows, where the popup's own chrome.tabs/chrome.scripting
-// context is scoped to the popup window rather than the browser window holding
-// the ABA Matrix tab. The injected script's __abaMatrixLoaded guard makes repeat
-// injections safe (no duplicate onMessage listeners).
+// ── Extension background message router ─────────────────────────────────────
+// Serves the gated Phase-2 fill pipeline (ClinicalExtractor -> Form Agent). The
+// legacy inject-and-fill path (injectAndFillABAMatrix / getABAMatrixAnswers ->
+// /api/extension/fill-aba-matrix) was DELETED so no form fill can bypass
+// extract-facts and its gates — the guarantee is architectural, not a hidden button.
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'injectAndFillABAMatrix') {
-    chrome.tabs.query({ active: true }, (tabs) => {
-      const abaTab = tabs.find(t => t.url?.includes('app.abamatrix.com/session'));
-      if (!abaTab) {
-        sendResponse({ ok: false, error: 'ABA Matrix tab not found' });
-        return;
-      }
-      chrome.scripting.executeScript({
-        target: { tabId: abaTab.id },
-        files: ['abamatrix-autofill.js']
-      }, () => {
-        setTimeout(() => {
-          chrome.tabs.sendMessage(abaTab.id, { action: 'fillABAMatrix', data: message.data }, (response) => {
-            sendResponse({ ok: true, response });
-          });
-        }, 500);
-      });
-    });
-    return true; // Keep channel open for async response
-  }
-
-  if (message.action === 'getABAMatrixAnswers') {
-    // Fetch AI answers from path4aba.app with the stored Bearer token. Runs in the
-    // background (not the content script) so it's exempt from CORS, and can read the
-    // token from chrome.storage. NOTE: the storage key is `extensionToken` (set by the
-    // popup at login) — not `authToken`. Callback-form storage.get keeps this listener
-    // synchronous so `return true` reliably holds the channel open.
-    chrome.storage.local.get(['extensionToken'], (stored) => {
-      const token = stored.extensionToken;
-      if (!token) { sendResponse({ error: 'Not authenticated' }); return; }
-      fetch('https://path4aba.app/api/extension/fill-aba-matrix', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ note: message.note, questions: message.questions }),
-      })
-        .then(r => r.json())
-        .then(data => sendResponse({ answers: data.answers || {} }))
-        .catch(err => sendResponse({ error: err.message }));
-    });
-    return true; // keep channel open for async sendResponse
-  }
-
   // ── Phase 2 ClinicalExtractor: fetch structured ClinicalFacts from a session note ──
-  // Same CORS-exempt Bearer proxy as getABAMatrixAnswers: runs in the background (not the
+  // CORS-exempt Bearer proxy: runs in the background (not the
   // content script) so it's exempt from CORS and can read the token from chrome.storage.
   // Called ONCE per session.
   if (message.action === 'getClinicalFacts') {

@@ -338,9 +338,8 @@ Return this exact JSON structure:
   ]
 }`
 
-  // Same OpenAI completion pattern as fill-aba-matrix/route.ts. max_tokens is raised to 4000
-  // because the ClinicalFacts payload (behaviors[] + skills[] with ~12 fields each) is larger
-  // than the fill-aba-matrix answers — too low a cap truncates the JSON and breaks JSON.parse.
+  // max_tokens is raised to 4000 because the ClinicalFacts payload (behaviors[] + skills[] with
+  // ~12 fields each) is large — too low a cap truncates the JSON and breaks JSON.parse.
   const response = await client.chat.completions.create({
     model: 'gpt-4o',
     messages: [{ role: 'user', content: prompt }],

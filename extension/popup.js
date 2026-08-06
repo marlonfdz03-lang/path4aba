@@ -2072,26 +2072,23 @@ function checkABAMatrixPage() {
   chrome.tabs.query({ active: true }, (tabs) => {
     const abaTab = tabs.find(t => t.url && t.url.includes('app.abamatrix.com/session'));
     if (abaTab) {
-      // Legacy "Send to ABA Matrix" (fillABAMatrixBtn) is intentionally NOT shown. It is a separate
-      // autofill that bypasses the gated pipeline — no extract-facts, no approved-function gate — and
-      // invents the reinforcement schedule ("If not specified → Continuous Reinforcement"). Only the
-      // gated "AI Fill (Beta)" path is reachable, so an invented schedule / ungated function cannot
-      // reach a signed compliance form via a mis-click.
+      // The legacy "Send to ABA Matrix" autofill was DELETED (it bypassed extract-facts and the
+      // approved-function gate). The gated "AI Fill (Beta)" path is the only fill path that exists.
       const aiBtn = document.getElementById('aiFillBetaBtn');
       if (aiBtn) aiBtn.style.display = 'block';
     }
   });
 }
 
-// ── ABA Matrix detection + autofill ─────────────────────────────────────────
-// abamatrix-autofill.js (declared content script) posts { action: 'onABAMatrix' }
-// on page load. NOTE: the popup only receives this while it is open, so the button
-// appears only if the popup was open when the ABA Matrix page loaded.
+// ── ABA Matrix detection ────────────────────────────────────────────────────
+// The gated "AI Fill (Beta)" button is shown by checkABAMatrixPage() when an ABA Matrix
+// tab is active. (The old onABAMatrix content-script ping was removed with the legacy
+// autofill; this listener is retained defensively and only ever reveals the gated button.)
 let onABAMatrix = false;
 chrome.runtime.onMessage.addListener((message) => {
   if (message.action === 'onABAMatrix') {
     onABAMatrix = true;
-    // Legacy fillABAMatrixBtn stays hidden (see checkABAMatrixPage) — gated Beta path only.
+    // Gated "AI Fill (Beta)" is the only fill path.
     const aiBtn = document.getElementById('aiFillBetaBtn');
     if (aiBtn) aiBtn.style.display = 'block';
   }
@@ -2226,26 +2223,9 @@ function renderFillSummary(summary) {
   }
 }
 
-document.getElementById('fillABAMatrixBtn')?.addEventListener('click', () => {
-  const noteData = {
-    fullNote: document.getElementById('outputNote')?.value || '',
-    behaviors: (selectedBehaviors || []).map(b => typeof b === 'string' ? { name: b } : b),
-    skills: (selectedSkills || []).map(s => typeof s === 'string' ? { name: s } : s),
-    caregivers: selectedPresent || [],
-    clientPresentStart: 'The client presented as cooperative and ready to engage in structured activities.',
-    clientPresentEnd: 'The client demonstrated appropriate disengagement and responded to closing routines.',
-    participation: 'The client demonstrated active participation throughout the session.',
-  };
-  console.log('[Path4ABA] Sending to ABA Matrix:', noteData.behaviors.length, 'behaviors:', noteData.behaviors, noteData.skills.length, 'skills:', noteData.skills);
-
-  chrome.runtime.sendMessage({ action: 'injectAndFillABAMatrix', data: noteData }, (response) => {
-    if (chrome.runtime.lastError) {
-      console.error('Fill error:', chrome.runtime.lastError.message);
-    } else {
-      console.log('Fill response:', response);
-    }
-  });
-});
+// The legacy "Fill ABA Matrix Form" button (fillABAMatrixBtn -> injectAndFillABAMatrix ->
+// /api/extension/fill-aba-matrix) was DELETED: it filled the signed form via raw LLM with no
+// extract-facts and no gates. Every fill now goes through the gated Form Agent below.
 
 // ── AI Fill (Beta): Phase 2 Form Agent (ClinicalExtractor) ──────────────────
 // Builds the same noteData as the fill flow (plus clientName) and hands it to the

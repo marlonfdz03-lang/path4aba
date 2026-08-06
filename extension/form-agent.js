@@ -9,9 +9,8 @@
  * WORLD / CORS: the extract-facts AI call is routed through background.js (Bearer token,
  * CORS-exempt via host_permissions). A direct fetch from a content script to path4aba.app is
  * CORS-blocked from the app.abamatrix.com origin (proxy.ts does not allowlist it), and
- * MAIN-world scripts can't reach chrome.storage for the token — so, exactly like
- * getABAMatrixAnswers, the call goes through the background service worker. This module
- * therefore runs in the ISOLATED world (it needs chrome.runtime).
+ * MAIN-world scripts can't reach chrome.storage for the token — so the call goes through the
+ * background service worker. This module therefore runs in the ISOLATED world (it needs chrome.runtime).
  *
  * Exposes: window.runFormAgent(noteData) -> Promise<{ clinicalFacts, normalizedForm }>
  */

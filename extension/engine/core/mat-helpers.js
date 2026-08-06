@@ -1,10 +1,9 @@
 /**
  * Path4ABA Form Engine — Angular Material DOM helpers (MAIN world)
  *
- * Provides window.setMatInput and window.selectMatOption for the Executor. These are ported
- * from abamatrix-autofill.js, which declares them as LOCAL functions (not on window) and runs
- * in the ISOLATED world — so the MAIN-world Executor cannot reach them there. This module
- * exposes them on the MAIN-world window. In the MAIN world the Angular expando __ngContext__
+ * Provides window.setMatInput and window.selectMatOption for the Executor, exposed on the
+ * MAIN-world window so the MAIN-world Executor can reach them (an ISOLATED-world content script
+ * cannot share function references with MAIN-world code). In the MAIN world the Angular expando __ngContext__
  * is also visible, so setMatInput can drive the control's onChange accessor directly.
  *
  * Exposes: window.setMatInput(el, value), window.selectMatOption(selectEl, value)

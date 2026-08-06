@@ -236,7 +236,7 @@ note's own text — do NOT plan it, and NEVER invent a generic antecedent phrase
   // Only call the AI for the fields not handled deterministically.
   let aiActions: any[] = []
   if (remainingFields.length > 0) {
-    // Same OpenAI completion pattern as fill-aba-matrix/route.ts (max_tokens raised for the plan).
+    // Standard OpenAI completion (max_tokens raised for the plan payload).
     const response = await client.chat.completions.create({
       model: 'gpt-4o',
       messages: [{ role: 'user', content: prompt }],
