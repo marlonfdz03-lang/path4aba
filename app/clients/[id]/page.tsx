@@ -409,68 +409,25 @@ export default function ClientProfilePage() {
     setStatus("Generating note...");
     setGeneratedNote("");
 
+    // Slim payload: the server builds the full SessionInput from the authoritative DB profile
+    // (dual-accept in /api/generate-note). Constraint sets (allowedFunctions, matrixFunctions,
+    // approvedInterventions) are derived server-side, never sent from here.
     const body = {
       clientId: client.id,
-      sessionInfo: { date, location, caregiver: presentPerson },
-      behaviorsObserved: selectedBehaviors.map((name) => {
-        const profileBehavior = (client.clinicalProfile?.maladaptiveBehaviors || [])
-          .find((b: any) => (typeof b === "string" ? b : b?.name) === name);
-        const topographies = profileBehavior?.topographies || [];
-        const functions = profileBehavior?.functions || [];
-        return {
-          name,
-          topography: topographies[Math.floor(Math.random() * Math.max(topographies.length, 1))] || "",
-          frequency: 1,
-          antecedentContext: "",
-          function: functions[0] || "",
-          // Full assessment-approved set for this behavior — the generation gate enforces the written
-          // function stays within it (not just functions[0]).
-          allowedFunctions: functions,
-        };
-      }),
-      // Functions the client's ABA Matrix dropdown can record (captured by the extension at fill time).
-      // Absent for most clients — the prompt then constrains to the assessment-approved set only. Mirrors
-      // app/app/note/lib/buildSessionInput.ts (see the divergence note there — these two builders drift).
-      matrixFunctions: client.clinicalProfile?.observedCatalog?.aba_matrix?.current?.functions ?? undefined,
-      replacementSkillsAddressed: selectedSkills.map((name) => ({ name, promptLevel: "", clientResponse: "", successful: true })),
-      activitiesUsed: (location === "school"
-        ? (client.clinicalProfile?.schoolActivities || [])
-        : (client.clinicalProfile?.homeActivities || [])
-      ).slice(0, 4).map((name: string) => ({ name, preferred: true })),
-      reinforcersUsed: (client.clinicalProfile?.reinforcers || []).slice(0, 3).map((item: string) => ({
-        type: "non-edible", item, deliveredWhen: "contingent on task engagement",
-      })),
-      clientProfile: {
-        diagnosis: client.diagnosis || [],
-        gender: client.clinicalProfile?.gender || client.gender || "",
-        pronouns: client.clinicalProfile?.pronouns || "",
-        setting: location === "other" ? (otherLocation || "community setting") : location,
-        approvedInterventions: client.clinicalProfile?.interventions?.map((i: any) => typeof i === "string" ? i : i.name) || [],
-        prohibitedInterventions: ["Punishment", "ResponseCost", "Restraint", "StandaloneExtinction", "TimeOut", "Overcorrection", "Aversive"],
-        reinforcers: {
-          tangibles: client.clinicalProfile?.reinforcers?.slice(0, 5).join(", ") || "",
-          activities: client.clinicalProfile?.homeActivities?.slice(0, 3).join(", ") || "",
-          social: "verbal praise, high fives, behavior-specific praise",
-          people: presentPerson,
-        },
-        activePrograms: {
-          maladaptive: client.clinicalProfile?.maladaptiveBehaviors?.map((b: any) => typeof b === "string" ? b : b.name) || [],
-          replacementSkills: [
-            ...(client.clinicalProfile?.replacementBehaviors?.map((b: any) => typeof b === "string" ? b : b.name) || []),
-            ...(client.clinicalProfile?.skillAcquisition?.map((s: any) => typeof s === "string" ? s : s.name) || []),
-          ],
-        },
-      },
-      clinicalEvents: [
-        medicationConsumed ? "Medication consumed today." : "",
-        // Only emit the next-session date when it is strictly AFTER the session date; otherwise omit.
-        nextSessionClause(nextApptDate, date),
-      ].filter(Boolean).join(" "),
-      complianceLevel: complianceLevel !== "typical" ? complianceLevel : undefined,
-      environmentalChangeDescription: environmentalChange && environmentalChangeDesc ? environmentalChangeDesc : undefined,
-      missedHoursData: missedHoursToggle && missedHoursCount
-        ? { totalHours: parseFloat(missedHoursCount), reason: missedHoursReason }
-        : undefined,
+      date,
+      location,
+      otherLocation,
+      present: selectedPresent,
+      selectedBehaviors,
+      selectedSkills,
+      compliance: complianceLevel,
+      medicationChange: medicationConsumed,
+      envChange: environmentalChange,
+      envChangeDesc: environmentalChangeDesc,
+      missedHours: missedHoursToggle,
+      missedCount: missedHoursCount,
+      missedReason: missedHoursReason,
+      nextAppt: nextApptDate,
       continuityContext: continuityCtx || undefined,
     };
 

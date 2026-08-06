@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { buildSessionInput, type NoteClientProfile } from "./lib/buildSessionInput";
+import { type NoteClientProfile } from "./lib/buildSessionInput";
 import { consumeNoteStream } from "./lib/consumeNoteStream";
 import { extractInterventions } from "./lib/extractInterventions";
 
@@ -199,20 +199,20 @@ function NoteForm() {
     setStatus("Generating note…");
 
     try {
-      const body = buildSessionInput(
-        {
-          clientId, date, location, otherLocation,
-          present: selectedPresent,
-          behaviors: selectedBehaviors,
-          skills: selectedSkills,
-          compliance, medicationChange,
-          envChange, envChangeDesc,
-          missedHours, missedCount, missedReason,
-          nextAppt,
-        },
-        profile,
-        continuity,
-      );
+      // Slim payload: the server builds the full SessionInput from the authoritative DB profile
+      // (dual-accept in /api/generate-note). Constraint sets (allowedFunctions, matrixFunctions,
+      // approvedInterventions) are derived server-side, never sent from here.
+      const body = {
+        clientId, date, location, otherLocation,
+        present: selectedPresent,
+        selectedBehaviors,
+        selectedSkills,
+        compliance, medicationChange,
+        envChange, envChangeDesc,
+        missedHours, missedCount, missedReason,
+        nextAppt,
+        continuityContext: continuity,
+      };
 
       const res = await fetch("/api/generate-note", {
         method: "POST",

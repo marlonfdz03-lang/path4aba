@@ -904,76 +904,25 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
   const approvedInterventions = (profile.interventions || [])
     .map(i => typeof i === 'string' ? i : i?.name || '').filter(Boolean);
 
+  // Slim payload: the server builds the full SessionInput from the authoritative DB profile
+  // (dual-accept in /api/generate-note). Constraint sets (allowedFunctions, matrixFunctions,
+  // approvedInterventions) are derived server-side — so this path now runs the function gate it
+  // never had. The medication free-text is intentionally NOT sent (server emits a fixed, non-PHI line).
   const body = {
     clientId: selectedClientId,
-    sessionInfo: {
-      date,
-      location: selectedLocation,
-      caregiver: selectedPresent.join(' and '),
-      caregiverName: (selectedProfile?.caregivers || []).join(' and ') || selectedPresent.join(' and '),
-    },
-    behaviorsObserved: selectedBehaviors.map(name => {
-      const profileBehavior = (selectedProfile?.maladaptiveBehaviors || [])
-        .find(b => (typeof b === 'string' ? b : b?.name) === name);
-      const topographies = profileBehavior?.topographies || [];
-      const functions = profileBehavior?.functions || [];
-      return {
-        name,
-        topography: topographies[Math.floor(Math.random() * Math.max(topographies.length, 1))] || '',
-        frequency: 1,
-        antecedentContext: '',
-        function: functions[0] || '',
-      };
-    }),
-    replacementSkillsAddressed: selectedSkills.map(name => ({
-      name, promptLevel: '', clientResponse: '', successful: true
-    })),
-    activitiesUsed: (selectedLocation === 'school'
-      ? (selectedProfile?.schoolActivities || [])
-      : (selectedProfile?.homeActivities || [])
-    ).slice(0, 4).map(name => ({ name, preferred: true })),
-    reinforcersUsed: (selectedProfile?.reinforcers || []).slice(0, 3).map(item => ({
-      type: 'non-edible', item, deliveredWhen: 'contingent on task engagement'
-    })),
-    clinicalEvents: [
-      medicationChange
-        ? (document.getElementById('medDescription')?.value?.trim()
-            ? `Medication change: ${document.getElementById('medDescription').value.trim()}`
-            : 'Medication change noted this session.')
-        : '',
-      document.getElementById('nextApptDate')?.value
-        ? `Next scheduled appointment: ${document.getElementById('nextApptDate').value}.`
-        : '',
-    ].filter(Boolean).join(' '),
-    complianceLevel: complianceLevel !== 'typical' ? complianceLevel : undefined,
-    environmentalChangeDescription: environmentalChange
-      ? (document.getElementById('envDescription')?.value?.trim() || 'Environmental changes noted this session.')
-      : undefined,
-    missedHoursData: missedSessions ? {
-      totalHours: 1,
-      reason: document.getElementById('missedDescription')?.value?.trim() || 'Reported by caregiver'
-    } : undefined,
-    clientProfile: {
-      diagnosis: selectedProfile?.diagnosis || [],
-      setting: selectedLocation,
-      approvedInterventions,
-      prohibitedInterventions: ['Punishment','ResponseCost','Restraint','StandaloneExtinction','TimeOut','Overcorrection','Aversive'],
-      reinforcers: {
-        tangibles: (selectedProfile?.reinforcers || []).slice(0, 5).join(', '),
-        activities: (selectedLocation === 'school'
-          ? selectedProfile?.schoolActivities
-          : selectedProfile?.homeActivities || []).slice(0, 3).join(', '),
-        social: 'verbal praise, high fives, behavior-specific praise',
-        people: (selectedProfile?.caregivers || []).join(', '),
-      },
-      activePrograms: {
-        maladaptive: (selectedProfile?.maladaptiveBehaviors || []).map(b => typeof b === 'string' ? b : b?.name || ''),
-        replacementSkills: [
-          ...(selectedProfile?.replacementBehaviors || []).map(s => typeof s === 'string' ? s : s?.name || ''),
-          ...(selectedProfile?.skillAcquisition || []).map(s => typeof s === 'string' ? s : s?.name || ''),
-        ],
-      },
-    },
+    date,
+    location: selectedLocation,
+    present: selectedPresent,
+    selectedBehaviors,
+    selectedSkills,
+    compliance: complianceLevel,
+    medicationChange,
+    envChange: environmentalChange,
+    envChangeDesc: document.getElementById('envDescription')?.value?.trim() || '',
+    missedHours: missedSessions,
+    missedCount: missedSessions ? '1' : '',
+    missedReason: document.getElementById('missedDescription')?.value?.trim() || '',
+    nextAppt: document.getElementById('nextApptDate')?.value || '',
   };
 
   await streamGenerate('/api/generate-note', body, 'POST');
