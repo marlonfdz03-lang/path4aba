@@ -31,10 +31,11 @@ export interface ExtractedAssessment {
     status: string;
   }[];
   reinforcers: {
-    people: string;
-    tangibles: string;
-    activities: string;
-    social: string;
+    // Each is an ARRAY of discrete items (the parser also tolerates a legacy prose string).
+    people: string | string[];
+    tangibles: string | string[];
+    activities: string | string[];
+    social: string | string[];
   };
   preferredActivities: string[];
   nonPreferredActivities: string[];
@@ -195,10 +196,10 @@ Return this exact JSON structure:
     }
   ],
   "reinforcers": {
-    "people": "people-based reinforcers",
-    "tangibles": "tangible reinforcers",
-    "activities": "activity-based reinforcers",
-    "social": "social reinforcers"
+    "people": ["array of discrete people-based reinforcers — ONE item per entry"],
+    "tangibles": ["array of discrete tangible reinforcers — ONE item per entry, e.g. \"strawberries\", \"tablet\". NO prose, NO \"such as ...\" lists, NO leading \"and\"/\"or\""],
+    "activities": ["array of discrete activity reinforcers — ONE item per entry"],
+    "social": ["array of discrete social reinforcers — ONE item per entry, e.g. \"verbal praise\", \"high five\". Strip quotes"]
   },
   "preferredActivities": ["all activities listed as preferred or high-preference"],
   "nonPreferredActivities": ["all activities listed as non-preferred or avoided"],

@@ -6,6 +6,7 @@
 import PDFParser from 'pdf2json'
 import { ExtractedAssessment } from '@/lib/extractAssessment'
 import { prisma } from '@/lib/prisma'
+import { parseReinforcers } from '@/lib/reinforcers'
 
 // ── PDF parsing ───────────────────────────────────────────────────────────────
 
@@ -106,18 +107,8 @@ export function mapToLegacyFormat(extracted: ExtractedAssessment) {
     replacementBehaviors: extracted.replacementSkills
       .filter(s => s.status?.toLowerCase() !== 'mastered' && !hasBlockedTerm(s.name))
       .map(s => ({ name: cleanText(s.name), status: 'active', targetFunction: s.targetFunction || '' })),
-    reinforcers: [
-      extracted.reinforcers.tangibles,
-      extracted.reinforcers.activities,
-      extracted.reinforcers.social,
-      extracted.reinforcers.people,
-    ]
-      .filter(Boolean)
-      .flatMap(r => {
-        const str = Array.isArray(r) ? r.join(', ') : String(r)
-        return str.split(',').map(s => s.trim())
-      })
-      .filter(r => r && !hasBlockedTerm(r))
+    reinforcers: parseReinforcers(extracted.reinforcers)
+      .filter(r => !hasBlockedTerm(r))
       .map(cleanText),
     homeActivities: [],
     schoolActivities: [],
