@@ -995,6 +995,24 @@ export default function ClientProfilePage() {
                   )}
                 </div>
               </div>
+
+              <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
+                <SectionHeader title="Reinforcers" />
+                <div className="flex flex-wrap gap-2">
+                  {(client.clinicalProfile?.reinforcers || []).map((r: any, idx: number) => (
+                    <span
+                      key={idx}
+                      className="text-[11px] font-medium px-2.5 py-1 rounded-full"
+                      style={{ background: "#F5F3FF", color: "#6D28D9" }}
+                    >
+                      {typeof r === "string" ? r : r?.name || String(r)}
+                    </span>
+                  ))}
+                  {!client.clinicalProfile?.reinforcers?.length && (
+                    <p className="text-[13px]" style={{ color: "var(--text3)" }}>No reinforcers recorded.</p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
