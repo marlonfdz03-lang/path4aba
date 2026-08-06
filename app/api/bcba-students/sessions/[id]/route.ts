@@ -59,11 +59,19 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   }
 
   try {
-    await prisma.fieldwork_sessions.delete({ where: { id } })
+    // SOFT DELETE — set deleted_at/deleted_by instead of destroying the row. Supervised fieldwork hours
+    // (dates, supervisor, hours toward BACB certification) cannot be reconstructed if lost. Reads filter
+    // these out globally via the lib/prisma extension; restore with scripts/restore-fieldwork-session.ts.
+    // is_locked / mvf_signed are already enforced above, so a locked or signed session never reaches here.
+    await prisma.fieldwork_sessions.update({
+      where: { id },
+      data: { deleted_at: new Date(), deleted_by: userId },
+    })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 
+  // Recalc runs after the soft delete: the extension now hides the row, so the month totals drop correctly.
   await recalculateMonth(userId, monthYear).catch(err => console.error('[sessions/delete] recalculate error:', err))
 
   return NextResponse.json({ ok: true })

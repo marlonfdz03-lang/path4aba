@@ -103,6 +103,12 @@ model fieldwork_sessions {
   is_locked         Boolean   @default(false)
   updated_at        DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
   client_reference  String
+  // Soft delete: the delete route sets these instead of DELETEing, so an accidentally-deleted month of
+  // fieldwork (supervised hours toward BACB cert) can be restored. deleted_by is kept for an audit trail —
+  // "who deleted it, when" — not just blind restore. Reads are filtered (deleted_at: null) globally by a
+  // Prisma client extension in lib/prisma.ts; restore via scripts/restore-fieldwork-session.ts.
+  deleted_at        DateTime? @db.Timestamptz(6)
+  deleted_by        String?
 }
 
 model fieldwork_monthly_summaries {
