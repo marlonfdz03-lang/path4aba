@@ -9,6 +9,7 @@ import {
 } from '@/lib/clinicalFilters';
 import { filterBlockedNarrative, type BlockedTerm } from '@/lib/blockedNarrativeTerms';
 import { findInterventionViolations } from '@/lib/interventionPolicy';
+import { findTeachingMethodViolations, approvedTeachingMethods } from '@/lib/teachingMethods';
 import {
   findFunctionAntecedentContradictions,
   segmentNoteByBehavior, deriveBehaviorFunction, functionToCanonical,
@@ -402,7 +403,14 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   const approvedFunctionConstraint = approvedFunctionLines
     ? `\n\nAPPROVED BEHAVIOR FUNCTIONS — HARD CONSTRAINT (do not violate): the assessment approved ONLY these functions per behavior. Assign each behavior a function from its approved set, and write an antecedent consistent with that function. NEVER assign a function outside a behavior's approved set:\n${approvedFunctionLines}`
     : '';
-  const userPrompt = `Generate a clinical ABA session note using this session data:\n\n${JSON.stringify(sessionContext, null, 2)}${approvedFunctionConstraint}\n\nRemember: ONE continuous paragraph, EXACTLY 5 ABCs, no mentalistic language, no prohibited interventions, all activities in parentheses format, every behavior must have an intervention.`;
+  // Closed teaching-method set (Commit 4, Part 1): the replacement-skill prose may name ONLY a method
+  // the assessment approves, so the fill can copy an approved method. Derived from the LIVE profile, so
+  // updating the assessment updates what is allowed.
+  const approvedMethodSet = [...approvedTeachingMethods(resolvedProfile.approvedInterventions)];
+  const approvedMethodConstraint = approvedMethodSet.length
+    ? `\n\nAPPROVED TEACHING METHODS — HARD CONSTRAINT (do not violate): when you state how a replacement skill was practiced, name ONLY a teaching method from this approved set — ${approvedMethodSet.join(', ')}. NEVER name a method outside it; never default to "Modeling" or "DTT" unless it is in this set.`
+    : '';
+  const userPrompt = `Generate a clinical ABA session note using this session data:\n\n${JSON.stringify(sessionContext, null, 2)}${approvedFunctionConstraint}${approvedMethodConstraint}\n\nRemember: ONE continuous paragraph, EXACTLY 5 ABCs, no mentalistic language, no prohibited interventions, all activities in parentheses format, every behavior must have an intervention.`;
 
   async function callOpenAI(systemContent: string): Promise<string> {
     if (onChunk) {
@@ -551,6 +559,22 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     functionViolations = findFunctionViolations(note);
   }
 
+  // Step 7c3: TEACHING-METHOD GATE (Commit 4, Part 1). A teaching procedure named in the note must be in
+  // the client's approved set (interventions ∩ teaching-method vocabulary). The generator defaults to
+  // "Modeling"/"DTT" as filler regardless of the plan; if the note names an unapproved method, regenerate
+  // ONCE naming the violation, then flag. The fill (Part 2) copies the note's method, so this keeps the
+  // copied method always approved.
+  let methodViolations = findTeachingMethodViolations(note, resolvedProfile.approvedInterventions);
+  if (methodViolations.length > 0) {
+    if (onChunk) onChunk('\n__REGEN__\n');
+    const methodClause = approvedMethodSet.length
+      ? `ONLY teaching methods the plan approves: ${approvedMethodSet.join(', ')}`
+      : `NO named teaching procedure — describe how the skill was practiced without naming a method`;
+    const methodInstruction = `\n\nTEACHING-METHOD VIOLATION — REGENERATE: the note named teaching method(s) the assessment did NOT approve for this client — ${methodViolations.join(', ')}. When you describe how a replacement skill was practiced, name ${methodClause}. Never name a teaching procedure outside the approved list.`;
+    note = applyBlockedFilter(await callOpenAI(MASTER_RBT_NOTE_PROMPT + contextualFactors + methodInstruction));
+    methodViolations = findTeachingMethodViolations(note, resolvedProfile.approvedInterventions);
+  }
+
   // Step 7d: Function↔antecedent coherence flags. Automatic reinforcement requires the ABSENCE of a
   // social antecedent; a clause asserting automatic function while describing a demand, directed
   // transition, item removal, or attention shift is contradictory. We surface these to the RBT as
@@ -560,6 +584,12 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   for (const v of functionViolations) {
     coherenceFlags.push(
       `"${v.name}" was written as ${v.wrote}, which the assessment did not approve for it (approved: ${v.approved.map(functionDisplayLabel).join(', ')}) — verify before using.`,
+    );
+  }
+  // Any teaching-method violation that survived the regeneration is surfaced (not auto-corrected).
+  for (const m of methodViolations) {
+    coherenceFlags.push(
+      `Teaching method "${m}" was named but the assessment does not approve it for this client — verify before using.`,
     );
   }
 
