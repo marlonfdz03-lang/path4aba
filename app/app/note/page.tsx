@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { type NoteClientProfile } from "./lib/buildSessionInput";
+import { type NoteClientProfile } from "./lib/noteProfile";
 import { consumeNoteStream } from "./lib/consumeNoteStream";
 import { extractInterventions } from "./lib/extractInterventions";
 
