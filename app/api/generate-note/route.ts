@@ -15,8 +15,9 @@ export async function POST(req: NextRequest) {
     // matrixFunctions / approvedInterventions are DERIVED, never client-supplied, and every entry point
     // gets the same gates. A FAT SessionInput (legacy clients, e.g. an un-updated extension in the wild)
     // is still accepted verbatim so those users don't break; deprecate once adoption is confirmed.
+    const wasSlim = isSlimNoteRequest(body);
     let input: SessionInput;
-    if (isSlimNoteRequest(body)) {
+    if (wasSlim) {
       if (!body.clientId) {
         return NextResponse.json({ error: "clientId is required" }, { status: 400 });
       }
@@ -36,7 +37,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "clientId is required" }, { status: 400 });
     }
     if (!input.sessionInfo?.date) {
-      return NextResponse.json({ error: "sessionInfo.date is required" }, { status: 400 });
+      // Shape-aware message. A slim payload sends `date` (+ selectedBehaviors[]); a full payload sends
+      // sessionInfo.date. If the request carried a top-level `date` but we still have none, it was NOT
+      // recognized as slim (routed as a full payload) — name that so a stale/hybrid client is obvious
+      // rather than a misleading "sessionInfo.date is required".
+      const b = body as { date?: unknown; selectedBehaviors?: unknown; behaviorsObserved?: unknown } | null;
+      const hadTopLevelDate = !!b && typeof b.date === "string" && b.date.length > 0;
+      const error = hadTopLevelDate && !wasSlim
+        ? "Received `date` but the payload was not recognized as a slim request (needs selectedBehaviors[] and no behaviorsObserved). Update/reload the extension, or send sessionInfo.date for a full payload."
+        : wasSlim
+          ? "date is required"
+          : "sessionInfo.date is required";
+      return NextResponse.json({ error }, { status: 400 });
     }
 
     // Authentication (Tier 1): accept a NextAuth session cookie (web) OR an extension Bearer token,
