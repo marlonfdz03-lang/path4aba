@@ -83,6 +83,29 @@
       return 'Other';
     },
 
+    // Whether ABA Matrix marks the teaching-procedure field(s) REQUIRED — captured from the live DOM so
+    // we learn, per client/config, whether a blank teaching-procedure blocks Submit (the open Commit-4
+    // question) instead of assuming. Returns true (≥1 required), false (found, none required), or null
+    // (no teaching-procedure field on the page). Best-effort — any failure yields null.
+    captureTeachingProcedureRequired: function () {
+      try {
+        var found = false, anyRequired = false;
+        document.querySelectorAll('mat-form-field').forEach(function (host) {
+          if (host.offsetParent === null) return;
+          var lbl = host.querySelector('mat-label, label, strong, b, p');
+          var text = (lbl && (lbl.innerText || '')) || '';
+          if (!/teaching\s*procedure/i.test(text)) return;
+          found = true;
+          var required =
+            host.className.indexOf('mat-form-field-required') !== -1 ||
+            !!host.querySelector('.mat-mdc-form-field-required-marker, .mat-form-field-required-marker, [aria-required="true"], [required]') ||
+            /\*\s*$/.test(text.trim());
+          if (required) anyRequired = true;
+        });
+        return found ? anyRequired : null;
+      } catch (e) { return null; }
+    },
+
     // Read the host app's OWN validation feedback after a fill (Rule 4) — this is the ground
     // truth, not our own success count. Parses BOTH the section index (numeric missing-count
     // badge or a completion check per section) AND any "Validation Errors" modal (messages as

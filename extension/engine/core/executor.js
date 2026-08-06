@@ -211,6 +211,14 @@ window.FormEngineExecutor = {
       behaviors: Array.from(this._catalogBehaviors || []),
       functions: Array.from(this._catalogFunctions || []),
       formState: this._catalogFormState || null,
+      // Per-fill capture of whether the teaching-procedure field is required (see the adapter). Answers
+      // "does a blank teaching-procedure block Submit" from real use, per client — no manual test needed.
+      teachingProcedureRequired: (function () {
+        try {
+          var a = window.ABAMatrixAdapter;
+          return (a && typeof a.captureTeachingProcedureRequired === 'function') ? a.captureTeachingProcedureRequired() : null;
+        } catch (e) { return null; }
+      })(),
     };
 
     if (this.DEBUG) console.log('[Path4ABA Executor] Done:', {

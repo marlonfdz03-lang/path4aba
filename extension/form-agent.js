@@ -263,6 +263,7 @@
             functions: cat.functions || [],
             blockedTerms: blockedTerms,
             formState: cat.formState || null,
+            teachingProcedureRequired: (cat.teachingProcedureRequired === undefined ? null : cat.teachingProcedureRequired),
           }, function () { void chrome.runtime.lastError; /* swallow — never block */ });
         }
       } catch (e) { /* catalog sync is best-effort; never block the fill */ }

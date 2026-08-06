@@ -35,7 +35,10 @@ export async function POST(req: Request) {
   const user = await getExtensionAuth()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { clientId, source, programs, behaviors, functions, blockedTerms, capturedAt, formState } = await req.json().catch(() => ({}))
+  const { clientId, source, programs, behaviors, functions, blockedTerms, capturedAt, formState, teachingProcedureRequired } = await req.json().catch(() => ({}))
+  // Whether ABA Matrix marks the teaching-procedure field required (Commit 4 auto-capture). Tri-state:
+  // true/false observed, null = the fill couldn't tell (field absent) — never coerce null to false.
+  const tpRequired: boolean | null = typeof teachingProcedureRequired === 'boolean' ? teachingProcedureRequired : null
   if (!clientId || typeof clientId !== 'string') {
     return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
   }
@@ -90,6 +93,7 @@ export async function POST(req: Request) {
         capturedAt: typeof capturedAt === 'string' ? capturedAt : new Date().toISOString(),
         capturedBy: user.id,
         formState: cleanFormState,
+        teachingProcedureRequired: tpRequired,
       },
       // Keep exactly one prior version for diffing (drop its own `previous` to avoid unbounded growth).
       previous: prior ? { ...prior.current } : null,
