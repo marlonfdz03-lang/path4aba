@@ -149,11 +149,9 @@ export async function POST(req: Request) {
       { fieldId: `Goal${n}_GoalName`, fieldType: 'select', value: s.name },
       { fieldId: `Goal${n}_MedicalBarriers`, fieldType: 'chip', value: s.medicalNecessity },
       { fieldId: `Goal${n}_Activities`, fieldType: 'chip', value: s.activity },
-      // Goal{n}_TeachingProcedure and Goal{n}_Schedule are LEFT BLANK for the RBT: teaching method and
-      // reinforcement schedule are direct session observations the assessment does not specify, so
-      // autofilling them (an LLM guess for teachingProcedure, a hardcoded "Continuous Reinforcement"
-      // for schedule) invents a clinical value into a signed compliance form. Both are also excluded
-      // from the AI candidate set below, so neither the deterministic nor the AI path fills them.
+      // Goal{n}_Schedule stays BLANK for the RBT (reinforcement schedule is a session observation the
+      // assessment doesn't specify; a hardcoded default would invent a value into a signed form).
+      // Goal{n}_TeachingProcedure is filled below from the note's APPROVED method (Commit 4, Part 2).
       {
         fieldId: `Goal${n}_PromptsUsed`, fieldType: 'radio', value: promptsRadio,
         conditional: promptsRadio === 'Yes' ? { value: promptTypes.join(', '), types: promptTypes } : undefined,
@@ -168,6 +166,19 @@ export async function POST(req: Request) {
         })
       }
     })
+
+    // Commit 4, Part 2: fill the free-text teaching-procedure field by COPYING the approved method the
+    // note stated (extract-facts already constrained it to the approved set). When the value is empty and
+    // a review is present (NO_APPROVED_METHOD config gap), we still emit the action so the executor
+    // surfaces the BCBA finding — never a silent blank. The RBT writes nothing.
+    const tpField = emptyFields.find((f) => f.fieldId === `Goal${n}_TeachingProcedure`)
+    if (tpField && (s.teachingProcedure || s.teachingProcedureReview)) {
+      deterministicActions.push({
+        fieldId: `Goal${n}_TeachingProcedure`, sectionId: `Goal${n}`, fieldType: tpField.fieldType || 'text',
+        value: s.teachingProcedure || '', confidence: 1,
+        ...(s.teachingProcedureReview ? { review: s.teachingProcedureReview } : {}),
+      })
+    }
   })
 
   // Only send the fields NOT handled deterministically to the AI.

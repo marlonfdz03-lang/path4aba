@@ -75,3 +75,20 @@ export function findTeachingMethodViolations(
   }
   return [...new Set(out)]
 }
+
+// The single APPROVED teaching method NAMED in a piece of note prose (Commit 4, Part 2 — the fill copies
+// this into the form). Constrained to the approved set, so even an ungated/hand-written note can only
+// yield an approved method. Returns null when the prose names no approved method (caller then defaults
+// to an approved method or surfaces the config gap). Order follows TEACHING_METHOD_PATTERNS.
+export function deriveTeachingMethod(
+  text: string,
+  approvedInterventions: string[] | undefined | null,
+): string | null {
+  const approved = approvedTeachingMethods(approvedInterventions)
+  if (!approved.size) return null
+  const s = String(text || '')
+  for (const { canonical, noteRe } of TEACHING_METHOD_PATTERNS) {
+    if (noteRe.test(s) && approved.has(canonical)) return canonical
+  }
+  return null
+}

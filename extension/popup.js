@@ -2111,7 +2111,7 @@ function renderFillSummary(summary) {
     review.forEach((r) => {
       const li = document.createElement('li');
       li.style.cssText = 'margin-bottom:2px;';
-      const QUIET_REASONS = ['INVALID', 'NEEDS_REVIEW', 'FUNCTION_ANTECEDENT_CONFLICT', 'INFERRED_FROM_ANTECEDENT', 'FUNCTION_NOT_APPROVED'];
+      const QUIET_REASONS = ['INVALID', 'NEEDS_REVIEW', 'FUNCTION_ANTECEDENT_CONFLICT', 'INFERRED_FROM_ANTECEDENT', 'FUNCTION_NOT_APPROVED', 'METHOD_DEFAULTED'];
       const reason = r.reason && QUIET_REASONS.indexOf(r.reason) === -1 ? ` — ${r.reason}` : '';
       let extra = '';
       if (r.reason === 'NO_MATCHING_OPTION') {
@@ -2137,6 +2137,13 @@ function renderFillSummary(summary) {
         const need = Array.isArray(r.unrecordable) ? r.unrecordable.join(', ') : '';
         const has = Array.isArray(r.matrixFunctions) ? r.matrixFunctions.join(', ') : '';
         extra = ` left blank — this client’s ABA Matrix can’t record ${need}, which the assessment requires for this behavior (dropdown offers: ${has}). Ask the BCBA/admin to add ${need} in ABA Matrix.`;
+      } else if (r.reason === 'METHOD_DEFAULTED') {
+        // Teaching method: the note didn't name one for this goal, so we filled an approved method.
+        const approved = Array.isArray(r.approved) ? r.approved.join(', ') : '';
+        extra = ` → set to ${r.intended} from the plan’s approved teaching methods (the note didn’t name one for this goal; approved: ${approved}) — verify`;
+      } else if (r.reason === 'NO_APPROVED_METHOD') {
+        // Config gap: the assessment approves NO teaching method for this client.
+        extra = ` left blank — this client’s assessment approves NO teaching method, so none can be filled. The BCBA must add an approved teaching method to the assessment.`;
       }
       li.textContent = `${r.label || r.stableId || 'field'}${reason}${extra}`;
       ul.appendChild(li);

@@ -3,6 +3,7 @@ import { getExtensionAuth } from '@/lib/extensionAuth'
 import OpenAI from 'openai'
 import { prisma } from '@/lib/prisma'
 import { inferFunctionFromAntecedent, segmentNoteByBehavior, deriveBehaviorFunction, constrainFunctionToApproved } from '@/lib/functionPatterns'
+import { approvedTeachingMethods, deriveTeachingMethod } from '@/lib/teachingMethods'
 import { findInterventionViolations } from '@/lib/interventionPolicy'
 
 // New diagnostics are gated behind this flag (default false) so nothing is logged in
@@ -443,11 +444,34 @@ Return this exact JSON structure:
       }
     }
     if (Array.isArray(facts.skills)) {
-      for (const s of facts.skills) {
+      // Commit 4, Part 2: the teaching-procedure field is filled by COPYING the approved method the note
+      // stated for each skill — not the old fixed-enum LLM guess. Part 1 constrains the note to approved
+      // methods, so whatever it named is approved; here we also constrain, so even a hand-written note
+      // yields only an approved method. Segment the note per skill so the method is read from that skill's
+      // own prose. The approved method SET comes from the LIVE profile (interventions ∩ method vocab).
+      const approvedMethodSet = [...approvedTeachingMethods(approvedInterventions)]
+      const skillSegments = segmentNoteByBehavior(note, facts.skills)
+      for (let i = 0; i < facts.skills.length; i++) {
+        const s = facts.skills[i]
         s.promptsUsed = inferPromptsUsed(s)
         // Issue 1c: the "which prompts" child needs a value. Populate it from the same text so
         // plan-fill can fill the conditional field revealed by promptsUsed = Yes.
         s.promptTypes = derivePromptTypes(s)
+
+        const noteMethod = deriveTeachingMethod(skillSegments[i], approvedInterventions)
+        if (noteMethod) {
+          s.teachingProcedure = noteMethod
+        } else if (approvedMethodSet.length) {
+          // The prose named no method for this skill, but the client HAS approved methods: fill the
+          // primary approved method (from the assessment, NOT a guessed default), flagged to verify.
+          s.teachingProcedure = approvedMethodSet[0]
+          s.teachingProcedureReview = { reason: 'METHOD_DEFAULTED', intended: approvedMethodSet[0], approved: approvedMethodSet }
+        } else {
+          // CONFIG GAP: the assessment approves NO teaching method for this client. Never invent a
+          // default (that is the exact bug we removed). Leave blank + a loud BCBA finding.
+          s.teachingProcedure = ''
+          s.teachingProcedureReview = { reason: 'NO_APPROVED_METHOD', approved: [] }
+        }
       }
     }
     if (facts.dailyLog) {
