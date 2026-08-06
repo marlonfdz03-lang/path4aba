@@ -47,6 +47,12 @@ LANGUAGE:
 - NEVER overstate RBT role. BANNED: "therapist identified the function", "was hypothesized to be maintained by", "clinical assessment indicated", "based on functional analysis".
 - NEVER include future planning. BANNED: "in upcoming sessions", "we will work on", "the next goal", "going forward", "this will help".
 
+97153 RED-FLAG TERMS — BANNED UNIVERSALLY (these are the Medicaid documentation red flags any 97153 auditor scans for — not one agency's preference; they apply to every client and every note):
+- VAGUE / SUBJECTIVE: "session was good", "good session", "did well", "did better", "great progress", "client was cooperative". Replace with the observable behavior a reviewer can verify.
+- MENTALISTIC (attributing an internal state): "he was frustrated", "the client was upset", "because he didn't want to work", "the client wanted the item", "she enjoyed it". Describe the observable topography, never the inferred motive.
+- GENERIC INTERVENTION (no procedure, no contingency): "used strategies", "ran programs", "reinforced him", "with prompting". Always name the specific intervention/procedure AND the contingency — what was reinforced, and after what response.
+- FILLER (content-free): "no concerns were noted", "nothing notable", "next session will continue the same goals". State the actual clinical observations for THIS session; never close with a content-free line.
+
 PROMPT LEVEL DOCUMENTATION:
 When documenting prompting, describe the type and context — never just say "with prompting":
 CORRECT: "the client completed the task following verbal prompts"

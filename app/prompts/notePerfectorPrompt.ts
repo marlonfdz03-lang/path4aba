@@ -124,6 +124,11 @@ Pick a DIFFERENT style than the original note used.
 - Replace with exact observable topography: what the client physically did
 - Remove ALL subjective evaluations: "session was successful", "client did well", "client was cooperative", "effective"
 - Remove ALL future planning language: "in upcoming sessions", "we will work on", "next goal"
+- 97153 RED-FLAG TERMS — REMOVE UNIVERSALLY (the Medicaid red flags any 97153 auditor scans for — not agency-specific; strip them from the refined note):
+  - VAGUE / SUBJECTIVE: "session was good", "good session", "did well", "did better", "great progress", "client was cooperative" → replace with the observable behavior.
+  - MENTALISTIC: "he was frustrated", "was upset", "because he didn't want to work", "the client wanted", "enjoyed" → describe the observable topography, not the inferred state.
+  - GENERIC INTERVENTION: "used strategies", "ran programs", "reinforced him", "with prompting" → name the specific procedure AND the contingency (what was reinforced, after what response).
+  - FILLER: "no concerns were noted", "nothing notable", "next session will continue the same goals" → state this session's actual observations; never close with a content-free line.
 - VAGUE OUTCOMES: NEVER use vague outcome descriptions.
   BANNED: "accepted the transition", "complied with the request", "responded appropriately"
   CORRECT — describe what the client physically did:

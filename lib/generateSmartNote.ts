@@ -16,6 +16,7 @@ import {
   normalizeApprovedFunctions, functionDisplayLabel, effectiveAllowedFunctions,
 } from '@/lib/functionPatterns';
 import { stripInvalidNextSession } from '@/lib/nextSessionDate';
+import { findRedFlagFlags } from '@/lib/redFlagPhrases';
 
 const openai = new OpenAI({
   apiKey: process.env.AZURE_OPENAI_API_KEY || 'azure-openai',
@@ -111,6 +112,9 @@ export interface GeneratedNote {
   // Function↔antecedent contradictions (automatic asserted alongside a social antecedent) — the
   // note is returned as-is but flagged "review before using"; never auto-corrected.
   coherenceFlags?: string[];
+  // Universal 97153 red-flag phrases (vague/mentalistic/generic-intervention/filler) present in the
+  // note — surfaced for the RBT to rewrite with observable detail; never auto-deleted (see redFlagPhrases.ts).
+  redFlags?: string[];
 }
 
 function calculateSimilarity(text1: string, text2: string): number {
@@ -585,6 +589,10 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   // transition, item removal, or attention shift is contradictory. We surface these to the RBT as
   // "review before using" — we never auto-rewrite, because a wrong function needs a human decision.
   const coherenceFlags = findFunctionAntecedentContradictions(note);
+  // Step 7e: Universal 97153 red-flag phrases (vague/mentalistic/generic/filler). These are the
+  // Medicaid documentation red flags any auditor scans for. We SURFACE them like the coherence flags
+  // for the RBT to rewrite — never auto-strip, since a vague phrase needs a human's observable detail.
+  const redFlags = findRedFlagFlags(note);
   // Any approved-function violation that survived the regeneration is surfaced (not auto-corrected).
   for (const v of functionViolations) {
     coherenceFlags.push(
@@ -615,5 +623,6 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     similarityWarning,
     blockedFlagged,
     coherenceFlags,
+    redFlags,
   };
 }

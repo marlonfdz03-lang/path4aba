@@ -2,7 +2,7 @@
 // parsing the inline __REGEN__ marker (clear & restart) and the trailing
 // __META__{...} JSON tail. App-only helper — not imported by any website file.
 
-export type NoteStreamMeta = { similarityWarning?: boolean; error?: string; blockedFlagged?: string[]; coherenceFlags?: string[]; filteredText?: string };
+export type NoteStreamMeta = { similarityWarning?: boolean; error?: string; blockedFlagged?: string[]; coherenceFlags?: string[]; redFlags?: string[]; filteredText?: string };
 
 export type NoteStreamHandlers = {
   onText: (fullText: string) => void; // called as the note streams in

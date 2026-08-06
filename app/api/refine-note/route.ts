@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { filterBlockedNarrative, type BlockedTerm } from '@/lib/blockedNarrativeTerms';
 import { findInterventionViolations } from '@/lib/interventionPolicy';
 import { isValidNextSessionDate, stripInvalidNextSession, stripInvalidNextSessionSentence } from '@/lib/nextSessionDate';
+import { findRedFlagFlags } from '@/lib/redFlagPhrases';
 import { getExtensionAuth } from '@/lib/extensionAuth';
 
 export const runtime = 'nodejs';
@@ -207,7 +208,9 @@ export async function POST(req: NextRequest) {
             }
           } catch { /* best-effort; seeded list still applies */ }
           const { text: cleaned, flagged } = filterBlockedNarrative(finalNote, learned);
-          controller.enqueue(encoder.encode(`\n__META__${JSON.stringify({ similarityWarning, blockedFlagged: flagged, filteredText: cleaned })}`));
+          // Universal 97153 red-flag phrases surfaced for the RBT to rewrite (same as generation).
+          const redFlags = findRedFlagFlags(cleaned);
+          controller.enqueue(encoder.encode(`\n__META__${JSON.stringify({ similarityWarning, blockedFlagged: flagged, redFlags, filteredText: cleaned })}`));
         } catch (e) {
           controller.enqueue(encoder.encode(`\n__META__${JSON.stringify({ error: 'Stream error' })}`));
         } finally {

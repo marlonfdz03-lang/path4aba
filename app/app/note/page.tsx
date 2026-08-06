@@ -91,6 +91,7 @@ function NoteForm() {
   const [status, setStatus] = useState("");
   const [similarityWarning, setSimilarityWarning] = useState(false);
   const [coherenceFlags, setCoherenceFlags] = useState<string[]>([]);
+  const [redFlags, setRedFlags] = useState<string[]>([]);
   const [genError, setGenError] = useState("");
   const [summary, setSummary] = useState<
     { behaviors: string[]; skills: string[]; interventions: string[] } | null
@@ -241,6 +242,7 @@ function NoteForm() {
           } else {
             setSimilarityWarning(!!meta.similarityWarning);
             setCoherenceFlags(Array.isArray(meta.coherenceFlags) ? meta.coherenceFlags : []);
+            setRedFlags(Array.isArray(meta.redFlags) ? meta.redFlags : []);
           }
         },
       });
@@ -322,6 +324,12 @@ function NoteForm() {
                 <ul>{coherenceFlags.map((f, i) => <li key={i}>{f}</li>)}</ul>
               </div>
             )}
+            {redFlags.length > 0 && (
+              <div className="app-warning">
+                97153 red-flag phrases — rewrite these with observable detail before submitting:
+                <ul>{redFlags.map((f, i) => <li key={i}>{f}</li>)}</ul>
+              </div>
+            )}
 
             <div className="app-result-list">
               {/* Box 1 — the generated note */}
@@ -389,6 +397,12 @@ function NoteForm() {
               <div className="app-warning">
                 Review before using — a behavior function may not match its antecedent:
                 <ul>{coherenceFlags.map((f, i) => <li key={i}>{f}</li>)}</ul>
+              </div>
+            )}
+            {redFlags.length > 0 && (
+              <div className="app-warning">
+                97153 red-flag phrases — rewrite these with observable detail before submitting:
+                <ul>{redFlags.map((f, i) => <li key={i}>{f}</li>)}</ul>
               </div>
             )}
             <div className="app-note-output">
