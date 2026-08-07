@@ -260,6 +260,17 @@ from the assessment; it does NOT default to "unknown" merely because its detail 
 Keep masteredBehaviors[] EXACTLY the set of behaviors whose status is "mastered" — do not list a name there
 unless that behavior's status is mastered, and do not omit one that is.
 
+━━━ INCLUDE MASTERED / MAINTENANCE SKILLS — DO NOT SKIP THEM ━━━
+The SAME rule applies to replacementSkills. The replacementSkills array must contain EVERY skill the
+assessment lists — including skills under a "MASTERED:", "Maintenance", or "Mastered" heading WITHIN the
+skills section ("Behaviors to Increase" / "Replacement Programs" / "Skill Acquisition"), not only the
+active acquisition targets. A mastered skill is frequently listed by NAME ONLY, with no detail row. That is
+EXPECTED and CORRECT: include it as its own replacementSkills entry with "status" set to "mastered". NEVER
+omit a skill just because it is already mastered or lacks a detail row — a mastered skill is a complete,
+required entry (e.g. a skill listed under "MASTERED: Request a Break Properly" has status "mastered"). Its
+status comes from the assessment; do NOT default it to "unknown" merely because it appears in a status
+heading rather than an active-goal table.
+
 Return this exact JSON structure:
 {
   "clientCode": "generated internal code like initials-DOB-001",
@@ -325,6 +336,22 @@ Return this exact JSON structure:
   try {
     const clean = content.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(clean) as ExtractedAssessment;
+
+    // (MASTERED)-on-skills DETERMINISTIC BACKSTOP: when a captured skill name carries a mastered marker
+    // ("(MASTERED)", a leading "MASTERED:", or a trailing "— MASTERED"), force status=mastered and strip the
+    // marker from the name. Belt-and-suspenders for the INCLUDE-MASTERED-SKILLS instruction: whenever the
+    // marker IS in the captured name, mastery is set deterministically regardless of the LLM's status field.
+    // (Capture itself is still instruction-driven — this cannot recover a skill the extractor dropped.)
+    const MASTERED_PAREN = /\(\s*mastered\s*\)/ig;
+    const MASTERED_PREFIX = /^\s*mastered\s*:\s*/i;
+    const MASTERED_SUFFIX = /\s*[-–—]\s*mastered\s*$/i;
+    const hasMasteredMarker = (n: string) => MASTERED_PAREN.test(n) || MASTERED_PREFIX.test(n) || MASTERED_SUFFIX.test(n);
+    parsed.replacementSkills = (parsed.replacementSkills || []).map(s => {
+      const name = String(s?.name || '');
+      if (!hasMasteredMarker(name)) return s;
+      const cleaned = name.replace(MASTERED_PAREN, '').replace(MASTERED_PREFIX, '').replace(MASTERED_SUFFIX, '').replace(/\s+/g, ' ').trim();
+      return { ...s, name: cleaned, status: 'mastered' };
+    });
 
     // Deduplicate replacement skills by name (case-insensitive)
     const seen = new Set<string>();

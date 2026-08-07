@@ -181,11 +181,31 @@ for (const [key, gt] of Object.entries(clients)) {
     .map((b) => `${b.name} (was ${b.status})`);
   check('Bug 1b — no non-active item flattened to active', flattened.length === 0, flattened.length ? `flattened: ${flattened.join(', ')}` : '');
 
-  // Mastered SKILLS/programs (the (MASTERED) markers on replacement goals) — a REAL mastery signal in the
-  // July PDFs. buildAssessmentProfile routes status=mastered skills to skillAcquisition. Print so we can
-  // see it's captured, not dropped like we feared behavior-mastery was.
+  // Mastered SKILLS/programs (a "MASTERED:" heading inside the skills section) — a REAL mastery signal in the
+  // July PDFs. buildAssessmentProfile routes status=mastered skills to skillAcquisition.
   const masteredSkills = arr(refreshProfile.skillAcquisition).map((x) => x.name);
   console.log(`   ${C.dim(`↳ skills: mastered(skillAcquisition) ${masteredSkills.length} [${masteredSkills.join(', ') || 'none'}]  |  active(replacementBehaviors) ${arr(refreshProfile.replacementBehaviors).length}`)}`);
+  // GATE (was observe-only): every expected mastered skill must be CAPTURED as mastered (→ skillAcquisition),
+  // not dropped. Presence match (normalized substring) tolerates minor name variation. Vacuous until ground
+  // truth is filled. This is instruction-driven capture — if it drops on some runs, that is the extraction
+  // -stability / FAST-MAS structured-reading root, tracked as a known-residual, never force-passed.
+  if (Array.isArray(gt.masteredSkills) && gt.masteredSkills.length) {
+    const gotNorm = masteredSkills.map(norm);
+    const missing = gt.masteredSkills.filter((w) => {
+      const wn = norm(w);
+      return !gotNorm.some((g) => g.includes(wn) || wn.includes(g));
+    });
+    check(`Skill-mastery — mastered skills captured (${masteredSkills.length})`, missing.length === 0,
+      missing.length ? `DROPPED (not captured as mastered): ${missing.join(', ')}` : '');
+    // Label the honest red: a mastered skill the extractor drops from a "MASTERED:" heading is not
+    // instruction-fixable (proven 0/6) — it is the SAME structured-reading root as F82/functions. The gate
+    // stays RED on purpose; this only LABELS it as tracked, never a false green.
+    if (missing.length && gt.masteredSkillsKnownResidual) {
+      console.log(`   ${C.dim(`↳ KNOWN-RESIDUAL: mastered-skill capture [${missing.join(', ')}] — extractor does not read the "MASTERED:" skills heading; tracked to FAST/MAS structured-reading front, NOT a regression`)}`);
+    }
+  } else {
+    check('Skill-mastery — mastered skills captured', null);
+  }
 
   // Ground-truth mastery checks. An ARRAY (even empty []) is a REAL assertion; a string ("TO CONFIRM")
   // observes. Alexandra July = [] asserts "no behavior is mastered" — the honest gate now that we know the
