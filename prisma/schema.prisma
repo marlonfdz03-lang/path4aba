@@ -33,6 +33,24 @@ model clients {
   supervision_notes             supervision_notes[]
   supervision_notes_97153xp     supervision_notes_97153xp[]
   clinical_timeline_entries     clinical_timeline_entries[]
+  client_files                  client_files[]
+}
+
+// Stored source assessment PDFs (BYTEA). Matches migration 20260805000000_add_client_files. The model MUST
+// be in the schema so `postinstall: prisma generate` produces the client_files delegate that storeClientFile
+// uses — without it the deployed build's Prisma client lacks client_files and every upload 500s.
+model client_files {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id   String   @db.Uuid
+  uploaded_by String
+  uploaded_at DateTime @default(now()) @db.Timestamptz(6)
+  filename    String
+  mime_type   String
+  size_bytes  Int
+  data        Bytes
+  clients     clients  @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([client_id])
 }
 
 model session_notes {
