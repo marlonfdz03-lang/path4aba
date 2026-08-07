@@ -3,6 +3,7 @@ import { getExtensionAuth } from '@/lib/extensionAuth'
 import { prisma } from '@/lib/prisma'
 import { extractAssessment } from '@/lib/extractAssessment'
 import { parsePdf, mapToLegacyFormat, saveKnowledgeBase } from '@/lib/assessmentPipeline'
+import { buildActivityLists } from '@/lib/curatedActivities'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -38,7 +39,11 @@ export async function POST(req: Request) {
 
     if (!clientName) return NextResponse.json({ error: 'Client name is required.' }, { status: 400 })
 
-    let clinicalProfile: Record<string, any> = { name: clientName }
+    // Curated activity baseline is UNCONDITIONAL — a client created here WITHOUT an assessment (pdfFile is
+    // optional) must still get the curated home/school lists from day one (Marlon's rule: every child,
+    // always). When a PDF is present the mapToLegacyFormat path below overwrites this with curated + the
+    // assessment's split activities.
+    let clinicalProfile: Record<string, any> = { name: clientName, ...buildActivityLists() }
     let internalCode = `BCBA-${Date.now()}`
 
     if (pdfFile) {

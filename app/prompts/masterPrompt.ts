@@ -164,6 +164,11 @@ ACTIVITIES FORMAT:
 - All activities MUST use parentheses: preferred activity as (ACTIVITY NAME), non-preferred as (ACTIVITY NAME).
 - Example: "During transition from (Lego building) to (worksheet completion)..."
 
+ACTIVITY SOURCE — MANDATORY (do not invent activities):
+- Every named activity in the note MUST come from the session data's activitiesUsed list. That list is the client's clinician-approved activities for this setting — draw every activity context from it.
+- NEVER introduce a specific named activity that is not in activitiesUsed. Do not invent one to fill an ABC, and do not pull one from the location activity-type lists below (those lists are ONLY a home/school validity check, not a menu to invent from).
+- GRACEFUL FALLBACK — if activitiesUsed is empty or missing, keep activity references generic and minimal ("a structured activity", "the current task") and do NOT invent specific named activities. A vaguer note is correct; a fabricated activity is not.
+
 LOCATION LANGUAGE — MANDATORY:
 Use the correct location term based on the session setting:
 - Home sessions: ALWAYS use "home" — NEVER "residence" or "residencia"
@@ -177,19 +182,21 @@ Use the correct location term based on the session setting:
   CORRECT: "Today's ABA session was conducted at [setting name]"
   Examples: "after-school program", "summer camp", "community center"
 
-LOCATION-BASED ACTIVITY RULES — MANDATORY:
-The session location determines which activities are valid. NEVER mix home and school activities.
+LOCATION-BASED ACTIVITY RULES — MANDATORY (VALIDITY CHECK, NOT A MENU):
+The session location determines which activities are VALID. NEVER mix home and school activities. Activities
+still come only from activitiesUsed (see ACTIVITY SOURCE above) — the type lists below are how you VALIDATE
+that each activity fits the session location, NOT a list to invent activities from.
 
-HOME-BASED sessions — ONLY use these activity types:
+Activity types VALID in HOME-BASED sessions:
 structured table activity, play-based instruction, puzzle activity, coloring activity, clean-up routine, meal routine, hygiene routine, sensory play activity, toy play activity, matching activity, fine motor task, building blocks activity, Play-Doh activity
 
-SCHOOL-BASED sessions — ONLY use these activity types:
+Activity types VALID in SCHOOL-BASED sessions:
 classroom activity, small group instruction, group activity, independent work, classroom transition, peer interaction activity, circle time, classroom routine, academic worksheet activity, fine motor task, structured table activity
 
 BANNED in HOME sessions: circle time, group activity with peers, classroom transition, small group instruction, academic worksheet, peer interaction activity
 BANNED in SCHOOL sessions: meal routine, hygiene routine, Play-Doh activity, sensory play at home, toy play activity, daily living routine
 
-RULE: If the session input says location is "home" — every activity in the note must be a home activity. If location is "school" — every activity must be a school activity. Never use a school activity in a home note or vice versa.
+RULE: If the session input says location is "home" — every activity in the note must be a home activity. If location is "school" — every activity must be a school activity. Never use a school activity in a home note or vice versa. If an activity in activitiesUsed does not fit the session location, omit it rather than relocating or replacing it.
 
 REINFORCEMENT DOCUMENTATION:
 - Always specify: type (non-edible/social) + exact item + when delivered.
@@ -722,7 +729,7 @@ The note must simulate natural human clinical writing — NOT perfectly optimize
 Every ABC must open with a natural activity context — not just a behavior trigger.
 CORRECT: "During a puzzle activity, when the client was presented with a multi-step task demand..."
 INCORRECT: "When a demand was presented..."
-Use varied activity contexts: puzzle activity, coloring activity, structured table activity, peer group activity, transition between activities, snack routine, hygiene routine, fine motor task, verbal instruction period.
+Draw the activity context for each ABC from the session data's activitiesUsed list, varying which activity anchors each ABC (see ACTIVITY SOURCE — never invent an activity that is not in activitiesUsed). If activitiesUsed is empty, keep the context generic ("a structured activity") rather than inventing a specific named one.
 
 2. PARTIAL OUTCOMES — REQUIRED
 Not every intervention resolves the behavior completely.

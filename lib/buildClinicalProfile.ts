@@ -1,3 +1,5 @@
+import { buildActivityLists } from './curatedActivities.ts';
+
 export interface ProgramItem {
   name: string;
   status?: string;
@@ -61,16 +63,14 @@ export function buildClinicalProfile(rawData: any): ClinicalProfile {
       .filter(Boolean);
   }
 
-  // Chain: existing -> the assessment's preferred activities -> [] (empty). NO generic hardcoded fallback
-  // (firewall: never fabricate activities the assessment didn't specify). The read-time location split
-  // (0d1b567) separates home vs school per note.
-  const homeActs = rawData.homeActivities?.length
-    ? rawData.homeActivities
-    : (rawData.preferredActivities ?? []);
-
-  const schoolActs = rawData.schoolActivities?.length
-    ? rawData.schoolActivities
-    : (rawData.preferredActivities ?? []);
+  // Activities = curated baseline + the assessment's SPLIT activities (home→home, school→school). A flat
+  // preferredActivities list has no home/school signal, so it is discarded rather than misplaced into both.
+  // No generic hardcoded fallback — the curated (clinician-approved) list is the guaranteed baseline. The
+  // read-time location split (0d1b567) still separates home vs school per note.
+  const { homeActivities: homeActs, schoolActivities: schoolActs } = buildActivityLists({
+    home: rawData.homeActivities,
+    school: rawData.schoolActivities,
+  });
 
   return {
     clientName: rawData.clientName || rawData.name || '',

@@ -37,6 +37,12 @@ export interface ExtractedAssessment {
     activities: string | string[];
     social: string | string[];
   };
+  // Location-aware activities. homeActivities/schoolActivities hold ONLY activities the assessment
+  // EXPLICITLY ties to that setting (split source). preferredActivities holds the flat/untagged remainder.
+  // Placement is the split-vs-flat signal the profile builder reads (buildActivityLists uses the tagged
+  // fields and discards the flat one). The extractor NEVER infers a setting — unsure → preferredActivities.
+  homeActivities: string[];
+  schoolActivities: string[];
   preferredActivities: string[];
   nonPreferredActivities: string[];
   caregivers: string[];
@@ -127,8 +133,17 @@ Never return an empty array for function — always infer at least one based on 
 For targetFunction on replacement skills: use the PRIMARY function of the behavior the skill is designed to replace. If multiple functions apply, pick the most clinically relevant one.
 For measurableUnit use: "frequency", "duration", or "rate".
 For setting use: "home", "school", "clinic", or "community".
-For preferredActivities: extract all activities listed as preferred or high-preference in reinforcement assessment or preference assessment sections.
-For nonPreferredActivities: extract all activities listed as non-preferred, low-preference, or avoided.
+━━━ ACTIVITY EXTRACTION RULES (LOCATION-AWARE) ━━━
+Read the WHOLE document for activities the client engages in or prefers — in tables, bullet lists, or narrative prose, under any section name. Do not restrict to a "preference assessment" heading.
+
+SPLIT vs FLAT — this distinction is REQUIRED:
+- If the assessment EXPLICITLY ties an activity to a setting — a Home / Home-Routine / Daily-Living section, a School / Classroom section, or an activity plainly labeled home vs school — put it in homeActivities or schoolActivities accordingly.
+- If an activity is listed WITHOUT a clear home/school context (one undifferentiated preference list, or activities named with no setting), put it in preferredActivities.
+
+FIREWALL — NEVER INFER THE SETTING:
+Place an activity in homeActivities or schoolActivities ONLY when the assessment itself assigns that setting. NEVER guess. If you are unsure whether an activity is home or school, it goes in preferredActivities — not in both, not in a guessed one. Capture only activities the assessment names; never invent activities.
+
+For nonPreferredActivities: extract all activities listed as non-preferred, low-preference, or avoided (anywhere in the document).
 For caregivers: extract names of caregivers, parents, or guardians mentioned in the document.
 
 INTERVENTION EXTRACTION — CRITICAL:
@@ -201,7 +216,9 @@ Return this exact JSON structure:
     "activities": ["array of discrete activity reinforcers — ONE item per entry"],
     "social": ["array of discrete social reinforcers — ONE item per entry, e.g. \"verbal praise\", \"high five\". Strip quotes"]
   },
-  "preferredActivities": ["all activities listed as preferred or high-preference"],
+  "homeActivities": ["activities the assessment EXPLICITLY ties to home/daily-living — empty if none are setting-tagged; never guess"],
+  "schoolActivities": ["activities the assessment EXPLICITLY ties to school/classroom — empty if none are setting-tagged; never guess"],
+  "preferredActivities": ["flat/untagged preferred activities with no clear home vs school context"],
   "nonPreferredActivities": ["all activities listed as non-preferred or avoided"],
   "caregivers": ["names of caregivers, parents, or guardians"],
   "medications": ["list of medications"],

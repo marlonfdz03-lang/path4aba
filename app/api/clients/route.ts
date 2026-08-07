@@ -4,6 +4,7 @@ import { Pool } from 'pg'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@/lib/generated/prisma/client'
 import { PLAN_LIMITS } from '@/lib/stripe'
+import { buildActivityLists } from '@/lib/curatedActivities'
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 const adapter = new PrismaPg(pool)
@@ -69,6 +70,16 @@ export async function POST(req: Request) {
     }
   }
 
+  // Curated activity baseline is UNCONDITIONAL on every save (create AND update) — this endpoint replaces
+  // clinical_profile wholesale from the request body, so applying buildActivityLists last guarantees the
+  // curated home/school lists are always present (a body without activities can never wipe them) while
+  // preserving any split activities the body did provide. Flat/untagged activities are not read here.
+  const withActivities = (cp: any) => ({
+    name: clientName,
+    ...cp,
+    ...buildActivityLists({ home: cp?.homeActivities, school: cp?.schoolActivities }),
+  })
+
   await prisma.clients.upsert({
     where: { id },
     create: {
@@ -76,10 +87,10 @@ export async function POST(req: Request) {
       internal_code: id,
       created_by: userId,
       rbt_id: userId,
-      clinical_profile: { name: clientName, ...clinicalProfile },
+      clinical_profile: withActivities(clinicalProfile),
     },
     update: {
-      clinical_profile: { name: clientName, ...clinicalProfile },
+      clinical_profile: withActivities(clinicalProfile),
     },
   })
 

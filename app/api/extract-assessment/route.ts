@@ -97,15 +97,12 @@ export async function POST(req: NextRequest) {
         reinforcers: normalized.reinforcers.length
           ? normalized.reinforcers
           : (existingProfile.reinforcers || []),
-        // REFRESH activities from the assessment's preferred activities (was PRESERVE-only). Replace when
-        // the new assessment names activities; keep the old set when it's silent (same refresh-if-present
-        // pattern as the keys above). The read-time home/school split (0d1b567) is untouched.
-        homeActivities: normalized.homeActivities.length
-          ? normalized.homeActivities
-          : (existingProfile.homeActivities || []),
-        schoolActivities: normalized.schoolActivities.length
-          ? normalized.schoolActivities
-          : (existingProfile.schoolActivities || []),
+        // REFRESH activities: normalized already carries the curated baseline + the assessment's SPLIT
+        // activities (mapToLegacyFormat → buildActivityLists), so it is ALWAYS populated and always wins.
+        // A flat/untagged assessment list was discarded upstream, never misplaced. The read-time home/
+        // school split (0d1b567) is untouched.
+        homeActivities: normalized.homeActivities,
+        schoolActivities: normalized.schoolActivities,
         parentTrainingGoals: normalized.parentTrainingGoals.length
           ? normalized.parentTrainingGoals
           : (existingProfile.parentTrainingGoals || []),

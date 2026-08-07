@@ -7,6 +7,7 @@ import PDFParser from 'pdf2json'
 import { ExtractedAssessment } from '@/lib/extractAssessment'
 import { prisma } from '@/lib/prisma'
 import { parseReinforcers } from '@/lib/reinforcers'
+import { buildActivityLists } from '@/lib/curatedActivities'
 
 // ── PDF parsing ───────────────────────────────────────────────────────────────
 
@@ -110,12 +111,11 @@ export function mapToLegacyFormat(extracted: ExtractedAssessment) {
     reinforcers: parseReinforcers(extracted.reinforcers)
       .filter(r => !hasBlockedTerm(r))
       .map(cleanText),
-    // The assessment's preferred activities feed BOTH lists (the extraction is a flat list with no
-    // home/school split); the read-time location split (buildServerSessionInput selection +
-    // isValidActivity's HOME_ONLY_PROGRAMS + masterPrompt rules — commit 0d1b567) separates them per note.
-    // Empty when the assessment names none — never the old generic hardcoded fallback (firewall: no fabrication).
-    homeActivities: extracted.preferredActivities ?? [],
-    schoolActivities: extracted.preferredActivities ?? [],
+    // Activities = curated baseline + the assessment's SPLIT activities (home→home, school→school). The
+    // assessment's FLAT preferredActivities is intentionally NOT used here — an untagged list has no
+    // home/school signal, so it is discarded rather than misplaced into both (see buildActivityLists).
+    // The curated list guarantees both lists are always populated; the home/school tags keep them distinct.
+    ...buildActivityLists({ home: extracted.homeActivities, school: extracted.schoolActivities }),
     parentTrainingGoals: extracted.parentTrainingGoals ||
       (extracted as any).caregiverTrainingGoals ||
       (extracted as any).familyTrainingGoals ||
