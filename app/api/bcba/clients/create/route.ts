@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { extractAssessment } from '@/lib/extractAssessment'
 import { parsePdf, mapToLegacyFormat, saveKnowledgeBase } from '@/lib/assessmentPipeline'
 import { buildActivityLists } from '@/lib/curatedActivities'
+import { isPdf, MAX_FILE_BYTES, storeClientFile } from '@/lib/clientFiles'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -46,9 +47,12 @@ export async function POST(req: Request) {
     let clinicalProfile: Record<string, any> = { name: clientName, ...buildActivityLists() }
     let internalCode = `BCBA-${Date.now()}`
 
+    let fileBuffer: Buffer | null = null
     if (pdfFile) {
-      const buffer = Buffer.from(await pdfFile.arrayBuffer())
-      const text = await parsePdf(buffer)
+      fileBuffer = Buffer.from(await pdfFile.arrayBuffer())
+      if (!isPdf(fileBuffer)) return NextResponse.json({ error: 'Only PDF files are supported.' }, { status: 415 })
+      if (fileBuffer.length > MAX_FILE_BYTES) return NextResponse.json({ error: 'File is too large (max 15 MB).' }, { status: 413 })
+      const text = await parsePdf(fileBuffer)
       if (text.trim()) {
         const extracted = await extractAssessment(text.slice(0, 90000))
         saveKnowledgeBase(extracted).catch(err =>
@@ -60,22 +64,27 @@ export async function POST(req: Request) {
       }
     }
 
-    const client = await prisma.clients.create({
-      data: {
-        rbt_id: null,
-        internal_code: internalCode,
-        clinical_profile: clinicalProfile,
-        primary_setting: primarySetting,
-        created_by: user.id,
-      },
-    })
-
-    await prisma.bcba_clients.create({
-      data: {
-        bcba_id: user.id,
-        client_id: client.id,
-        connected_at: new Date(),
-      },
+    // Create the client, connect the BCBA, and (when a PDF was uploaded) store the SOURCE PDF — all
+    // atomically, so the file is never orphaned and the client is never half-created.
+    const client = await prisma.$transaction(async (tx) => {
+      const c = await tx.clients.create({
+        data: {
+          rbt_id: null,
+          internal_code: internalCode,
+          clinical_profile: clinicalProfile,
+          primary_setting: primarySetting,
+          created_by: user.id,
+        },
+      })
+      await tx.bcba_clients.create({
+        data: {
+          bcba_id: user.id,
+          client_id: c.id,
+          connected_at: new Date(),
+        },
+      })
+      if (pdfFile && fileBuffer) await storeClientFile(c.id, user.id, pdfFile, fileBuffer, tx)
+      return c
     })
 
     return NextResponse.json({ clientId: client.id, clientName, message: 'Client created' })

@@ -19,6 +19,7 @@ export interface ExtractedAssessment {
     baselineFrequency: string;
     intensity: number;
     measurableUnit: string;
+    status: string;
   }[];
   masteredBehaviors: string[];
   newBehaviors: string[];
@@ -208,6 +209,49 @@ GRANULARITY — ONE DISCRETE ITEM PER ENTRY:
 
 FIREWALL — CAPTURE ONLY WHAT IS NAMED:
 Exhaustive means miss NONE that the assessment actually names. It does NOT mean add any. NEVER invent, infer, generalize, or pad reinforcers that are not written in the document. If the assessment names three, return exactly those three — no "typical" additions, no filler, no assumed favorites.
+━━━ STATUS EXTRACTION RULES — applies to BOTH maladaptiveBehaviors AND replacementSkills ━━━
+Every behavior and every replacement skill has a "status" field. Use EXACTLY one of these five values:
+  mastered | maintenance | active | unknown | discontinued
+
+DEFAULT IS "unknown", AND YOU MUST NOT INFER STATUS. This is the OPPOSITE of "function": for function you
+are told to infer one when it is not stated — for status you must do the REVERSE. NEVER guess, infer, or
+default a status to look complete. If the document does not EXPLICITLY declare an item's status at the
+item level, its status is "unknown". "unknown" is a correct, expected, and common result — it is NOT a
+failure, and most items in most assessments will be "unknown". Leaving it "unknown" is exactly what you
+should do; the clinician confirms status, you do not assert it.
+
+Assign a value OTHER THAN "unknown" ONLY when the document declares it explicitly at the item (behavior or
+program) level, in one of these two forms — nothing else counts:
+  1. A dedicated section heading listing the items — e.g. "MASTERED:", "NEW:".
+  2. A marker inside the item's own name — e.g. "Waiting Behavior (MASTERED)", "Request Break (NEW)".
+
+Normalize the document's wording to exactly one value:
+  mastered      ← "MASTERED", "Mastered on <date>"
+  maintenance   ← "Maintenance", "in maintenance"
+  active        ← "NEW", "Initiated", "Initiated on", "In Progress", "Ongoing", "Not started", "Modified" (when NOT "Discontinued")
+  discontinued  ← "Discontinued", "Discontinued/Modified"
+  unknown       ← no explicit item-level declaration
+
+STO / OBJECTIVE STATUS — NEVER PROMOTE IT (this is the most common mistake — do not make it):
+Short-term objectives (STOs) and the individual objectives WITHIN a behavior or program each carry their
+own status ("Mastered on 11/15/2025", "In Progress", "Initiated on", "Ongoing"). That is STO-level
+progress. It is NOT the item's status, and you must NEVER copy it up to the behavior or program. A
+behavior whose STO#1, STO#2, STO#3 are "Mastered" and STO#4 is "In Progress" is NOT a mastered behavior —
+marking it mastered is WRONG. Its status is ONLY what is declared at the item level; if nothing is
+declared at the item level, it is "unknown", no matter what the STOs inside it say. Recognize STO markers
+precisely so that you EXCLUDE them from the item's status.
+
+━━━ INCLUDE MASTERED / DISCONTINUED BEHAVIORS — DO NOT SKIP THEM ━━━
+The maladaptiveBehaviors array must contain EVERY behavior the assessment lists — including behaviors in a
+"Mastered", "Maintenance", or "Discontinued" section, not only the active reduction targets. Such behaviors
+are frequently listed by NAME ONLY (in a summary or status section), with no topography, function, or
+baseline. That is EXPECTED and CORRECT: include each one as its own entry with "status" set accordingly
+(mastered/maintenance/discontinued) and an EMPTY topography ("") and an EMPTY function array ([]). NEVER
+omit a behavior just because it lacks a topography or function — a name plus a non-active status is a
+complete, required entry. A behavior under a "MASTERED" heading has status "mastered" (its status comes
+from the assessment; it does NOT default to "unknown" merely because its detail row lives elsewhere).
+Keep masteredBehaviors[] EXACTLY the set of behaviors whose status is "mastered" — do not list a name there
+unless that behavior's status is mastered, and do not omit one that is.
 
 Return this exact JSON structure:
 {
@@ -222,7 +266,8 @@ Return this exact JSON structure:
       "function": ["attention|escape|tangible|automatic"],
       "baselineFrequency": "number/week as string",
       "intensity": 1-5,
-      "measurableUnit": "frequency|duration|rate"
+      "measurableUnit": "frequency|duration|rate",
+      "status": "mastered|maintenance|active|unknown|discontinued (default unknown — see STATUS EXTRACTION RULES; never inferred, never from STO status)"
     }
   ],
   "masteredBehaviors": ["list of mastered behaviors"],
@@ -234,7 +279,7 @@ Return this exact JSON structure:
       "name": "exact skill name as written in document",
       "targetFunction": "attention|escape|tangible|automatic",
       "currentAccuracy": "percentage as string if available",
-      "status": "acquisition|maintenance|mastered|new"
+      "status": "mastered|maintenance|active|unknown|discontinued (default unknown — see STATUS EXTRACTION RULES; never inferred, never from STO status)"
     }
   ],
   "reinforcers": {

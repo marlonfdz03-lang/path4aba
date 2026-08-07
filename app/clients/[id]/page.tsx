@@ -246,6 +246,7 @@ export default function ClientProfilePage() {
     client?.clinicalProfile?.authorizedHoursPerWeek || 0
   );
   const [savingHours, setSavingHours] = useState(false);
+  const [clientFiles, setClientFiles] = useState<any[]>([]);
 
   async function loadNotesFromSupabase(clientId: string) {
     try {
@@ -302,6 +303,10 @@ export default function ClientProfilePage() {
     }
     load();
   }, [params.id]);
+
+  useEffect(() => {
+    if (client?.id) loadClientFiles(client.id);
+  }, [client?.id]);
 
   useEffect(() => {
     if (!client?.id) return;
@@ -669,6 +674,8 @@ export default function ClientProfilePage() {
       setUpdateAssessError("Network error. Please try again.");
     } finally {
       setUpdateAssessing(false);
+      // The source PDF is saved on success AND on a 422 (extraction rejected), so refresh either way.
+      if (client?.id) loadClientFiles(client.id);
     }
   }
 
@@ -689,6 +696,31 @@ export default function ClientProfilePage() {
       setShareError("Network error. Please try again.");
     }
     setGeneratingCode(false);
+  }
+
+  async function loadClientFiles(clientId: string) {
+    try {
+      const res = await fetch(`/api/clients/${clientId}/files`);
+      if (!res.ok) return; // non-owner (403) or error: leave the list empty
+      const data = await res.json();
+      setClientFiles(Array.isArray(data?.files) ? data.files : []);
+    } catch { /* non-fatal: Files section just shows empty */ }
+  }
+
+  async function handleDeleteFile(fileId: string) {
+    if (!client?.id) return;
+    if (!confirm('Delete this stored source PDF? This cannot be undone.')) return;
+    try {
+      const res = await fetch(`/api/clients/${client.id}/files/${fileId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data?.error || 'Failed to delete the file. Please try again.');
+        return; // do NOT remove from local state on a failed delete
+      }
+      setClientFiles((prev) => prev.filter((f) => f.id !== fileId));
+    } catch {
+      alert('Network error deleting the file. Please try again.');
+    }
   }
 
   async function handleSaveAuthorizedHours(hours: number) {
@@ -937,6 +969,30 @@ export default function ClientProfilePage() {
                     <option value="male">Male (he/him)</option>
                     <option value="female">Female (she/her)</option>
                   </select>
+                </div>
+                {/* ── Files: stored source assessment PDFs ── */}
+                <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[12px] font-semibold" style={{ color: "var(--text1)" }}>Files (source assessments)</span>
+                    <span className="text-[11px]" style={{ color: "var(--text3)" }}>{clientFiles.length} file{clientFiles.length === 1 ? "" : "s"}</span>
+                  </div>
+                  {clientFiles.length === 0 ? (
+                    <p className="text-[11px]" style={{ color: "var(--text3)" }}>No source PDFs stored yet. Uploading an assessment saves the original here.</p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {clientFiles.map((f) => (
+                        <li key={f.id} className="flex items-center justify-between text-[11px]" style={{ color: "var(--text2)" }}>
+                          <span className="truncate mr-2" title={f.filename}>
+                            {f.filename} · {(Number(f.size_bytes) / 1024 / 1024).toFixed(1)} MB · {new Date(f.uploaded_at).toLocaleDateString()}
+                          </span>
+                          <span className="flex items-center gap-2 shrink-0">
+                            <a href={`/api/clients/${client.id}/files/${f.id}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>View</a>
+                            <button onClick={() => handleDeleteFile(f.id)} style={{ color: "#dc2626" }}>Delete</button>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
                   {[
                     { label: "Maladaptive Behaviors", value: client.clinicalProfile?.maladaptiveBehaviors?.length || 0 },

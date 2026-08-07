@@ -126,6 +126,75 @@ export function mapToLegacyFormat(extracted: ExtractedAssessment) {
   }
 }
 
+// ── Full-refresh profile builder (Update Assessment) ──────────────────────────
+// Unlike mapToLegacyFormat, this deliberately does NOT apply cleanText/hasBlockedTerm. Update Assessment
+// is a source-of-truth REFRESH: assessment-sourced keys are replaced wholesale, so there is no old profile
+// for a filtered-out item to survive into — silently dropping (hasBlockedTerm) or rewriting (cleanText)
+// real clinical text would corrupt the assessment. It carries the assessment's masteredBehaviors and drops
+// any mastered name from the active list. Output keys match the clinical_profile shape the gates/UI read
+// (skillAcquisition = mastered skills, replacementBehaviors = active skills — same convention as
+// mapToLegacyFormat). homeActivities/schoolActivities = the curated clinician-approved baseline (always
+// present) + the assessment's SPLIT activities (home→home, school→school); a FLAT/untagged list is
+// discarded, never misplaced into both (see buildActivityLists). Activities are the one ENRICHABLE field —
+// clinical content here is still faithful-only, never fabricated.
+// Behavior/skill status is the SINGLE SOURCE OF TRUTH for mastery (Commit B). The old build routed
+// behaviors by masteredBehaviors[] (a second source) AND hardcoded status:'active', which (a) flattened
+// every non-active behavior to active and (b) let the two sources disagree (split-brain). Now: fold
+// masteredBehaviors[] into the behavior list by CREATING name-only entries for any mastered name that has
+// no detail row (so a name-only "Mastered" section is captured, never dropped), then classify EVERYTHING
+// by per-item status — mastered behaviors go to masteredBehaviors[], the rest stay with their REAL status.
+const behaviorStatus = (item: { status?: string }): string => {
+  const s = String(item?.status || '').toLowerCase().trim()
+  return ['mastered', 'maintenance', 'active', 'discontinued'].includes(s) ? s : 'unknown'
+}
+
+export function buildAssessmentProfile(extracted: ExtractedAssessment) {
+  const behaviors: any[] = (extracted.maladaptiveBehaviors || []).filter(b => b && b.name)
+  // Fold masteredBehaviors[] into the SAME list: create a name-only mastered entry for any mastered name
+  // that has no behavior row. Never override an EXISTING entry's per-item status (status stays the source).
+  const present = new Set(behaviors.map(b => String(b.name).toLowerCase().trim()))
+  for (const raw of (extracted.masteredBehaviors || [])) {
+    const n = String(raw || '').toLowerCase().trim()
+    if (n && !present.has(n)) { behaviors.push({ name: String(raw), status: 'mastered', topography: '', function: [] }); present.add(n) }
+  }
+  const mastered = behaviors.filter(b => behaviorStatus(b) === 'mastered')
+  const active = behaviors.filter(b => behaviorStatus(b) !== 'mastered')
+
+  return {
+    maladaptiveBehaviors: active.map(b => ({
+      name: b.name.trim(),
+      status: behaviorStatus(b), // carry the REAL status (active/maintenance/unknown/discontinued) — never hardcoded
+      topographies: b.topography && String(b.topography).trim() ? [String(b.topography).trim()] : [],
+      functions: Array.isArray(b.function) ? b.function : (b.function ? [b.function] : []),
+    })),
+    // Derived from the ONE source (status), so it can never disagree with the items' status.
+    masteredBehaviors: [...new Set(mastered.map(b => String(b.name).trim()).filter(Boolean))],
+    interventions: (extracted.approvedInterventions || [])
+      .filter(Boolean)
+      .map(i => ({ name: String(i).trim(), status: 'active' })),
+    skillAcquisition: (extracted.replacementSkills || [])
+      .filter(s => s.name && behaviorStatus(s) === 'mastered')
+      .map(s => ({ name: s.name.trim(), status: 'mastered', targetFunction: s.targetFunction || '' })),
+    replacementBehaviors: (extracted.replacementSkills || [])
+      .filter(s => s.name && behaviorStatus(s) !== 'mastered')
+      .map(s => ({ name: s.name.trim(), status: behaviorStatus(s), targetFunction: s.targetFunction || '' })),
+    reinforcers: parseReinforcers(extracted.reinforcers),
+    // Curated clinician-approved baseline (always present) + the assessment's SPLIT activities (home→home,
+    // school→school). A FLAT/untagged preferredActivities list is DISCARDED, never misplaced into both. Same
+    // buildActivityLists helper the create/merge paths use. On this held branch the extractor may not yet
+    // emit the split fields (they arrive when harden rebases onto the shipped activities work) — until then
+    // this yields the curated baseline, which is the correct graceful result. The read-time home/school
+    // split (buildServerSessionInput + isValidActivity) still applies per session location.
+    ...buildActivityLists({
+      home: (extracted as any).homeActivities,
+      school: (extracted as any).schoolActivities,
+    }),
+    parentTrainingGoals: extracted.parentTrainingGoals || [],
+    diagnosis: extracted.diagnosis || [],
+    caregivers: extracted.caregivers || [],
+  }
+}
+
 // ── Knowledge base persistence (fire-and-forget) ──────────────────────────────
 
 export async function saveKnowledgeBase(extracted: ExtractedAssessment): Promise<void> {

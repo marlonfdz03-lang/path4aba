@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { extractAssessment, ExtractedAssessment } from "@/lib/extractAssessment";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
-import { parsePdf, hasBlockedTerm, cleanText, mapToLegacyFormat, saveKnowledgeBase } from "@/lib/assessmentPipeline";
+import { parsePdf, mapToLegacyFormat, saveKnowledgeBase, buildAssessmentProfile } from "@/lib/assessmentPipeline";
+import { isPdf, MAX_FILE_BYTES, storeClientFile, userOwnsClient } from "@/lib/clientFiles";
+import { validateAssessmentProfile, buildRefreshedProfile } from "@/lib/assessmentRefresh";
 
 export const maxDuration = 60;
 
@@ -24,6 +26,16 @@ export async function POST(req: NextRequest) {
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+
+    // We now KEEP the source PDF (client_files), so validate it up front: must be a real PDF (magic bytes —
+    // browser MIME is spoofable) and <= 15 MB. Applies to every upload path.
+    if (!isPdf(buffer)) {
+      return NextResponse.json({ error: "Only PDF files are supported." }, { status: 415 });
+    }
+    if (buffer.length > MAX_FILE_BYTES) {
+      return NextResponse.json({ error: "File is too large (max 15 MB)." }, { status: 413 });
+    }
+
     const text = await parsePdf(buffer);
 
     if (!text.trim()) {
@@ -39,90 +51,82 @@ export async function POST(req: NextRequest) {
       console.error("Knowledge base save error:", err)
     );
 
-    const normalized = mapToLegacyFormat(extracted);
-
-    // ── If clientId provided: merge into existing clinical_profile ─────────
+    // ── If clientId provided: REFRESH the clinical_profile from the assessment ─────
+    // The assessment is the source of truth. Every assessment-sourced key is replaced wholesale from the
+    // new PDF (no name-merge, no keep-the-old-object): new functions/topographies on an existing behavior
+    // land; a behavior absent from the new assessment is gone; a mastered behavior leaves the active list.
     const clientId = formData.get("clientId") as string | null;
     if (clientId) {
       const session = await auth();
       if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+      // OWNERSHIP GATE (security/PHI). Refreshing a profile OVERWRITES a real clinical record, and
+      // storeClientFile below attaches the source PDF — both must require that the caller owns this
+      // client (its RBT, or a connected BCBA). Without this any authenticated user could overwrite (or
+      // attach files to) ANY client — unacceptable once uploads open. Checked BEFORE the file store and
+      // BEFORE the write, so an unauthorized caller changes nothing. userOwnsClient = rbt_id OR bcba_clients.
+      const userId = (session.user as any).id as string;
+      if (!(await userOwnsClient(userId, clientId))) {
+        return NextResponse.json(
+          { error: "Forbidden — you are not assigned to this client." },
+          { status: 403 }
+        );
+      }
+
+      // Confirm the client exists FIRST — we attach the source PDF below regardless of extraction outcome,
+      // and the file's foreign key requires a real client.
       const existing = await prisma.clients.findUnique({
         where: { id: clientId },
         select: { clinical_profile: true },
       });
       if (!existing) return NextResponse.json({ error: "Client not found" }, { status: 404 });
 
+      // Keep the SOURCE PDF now — stored even if extraction fails below, so a rejected new-format PDF can be
+      // debugged and the RBT need not re-upload. STORING THE FILE DOES NOT MEAN THE PROFILE WAS UPDATED.
+      await storeClientFile(clientId, (session.user as any).id, file, buffer);
+
+      // Assessment-sourced keys, built wholesale (no cleanText/hasBlockedTerm — see buildAssessmentProfile).
+      const assessmentProfile = buildAssessmentProfile(extracted);
+
+      // GUARD 1 — required-field validation (pure, unit-tested in assessmentRefresh.test.mjs). A
+      // clinically valid assessment must contain ALL required fields; an empty result for ANY means the
+      // extraction failed (a scan, an unsupported agency format, or a bad LLM response) and must NEVER
+      // wipe a real profile. The source PDF is already saved above; here we only refuse to touch the
+      // profile. NOTE: teaching procedures are deliberately NOT required (the extractor doesn't capture
+      // that field yet) — they should join the required set once extraction captures them.
+      const problems = validateAssessmentProfile(assessmentProfile, extracted);
+
+      if (problems.length) {
+        return NextResponse.json(
+          {
+            error:
+              `Extraction incomplete — the source PDF WAS SAVED to the client's Files, but the assessment ` +
+              `was NOT applied and the existing profile is unchanged. Could not read from this file: ` +
+              `${problems.join("; ")}. Check that the PDF contains these sections and is a text-based file ` +
+              `(scanned or image-only PDFs aren't supported), then try again.`,
+            fileStored: true,
+          },
+          { status: 422 }
+        );
+      }
+
+      // GUARD 2 — the refresh merge (pure, unit-tested): preserves non-assessment keys (observedCatalog,
+      // blockedNarrativeTerms, continuityContext, …), replaces assessment-sourced keys wholesale, and
+      // snapshots the pre-refresh profile as `previousProfile` for one-level undo (restored by
+      // /api/clients/[id]/profile/restore). A whole-profile snapshot, so it also covers any future key.
       const existingProfile = (existing.clinical_profile as any) || {};
-      const existingBehaviors: any[] = existingProfile.maladaptiveBehaviors || [];
-      const existingMastered: string[] = existingProfile.masteredBehaviors || [];
-
-      // Names mastered in the new assessment
-      const masteredNamesLower = new Set(
-        normalized.maladaptiveBehaviors
-          .filter((b: any) => b.status?.toLowerCase() === "mastered")
-          .map((b: any) => b.name.toLowerCase())
-      );
-
-      // Keep existing behaviors unless newly mastered
-      const keptExisting = existingBehaviors.filter(
-        (b: any) => !masteredNamesLower.has(b.name.toLowerCase())
-      );
-
-      // Add new active behaviors not already present
-      const existingNames = new Set(existingBehaviors.map((b: any) => b.name.toLowerCase()));
-      const addedNew = normalized.maladaptiveBehaviors.filter(
-        (b: any) => !existingNames.has(b.name.toLowerCase()) && b.status?.toLowerCase() !== "mastered"
-      );
-
-      // Accumulate mastered behavior names
-      const allMastered = [
-        ...existingMastered,
-        ...Array.from(masteredNamesLower),
-      ].filter((v, i, a) => a.indexOf(v) === i);
-
-      const merged = {
-        ...existingProfile,
-        maladaptiveBehaviors: [...keptExisting, ...addedNew],
-        masteredBehaviors: allMastered,
-        interventions: normalized.interventions.length
-          ? normalized.interventions
-          : (existingProfile.interventions || []),
-        replacementBehaviors: normalized.replacementBehaviors.length
-          ? normalized.replacementBehaviors
-          : (existingProfile.replacementBehaviors || []),
-        skillAcquisition: normalized.skillAcquisition.length
-          ? normalized.skillAcquisition
-          : (existingProfile.skillAcquisition || []),
-        reinforcers: normalized.reinforcers.length
-          ? normalized.reinforcers
-          : (existingProfile.reinforcers || []),
-        // REFRESH activities: normalized already carries the curated baseline + the assessment's SPLIT
-        // activities (mapToLegacyFormat → buildActivityLists), so it is ALWAYS populated and always wins.
-        // A flat/untagged assessment list was discarded upstream, never misplaced. The read-time home/
-        // school split (0d1b567) is untouched.
-        homeActivities: normalized.homeActivities,
-        schoolActivities: normalized.schoolActivities,
-        parentTrainingGoals: normalized.parentTrainingGoals.length
-          ? normalized.parentTrainingGoals
-          : (existingProfile.parentTrainingGoals || []),
-        diagnosis: normalized.diagnosis.length
-          ? normalized.diagnosis
-          : (existingProfile.diagnosis || []),
-        caregivers: normalized.caregivers.length
-          ? normalized.caregivers
-          : (existingProfile.caregivers || []),
-      };
+      const refreshed = buildRefreshedProfile(existingProfile, assessmentProfile);
 
       await prisma.clients.update({
         where: { id: clientId },
-        data: { clinical_profile: merged },
+        data: { clinical_profile: refreshed },
       });
 
-      return NextResponse.json({ ...merged, updated: true });
+      return NextResponse.json({ ...refreshed, updated: true, fileStored: true });
     }
 
-    return NextResponse.json({ ...normalized });
+    // No clientId: return the extraction without writing (unchanged; still uses mapToLegacyFormat).
+    return NextResponse.json({ ...mapToLegacyFormat(extracted) });
   } catch (error: any) {
     console.error(error);
 
