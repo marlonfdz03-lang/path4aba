@@ -110,8 +110,12 @@ export function mapToLegacyFormat(extracted: ExtractedAssessment) {
     reinforcers: parseReinforcers(extracted.reinforcers)
       .filter(r => !hasBlockedTerm(r))
       .map(cleanText),
-    homeActivities: [],
-    schoolActivities: [],
+    // The assessment's preferred activities feed BOTH lists (the extraction is a flat list with no
+    // home/school split); the read-time location split (buildServerSessionInput selection +
+    // isValidActivity's HOME_ONLY_PROGRAMS + masterPrompt rules — commit 0d1b567) separates them per note.
+    // Empty when the assessment names none — never the old generic hardcoded fallback (firewall: no fabrication).
+    homeActivities: extracted.preferredActivities ?? [],
+    schoolActivities: extracted.preferredActivities ?? [],
     parentTrainingGoals: extracted.parentTrainingGoals ||
       (extracted as any).caregiverTrainingGoals ||
       (extracted as any).familyTrainingGoals ||

@@ -97,6 +97,15 @@ export async function POST(req: NextRequest) {
         reinforcers: normalized.reinforcers.length
           ? normalized.reinforcers
           : (existingProfile.reinforcers || []),
+        // REFRESH activities from the assessment's preferred activities (was PRESERVE-only). Replace when
+        // the new assessment names activities; keep the old set when it's silent (same refresh-if-present
+        // pattern as the keys above). The read-time home/school split (0d1b567) is untouched.
+        homeActivities: normalized.homeActivities.length
+          ? normalized.homeActivities
+          : (existingProfile.homeActivities || []),
+        schoolActivities: normalized.schoolActivities.length
+          ? normalized.schoolActivities
+          : (existingProfile.schoolActivities || []),
         parentTrainingGoals: normalized.parentTrainingGoals.length
           ? normalized.parentTrainingGoals
           : (existingProfile.parentTrainingGoals || []),

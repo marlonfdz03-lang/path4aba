@@ -61,15 +61,16 @@ export function buildClinicalProfile(rawData: any): ClinicalProfile {
       .filter(Boolean);
   }
 
+  // Chain: existing -> the assessment's preferred activities -> [] (empty). NO generic hardcoded fallback
+  // (firewall: never fabricate activities the assessment didn't specify). The read-time location split
+  // (0d1b567) separates home vs school per note.
   const homeActs = rawData.homeActivities?.length
     ? rawData.homeActivities
-    : rawData.preferredActivities?.length
-      ? rawData.preferredActivities
-      : ['structured table activity','play-based instruction','puzzle activity','clean-up routine','meal routine'];
+    : (rawData.preferredActivities ?? []);
 
   const schoolActs = rawData.schoolActivities?.length
     ? rawData.schoolActivities
-    : ['classroom table work','group instruction','academic worksheet activity','peer interaction activity','circle time'];
+    : (rawData.preferredActivities ?? []);
 
   return {
     clientName: rawData.clientName || rawData.name || '',

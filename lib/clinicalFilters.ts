@@ -57,6 +57,11 @@ export const HOME_ONLY_PROGRAMS = [
   'shower',
   'bedtime',
   'couch',
+  // Play-Doh is a home-context activity — filtered from SCHOOL notes so it can't leak in when the flat
+  // assessment activity list is shared to both lists. (Deliberately NOT adding 'toy play'/'sensory play':
+  // those can legitimately occur in classrooms — Marlon's clinical call.)
+  'play-doh',
+  'playdoh',
 ];
 
 export const INVALID_LANGUAGE_PATTERNS = [
