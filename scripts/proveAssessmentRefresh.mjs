@@ -38,7 +38,7 @@ const LOCAL = new URL('../assessments-local/', import.meta.url);
 const { parsePdf, buildAssessmentProfile, mapToLegacyFormat } = await import('../lib/assessmentPipeline.ts');
 const { extractAssessment } = await import('../lib/extractAssessment.ts');
 const { parsePositioned, clusterRows } = await import('../lib/pdfGeometry.ts');
-const { assembleCommit1 } = await import('../lib/assembleRefreshProfile.ts');
+const { assembleCommit1, assembleRefreshProfile } = await import('../lib/assembleRefreshProfile.ts');
 const { validateAssessmentProfile, buildRefreshedProfile } = await import('../lib/assessmentRefresh.ts');
 const { CURATED_HOME_ACTIVITIES, CURATED_SCHOOL_ACTIVITIES } = await import('../lib/curatedActivities.ts');
 const { diagnosisColumn } = await import('../lib/diagnosis.ts');
@@ -299,6 +299,32 @@ for (const [key, gt] of Object.entries(clients)) {
   // Firewall gate: every field NOT read by geometry must be flagged — never a silent unverified value.
   // Here we assert the flag exists whenever the LLM value was used for diagnosis (geometry didn't read it).
   if (dxFlag) check('FAST/MAS — LLM-fallback diagnosis is FLAGGED (never presented as verified)', true, '');
+
+  // ── FAST/MAS Commit 2: GUARDED behavior refresh (HIGH → geometry refresh · LOW/UNREAD → preserve) ──
+  // A DISTINCTIVE mock "existing profile" so preserve is provable: if guarded, the assembled behaviors must
+  // EQUAL this mock (not the incomplete geometric read) — the whole point of the guard.
+  const mockExisting = {
+    maladaptiveBehaviors: [{ name: '__EXISTING_PRESERVED__', status: 'active', functions: ['escape'], topographies: ['existing topography'] }],
+    masteredBehaviors: ['__EXISTING_MASTERED__'],
+  };
+  const asm = assembleRefreshProfile(llmRefreshProfile, geomRows, mockExisting);
+  const conf = asm.confidence;
+  console.log(`   ${C.dim(`↳ FAST/MAS guard: ${conf.level} → ${conf.route}${conf.reasons.length ? ' — ' + conf.reasons.join('; ') : ''}`)}`);
+  const asmBeh = arr(asm.profile.maladaptiveBehaviors);
+  if (conf.level === 'HIGH') {
+    // Refreshed from geometry — must NOT be the mock, and the active count matches the PDF (wobble gone).
+    const isMock = asmBeh.some((b) => /__EXISTING_PRESERVED__/.test(b.name));
+    check('FAST/MAS guard HIGH — behaviors REFRESHED from geometry (not preserved)', !isMock, isMock ? 'unexpectedly preserved the mock' : '');
+    if (gt.activeBehaviorsComplete === true && arr(gt.activeBehaviors).length)
+      check(`FAST/MAS guard HIGH — geometry active count matches PDF (${asmBeh.length})`, asmBeh.length === arr(gt.activeBehaviors).length, `got ${asmBeh.length}, expected ${arr(gt.activeBehaviors).length}`);
+  } else {
+    // THE CRITICAL ASSERTION — preserved existing behaviors, NOT the dirty read.
+    const preserved = JSON.stringify(asmBeh) === JSON.stringify(mockExisting.maladaptiveBehaviors)
+      && JSON.stringify(arr(asm.profile.masteredBehaviors)) === JSON.stringify(mockExisting.masteredBehaviors);
+    check(`FAST/MAS guard ${conf.level} — behaviors PRESERVED (=== existing, NOT the incomplete read)`, preserved,
+      preserved ? '' : `assembled behaviors differ from existing — OVERWRITE LEAK: ${JSON.stringify(asmBeh.slice(0, 3))}`);
+    check(`FAST/MAS guard ${conf.level} — guard-preserved flag present`, asm.reviewFlags.some((f) => f.source === 'guard-preserved'), '');
+  }
 
   // ── Activities: curated baseline always present + assessment SPLIT only; flat discarded ──
   // Marlon's rule: the curated clinician-approved list is ALWAYS in the profile (every client, every path);

@@ -8,7 +8,8 @@
 // structure only. (Behaviors are NOT touched in Commit 1 — that is the guarded refresh in Commit 2.)
 
 import type { Row } from './pdfGeometry.ts'
-import { readConfirmedDiagnosis, readMasteredSkills } from './pdfGeometry.ts'
+import { readConfirmedDiagnosis, readMasteredSkills, readBehaviorFunctions } from './pdfGeometry.ts'
+import { assessConfidence } from './fastMasConfidence.ts'
 import { normalizeDiagnosis } from './diagnosis.ts'
 
 export interface ReviewFlag { field: string; reason: string; source: 'llm-fallback' | 'guard-preserved' | 'behavior-review' }
@@ -59,4 +60,49 @@ export function assembleCommit1(baseProfile: any, rows: Row[]): { profile: any; 
   }
 
   return { profile, reviewFlags: flags }
+}
+
+// ── Commit 2: GUARDED behavior refresh ──────────────────────────────────────────────────────────────────
+// Applies the confidence guard to the ACTIVE behavior set. HIGH → refresh from geometry (authoritative set +
+// functions; LLM supplies topography, matched by name; per-behavior flags for unresolved-name/unknown-
+// function). LOW/UNREAD → PRESERVE the existing behavior classification (maladaptiveBehaviors +
+// masteredBehaviors); the overwrite NEVER happens. On CREATE (no existing) LOW/UNREAD keeps the LLM
+// behaviors, FLAGGED (nothing to preserve; flagged-LLM beats empty). Keys on intrinsic signals only.
+export function assembleRefreshProfile(
+  llmProfile: any,
+  rows: Row[],
+  existingProfile?: any,
+): { profile: any; reviewFlags: ReviewFlag[]; confidence: ReturnType<typeof assessConfidence> } {
+  const { profile, reviewFlags } = assembleCommit1(llmProfile, rows) // diagnosis + mastered (Commit 1)
+  const conf = assessConfidence(rows)
+  const llmBehaviors: any[] = llmProfile.maladaptiveBehaviors || []
+
+  if (conf.level === 'HIGH') {
+    // REFRESH behaviors from geometry: authoritative active set + functions; LLM topography by name match.
+    const bf = readBehaviorFunctions(rows)
+    profile.maladaptiveBehaviors = bf.map((b) => {
+      const match = llmBehaviors.find((lb) => nameMatch(String(lb?.name || ''), b.behavior))
+      return {
+        name: b.behavior,
+        status: 'active',
+        functions: b.functions,                        // geometry authoritative (no prose-guessed flicker)
+        topographies: match?.topographies || match?.topography ? (match.topographies || [match.topography]) : [],
+      }
+    })
+    // masteredBehaviors stays the LLM baseline (geometry's active set already excludes mastered — they have
+    // no Hypothesized-Function block). The active set is geometry; mastery classification is unchanged here.
+    for (const f of conf.perBehaviorFlags)
+      reviewFlags.push({ field: `behavior:${f.name}`, reason: `${f.issue} — not structurally verified, please confirm`, source: 'behavior-review' })
+  } else {
+    // LOW / UNREAD — do NOT overwrite. Preserve existing behaviors (refresh) or keep flagged LLM (create).
+    const existingBeh: any[] = existingProfile?.maladaptiveBehaviors || []
+    if (existingBeh.length) {
+      profile.maladaptiveBehaviors = existingProfile.maladaptiveBehaviors
+      profile.masteredBehaviors = existingProfile.masteredBehaviors || []
+      reviewFlags.push({ field: 'behaviors', reason: `read confidence ${conf.level} (${conf.reasons.join('; ')}) — EXISTING behaviors preserved, not overwritten`, source: 'guard-preserved' })
+    } else {
+      reviewFlags.push({ field: 'behaviors', reason: `read confidence ${conf.level} (${conf.reasons.join('; ')}) — behaviors from LLM (structure not verified)`, source: 'llm-fallback' })
+    }
+  }
+  return { profile, reviewFlags, confidence: conf }
 }

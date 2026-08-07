@@ -7,7 +7,7 @@ import { isPdf, MAX_FILE_BYTES, storeClientFile, userOwnsClient } from "@/lib/cl
 import { validateAssessmentProfile, buildRefreshedProfile } from "@/lib/assessmentRefresh";
 import { diagnosisColumn } from "@/lib/diagnosis";
 import { parsePositioned, clusterRows } from "@/lib/pdfGeometry";
-import { assembleCommit1 } from "@/lib/assembleRefreshProfile";
+import { assembleRefreshProfile } from "@/lib/assembleRefreshProfile";
 
 export const maxDuration = 60;
 
@@ -83,6 +83,7 @@ export async function POST(req: NextRequest) {
         select: { clinical_profile: true },
       });
       if (!existing) return NextResponse.json({ error: "Client not found" }, { status: 404 });
+      const existingProfile = (existing.clinical_profile as any) || {};
 
       // Keep the SOURCE PDF now — stored even if extraction fails below, so a rejected new-format PDF can be
       // debugged and the RBT need not re-upload. STORING THE FILE DOES NOT MEAN THE PROFILE WAS UPDATED.
@@ -90,11 +91,13 @@ export async function POST(req: NextRequest) {
 
       // Assessment-sourced keys, built wholesale (no cleanText/hasBlockedTerm — see buildAssessmentProfile).
       const llmProfile = buildAssessmentProfile(extracted);
-      // FAST/MAS Commit 1: overlay GEOMETRY-AUTHORITATIVE diagnosis + mastered-skills (structured read; F82
-      // and other differentials excluded at source). LLM value kept as a FLAGGED fallback where geometry
-      // could not read the structure. Same one PDF parse feeds text (LLM) and positioned rows (geometry).
+      // FAST/MAS overlay (one PDF parse feeds text→LLM and positioned rows→geometry):
+      //  • Commit 1 — diagnosis + mastered-skills GEOMETRY-AUTHORITATIVE (F82/differentials excluded at
+      //    source); LLM kept as a FLAGGED fallback where no structure is located.
+      //  • Commit 2 — GUARDED behavior refresh: HIGH confidence → geometry behaviors (source of truth);
+      //    LOW/UNREAD → PRESERVE existingProfile behaviors (never overwrite an incomplete read), flagged.
       const geomRows = clusterRows(await parsePositioned(buffer));
-      const { profile: assessmentProfile, reviewFlags } = assembleCommit1(llmProfile, geomRows);
+      const { profile: assessmentProfile, reviewFlags } = assembleRefreshProfile(llmProfile, geomRows, existingProfile);
 
       // GUARD 1 — required-field validation (pure, unit-tested in assessmentRefresh.test.mjs). A
       // clinically valid assessment must contain ALL required fields; an empty result for ANY means the
@@ -122,7 +125,6 @@ export async function POST(req: NextRequest) {
       // blockedNarrativeTerms, continuityContext, …), replaces assessment-sourced keys wholesale, and
       // snapshots the pre-refresh profile as `previousProfile` for one-level undo (restored by
       // /api/clients/[id]/profile/restore). A whole-profile snapshot, so it also covers any future key.
-      const existingProfile = (existing.clinical_profile as any) || {};
       const refreshed = buildRefreshedProfile(existingProfile, assessmentProfile);
       // reviewFlags is a non-clinical key (preserved by buildRefreshedProfile's spread) — surfaced to the
       // RBT/BCBA as a "Needs review" banner. A flagged field is an LLM fallback, never a verified read.
