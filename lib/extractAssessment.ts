@@ -328,6 +328,23 @@ Return this exact JSON structure:
       return true;
     });
 
+    // PHANTOM-BEHAVIOR SUPPRESSION (deterministic). A maladaptiveBehavior with ACTIVE/UNKNOWN status but NO
+    // topography AND NO function is a phantom — a stale or narrative mention (e.g. a behavior mastered in a
+    // PRIOR assessment, referenced in prose but not re-listed as an active target this period) that carries
+    // no operational definition. A REAL active behavior always has BOTH a topography and a function (verified
+    // across every reference assessment — real active behaviors have 100-300-char topographies and 1-3
+    // functions; none is missing even one). Name-only entries are legitimate ONLY for mastered/maintenance/
+    // discontinued (the INCLUDE-MASTERED rule) — those are EXEMPT here. Dropping the phantom keeps it out of
+    // the profile and stops it from tripping Guard 1 (which requires a function + topography). The rule can
+    // never remove a real active behavior, because none is missing a topography or a function.
+    parsed.maladaptiveBehaviors = (parsed.maladaptiveBehaviors || []).filter(b => {
+      const status = String((b as any)?.status || '').toLowerCase().trim();
+      const noTopography = !String(b?.topography || '').trim();
+      const noFunction = !Array.isArray(b?.function) || b.function.length === 0;
+      const activeOrUnknown = status === '' || status === 'active' || status === 'unknown';
+      return !(activeOrUnknown && noTopography && noFunction);
+    });
+
     return stripIdentifiers(parsed);
   } catch (error) {
     console.error('Failed to parse assessment extraction:', error);
