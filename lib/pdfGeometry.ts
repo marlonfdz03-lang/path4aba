@@ -189,9 +189,11 @@ export function readMasteredSkills(rows: Row[]): { heading: string; page: number
 // Felix proves the grid alone is NOT enough: a differential (F82) sits inside a diagnosis table. The clean
 // deterministic signal is the confirmed-statement anchor; codes in that sentence are the confirmed set.
 const ICD = /\b[A-Za-z]\d{2}(?:\.\d+)?\b/g
+// PDF fragments split words across cells ("con"|"fi"|"rmed"); row-join with spaces yields "con fi rmed".
+// Match anchors against a DESPACED copy so fragmentation can't hide the phrase. Deterministic, general.
+const despace = (s: string) => s.replace(/\s+/g, '').toLowerCase()
 export function readConfirmedDiagnosis(rows: Row[]): { source: string; codes: string[] } | null {
-  // Find the row(s) containing "confirmed diagnos..." and gather ICD codes on that row + the next few.
-  const anchorIdx = rows.findIndex((r) => /confirmed diagnos/i.test(rowText(r)))
+  const anchorIdx = rows.findIndex((r) => despace(rowText(r)).includes('confirmeddiagnos'))
   if (anchorIdx >= 0) {
     const window = rows.slice(anchorIdx, anchorIdx + 3).map(rowText).join(' ')
     const codes = [...new Set((window.match(ICD) || []).map((c) => c.toUpperCase()).filter((c) => !/^Z/.test(c)))]
