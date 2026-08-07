@@ -108,47 +108,56 @@ const rowText = (row: Row) => row.cells.map((c) => c.text).join(' ')
 // A behavior is ACTIVE iff it has a detail block containing a "Hypothesized Function:" field. The behavior
 // name is the LEFT column (small x); the function value is the middle column on the anchor row. Completeness
 // = count of such blocks (deterministic), which is exactly what closes the 10-vs-9 wobble + the phantom.
+const FUNC_WORD = /^(escape|attention|tangible|tangibles|automatic|sensory)$/i
+// Column-header phrases that live in the same left column as behavior names but are NOT behaviors.
+const HEADER_PHRASE = /^(target|behavior|definition|hypothesi[sz]ed|data collection|baseline|intensity|level|frequency|operational|topography|function|measurable)\b/i
+
+// A "value cell" is one whose text is DOMINATED by function-vocabulary tokens (e.g. "Attention/Escape",
+// "Escape/Automatic", "Escape") — as opposed to a definition sentence that merely CONTAINS "escape". This
+// is what generalizes across layouts: we don't care whether the value sits right-of or below the label,
+// only that a function-dominated cell is in the anchor's immediate neighborhood.
+function functionsFromCell(text: string): string[] {
+  const toks = text.split(/[\/,]|\bor\b|\band\b|\s+/i).map((s) => s.trim()).filter(Boolean)
+  if (!toks.length) return []
+  const fns = toks.filter((t) => FUNC_WORD.test(t))
+  // Dominated: at least half the tokens are function words (excludes prose like "escape-maintained isolation").
+  if (fns.length && fns.length * 2 >= toks.length) {
+    return [...new Set(fns.map((t) => t.toLowerCase().replace(/s$/, '')))].map((t) => (t === 'tangible' ? 'tangible' : t))
+  }
+  return []
+}
+
 export interface BehaviorFunctionRow { behavior: string; functions: string[]; page: number; y: number }
 export function readBehaviorFunctions(rows: Row[]): BehaviorFunctionRow[] {
-  // Anchor rows: contain "Hypothesized Function"
   const anchors = rows.filter((r) => /hypothesi[sz]ed function/i.test(rowText(r)))
   if (!anchors.length) return []
-  // Left-column name fragments live at small x on the anchor pages. Determine the name column as the
-  // minimum-x band on those pages, then build name blocks (consecutive small-x fragments by y).
   const anchorPages = new Set(anchors.map((a) => a.page))
-  const leftFrags = rows
-    .filter((r) => anchorPages.has(r.page))
+  // Name column = the leftmost x-band on the anchor pages. Build name blocks (consecutive leftmost fragments),
+  // EXCLUDING header phrases (structural headers, not behaviors). General: no client name, no absolute x.
+  const pageRows = rows.filter((r) => anchorPages.has(r.page))
+  const minX = Math.min(...pageRows.flatMap((r) => r.cells.map((c) => c.x)))
+  const leftFrags = pageRows
     .flatMap((r) => r.cells)
-    .filter((c) => c.x < 5) // measured: behavior names at x≈3.4; definitions start at x≈8
+    .filter((c) => c.x < minX + 2 && !HEADER_PHRASE.test(c.text)) // leftmost column, headers excluded
     .sort((a, b) => a.page - b.page || a.y - b.y)
-  // Group left fragments into name blocks: a gap > 1.2 in y (or new page) starts a new block.
   const blocks: { name: string; page: number; yStart: number; yEnd: number }[] = []
   for (const f of leftFrags) {
     const last = blocks[blocks.length - 1]
     if (last && last.page === f.page && f.y - last.yEnd < 1.5) { last.name += ' ' + f.text; last.yEnd = f.y }
     else blocks.push({ name: f.text, page: f.page, yStart: f.y, yEnd: f.y })
   }
+
   const out: BehaviorFunctionRow[] = []
   for (const a of anchors) {
-    // value = cells to the RIGHT of the "Function" label on the anchor row, taken until a large x-gap marks
-    // the next column. RELATIVE to the label position (generalizes across layouts — never a hardcoded x).
     const labelCell = [...a.cells].sort((c1, c2) => c1.x - c2.x).find((c) => /function/i.test(c.text))
-    const after = a.cells.filter((c) => labelCell && c.x > labelCell.x).sort((c1, c2) => c1.x - c2.x)
-    const valueParts: string[] = []
-    let prevX = labelCell?.x ?? 0
-    for (const c of after) {
-      if (valueParts.length && c.x - prevX > 6) break // big gap → next column (e.g. intensity)
-      const t = c.text.replace(/^:\s*/, '').trim()
-      if (t) valueParts.push(t)
-      prevX = c.x
-    }
-    const value = valueParts.join(' ').trim()
-    const functions = value
-      .split(/[\/,]| or | and /i)
-      .map((s) => s.trim().toLowerCase())
-      .filter((s) => /^(escape|attention|tangible|tangibles|automatic|sensory)$/.test(s))
-      .map((s) => (s === 'tangibles' ? 'tangible' : s))
-    // behavior = nearest name block on the same page whose yStart ≤ anchor.y (the block the field sits in)
+    const lx = labelCell?.x ?? 0
+    // Neighborhood: same row + the next ~2 rows, cells at or right of the label's column (excludes the far-left
+    // definition/name columns). Value = function-dominated cell(s) in that neighborhood — direction-agnostic.
+    const near = rows
+      .filter((r) => r.page === a.page && r.y >= a.y - ROW_TOL && r.y <= a.y + 1.7)
+      .flatMap((r) => r.cells)
+      .filter((c) => c.x >= lx - 2)
+    const functions = [...new Set(near.flatMap((c) => functionsFromCell(c.text)))]
     const block = blocks
       .filter((b) => b.page === a.page && b.yStart <= a.y + ROW_TOL)
       .sort((b1, b2) => b2.yStart - b1.yStart)[0]
