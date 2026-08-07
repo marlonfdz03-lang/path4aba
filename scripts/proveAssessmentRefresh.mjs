@@ -39,6 +39,7 @@ const { parsePdf, buildAssessmentProfile, mapToLegacyFormat } = await import('..
 const { extractAssessment } = await import('../lib/extractAssessment.ts');
 const { validateAssessmentProfile, buildRefreshedProfile } = await import('../lib/assessmentRefresh.ts');
 const { CURATED_HOME_ACTIVITIES, CURATED_SCHOOL_ACTIVITIES } = await import('../lib/curatedActivities.ts');
+const { diagnosisColumn } = await import('../lib/diagnosis.ts');
 
 // ── tiny helpers ──────────────────────────────────────────────────────────────
 const arr = (v) => (Array.isArray(v) ? v : []);
@@ -229,14 +230,37 @@ for (const [key, gt] of Object.entries(clients)) {
   // ── Bug 3: DIAGNOSIS (both paths) ──
   const july = codesOf(gt.diagnosisJuly);
   const staleOld = codesOf(gt.diagnosisJanuaryOld);
+  // KNOWN-RESIDUAL codes (e.g. Felix F82): a "suspected"/differential the extractor emits BARE as a
+  // confirmed F-code. NOT deterministically catchable (valid code, no marker) — tracked to the extraction-
+  // accuracy / FAST-MAS structured-reading front (read the confirmed-diagnosis TABLE, same root as reading
+  // the function tables). The over-count check stays RED on purpose (honest, not a false green); this only
+  // LABELS the red so it is not mistaken for a regression. NEVER add these to diagnosisJuly ground truth.
+  const knownResidual = codesOf(gt.diagnosisKnownResidual);
   for (const [pathName, prof] of [['refresh', refreshProfile], ['create', createProfile]]) {
     const got = codesOf(prof.diagnosis);
     if (july.length) {
       check(`Bug 3 — diagnosis count [${pathName}]`, got.length === july.length, `got ${got.length} (${got.join(',')}), expected ${july.length} (${july.join(',')})`);
       check(`Bug 3 — expected codes present [${pathName}]`, july.every((c) => got.includes(c)), `missing: ${july.filter((c) => !got.includes(c)).join(',') || 'none'}`);
       if (staleOld.length) check(`Bug 3 — stale old codes replaced/absent [${pathName}]`, !staleOld.some((c) => got.includes(c)), `stale still present: ${staleOld.filter((c) => got.includes(c)).join(',') || 'none'}`);
+      // Label the honest red: if the ONLY over-count codes are known residuals, say so explicitly.
+      const extra = got.filter((c) => !july.includes(c));
+      if (extra.length && extra.every((c) => knownResidual.includes(c))) {
+        console.log(`   ${C.dim(`↳ KNOWN-RESIDUAL [${pathName}]: ${extra.join(', ')} — extraction-judgment (bare "suspected" F-code); tracked to FAST/MAS structured-reading front, NOT a regression`)}`);
+      }
     } else check(`Bug 3 — diagnosis [${pathName}] got ${got.length}: ${got.join(',')}`, null);
   }
+  // Bug 3 — COLUMN SYNC (no-drift): the clients.diagnosis COLUMN the refresh route writes derives from the
+  // SAME normalized diagnosis as the JSON, so parsing the column back to codes must equal the JSON's codes.
+  // The harness does no DB writes, so this gates the invariant (one normalized source → column == JSON),
+  // catching any future path that lets the column drift from clinical_profile.diagnosis.
+  const jsonCodes = codesOf(refreshProfile.diagnosis).sort();
+  const columnCodes = codesOf([diagnosisColumn(refreshProfile.diagnosis)]).sort();
+  check('Bug 3 — column sync: diagnosis COLUMN matches JSON (no drift)',
+    JSON.stringify(jsonCodes) === JSON.stringify(columnCodes),
+    `column [${columnCodes.join(',')}] vs json [${jsonCodes.join(',')}]`);
+  // Firewall backstop: NO Z-code and NO obviously-unconfirmed code may survive in the stored diagnosis.
+  const zcodes = codesOf(refreshProfile.diagnosis).filter((c) => /^Z/i.test(c));
+  check('Bug 3 — firewall: no Z-code in stored diagnosis', zcodes.length === 0, zcodes.length ? `leaked Z-codes: ${zcodes.join(',')}` : '');
 
   // ── Activities: curated baseline always present + assessment SPLIT only; flat discarded ──
   // Marlon's rule: the curated clinician-approved list is ALWAYS in the profile (every client, every path);

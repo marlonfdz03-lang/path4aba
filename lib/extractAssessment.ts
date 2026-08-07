@@ -156,6 +156,13 @@ Place an activity in homeActivities or schoolActivities ONLY when the assessment
 For nonPreferredActivities: extract all activities listed as non-preferred, low-preference, or avoided (anywhere in the document).
 For caregivers: extract names of caregivers, parents, or guardians mentioned in the document.
 
+━━━ DIAGNOSIS EXTRACTION RULES ━━━
+Capture CONFIRMED clinical diagnoses. Emit each as a single STRING in the form "Diagnosis Name (ICD-10 code)" — e.g. "Autism Spectrum Disorder, Level 1 (F84.0)". Do NOT emit objects; the diagnosis array is an array of strings.
+- Prefer the formal source — a "Diagnosis" / "Diagnosis Code" section/table, or an explicit "confirmed diagnoses" statement. A condition mentioned ONLY as a differential, associated/co-occurring, historical, or "rule out" note — and NOT listed among the confirmed diagnoses — should be EXCLUDED.
+- EXCLUDE any diagnosis flagged as suspected, rule-out, "r/o", differential, provisional, presumptive, possible, probable, or "to rule out".
+- EXCLUDE Z-codes (Z##.# — e.g. Z55.9 "academic problem"): they are ICD contextual/social factors, NOT clinical diagnoses.
+- Deduplicate: each distinct diagnosis appears ONCE, even if the document mentions it in several places.
+
 INTERVENTION EXTRACTION — CRITICAL:
 Extract every ABA intervention, teaching procedure, behavior reduction procedure, antecedent strategy, consequence strategy, prompting procedure, reinforcement procedure, or clinical protocol explicitly described or mentioned anywhere in this assessment. An intervention does not need to match a predefined list — if a BCBA describes a clinical procedure, extract it.
 

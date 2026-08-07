@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { parsePdf, mapToLegacyFormat, saveKnowledgeBase, buildAssessmentProfile } from "@/lib/assessmentPipeline";
 import { isPdf, MAX_FILE_BYTES, storeClientFile, userOwnsClient } from "@/lib/clientFiles";
 import { validateAssessmentProfile, buildRefreshedProfile } from "@/lib/assessmentRefresh";
+import { diagnosisColumn } from "@/lib/diagnosis";
 
 export const maxDuration = 60;
 
@@ -117,9 +118,16 @@ export async function POST(req: NextRequest) {
       const existingProfile = (existing.clinical_profile as any) || {};
       const refreshed = buildRefreshedProfile(existingProfile, assessmentProfile);
 
+      // COLUMN SYNC: write the clients.diagnosis COLUMN from the SAME normalized diagnosis as the JSON, so
+      // the column (set once at create, previously never updated on refresh) can no longer drift from
+      // clinical_profile.diagnosis. diagnosisColumn re-normalizes defensively — no Z-code / suspected code
+      // can reach the column even if a future caller passes a raw profile.
       await prisma.clients.update({
         where: { id: clientId },
-        data: { clinical_profile: refreshed },
+        data: {
+          clinical_profile: refreshed,
+          diagnosis: diagnosisColumn((refreshed as any).diagnosis),
+        },
       });
 
       return NextResponse.json({ ...refreshed, updated: true, fileStored: true });

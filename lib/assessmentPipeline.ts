@@ -8,6 +8,7 @@ import { ExtractedAssessment } from '@/lib/extractAssessment'
 import { prisma } from '@/lib/prisma'
 import { parseReinforcers } from '@/lib/reinforcers'
 import { buildActivityLists } from '@/lib/curatedActivities'
+import { normalizeDiagnosis } from '@/lib/diagnosis'
 
 // ── PDF parsing ───────────────────────────────────────────────────────────────
 
@@ -121,7 +122,7 @@ export function mapToLegacyFormat(extracted: ExtractedAssessment) {
       (extracted as any).familyTrainingGoals ||
       (extracted as any).parentEducationGoals ||
       (extracted as any).caregiverObjectives || [],
-    diagnosis: extracted.diagnosis || [],
+    diagnosis: normalizeDiagnosis(extracted.diagnosis),
     caregivers: extracted.caregivers || [],
   }
 }
@@ -190,7 +191,7 @@ export function buildAssessmentProfile(extracted: ExtractedAssessment) {
       school: (extracted as any).schoolActivities,
     }),
     parentTrainingGoals: extracted.parentTrainingGoals || [],
-    diagnosis: extracted.diagnosis || [],
+    diagnosis: normalizeDiagnosis(extracted.diagnosis),
     caregivers: extracted.caregivers || [],
   }
 }
