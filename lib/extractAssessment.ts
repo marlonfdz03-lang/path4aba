@@ -77,7 +77,16 @@ export async function extractAssessment(text: string): Promise<ExtractedAssessme
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',
     temperature: 0,
-    max_tokens: 8000,
+    // Fixed seed + temperature 0 = best-effort reproducibility: the same PDF extracts the same set across
+    // runs (fixes the 19-vs-13 reinforcer swing). Seed is best-effort on Azure (a system_fingerprint change
+    // can still shift output), so the REINFORCER EXTRACTION RULES block below is what makes it COMPLETE;
+    // the seed makes a complete extraction repeatable on top.
+    seed: 42,
+    // 16000 (GPT-4o max output is 16384) so a large assessment (many behaviors/skills/interventions) never
+    // truncates the tail of the JSON — reinforcers/activities/parent-goals sit near the end and would be the
+    // first lost. Truncation is caught explicitly below (finish_reason === 'length') rather than surfacing as
+    // an opaque JSON parse error.
+    max_tokens: 16000,
     messages: [
       {
         role: 'system',
@@ -182,6 +191,24 @@ Stimulus Fading, NCR, Noncontingent Reinforcement, Behavioral Skills Training, B
 Structured Antecedent Strategies, Systematic Prompting, Reinforcement Schedules,
 Guided Practice, Caregiver Training Procedures
 
+━━━ REINFORCER EXTRACTION RULES ━━━
+Extract EVERY reinforcer and preferred item named ANYWHERE in the assessment — DO NOT STOP EARLY, DO NOT LIMIT, DO NOT summarize, sample, or select a representative subset. If the assessment names 20 reinforcers, return all 20.
+
+WHERE TO LOOK — understand the document and scan ALL of it, not one fixed section:
+- Reinforcement / preference assessment results (MSWO, paired-stimulus, free-operant, forced-choice) — capture every item listed
+- Any section titled "Reinforcers", "Preferred Items", "Motivating Operations", "Likes / Interests", or similar
+- NARRATIVE PROSE anywhere in the document — "enjoys ...", "responds well to ...", "is motivated by ...", "likes ...", and caregiver- or teacher-reported preferences
+- Reinforcers embedded inside intervention or reinforcement-schedule descriptions
+An item named in a paragraph counts exactly as much as one in a table or bullet list — extract it either way. Do NOT require a heading; different assessments place reinforcers differently, so read the whole document and pull them from wherever they appear.
+
+GRANULARITY — ONE DISCRETE ITEM PER ENTRY:
+- When several items appear under one category (e.g. social: smiles, thumbs up, high five, positive tone of voice), capture EACH as its own entry. NEVER collapse a group into a single summary entry.
+- Sort each item into the best-fit bucket (people / tangibles / activities / social). If the bucket is ambiguous, STILL capture the item in the closest bucket — never drop a named reinforcer because its category is unclear.
+- Format (unchanged): one item per array entry, no prose sentences, no "such as ..." lists, no leading "and"/"or", strip surrounding quotes.
+
+FIREWALL — CAPTURE ONLY WHAT IS NAMED:
+Exhaustive means miss NONE that the assessment actually names. It does NOT mean add any. NEVER invent, infer, generalize, or pad reinforcers that are not written in the document. If the assessment names three, return exactly those three — no "typical" additions, no filler, no assumed favorites.
+
 Return this exact JSON structure:
 {
   "clientCode": "generated internal code like initials-DOB-001",
@@ -232,6 +259,14 @@ Return this exact JSON structure:
       }
     ]
   });
+
+  // TRUNCATION GUARD: if the model hit the output cap, the JSON is cut off mid-structure and the tail
+  // fields (reinforcers/activities/parent-goals) are lost. Fail LOUD with a clear message rather than
+  // letting it surface as an opaque "could not parse" error — nothing partial is written either way, but
+  // this tells the caller the real cause (assessment too large for one pass).
+  if (response.choices[0].finish_reason === 'length') {
+    throw new Error('Assessment extraction was truncated (document too large for a single extraction pass) — the result was incomplete and was not applied.');
+  }
 
   const content = response.choices[0].message.content || '{}';
 
