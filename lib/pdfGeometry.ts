@@ -166,21 +166,34 @@ export function readBehaviorFunctions(rows: Row[]): BehaviorFunctionRow[] {
   return out
 }
 
-// ── READER 2: mastered skills (names under a "MASTERED:" heading in the skills section) ──────────────────
+// ── READER 2: mastered skills (names under a "MASTERED:" heading, bounded by the section's real end) ─────
+// A section HEADING ends at the next heading OR a return to a further-left column (a major section like
+// "Behaviors to Increase" begins). Items are the ROWS below the heading in the section's column — ONE item
+// per row (not per cell, so "Request a Break Properly" stays whole). General: keys on the heading/column
+// structure, never on a coordinate or item count.
+const IS_HEADING = (t: string) => /^(MASTERED|NEW|DISCONTINUED|MAINTENANCE|IN\s*PROGRESS)\s*:/i.test(t.trim())
 export function readMasteredSkills(rows: Row[]): { heading: string; page: number; y: number; items: string[] }[] {
-  const headings = rows.filter((r) => /\bMASTERED\s*:/i.test(rowText(r)))
+  const headings = rows.filter((r) => IS_HEADING(rowText(r)) && /MASTERED/i.test(rowText(r)))
   const out: { heading: string; page: number; y: number; items: string[] }[] = []
   for (const h of headings) {
-    const hx = h.cells.find((c) => /MASTERED/i.test(c.text))?.x ?? 0
-    // Items: same-or-following rows on the page, in the same x-column band as the heading, until the next
-    // section. Include text on the heading row after "MASTERED:" and rows just below within the column.
-    const sameCol = rows
-      .filter((r) => r.page === h.page && r.y >= h.y - ROW_TOL && r.y < h.y + 6)
-      .flatMap((r) => r.cells)
-      .filter((c) => Math.abs(c.x - hx) < 8 && !/MASTERED\s*:/i.test(c.text) && c.text.trim())
-      .sort((a, b) => a.y - b.y || a.x - b.x)
-      .map((c) => c.text.trim())
-    out.push({ heading: rowText(h).trim(), page: h.page, y: h.y, items: sameCol })
+    const hx = h.cells.find((c) => /MASTERED/i.test(c.text))?.x ?? Math.min(...h.cells.map((c) => c.x))
+    const below = rows
+      .filter((r) => r.page === h.page && r.y > h.y + ROW_TOL / 2)
+      .sort((a, b) => a.y - b.y)
+    const items: string[] = []
+    // Any text on the heading row AFTER "MASTERED:" is the first item (e.g. "MASTERED: Tantrum").
+    const inline = h.cells.filter((c) => c.x > hx + 0.5).map((c) => c.text).join(' ').trim()
+    if (inline) items.push(inline)
+    let lastY = h.y
+    for (const r of below) {
+      const leftX = Math.min(...r.cells.map((c) => c.x))
+      // BOUNDARY: next heading, a return to a further-left column (new section), or a large vertical GAP
+      // (the list ended — following content like a signature/footer is separate). All structural, not tuned.
+      if (IS_HEADING(rowText(r)) || leftX < hx - 2 || r.y - lastY > 2) break
+      const itemText = r.cells.filter((c) => c.x >= hx - 1).map((c) => c.text).join(' ').replace(/\s+/g, ' ').trim()
+      if (itemText) { items.push(itemText); lastY = r.y }
+    }
+    out.push({ heading: rowText(h).trim(), page: h.page, y: h.y, items })
   }
   return out
 }
