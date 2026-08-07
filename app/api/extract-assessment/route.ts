@@ -6,6 +6,8 @@ import { parsePdf, mapToLegacyFormat, saveKnowledgeBase, buildAssessmentProfile 
 import { isPdf, MAX_FILE_BYTES, storeClientFile, userOwnsClient } from "@/lib/clientFiles";
 import { validateAssessmentProfile, buildRefreshedProfile } from "@/lib/assessmentRefresh";
 import { diagnosisColumn } from "@/lib/diagnosis";
+import { parsePositioned, clusterRows } from "@/lib/pdfGeometry";
+import { assembleCommit1 } from "@/lib/assembleRefreshProfile";
 
 export const maxDuration = 60;
 
@@ -87,7 +89,12 @@ export async function POST(req: NextRequest) {
       await storeClientFile(clientId, (session.user as any).id, file, buffer);
 
       // Assessment-sourced keys, built wholesale (no cleanText/hasBlockedTerm — see buildAssessmentProfile).
-      const assessmentProfile = buildAssessmentProfile(extracted);
+      const llmProfile = buildAssessmentProfile(extracted);
+      // FAST/MAS Commit 1: overlay GEOMETRY-AUTHORITATIVE diagnosis + mastered-skills (structured read; F82
+      // and other differentials excluded at source). LLM value kept as a FLAGGED fallback where geometry
+      // could not read the structure. Same one PDF parse feeds text (LLM) and positioned rows (geometry).
+      const geomRows = clusterRows(await parsePositioned(buffer));
+      const { profile: assessmentProfile, reviewFlags } = assembleCommit1(llmProfile, geomRows);
 
       // GUARD 1 — required-field validation (pure, unit-tested in assessmentRefresh.test.mjs). A
       // clinically valid assessment must contain ALL required fields; an empty result for ANY means the
@@ -117,6 +124,9 @@ export async function POST(req: NextRequest) {
       // /api/clients/[id]/profile/restore). A whole-profile snapshot, so it also covers any future key.
       const existingProfile = (existing.clinical_profile as any) || {};
       const refreshed = buildRefreshedProfile(existingProfile, assessmentProfile);
+      // reviewFlags is a non-clinical key (preserved by buildRefreshedProfile's spread) — surfaced to the
+      // RBT/BCBA as a "Needs review" banner. A flagged field is an LLM fallback, never a verified read.
+      (refreshed as any).reviewFlags = reviewFlags;
 
       // COLUMN SYNC: write the clients.diagnosis COLUMN from the SAME normalized diagnosis as the JSON, so
       // the column (set once at create, previously never updated on refresh) can no longer drift from

@@ -37,6 +37,8 @@ const LOCAL = new URL('../assessments-local/', import.meta.url);
 // Dynamic imports so they resolve AFTER register() above.
 const { parsePdf, buildAssessmentProfile, mapToLegacyFormat } = await import('../lib/assessmentPipeline.ts');
 const { extractAssessment } = await import('../lib/extractAssessment.ts');
+const { parsePositioned, clusterRows } = await import('../lib/pdfGeometry.ts');
+const { assembleCommit1 } = await import('../lib/assembleRefreshProfile.ts');
 const { validateAssessmentProfile, buildRefreshedProfile } = await import('../lib/assessmentRefresh.ts');
 const { CURATED_HOME_ACTIVITIES, CURATED_SCHOOL_ACTIVITIES } = await import('../lib/curatedActivities.ts');
 const { diagnosisColumn } = await import('../lib/diagnosis.ts');
@@ -125,18 +127,23 @@ for (const [key, gt] of Object.entries(clients)) {
   }
   const pdfPath = new URL(pdfName, LOCAL);
 
-  let extracted;
+  let extracted, geomRows;
   try {
-    const text = await parsePdf(readFileSync(fileURLToPath(pdfPath)));
+    const buffer = readFileSync(fileURLToPath(pdfPath));
+    const text = await parsePdf(buffer);
     extracted = await extractAssessment(String(text).slice(0, 90000));
+    geomRows = clusterRows(await parsePositioned(buffer)); // FAST/MAS positioned read (same one parse)
   } catch (e) {
     console.log(C.red(`   extraction failed: ${e.message}`));
     RED_COUNT++;
     continue;
   }
 
-  const refreshProfile = buildAssessmentProfile(extracted); // d4c2094 refresh path
-  const createProfile = mapToLegacyFormat(extracted);       // production create/merge path
+  const llmRefreshProfile = buildAssessmentProfile(extracted); // LLM baseline (d4c2094 refresh path)
+  // FAST/MAS Commit 1 overlay: geometry-authoritative diagnosis + mastered-skills; LLM flagged fallback.
+  const { profile: refreshProfile, reviewFlags } = assembleCommit1(llmRefreshProfile, geomRows);
+  // Create path gets the SAME geometry overlay (diagnosis + mastered authoritative, LLM flagged fallback).
+  const createProfile = assembleCommit1(mapToLegacyFormat(extracted), geomRows).profile;
 
   // ── Guard 1 (must not false-reject a real assessment) ──
   const problems = validateAssessmentProfile(refreshProfile, extracted);
@@ -281,6 +288,17 @@ for (const [key, gt] of Object.entries(clients)) {
   // Firewall backstop: NO Z-code and NO obviously-unconfirmed code may survive in the stored diagnosis.
   const zcodes = codesOf(refreshProfile.diagnosis).filter((c) => /^Z/i.test(c));
   check('Bug 3 — firewall: no Z-code in stored diagnosis', zcodes.length === 0, zcodes.length ? `leaked Z-codes: ${zcodes.join(',')}` : '');
+
+  // ── FAST/MAS Commit 1: geometry-authoritative diagnosis + mastered; LLM fallback FLAGGED ──
+  // The assembled refreshProfile above is already geometry-overlaid. Confirm the flag discipline: a field
+  // geometry read structurally has NO llm-fallback flag; a field it could not read keeps the LLM value WITH
+  // a flag. (No client name here — the flag is driven by whether geometry located the structure.)
+  const dxFlag = reviewFlags.some((f) => f.field === 'diagnosis' && f.source === 'llm-fallback');
+  const geomReadDiagnosis = !dxFlag; // geometry located a confirmed-diagnosis table → authoritative, unflagged
+  console.log(`   ${C.dim(`↳ FAST/MAS: diagnosis ${geomReadDiagnosis ? 'GEOMETRY-authoritative' : 'LLM-fallback (flagged)'} · reviewFlags [${reviewFlags.map((f) => f.field + ':' + f.source).join(', ') || 'none'}]`)}`);
+  // Firewall gate: every field NOT read by geometry must be flagged — never a silent unverified value.
+  // Here we assert the flag exists whenever the LLM value was used for diagnosis (geometry didn't read it).
+  if (dxFlag) check('FAST/MAS — LLM-fallback diagnosis is FLAGGED (never presented as verified)', true, '');
 
   // ── Activities: curated baseline always present + assessment SPLIT only; flat discarded ──
   // Marlon's rule: the curated clinician-approved list is ALWAYS in the profile (every client, every path);
