@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs'
 import OpenAI from 'openai'
 import { parsePositioned, clusterRows } from '../lib/pdfGeometry.ts'
 import { buildLocatedInput, transcribeLocated, validate } from '../lib/fastMasTranscribe.ts'
+import { assessConfidence } from '../lib/fastMasConfidence.ts'
 
 const openai = new OpenAI({
   apiKey: process.env.AZURE_OPENAI_API_KEY || 'azure-openai',
@@ -68,5 +69,12 @@ for (const [name, key, path, knownNames] of PDFS) {
   else if (c.state === 'UNREAD') console.log(`  correctness (behaviors vs ground truth): ${Y('UNREAD — narrative format, geometry located 0; honest-unknown (NOT guessed)')}`)
   else if (c.state === 'WRONG') console.log(`  correctness (behaviors vs ground truth): ${R('WRONG')}${c.spurious.length ? D(`\n      spurious: ${c.spurious.join(', ')}`) : ''}${c.missing.length ? D(`\n      missing:  ${c.missing.join(', ')}`) : ''}`)
   else console.log(`  correctness: ${D('(no ground truth set)')}`)
+
+  // CONFIDENCE GUARD — intrinsic self-assessment (no ground truth) → refresh vs preserve+flag.
+  const conf = assessConfidence(rows)
+  const badge = conf.level === 'HIGH' ? G('HIGH') : conf.level === 'UNREAD' ? Y('UNREAD') : R('LOW')
+  console.log(`  confidence guard: ${badge} → ${conf.route === 'refresh' ? G('REFRESH behaviors (source of truth)') : R('PRESERVE existing + FLAG (no overwrite, no drop)')}`)
+  for (const r of conf.reasons) console.log(D(`      reason: ${r}`))
+  if (conf.perBehaviorFlags.length) console.log(D(`      per-behavior flags: ${conf.perBehaviorFlags.map((f) => `${f.name} (${f.issue})`).join('; ')}`))
 }
 console.log('')
