@@ -11,6 +11,7 @@ import { nextSessionClause } from "@/lib/nextSessionDate";
 import { saveNote, getNotesByClientId, deleteNote } from "@/lib/noteStorage";
 import { DataTab } from "./DataTab";
 import { CatalogDiffPanel } from "./CatalogDiffPanel";
+import { reviewBannerLines } from "@/lib/reviewFlagCopy";
 
 const LOCATION_OPTIONS = [
   { label: "Home", value: "home" },
@@ -787,6 +788,10 @@ export default function ClientProfilePage() {
       .map(({ name }) => name);
   }
 
+  // "Needs review" banner: plain-language lines derived from the guard's reviewFlags (persisted in
+  // clinical_profile; also merged in after an in-page Update Assessment). Pure display — no mutation.
+  const reviewLines = reviewBannerLines(client?.clinicalProfile?.reviewFlags);
+
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       {/* Topbar / breadcrumb */}
@@ -887,6 +892,28 @@ export default function ClientProfilePage() {
             ))}
           </div>
         </div>
+
+        {/* "Needs review" banner — shown when the assessment guard flagged unverified data.
+            Amber (visible, non-alarming), persistent while flags exist, self-clears when the next
+            clean upload recomputes empty reviewFlags. Pure display: no mutation, no raw reason shown. */}
+        {reviewLines.length > 0 && (
+          <div className="rounded-[10px] border-l-4 p-4 mb-6" style={{ background: "#FEF3C7", borderLeftColor: "#F59E0B" }}>
+            <div className="flex items-start gap-3" style={{ color: "#92400E" }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mt-0.5" aria-hidden="true">
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <div>
+                <p className="text-[14px] font-semibold mb-1">Needs review</p>
+                <p className="text-[13px] mb-2">This assessment upload couldn&apos;t be fully read automatically. The items below were kept or estimated — please double-check them.</p>
+                <ul className="list-disc pl-5 text-[13px]" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {reviewLines.map((line, i) => <li key={i}>{line}</li>)}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6" style={{ borderBottom: "1px solid var(--border)" }}>
