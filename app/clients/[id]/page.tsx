@@ -12,6 +12,7 @@ import { saveNote, getNotesByClientId, deleteNote } from "@/lib/noteStorage";
 import { DataTab } from "./DataTab";
 import { CatalogDiffPanel } from "./CatalogDiffPanel";
 import { reviewBannerLines } from "@/lib/reviewFlagCopy";
+import { subtractMasteredFromActive } from "@/lib/skillReconcile";
 
 const LOCATION_OPTIONS = [
   { label: "Home", value: "home" },
@@ -358,10 +359,18 @@ export default function ClientProfilePage() {
   }
 
   const behaviors: any[] = client.clinicalProfile?.maladaptiveBehaviors || [];
-  const skills: any[] = [
-    ...(client.clinicalProfile?.replacementBehaviors || []),
-    ...(client.clinicalProfile?.skillAcquisition || []),
-  ];
+  // Replacement skills are two clinically-distinct fields. A skill the assessment's MASTERED section declares
+  // mastered (skillAcquisition) is NOT an active program — so we subtract mastered names from the active list
+  // for display (Layer 2). This mirrors Layer 1 (assembleRefreshProfile) AND fixes any already-stored
+  // cross-field overlap immediately, before a re-upload. subtractMasteredFromActive keys on the mastered
+  // names via token-subset, so near-dups ("Share a toy" vs "Share a preferred toy") collapse too.
+  const masteredSkills: any[] = client.clinicalProfile?.skillAcquisition || [];
+  const masteredSkillNames: string[] = masteredSkills.map((s: any) => (typeof s === "string" ? s : s?.name || ""));
+  const activePrograms: any[] = subtractMasteredFromActive(
+    client.clinicalProfile?.replacementBehaviors || [],
+    masteredSkillNames,
+  );
+  const skills: any[] = [...activePrograms, ...masteredSkills];
 
   function getName(item: any): string {
     return typeof item === "string" ? item : item?.name || "";
@@ -556,10 +565,9 @@ export default function ClientProfilePage() {
         },
         activePrograms: {
           maladaptive: (client.clinicalProfile?.maladaptiveBehaviors || []).map((b: any) => typeof b === "string" ? b : b?.name || ""),
-          replacementSkills: [
-            ...(client.clinicalProfile?.replacementBehaviors || []).map((s: any) => typeof s === "string" ? s : s?.name || ""),
-            ...(client.clinicalProfile?.skillAcquisition || []).map((s: any) => typeof s === "string" ? s : s?.name || ""),
-          ],
+          // Reconciled (Layer 2): active programs (mastered subtracted) + mastered skills — no duplicate skill
+          // name reaches note generation.
+          replacementSkills: skills.map((s: any) => (typeof s === "string" ? s : s?.name || "")),
         },
         diagnosis: client.clinicalProfile?.diagnosis || [],
         setting: client.primary_setting || "",
@@ -881,7 +889,7 @@ export default function ClientProfilePage() {
             {[
               { label: "Behaviors", value: (client.clinicalProfile?.maladaptiveBehaviors?.length || 0) + " tracked" },
               { label: "Interventions", value: (client.clinicalProfile?.interventions?.length || 0) + " approved" },
-              { label: "Skills", value: ((client.clinicalProfile?.skillAcquisition?.length || 0) + (client.clinicalProfile?.replacementBehaviors?.length || 0)) + " programs" },
+              { label: "Skills", value: (activePrograms.length + masteredSkills.length) + " programs" },
               { label: "Reinforcers", value: client.clinicalProfile?.reinforcers?.length || 0 },
               { label: "Notes Saved", value: dailyNotes.length },
             ].map(({ label, value }) => (
@@ -1024,8 +1032,8 @@ export default function ClientProfilePage() {
                   {[
                     { label: "Maladaptive Behaviors", value: client.clinicalProfile?.maladaptiveBehaviors?.length || 0 },
                     { label: "Approved Interventions", value: client.clinicalProfile?.interventions?.length || 0 },
-                    { label: "Replacement Behaviors", value: client.clinicalProfile?.replacementBehaviors?.length || 0 },
-                    { label: "Skill Programs", value: client.clinicalProfile?.skillAcquisition?.length || 0 },
+                    { label: "Active Replacement Programs", value: activePrograms.length },
+                    { label: "Mastered Skills", value: masteredSkills.length },
                     { label: "Reinforcers", value: client.clinicalProfile?.reinforcers?.length || 0 },
                   ].map(({ label, value }) => (
                     <div key={label} className="flex justify-between items-center">
@@ -1077,23 +1085,48 @@ export default function ClientProfilePage() {
 
               <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
                 <SectionHeader title="Replacement Skills" />
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    ...(client.clinicalProfile?.replacementBehaviors || []),
-                    ...(client.clinicalProfile?.skillAcquisition || []),
-                  ].map((s: any, idx: number) => (
-                    <span
-                      key={idx}
-                      className="text-[11px] font-medium px-2.5 py-1 rounded-full"
-                      style={{ background: "var(--teal-light)", color: "var(--teal)" }}
-                    >
-                      {typeof s === "string" ? s : s.name}
-                    </span>
-                  ))}
-                  {!skills.length && (
-                    <p className="text-[13px]" style={{ color: "var(--text3)" }}>No skills recorded.</p>
-                  )}
-                </div>
+                {/* Two clinically-distinct groups: active replacement programs vs skills the assessment marked
+                    MASTERED. Deduped (Layer 2) so a mastered skill never also appears as active. */}
+                {!skills.length ? (
+                  <p className="text-[13px]" style={{ color: "var(--text3)" }}>No skills recorded.</p>
+                ) : (
+                  <>
+                    <p className="text-[11px] uppercase tracking-widest font-semibold mb-2" style={{ color: "var(--text3)" }}>
+                      Active Replacement Programs ({activePrograms.length})
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {activePrograms.map((s: any, idx: number) => (
+                        <span
+                          key={idx}
+                          className="text-[11px] font-medium px-2.5 py-1 rounded-full"
+                          style={{ background: "var(--teal-light)", color: "var(--teal)" }}
+                        >
+                          {typeof s === "string" ? s : s.name}
+                        </span>
+                      ))}
+                      {!activePrograms.length && (
+                        <p className="text-[13px]" style={{ color: "var(--text3)" }}>None.</p>
+                      )}
+                    </div>
+                    <p className="text-[11px] uppercase tracking-widest font-semibold mb-2 mt-4" style={{ color: "var(--text3)" }}>
+                      Mastered Skills ({masteredSkills.length})
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {masteredSkills.map((s: any, idx: number) => (
+                        <span
+                          key={idx}
+                          className="text-[11px] font-medium px-2.5 py-1 rounded-full border"
+                          style={{ background: "var(--bg)", color: "var(--text2)", borderColor: "var(--border)" }}
+                        >
+                          {typeof s === "string" ? s : s.name}
+                        </span>
+                      ))}
+                      {!masteredSkills.length && (
+                        <p className="text-[13px]" style={{ color: "var(--text3)" }}>None.</p>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
@@ -1133,10 +1166,9 @@ export default function ClientProfilePage() {
 
             {(() => {
               const rawBehaviors = (client.clinicalProfile?.maladaptiveBehaviors || []);
-              const rawReplacements = [
-                ...(client.clinicalProfile?.replacementBehaviors || []),
-                ...(client.clinicalProfile?.skillAcquisition || []),
-              ];
+              // Reconciled (Layer 2): active programs (mastered subtracted) + mastered skills — no cross-field
+              // duplicate reaches the Treatment Map.
+              const rawReplacements = skills;
               const approvedInterventions = (client.clinicalProfile?.interventions || []).map((i: any) => typeof i === "string" ? i : i?.name || "").filter(Boolean);
 
               if (rawBehaviors.length === 0 && rawReplacements.length === 0) {

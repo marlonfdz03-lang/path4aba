@@ -11,6 +11,7 @@ import type { Row } from './pdfGeometry.ts'
 import { readConfirmedDiagnosis, readMasteredSkills, readBehaviorFunctions } from './pdfGeometry.ts'
 import { assessConfidence } from './fastMasConfidence.ts'
 import { normalizeDiagnosis } from './diagnosis.ts'
+import { subtractMasteredFromActive } from './skillReconcile.ts'
 
 export interface ReviewFlag { field: string; reason: string; source: 'llm-fallback' | 'guard-preserved' | 'behavior-review' }
 
@@ -55,6 +56,14 @@ export function assembleCommit1(baseProfile: any, rows: Row[]): { profile: any; 
     profile.skillAcquisition = geoMastered
       .filter((n) => { const k = norm(n); if (!k || seen.has(k)) return false; seen.add(k); return true })
       .map((name) => ({ name: name.trim(), status: 'mastered', targetFunction: '' }))
+    // LAYER 1 — a skill the MASTERED section declares mastered is NOT an active replacement target. Subtract
+    // the mastered names (token-subset match) from replacementBehaviors so the two fields are DISJOINT. Keys
+    // purely on the geometry MASTERED section — no skill name, no client rule, no threshold. Non-destructive:
+    // mastered skills stay in skillAcquisition; only their duplicate leak into the active list is removed.
+    profile.replacementBehaviors = subtractMasteredFromActive(
+      profile.replacementBehaviors,
+      profile.skillAcquisition.map((s: any) => s.name),
+    )
   } else if ((profile.skillAcquisition || []).length) {
     flags.push({ field: 'skillAcquisition', reason: 'mastered skills read from LLM, not a structured MASTERED section — verify', source: 'llm-fallback' })
   }
