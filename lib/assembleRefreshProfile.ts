@@ -8,12 +8,14 @@
 // structure only. (Behaviors are NOT touched in Commit 1 — that is the guarded refresh in Commit 2.)
 
 import type { Row } from './pdfGeometry.ts'
-import { readConfirmedDiagnosis, readMasteredSkills, readBehaviorFunctions } from './pdfGeometry.ts'
+import { readConfirmedDiagnosis, readMasteredSkills, readBehaviorFunctions, readTargetList } from './pdfGeometry.ts'
 import { assessConfidence } from './fastMasConfidence.ts'
 import { normalizeDiagnosis } from './diagnosis.ts'
 import { subtractMasteredFromActive } from './skillReconcile.ts'
+import { matchByName, matchByDefinition } from './behaviorReconcile.ts'
+import { tokenSubsetMatch } from './skillReconcile.ts'
 
-export interface ReviewFlag { field: string; reason: string; source: 'llm-fallback' | 'guard-preserved' | 'behavior-review' }
+export interface ReviewFlag { field: string; reason: string; source: 'llm-fallback' | 'guard-preserved' | 'behavior-review' | 'target-undefined' }
 
 const CODE = (s: string) => (String(s).match(/[A-Za-z]\d{2}(?:\.\d+)?/) || [])[0]?.toUpperCase()
 const norm = (s: string) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
@@ -86,15 +88,27 @@ export function assembleRefreshProfile(
   const conf = assessConfidence(rows)
   const llmBehaviors: any[] = llmProfile.maladaptiveBehaviors || []
 
+  // Did we APPLY the assessment's behavior set (HIGH refresh or create)? If so, the target-undefined check
+  // below runs; on LOW/UNREAD-preserve nothing was applied, so it is skipped.
+  let appliedAssessmentSet = false
   if (conf.level === 'HIGH') {
-    // REFRESH behaviors from geometry: authoritative active set + functions; LLM topography by name match.
+    appliedAssessmentSet = true
+    // REFRESH behaviors from geometry: authoritative active SET + FUNCTIONS. The behavior's NAME + operational
+    // definition (topography) come from the LLM read of the SAME behavior, reconciled two ways (both require a
+    // UNIQUE candidate, so the wrong topography can never attach):
+    //   FIX 2  — by name: containment → token-subset (order-independent; survives a mangled/re-ordered geometry
+    //            name like "SIB (Self-Injury"). On match we adopt the LLM's CLEAN name, not the geometry string.
+    //   FIX 3a — if unnamed/unmatched: by the anchor's definition text vs each LLM topography's DISCRIMINATING
+    //            tokens (resolves a block whose name wasn't located, e.g. Defiant Behavior).
+    // No match either way → keep the geometry name (may be "(unresolved)") with EMPTY topography, so GUARD 1
+    // hard-422s the upload (firewall: never apply an unresolvable behavior, never mix new+old).
     const bf = readBehaviorFunctions(rows)
     profile.maladaptiveBehaviors = bf.map((b) => {
-      const match = llmBehaviors.find((lb) => nameMatch(String(lb?.name || ''), b.behavior))
+      const match = matchByName(b.behavior, llmBehaviors) || matchByDefinition(b.defText, llmBehaviors)
       return {
-        name: b.behavior,
+        name: match?.name ? String(match.name) : b.behavior,      // adopt the LLM's clean name on a match
         status: 'active',
-        functions: b.functions,                        // geometry authoritative (no prose-guessed flicker)
+        functions: b.functions,                                   // geometry authoritative (no prose-guessed flicker)
         topographies: match?.topographies || match?.topography ? (match.topographies || [match.topography]) : [],
       }
     })
@@ -110,7 +124,28 @@ export function assembleRefreshProfile(
       profile.masteredBehaviors = existingProfile.masteredBehaviors || []
       reviewFlags.push({ field: 'behaviors', reason: `read confidence ${conf.level} (${conf.reasons.join('; ')}) — EXISTING behaviors preserved, not overwritten`, source: 'guard-preserved' })
     } else {
+      appliedAssessmentSet = true // create path (no existing to preserve): the LLM behaviors are applied
       reviewFlags.push({ field: 'behaviors', reason: `read confidence ${conf.level} (${conf.reasons.join('; ')}) — behaviors from LLM (structure not verified)`, source: 'llm-fallback' })
+    }
+  }
+
+  // TARGET-UNDEFINED — a behavior NAMED in the assessment's target list ("Behavior to Reduce" capsule) but
+  // given NO detail block (no operational definition/baseline) and NOT mastered. We do NOT add it (an empty
+  // behavior), but we SURFACE it for the BCBA. Structural: named-in-list minus (detailed ∪ mastered), matched
+  // fuzzily so a variant ("Hygiene" vs "Non-Compliance with Hygiene Routines") is not falsely flagged. Only
+  // when we actually applied the assessment's set (HIGH/create) — on LOW/UNREAD-preserve nothing was applied.
+  if (appliedAssessmentSet) {
+    const targetNames = readTargetList(rows)
+    if (targetNames.length) {
+      const known = [
+        ...((profile.maladaptiveBehaviors || []) as any[]).map((b) => String(b?.name || '')),
+        ...((profile.masteredBehaviors || []) as string[]),
+        ...((profile.skillAcquisition || []) as any[]).map((s) => String(s?.name || '')),
+      ].filter(Boolean)
+      for (const t of targetNames) {
+        if (!known.some((k) => nameMatch(k, t) || tokenSubsetMatch(k, t)))
+          reviewFlags.push({ field: `target:${t}`, source: 'target-undefined', reason: `${t} is listed as a target behavior but has no operational definition or baseline data` })
+      }
     }
   }
   return { profile, reviewFlags, confidence: conf }

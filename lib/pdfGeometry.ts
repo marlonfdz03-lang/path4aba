@@ -127,7 +127,7 @@ function functionsFromCell(text: string): string[] {
   return []
 }
 
-export interface BehaviorFunctionRow { behavior: string; functions: string[]; page: number; y: number }
+export interface BehaviorFunctionRow { behavior: string; functions: string[]; page: number; y: number; defText: string }
 export function readBehaviorFunctions(rows: Row[]): BehaviorFunctionRow[] {
   const anchors = rows.filter((r) => /hypothesi[sz]ed function/i.test(rowText(r)))
   if (!anchors.length) return []
@@ -143,7 +143,10 @@ export function readBehaviorFunctions(rows: Row[]): BehaviorFunctionRow[] {
   const blocks: { name: string; page: number; yStart: number; yEnd: number }[] = []
   for (const f of leftFrags) {
     const last = blocks[blocks.length - 1]
-    if (last && last.page === f.page && f.y - last.yEnd < 1.5) { last.name += ' ' + f.text; last.yEnd = f.y }
+    // FIX 1 — rejoin a hyphenated line-break: when the accumulated name ends in "-", the next fragment is the
+    // continuation of a split word ("SIB (Self-" + "Injury" → "SIB (Self-Injury"), so append WITHOUT a space.
+    // Keys on the trailing-hyphen pattern — no client/behavior name.
+    if (last && last.page === f.page && f.y - last.yEnd < 1.5) { last.name += /-\s*$/.test(last.name) ? f.text : ' ' + f.text; last.yEnd = f.y }
     else blocks.push({ name: f.text, page: f.page, yStart: f.y, yEnd: f.y })
   }
 
@@ -161,7 +164,19 @@ export function readBehaviorFunctions(rows: Row[]): BehaviorFunctionRow[] {
     const block = blocks
       .filter((b) => b.page === a.page && b.yStart <= a.y + ROW_TOL)
       .sort((b1, b2) => b2.yStart - b1.yStart)[0]
-    out.push({ behavior: (block?.name || '(unresolved)').replace(/\s+/g, ' ').trim(), functions, page: a.page, y: a.y })
+    // FIX 3a support — the anchor's neighborhood OPERATIONAL DEFINITION: content-column cells (excludes the
+    // far-left name band) just above/at the anchor. Used to reconcile an unnamed block to an LLM behavior by
+    // its definition when the name couldn't be located. Over-grabbing a neighbor only makes the match ambiguous
+    // (→ refused), never wrong.
+    const defText = rows
+      .filter((r) => r.page === a.page && r.y >= a.y - 6 && r.y <= a.y + 1.7)
+      .flatMap((r) => r.cells)
+      .filter((c) => c.x >= minX + 2)
+      .map((c) => c.text)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    out.push({ behavior: (block?.name || '(unresolved)').replace(/\s+/g, ' ').trim(), functions, page: a.page, y: a.y, defText })
   }
   return out
 }
@@ -196,6 +211,40 @@ export function readMasteredSkills(rows: Row[]): { heading: string; page: number
     out.push({ heading: rowText(h).trim(), page: h.page, y: h.y, items })
   }
   return out
+}
+
+// ── READER 4: target-behavior list (the "Behavior(s) to Reduce" capsule that names every target behavior) ──
+// Names appear one per row in the heading's left column, bounded by the next major section. Used to detect a
+// behavior NAMED as a target but given NO detail block (no operational definition/baseline) — see
+// assembleRefreshProfile. General: keys on the target-list header vocabulary + the left-column list, never on
+// a client/behavior name.
+const TARGET_HEADER = /^\s*(behaviors?\s+(?:to\s+reduce|to\s+decrease|targeted\s+for\s+reduction)|target\s+behaviors?)\s*:?/i
+// Next major section = the list has ended (skills/replacement/reinforcers/intervention/mastered/goals).
+const NEXT_SECTION = /^\s*(behaviors?\s+to\s+increase|skill\s+acquisition|replacement|goals?\s+to\s+increase|maintenance|mastered|reinforc|intervention)/i
+export function readTargetList(rows: Row[]): string[] {
+  const hi = rows.findIndex((r) => TARGET_HEADER.test(rowText(r)))
+  if (hi < 0) return []
+  const h = rows[hi]
+  const hx = Math.min(...h.cells.map((c) => c.x))
+  const names: string[] = []
+  // Any text on the heading row AFTER the header phrase is the first name ("Behavior to Reduce: Tantrums").
+  const inline = rowText(h).replace(TARGET_HEADER, '').replace(/\s+/g, ' ').trim()
+  if (inline) names.push(inline)
+  const below = rows
+    .filter((r) => r.page > h.page || (r.page === h.page && r.y > h.y + ROW_TOL / 2))
+    .sort((a, b) => a.page - b.page || a.y - b.y)
+  let lastY = h.y, lastPage = h.page
+  for (const r of below) {
+    const t = rowText(r).trim()
+    const leftX = Math.min(...r.cells.map((c) => c.x))
+    // BOUNDARY: next section heading, a return to a further-left column, a bullet list (skills), or a large
+    // vertical gap on the same page (the list ended). All structural, not tuned.
+    if (NEXT_SECTION.test(t) || leftX < hx - 2 || /^[•·▪]/.test(t) || (r.page === lastPage && r.y - lastY > 2)) break
+    // One NAME per row — the left-column text (excludes any right-column content on the same row).
+    const nameText = r.cells.filter((c) => c.x <= hx + 4).map((c) => c.text).join(' ').replace(/\s+/g, ' ').trim()
+    if (nameText) { names.push(nameText); lastY = r.y; lastPage = r.page }
+  }
+  return names.map((n) => n.replace(/\s+/g, ' ').trim()).filter(Boolean)
 }
 
 // ── READER 3: confirmed diagnosis (the "confirmed diagnoses of ..." statement — differentials excluded) ──
