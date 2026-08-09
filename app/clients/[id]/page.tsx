@@ -13,6 +13,7 @@ import { DataTab } from "./DataTab";
 import { CatalogDiffPanel } from "./CatalogDiffPanel";
 import { reviewBannerLines } from "@/lib/reviewFlagCopy";
 import { subtractMasteredFromActive } from "@/lib/skillReconcile";
+import { functionDisplayLabel } from "@/lib/functionPatterns";
 
 const LOCATION_OPTIONS = [
   { label: "Home", value: "home" },
@@ -23,7 +24,7 @@ const LOCATION_OPTIONS = [
 
 const FIXED_PRESENT = ["Caregiver", "Teacher"];
 
-type Tab = "overview" | "treatment_map" | "generate" | "refine" | "notes" | "data";
+type Tab = "overview" | "fast" | "treatment_map" | "generate" | "refine" | "notes" | "data";
 
 // ── Shared micro-components ────────────────────────────────────────────────
 
@@ -755,6 +756,7 @@ export default function ClientProfilePage() {
 
   const TABS: { key: Tab; label: string }[] = [
     { key: "overview", label: "Overview" },
+    { key: "fast", label: "FAST" },
     ...(client?.treatmentMapApproved ? [{ key: "treatment_map" as Tab, label: "Treatment Map" }] : []),
     { key: "generate", label: "Generate Note" },
     { key: "refine", label: "Refine Note" },
@@ -1153,6 +1155,91 @@ export default function ClientProfilePage() {
           <CatalogDiffPanel clinicalProfile={client.clinicalProfile} />
           </div>
         )}
+
+        {/* ── FAST Tab — behavior → function review (read-only, Piece 1) ── */}
+        {activeTab === "fast" && (() => {
+          const rows: any[] = client.clinicalProfile?.maladaptiveBehaviors || [];
+          const flags: any[] = client.clinicalProfile?.reviewFlags || [];
+          // Per-behavior FAST flags: the HIGH route writes behavior:<name> (source 'behavior-review') when a
+          // behavior's function wasn't structurally verified. Match by normalized name.
+          const flaggedNames = new Set(
+            flags
+              .filter((f: any) => f?.source === "behavior-review" && String(f?.field || "").startsWith("behavior:"))
+              .map((f: any) => String(f.field).slice("behavior:".length).trim().toLowerCase())
+          );
+          // LOW/UNREAD route preserved the existing behaviors instead of refreshing them (guard-preserved).
+          const preservedLow = flags.some((f: any) => f?.field === "behaviors" && f?.source === "guard-preserved");
+
+          return (
+            <div className="space-y-4">
+              <p className="text-[12px]" style={{ color: "var(--text3)" }}>
+                The function(s) the assessment reading (FAST) recorded for each behavior. Review-only for now.
+              </p>
+              {preservedLow && (
+                <div className="rounded-[10px] border-l-4 p-3 text-[13px]" style={{ background: "#FEF3C7", borderLeftColor: "#F59E0B", color: "#92400E" }}>
+                  Functions preserved from the prior assessment (this upload couldn&apos;t be read cleanly) — please review.
+                </div>
+              )}
+
+              {rows.length === 0 ? (
+                <div className="bg-white rounded-[10px] border p-8 text-center" style={{ borderColor: "var(--border)" }}>
+                  <p className="text-[13px]" style={{ color: "var(--text3)" }}>No behaviors recorded. Upload an assessment to populate this table.</p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-[10px] border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[13px]" style={{ borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)" }}>
+                          <th className="text-left font-semibold px-4 py-3" style={{ color: "var(--text2)" }}>Behavior</th>
+                          <th className="text-left font-semibold px-4 py-3" style={{ color: "var(--text2)" }}>Function(s)</th>
+                          <th className="text-left font-semibold px-4 py-3" style={{ color: "var(--text2)" }}>Topography</th>
+                          <th className="text-left font-semibold px-4 py-3" style={{ color: "var(--text2)" }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((b: any, i: number) => {
+                          const name = typeof b === "string" ? b : (b?.name || "");
+                          const fns: string[] = typeof b === "object" ? (b.functions || b.function || []) : [];
+                          const topos: string[] = typeof b === "object" ? (b.topographies || (b.topography ? [b.topography] : [])) : [];
+                          const status = (typeof b === "object" && b?.status) ? b.status : "active";
+                          const flagged = flaggedNames.has(String(name).trim().toLowerCase());
+                          return (
+                            <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+                              <td className="px-4 py-3 align-top" style={{ color: "var(--text1)", fontWeight: 500 }}>
+                                {name}
+                                {flagged && (
+                                  <span className="ml-2 text-[11px] font-medium px-2 py-0.5 rounded-full" style={{ background: "#FEF3C7", color: "#92400E" }}>⚠ confirm</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 align-top">
+                                <div className="flex flex-wrap gap-1.5">
+                                  {fns.length ? fns.map((fn, j) => (
+                                    <span key={j} className="text-[11px] font-medium px-2 py-0.5 rounded-full" style={{ background: "var(--teal-light)", color: "var(--teal)" }}>
+                                      {functionDisplayLabel(fn)}
+                                    </span>
+                                  )) : <span style={{ color: "var(--text3)" }}>—</span>}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 align-top" style={{ color: "var(--text2)", maxWidth: 420 }}>
+                                {topos.length ? topos.join(" ") : <span style={{ color: "var(--text3)" }}>—</span>}
+                              </td>
+                              <td className="px-4 py-3 align-top">
+                                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full" style={{ background: status === "mastered" ? "var(--bg)" : "#E6F9F5", color: status === "mastered" ? "var(--text2)" : "#0D8A6A", border: status === "mastered" ? "1px solid var(--border)" : "none" }}>
+                                  {status}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ── Treatment Map Tab ── */}
         {/* ── Treatment Map Tab ── */}
