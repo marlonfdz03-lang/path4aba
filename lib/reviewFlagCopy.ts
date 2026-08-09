@@ -11,10 +11,11 @@
 //   llm-fallback    · behaviors         (create path, no existing to preserve)
 //   behavior-review · behavior:<name>   (a single behavior whose name/function wasn't structural)
 
-export type ReviewFlagSource = "llm-fallback" | "guard-preserved" | "behavior-review";
+export type ReviewFlagSource = "llm-fallback" | "guard-preserved" | "behavior-review" | "target-undefined";
 export interface ReviewFlagLike { field: string; reason?: string; source: ReviewFlagSource }
 
 const BEHAVIOR_PREFIX = "behavior:";
+const TARGET_PREFIX = "target:";
 
 /** Plain-language, non-technical, actionable line for one flag. Never renders the raw `reason`. */
 export function flagCopy(flag: ReviewFlagLike): string {
@@ -24,6 +25,13 @@ export function flagCopy(flag: ReviewFlagLike): string {
   if (field.startsWith(BEHAVIOR_PREFIX)) {
     const name = field.slice(BEHAVIOR_PREFIX.length).trim();
     return `One behavior may not have been read correctly — please verify: ${name}.`;
+  }
+
+  // Named-but-undefined target: field is "target:<name>" — listed in the plan's target list but with no
+  // operational definition/baseline in the assessment, so it was not added.
+  if (field.startsWith(TARGET_PREFIX)) {
+    const name = field.slice(TARGET_PREFIX.length).trim();
+    return `${name} is listed as a target behavior but has no operational definition or baseline data — please verify with your BCBA.`;
   }
 
   if (field === "diagnosis")
