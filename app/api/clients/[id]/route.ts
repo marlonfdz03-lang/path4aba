@@ -3,10 +3,22 @@ import { auth } from '@/auth'
 import { Pool } from 'pg'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@/lib/generated/prisma/client'
+import { userOwnsClient } from '@/lib/clientFiles'
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter } as any)
+
+// PHI/ownership gate. A client's record (read, edit, delete) is accessible only to a user who OWNS it — its
+// assigned RBT or a connected BCBA (userOwnsClient) — or an admin. Fails CLOSED: any other authenticated user
+// is refused with 403 and no data is read or written. Without this, any logged-in user could read, overwrite,
+// or delete ANY client's clinical_profile (PHI). Same hole-class already closed on the assessment route.
+async function canAccessClient(session: any, clientId: string): Promise<boolean> {
+  if ((session?.user as any)?.role === 'admin') return true
+  const userId = (session?.user as any)?.id as string | undefined
+  if (!userId) return false
+  return userOwnsClient(userId, clientId)
+}
 
 
 export async function GET(
@@ -17,6 +29,8 @@ export async function GET(
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
+  if (!(await canAccessClient(session, id)))
+    return NextResponse.json({ error: 'Forbidden — you are not assigned to this client.' }, { status: 403 })
 
   try {
     const client = await prisma.clients.findFirst({
@@ -40,6 +54,9 @@ export async function PATCH(
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
+  if (!(await canAccessClient(session, id)))
+    return NextResponse.json({ error: 'Forbidden — you are not assigned to this client.' }, { status: 403 })
+
   const { clinical_profile } = await req.json()
 
   const existingRow = await prisma.clients.findUnique({
@@ -61,6 +78,9 @@ export async function DELETE(
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
+  if (!(await canAccessClient(session, id)))
+    return NextResponse.json({ error: 'Forbidden — you are not assigned to this client.' }, { status: 403 })
+
   await prisma.clients.delete({ where: { id } })
   return NextResponse.json({ ok: true })
 }
