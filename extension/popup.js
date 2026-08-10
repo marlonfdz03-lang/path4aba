@@ -2034,6 +2034,17 @@ function checkABAMatrixPage() {
 // tab is active. (The old onABAMatrix content-script ping was removed with the legacy
 // autofill; this listener is retained defensively and only ever reveals the gated button.)
 let onABAMatrix = false;
+
+// AI Fill (Beta) double-click guard: the button is disabled while a fill runs and re-enabled on the form
+// agent's terminal 'done' message, the sendMessage error callback, or a 60s timeout fallback (so a lost
+// message can never leave it stuck). Prevents the double-fill (5 maladaptive → 10) from a second click.
+let aiFillTimeout = null;
+function reEnableAiFill() {
+  if (aiFillTimeout) { clearTimeout(aiFillTimeout); aiFillTimeout = null; }
+  const aiBtn = document.getElementById('aiFillBetaBtn');
+  if (aiBtn) { aiBtn.disabled = false; aiBtn.textContent = '✨ AI Fill (Beta)'; }
+}
+
 chrome.runtime.onMessage.addListener((message) => {
   if (message.action === 'onABAMatrix') {
     onABAMatrix = true;
@@ -2045,10 +2056,15 @@ chrome.runtime.onMessage.addListener((message) => {
   // open popup directly, so we render them here with no background relay needed.
   if (message.action === 'agentStatus') {
     const statusDiv = document.getElementById('aiFillStatus');
-    if (statusDiv) {
+    // Only render non-empty text — the terminal 'done' message carries empty text and must not clobber the
+    // last real status line.
+    if (statusDiv && typeof message.text === 'string' && message.text !== '') {
       statusDiv.style.display = 'block';
-      statusDiv.textContent = message.text || '';
+      statusDiv.textContent = message.text;
     }
+    // Terminal signal from runFormAgent's finally (fires on success, early return, or error) → the fill is
+    // over, re-enable the button.
+    if (message.done) reEnableAiFill();
   }
 
   // Post-fill summary (Rule 7): total written, verified OK, and fields needing review.
@@ -2192,6 +2208,9 @@ function renderFillSummary(summary) {
 // Builds the same noteData as the fill flow (plus clientName) and hands it to the
 // background, which runs window.runFormAgent(noteData) in the ABA Matrix tab.
 document.getElementById('aiFillBetaBtn')?.addEventListener('click', () => {
+  const aiBtn = document.getElementById('aiFillBetaBtn');
+  if (aiBtn && aiBtn.disabled) return; // already filling — ignore the second click
+
   const clientOpt = document.getElementById('clientSelect')?.selectedOptions[0];
   const noteData = {
     fullNote: document.getElementById('outputNote')?.value || '',
@@ -2206,14 +2225,25 @@ document.getElementById('aiFillBetaBtn')?.addEventListener('click', () => {
   if (statusDiv) { statusDiv.style.display = 'block'; statusDiv.textContent = 'Starting AI Fill…'; }
   console.log('[Path4ABA] AI Fill (Beta) → runFormAgent:', noteData);
 
+  // Disable while the fill runs (prevents the double-click double-fill). Re-enabled by the terminal 'done'
+  // message (listener above), the error branch below, or the 60s timeout fallback.
+  if (aiBtn) { aiBtn.disabled = true; aiBtn.textContent = 'Filling…'; }
+  if (aiFillTimeout) clearTimeout(aiFillTimeout);
+  aiFillTimeout = setTimeout(reEnableAiFill, 60000);
+
   chrome.runtime.sendMessage({ action: 'runFormAgent', noteData }, (response) => {
+    // NOTE: this callback fires when the agent STARTS (background ack), not when the fill completes — so on
+    // success we do NOT re-enable here (that would reopen the double-click window). Re-enable only on an
+    // error, where the agent never started and no terminal 'done' will arrive.
     if (chrome.runtime.lastError) {
       console.error('[Path4ABA] runFormAgent error:', chrome.runtime.lastError.message);
       if (statusDiv) statusDiv.textContent = 'Error: ' + chrome.runtime.lastError.message;
+      reEnableAiFill();
     } else {
       console.log('[Path4ABA] runFormAgent response:', response);
-      if (response && response.ok === false && statusDiv) {
-        statusDiv.textContent = 'Error: ' + (response.error || 'agent did not start (reload the ABA Matrix page)');
+      if (response && response.ok === false) {
+        if (statusDiv) statusDiv.textContent = 'Error: ' + (response.error || 'agent did not start (reload the ABA Matrix page)');
+        reEnableAiFill();
       }
     }
   });

@@ -127,6 +127,8 @@
 
   async function runFormAgent(noteData) {
     noteData = noteData || {};
+    let __agentOk = true;
+    try {
 
     // ── Phase 2: ClinicalExtractor — ONE AI call, before any scanning ──
     sendStatus('🧠 Extracting clinical facts from the note…');
@@ -294,6 +296,16 @@
     }
 
     return { clinicalFacts: clinicalFacts, normalizedForm: normalizedForm, plan: plan, results: results };
+    } catch (e) {
+      __agentOk = false;
+      console.error('[Path4ABA] runFormAgent error:', e);
+      return { clinicalFacts: null, normalizedForm: null, plan: null, results: null, error: String((e && e.message) || e) };
+    } finally {
+      // TERMINAL SIGNAL — the finally ALWAYS runs, so this fires on the clean end, EVERY early return, and any
+      // thrown error. It re-enables the popup's AI Fill button (via done:true). Empty text so it never clobbers
+      // the last real status line the listener rendered.
+      try { chrome.runtime.sendMessage({ action: 'agentStatus', done: true, level: __agentOk ? 'success' : 'error', text: '' }); } catch (_e) { /* noop */ }
+    }
   }
 
   window.runFormAgent = runFormAgent;
