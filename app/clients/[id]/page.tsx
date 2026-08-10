@@ -13,7 +13,7 @@ import { DataTab } from "./DataTab";
 import { CatalogDiffPanel } from "./CatalogDiffPanel";
 import { reviewBannerLines } from "@/lib/reviewFlagCopy";
 import { subtractMasteredFromActive } from "@/lib/skillReconcile";
-import { functionDisplayLabel } from "@/lib/functionPatterns";
+import { functionDisplayLabel, functionToCanonical } from "@/lib/functionPatterns";
 
 const LOCATION_OPTIONS = [
   { label: "Home", value: "home" },
@@ -227,6 +227,11 @@ export default function ClientProfilePage() {
   const [updateAssessing, setUpdateAssessing] = useState(false);
   const [updateAssessError, setUpdateAssessError] = useState("");
   const [updateAssessSuccess, setUpdateAssessSuccess] = useState(false);
+
+  // FAST tab — per-row function editing (2c). fnEdit = the behavior being edited + its in-progress selection.
+  const [fnEdit, setFnEdit] = useState<{ name: string; selected: string[] } | null>(null);
+  const [fnSaving, setFnSaving] = useState(false);
+  const [fnError, setFnError] = useState("");
 
   // Refine Note state
   const [pastedNote, setPastedNote] = useState("");
@@ -802,6 +807,37 @@ export default function ClientProfilePage() {
   // clinical_profile; also merged in after an in-page Update Assessment). Pure display — no mutation.
   const reviewLines = reviewBannerLines(client?.clinicalProfile?.reviewFlags);
 
+  // FAST tab — save one behavior's edited functions via the gated behavior-functions route (2b). On success,
+  // update the row in place with the server's canonical result + human-edited source marker. On failure, keep
+  // the row as it was (the edit form stays open with an error) so we never leave a half-applied row.
+  async function saveBehaviorFunctions(behaviorName: string, selected: string[]) {
+    if (!client?.id) return;
+    setFnSaving(true); setFnError("");
+    try {
+      const res = await fetch(`/api/clients/${client.id}/behavior-functions`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ behaviorName, functions: selected }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setFnError(data?.error || "Could not save — please try again."); return; }
+      // Reflect the server's canonical result on the matching behavior (functions + source marker).
+      setClient((prev: any) => {
+        const behaviors = (prev?.clinicalProfile?.maladaptiveBehaviors || []).map((b: any) =>
+          (typeof b === "object" && String(b?.name || "") === String(data.behavior || behaviorName))
+            ? { ...b, functions: data.functions, functionsSource: "human-edited", functionsEditedBy: data.editedBy, functionsEditedAt: data.editedAt }
+            : b
+        );
+        return { ...prev, clinicalProfile: { ...prev.clinicalProfile, maladaptiveBehaviors: behaviors } };
+      });
+      setFnEdit(null);
+    } catch {
+      setFnError("Network error — please try again.");
+    } finally {
+      setFnSaving(false);
+    }
+  }
+
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       {/* Topbar / breadcrumb */}
@@ -1169,11 +1205,14 @@ export default function ClientProfilePage() {
           );
           // LOW/UNREAD route preserved the existing behaviors instead of refreshing them (guard-preserved).
           const preservedLow = flags.some((f: any) => f?.field === "behaviors" && f?.source === "guard-preserved");
+          // Canonical function vocabulary — the UI half of the firewall (the 2b route re-validates server-side).
+          const CANONICAL_FUNCTIONS = ["attention", "escape", "tangible", "automatic"];
+          const fmtDate = (iso?: string) => { if (!iso) return ""; const d = new Date(iso); return isNaN(+d) ? "" : d.toLocaleDateString(); };
 
           return (
             <div className="space-y-4">
               <p className="text-[12px]" style={{ color: "var(--text3)" }}>
-                The function(s) the assessment reading (FAST) recorded for each behavior. Review-only for now.
+                The function(s) recorded for each behavior. Click <strong>Edit</strong> to correct a behavior&apos;s functions — changes are saved and marked as reviewed by you.
               </p>
               {preservedLow && (
                 <div className="rounded-[10px] border-l-4 p-3 text-[13px]" style={{ background: "#FEF3C7", borderLeftColor: "#F59E0B", color: "#92400E" }}>
@@ -1204,6 +1243,8 @@ export default function ClientProfilePage() {
                           const topos: string[] = typeof b === "object" ? (b.topographies || (b.topography ? [b.topography] : [])) : [];
                           const status = (typeof b === "object" && b?.status) ? b.status : "active";
                           const flagged = flaggedNames.has(String(name).trim().toLowerCase());
+                          const humanEdited = typeof b === "object" && b?.functionsSource === "human-edited";
+                          const isEditing = fnEdit?.name === name;
                           return (
                             <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
                               <td className="px-4 py-3 align-top" style={{ color: "var(--text1)", fontWeight: 500 }}>
@@ -1212,14 +1253,60 @@ export default function ClientProfilePage() {
                                   <span className="ml-2 text-[11px] font-medium px-2 py-0.5 rounded-full" style={{ background: "#FEF3C7", color: "#92400E" }}>⚠ confirm</span>
                                 )}
                               </td>
-                              <td className="px-4 py-3 align-top">
-                                <div className="flex flex-wrap gap-1.5">
-                                  {fns.length ? fns.map((fn, j) => (
-                                    <span key={j} className="text-[11px] font-medium px-2 py-0.5 rounded-full" style={{ background: "var(--teal-light)", color: "var(--teal)" }}>
-                                      {functionDisplayLabel(fn)}
-                                    </span>
-                                  )) : <span style={{ color: "var(--text3)" }}>—</span>}
-                                </div>
+                              <td className="px-4 py-3 align-top" style={{ minWidth: 260 }}>
+                                {isEditing ? (
+                                  <div className="space-y-2">
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {CANONICAL_FUNCTIONS.map((fn) => {
+                                        const on = fnEdit!.selected.includes(fn);
+                                        return (
+                                          <button
+                                            key={fn}
+                                            type="button"
+                                            onClick={() => setFnEdit((p) => p && ({ ...p, selected: on ? p.selected.filter((x) => x !== fn) : [...p.selected, fn] }))}
+                                            className="text-[11px] font-medium px-2.5 py-1 rounded-full border transition-colors"
+                                            style={on
+                                              ? { background: "var(--teal)", color: "white", borderColor: "var(--teal)" }
+                                              : { background: "white", color: "var(--text2)", borderColor: "var(--border)" }}
+                                          >
+                                            {functionDisplayLabel(fn)}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <button type="button" disabled={fnSaving} onClick={() => saveBehaviorFunctions(name, fnEdit!.selected)}
+                                        className="text-[12px] font-semibold px-3 py-1 rounded-lg text-white disabled:opacity-50" style={{ background: "var(--teal)" }}>
+                                        {fnSaving ? "Saving…" : "Save"}
+                                      </button>
+                                      <button type="button" disabled={fnSaving} onClick={() => { setFnEdit(null); setFnError(""); }}
+                                        className="text-[12px] font-medium px-3 py-1 rounded-lg border disabled:opacity-50" style={{ borderColor: "var(--border)", color: "var(--text2)" }}>
+                                        Cancel
+                                      </button>
+                                    </div>
+                                    {fnError && <p className="text-[12px]" style={{ color: "#dc2626" }}>{fnError}</p>}
+                                  </div>
+                                ) : (
+                                  <div className="space-y-1">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      {fns.length ? fns.map((fn, j) => (
+                                        <span key={j} className="text-[11px] font-medium px-2 py-0.5 rounded-full" style={{ background: "var(--teal-light)", color: "var(--teal)" }}>
+                                          {functionDisplayLabel(fn)}
+                                        </span>
+                                      )) : <span style={{ color: "var(--text3)" }}>—</span>}
+                                      <button type="button"
+                                        onClick={() => { setFnError(""); setFnEdit({ name, selected: fns.map((f: string) => functionToCanonical(f)).filter((x): x is string => !!x) }); }}
+                                        className="ml-1 text-[11px] font-medium underline" style={{ color: "var(--teal)" }}>
+                                        Edit
+                                      </button>
+                                    </div>
+                                    <p className="text-[10px]" style={{ color: "var(--text3)" }}>
+                                      {humanEdited
+                                        ? `edited by ${b.functionsEditedBy || "a user"}${b.functionsEditedAt ? " · " + fmtDate(b.functionsEditedAt) : ""}`
+                                        : "from assessment"}
+                                    </p>
+                                  </div>
+                                )}
                               </td>
                               <td className="px-4 py-3 align-top" style={{ color: "var(--text2)", maxWidth: 420 }}>
                                 {topos.length ? topos.join(" ") : <span style={{ color: "var(--text3)" }}>—</span>}
