@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getExtensionAuth } from '@/lib/extensionAuth'
+import { scheduleFillValue } from '@/lib/scheduleFill'
 import OpenAI from 'openai'
 
 export async function POST(req: Request) {
@@ -156,9 +157,10 @@ export async function POST(req: Request) {
       { fieldId: `Goal${n}_GoalName`, fieldType: 'select', value: s.name },
       { fieldId: `Goal${n}_MedicalBarriers`, fieldType: 'chip', value: s.medicalNecessity },
       { fieldId: `Goal${n}_Activities`, fieldType: 'chip', value: s.activity },
-      // Goal{n}_Schedule stays BLANK for the RBT (reinforcement schedule is a session observation the
-      // assessment doesn't specify; a hardcoded default would invent a value into a signed form).
-      // Goal{n}_TeachingProcedure is filled below from the note's APPROVED method (Commit 4, Part 2).
+      // Goal{n}_Schedule and Goal{n}_TeachingProcedure are filled below in their own blocks (which read the
+      // field's REAL type from the form): Schedule transcribes the note's stated reinforcement schedule and
+      // defaults to "Continuous" only when the note specifies none (the field stays editable for the RBT to
+      // correct before signing); TeachingProcedure copies the note's APPROVED method (Commit 4, Part 2).
       {
         fieldId: `Goal${n}_PromptsUsed`, fieldType: 'radio', value: promptsRadio,
         conditional: promptsRadio === 'Yes' ? { value: promptTypes.join(', '), types: promptTypes } : undefined,
@@ -186,15 +188,27 @@ export async function POST(req: Request) {
         ...(s.teachingProcedureReview ? { review: s.teachingProcedureReview } : {}),
       })
     }
+
+    // Schedule of reinforcement — transcribe the note's stated schedule; default to "Continuous" only when the
+    // note specifies none (scheduleFillValue: the default is the fallback branch, never overrides a stated
+    // value). Reads the field's real type so a select (canonical option) or free-text both fill correctly.
+    const schedField = emptyFields.find((f) => f.fieldId === `Goal${n}_Schedule`)
+    if (schedField) {
+      deterministicActions.push({
+        fieldId: `Goal${n}_Schedule`, sectionId: `Goal${n}`, fieldType: schedField.fieldType || 'select',
+        value: scheduleFillValue(s.schedule), confidence: 1,
+      })
+    }
   })
 
   // Only send the fields NOT handled deterministically to the AI.
   const deterministicIds = new Set(deterministicActions.map((a) => a.fieldId))
-  // Teaching method and reinforcement schedule are intentionally never autofilled (see goalMappings):
-  // exclude them from the AI candidate set so the fallback planner cannot re-invent what we just
-  // removed from the deterministic path. They are left blank for the RBT to complete by observation.
+  // Teaching method is never AI-autofilled (filled deterministically above, or left for the BCBA-review
+  // path) — exclude it from the AI candidate set so the fallback planner cannot re-invent it. Schedule is
+  // now filled deterministically above (transcribe-or-default), so it is already in deterministicIds and
+  // needs no separate exclusion.
   const remainingFields = emptyFields.filter((f) =>
-    !deterministicIds.has(f.fieldId) && !/_(TeachingProcedure|Schedule)$/.test(f.fieldId))
+    !deterministicIds.has(f.fieldId) && !/_TeachingProcedure$/.test(f.fieldId))
 
   const prompt = `You are an ABA documentation form-filling planner. You are given structured ClinicalFacts and a list of EMPTY fields from an ABA Matrix session form. For each field you can confidently fill, output one fill action. Perform NO clinical reasoning — only MATCH the already-extracted facts to the fields.
 

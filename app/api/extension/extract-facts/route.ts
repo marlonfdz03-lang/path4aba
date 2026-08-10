@@ -345,7 +345,7 @@ Return this exact JSON structure:
       "promptsUsed": true or false,
       "promptDetail": "type of prompts if used",
       "reinforcers": "what was used as reinforcement",
-      "schedule": "Continuous Reinforcement or Fixed Ratio (FR) Schedule or Variable Ratio (VR) Schedule or other",
+      "schedule": "the reinforcement schedule the note EXPLICITLY states, as one canonical option — Continuous Reinforcement, Fixed Ratio (FR) Schedule, Variable Ratio (VR) Schedule, or other; EMPTY STRING \"\" if the note does not specify a schedule (do not guess one)",
       "medicalNecessity": "clinical justification sentence"
     }
   ]
