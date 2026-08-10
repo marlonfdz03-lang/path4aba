@@ -46,9 +46,10 @@ model client_files {
   uploaded_at DateTime @default(now()) @db.Timestamptz(6)
   filename    String
   mime_type   String
-  size_bytes  Int
-  data        Bytes
-  clients     clients  @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  size_bytes    Int
+  data          Bytes
+  superseded_at DateTime? @db.Timestamptz(6) // NULL = current; a timestamp = when a newer upload superseded it (bytes retained)
+  clients       clients   @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
   @@index([client_id])
 }

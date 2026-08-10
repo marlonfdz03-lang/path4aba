@@ -19,8 +19,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
 
   // Never select `data` — a list must not pull every PDF's bytes.
+  // Only the CURRENT assessment (superseded_at IS NULL); superseded PDFs are retained in the DB but hidden
+  // from the default list — still retrievable by id via /files/[fileId] for the 7-year retention window.
   const files = await prisma.client_files.findMany({
-    where: { client_id: id },
+    where: { client_id: id, superseded_at: null },
     select: { id: true, filename: true, mime_type: true, size_bytes: true, uploaded_at: true, uploaded_by: true },
     orderBy: { uploaded_at: 'desc' },
   })

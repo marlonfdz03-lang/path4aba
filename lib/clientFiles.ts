@@ -31,7 +31,12 @@ export async function storeClientFile(
   buffer: Buffer,
   tx: any = prisma,
 ): Promise<void> {
-  await tx.client_files.create({
+  // Store the new PDF FIRST (superseded_at defaults NULL = current), THEN soft-delete the client's prior
+  // current file(s) — mark, never delete: the bytes are RETAINED for the 7-year retention window (the
+  // /files list hides superseded rows; download-by-id still reaches them). Store-first ordering means there
+  // is never a window with no current file; a failed updateMany leaves a stale extra "current" the next
+  // upload corrects — never data loss. Keys on client_id only; one current assessment per client.
+  const created = await tx.client_files.create({
     data: {
       client_id: clientId,
       uploaded_by: uploadedBy,
@@ -40,5 +45,10 @@ export async function storeClientFile(
       size_bytes: buffer.length,
       data: buffer,
     },
+    select: { id: true },
+  })
+  await tx.client_files.updateMany({
+    where: { client_id: clientId, id: { not: created.id }, superseded_at: null },
+    data: { superseded_at: new Date() },
   })
 }
