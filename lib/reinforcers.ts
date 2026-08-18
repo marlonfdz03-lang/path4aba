@@ -29,6 +29,11 @@ export function splitReinforcerValue(value: unknown): string[] {
   const parts = Array.isArray(value) ? value.map((v) => String(v)) : [String(value ?? '')];
   return parts
     .flatMap((part) => part.split(/[,;\n]/))
+    // " or " denotes ALTERNATIVES ("tablet or phone") — resolve them into discrete items so the note can
+    // name ONE reinforcer, never an unresolved "(tablet or phone)". Split on " or " ONLY (whitespace on
+    // both sides so it's a standalone token, not the "or" inside a word). NEVER split " and " — " and "
+    // joins compound items ("arts and crafts", "kinetic sand and bin") that must stay whole.
+    .flatMap((frag) => frag.split(/\s+or\s+/i))
     .map(cleanFragment)
     .filter((s) => s.length >= 2 && !REINFORCER_STOPWORDS.has(s.toLowerCase()));
 }
