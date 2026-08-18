@@ -179,7 +179,7 @@ function buildContextualFactors(input: SessionInput): string {
       `CRITICAL RULE FOR TREND CONTEXT: NEVER mention numbers, frequencies, percentages, or counts when reflecting trends in the note. ` +
       `Trends must be reflected through QUALITATIVE clinical language only.\n` +
       `BANNED: "the behavior occurred 6 times", "frequency increased by 20%", "3 more episodes than last week"\n` +
-      `CORRECT: "the behavior continued to require active intervention support", "the client demonstrated emerging behavioral control", "the behavior remained an active treatment target"\n`,
+      `CORRECT: "the behavior continued to require active intervention support", "the client required continued prompting across activities", "the behavior remained an active treatment target"\n`,
     ];
     if (worseningBehaviors.length > 0) lines.push(
       `The following behaviors have been trending UPWARD in recent weeks: ${worseningBehaviors.join(', ')}. ` +
@@ -191,7 +191,7 @@ function buildContextualFactors(input: SessionInput): string {
     if (improvingBehaviors.length > 0) lines.push(
       `The following behaviors have been trending DOWNWARD in recent weeks: ${improvingBehaviors.join(', ')}. ` +
       `IMPORTANT: Reflect this as GRADUAL improvement over time — not sudden mastery. ` +
-      `Use language like: "demonstrated a slight reduction in frequency compared to recent baseline", "continued to respond to intervention with improved compliance", "showed emerging behavioral control with consistent intervention support". ` +
+      `Use language like: "demonstrated a slight reduction in frequency compared to recent baseline", "continued to respond to intervention with improved compliance", "required less prompting than in recent sessions to complete tasks". ` +
       `NEVER say the behavior is resolved or mastered unless goalStatus is Mastered.`
     );
     if (improvingSkills.length > 0) lines.push(
