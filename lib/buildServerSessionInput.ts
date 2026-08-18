@@ -9,6 +9,7 @@
 import type { SessionInput } from "./generateSmartNote";
 import { nextSessionClause } from "./nextSessionDate.ts";
 import { matrixFunctionsForBehavior } from "./functionPatterns.ts";
+import { splitReinforcerValue } from "./reinforcers.ts";
 
 // The slim payload the clients POST. Everything NOT here is derived from the DB profile.
 export type SlimNoteRequest = {
@@ -60,7 +61,12 @@ export function buildServerSessionInput(
   const mal = asArray(p.maladaptiveBehaviors);
   const home = asArray(p.homeActivities) as string[];
   const school = asArray(p.schoolActivities) as string[];
-  const reinforcers = asArray(p.reinforcers) as string[];
+  // Read-time reinforcer normalization: the stored profile array may still hold an unresolved
+  // alternative ("tablet or phone") — either persisted before the ingest-time " or " split shipped, or
+  // written by a path that skipped parseReinforcers. Re-split here so the note names a single item and
+  // never renders "(tablet or phone)". Reuses the tested split; idempotent (an already-split value is a
+  // no-op), so it also fixes every existing client with no data migration.
+  const reinforcers = splitReinforcerValue(asArray(p.reinforcers)) as string[];
   const caregivers = asArray(p.caregivers) as string[];
   const present = slim.present ?? [];
   const presentPerson = present.join(" and ");
