@@ -208,13 +208,26 @@ BANNED — Duration statements:
 "tantrum duration was X seconds"
 "the client engaged for X minutes"
 
+BANNED — Implementation / quantity counts (the number of things used in a procedure):
+"two neutral items", "three cards", "presented two choices", "a field of two", "two distractors",
+"three steps", "four blocks", "a set of two" — any cardinal count of items, materials, stimuli, cards,
+choices, distractors, or steps presented or manipulated during a procedure.
+CORRECT alternatives (describe WITHOUT the count):
+Instead of "presenting two neutral items alongside a preferred item" → "presenting a preferred item among neutral materials"
+Instead of "two neutral items" → "neutral materials" / "a selection of neutral items"
+Instead of "three cards" → "a set of cards" / "the cards"
+ALLOWED — narrative identification is NOT a count: an ordinal that identifies WHICH person or WHICH
+event in the narrative — "the second peer", "the other child", "a second staff member" — stays. This
+identifies who or which one in the story, never a quantity of a manipulated variable. Ban the cardinal
+count of stimuli/materials/steps; keep the ordinal that identifies which person or which event.
+
 CORRECT alternatives:
 Instead of "the client engaged in tantrums for 30 minutes" → "the client engaged in tantrum behavior across multiple instructional activities"
 Instead of "3 times during the session" → "across several opportunities during the session"
 Instead of "for approximately 15 minutes" → "for an extended period"
 Instead of "twice" → "on more than one occasion"
 
-RULE: If the original note contains a number or unit of measurement of any kind — time, frequency, duration, percentage — REMOVE it and replace with qualitative clinical language.
+RULE: If the original note contains a number or count of ANY kind — time, frequency, duration, percentage, OR a quantity of items, materials, stimuli, or steps — REMOVE it and replace with qualitative clinical language. (A count of anything is banned; the ONLY exception is an ordinal that identifies which person or which event in the narrative — e.g. "the second peer" — not a count.)
 
 TIME REFERENCES — ALL FORMS BANNED:
 NEVER include any time measurement in any form. This includes:
