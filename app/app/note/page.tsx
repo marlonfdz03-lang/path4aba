@@ -76,7 +76,8 @@ function NoteForm() {
   const [customPresent, setCustomPresent] = useState("");
   const [selectedBehaviors, setSelectedBehaviors] = useState<string[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
-  const [compliance, setCompliance] = useState("typical");
+  const [complianceChoice, setComplianceChoice] = useState("typical");
+  const [complianceTouched, setComplianceTouched] = useState(false);
   const [medicationChange, setMedicationChange] = useState(false);
   const [envChange, setEnvChange] = useState(false);
   const [envChangeDesc, setEnvChangeDesc] = useState("");
@@ -84,6 +85,12 @@ function NoteForm() {
   const [missedCount, setMissedCount] = useState("");
   const [missedReason, setMissedReason] = useState("");
   const [nextAppt, setNextAppt] = useState("");
+  // When the RBT reports an environmental change, the compliance control is UNSET until they
+  // actively choose — the system never pre-picks how the session went, and never infers it from the
+  // reported context. Derived rather than stored, so a real choice can never be overwritten.
+  // Mirrors the website form.
+  const envChangeReported = envChange && envChangeDesc.trim() !== "";
+  const compliance = complianceTouched ? complianceChoice : envChangeReported ? "" : "typical";
 
   // ── Generation state ──
   const [generating, setGenerating] = useState(false);
@@ -164,7 +171,9 @@ function NoteForm() {
     location !== "" &&
     selectedPresent.length > 0 &&
     selectedBehaviors.length >= 1 &&
-    selectedSkills.length >= 1;
+    selectedSkills.length >= 1 &&
+    // An environmental change was reported, so the compliance level must be the RBT's own choice.
+    compliance !== "";
 
   async function handleSave() {
     if (!generatedNote.trim() || saveState === "saving" || saveState === "saved") return;
@@ -555,13 +564,18 @@ function NoteForm() {
       {/* Compliance level */}
       <div className="app-form-group">
         <p className="app-section-label">Compliance level</p>
+        {envChangeReported && compliance === "" && (
+          <p className="app-warning">
+            You reported an environmental change — please indicate the session&apos;s compliance level.
+          </p>
+        )}
         <div className="app-seg">
           {COMPLIANCE_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               type="button"
               className={`app-seg__btn ${compliance === opt.value ? "app-seg__btn--active" : ""}`}
-              onClick={() => setCompliance(opt.value)}
+              onClick={() => { setComplianceChoice(opt.value); setComplianceTouched(true); }}
             >
               {opt.label}
             </button>

@@ -148,26 +148,48 @@ function buildContextualFactors(input: SessionInput): string {
     );
   }
 
+  // REPORTED CONTEXT, NOT AN INTERVENTION. The RBT reports what was DIFFERENT in the client's
+  // environment that day (a visitor, an illness, a schedule change) — a daily-life factor nobody
+  // performed. This block used to instruct the model to "reflect" the change as reduced compliance,
+  // increased latency, and higher behavior frequency: data the RBT never entered, fabricated by the
+  // system. It also pushed the context into an ABC antecedent slot, where the ABC grammar
+  // ("the RBT implemented [intervention] by …") turned it into "implemented Environmental
+  // Modification" — which the approval gate then rejected as an out-of-plan intervention, hard-
+  // stopping the note. Both are gone: the change is documented ONCE at the start as reported
+  // context, and how the session went comes from the RBT's own compliance selection below.
   if (input.environmentalChangeDescription && input.environmentalChangeDescription.trim()) {
     blocks.push(
-      `ENVIRONMENTAL CHANGE CONTEXT — WEAVE NATURALLY INTO NOTE:\n` +
-      `The RBT reported the following environmental change during this session: ${input.environmentalChangeDescription.trim()}. ` +
-      `Clinical context: changes in the client's typical environment can disrupt established routines and increase behavioral reactivity. ` +
-      `Reflect this by documenting slightly reduced compliance compared to typical sessions, increased latency to task initiation, and behaviors occurring at higher frequency than recent sessions. ` +
-      `Do NOT say the session was bad — document it observationally. ` +
-      `Example language: "The presence of [environmental change] appeared to correlate with increased behavioral frequency during the first portion of the session. As the session progressed and the client habituated to the change, compliance improved moderately."`
+      `REPORTED SESSION CONTEXT — DOCUMENT AT THE START, NEVER AS AN ACTION:\n` +
+      `The RBT reported that the following was different in the client's environment today: ${input.environmentalChangeDescription.trim()}\n` +
+      `This is REPORTED CONTEXT — a daily-life factor the RBT observed. The RBT did NOT perform it, and it is NOT an intervention.\n` +
+      `- State it ONCE, immediately after the opening sentence, as reported context: "...and it was reported that [what the RBT described]."\n` +
+      `- Do NOT use it as an ABC antecedent.\n` +
+      `- Do NOT write "the RBT implemented Environmental Modification" — or any intervention clause — because of it.\n` +
+      `- Do NOT infer or invent any effect on the client's behavior, compliance, latency, or frequency from it. Document only what the RBT reported.\n` +
+      `The rest of the note proceeds normally: the marked behaviors, their approved interventions, the skills, and the closing are unchanged.`
     );
   }
 
+  // SESSION QUALITY IS THE RBT'S JUDGMENT — the firewall. How the session went is a clinical call
+  // the RBT makes by selecting typical / below typical / poor; the system never infers it from a
+  // reported context factor. This block used to ASSERT specifics the RBT never entered ("increased
+  // latency to instructions", "did not initiate several activities independently") and modelled a
+  // fabricated count ("2–3 prompt repetitions across most tasks") — the same fabrication defect the
+  // environmental block carried, so sealing only that one would have moved the leak, not closed it.
+  //
+  // The rule the replacement encodes: ENTAILMENT, NOT INVENTION. Prose that restates what the
+  // selected level MEANS is documenting the RBT's judgment; prose that needs a count, a rate, a
+  // duration, or a comparison to baseline needs data the RBT never supplied, and is fabrication.
   if (input.complianceLevel === 'below_typical' || input.complianceLevel === 'poor') {
     const level = input.complianceLevel === 'poor' ? 'poor' : 'below typical';
     blocks.push(
-      `COMPLIANCE CONTEXT — WEAVE NATURALLY INTO NOTE:\n` +
-      `The RBT reported that the client's compliance was ${level} today. ` +
-      `The client demonstrated increased latency to instructions, did not initiate several activities independently, and required additional prompting throughout the session. ` +
-      `Reflect this observationally in the note without using mentalistic language. ` +
-      `Do NOT say the client "didn't want to" or "refused" — use observable language only. ` +
-      `Example language: "The client demonstrated increased latency to task demands throughout the session, requiring additional gestural and verbal prompting to initiate activities. Response to instructions was below the client's typical baseline, with compliance achieved following 2–3 prompt repetitions across most tasks."`
+      `SESSION QUALITY — THE RBT'S OWN ASSESSMENT:\n` +
+      `The RBT indicated that the client's overall compliance today was ${level}. This is the RBT's clinical judgment of the session — document it, do not elaborate beyond it.\n` +
+      `- Let the ABC prose read CONSISTENTLY with a ${level} session, using ONLY the prompt levels and client responses already present in the session data.\n` +
+      `- Do NOT add a separate sentence announcing the compliance level ("The RBT indicated compliance was ${level}") — it reads as assembled. The level shows through the ABCs themselves.\n` +
+      `- Do NOT assert anything the RBT did not enter: no invented latency, no number of prompt repetitions, no comparison to the client's baseline or to recent sessions, no claim that behaviors occurred more or less often than usual, no duration.\n` +
+      `- Do NOT state any count or percentage.\n` +
+      `- Do NOT say the session went badly, and never use mentalistic language ("didn't want to", "refused").`
     );
   }
 
@@ -226,9 +248,11 @@ function buildContextualFactors(input: SessionInput): string {
     }
   }
 
-  if (blocks.length === 0) return '';
-
-  // CLIENT PRONOUNS: guidance for the note generator
+  // CLIENT PRONOUNS: guidance for the note generator. This used to sit behind an
+  // `if (blocks.length === 0) return ''` early exit, so a plain session — typical compliance, no
+  // environmental change, no missed hours, no trends — shipped with NO pronoun instruction at all,
+  // and the model picked pronouns on its own. Pronouns do not depend on whether any other
+  // contextual factor applies, so the block is now unconditional.
   if (input.gender || input.pronouns) {
     blocks.push(
       `CLIENT PRONOUNS: Use ${input.pronouns || (input.gender === 'male' ? 'he/him/his' : input.gender === 'female' ? 'she/her/hers' : '"the client"')} consistently throughout the note.`

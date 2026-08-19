@@ -39,6 +39,11 @@ let environmentalChange = false;
 let medicationChange = false;
 let missedSessions = false;
 let complianceLevel = 'typical';
+// '' = no active selection. When the RBT reports an environmental change the control is CLEARED and
+// they must actively choose how the session went — the system never pre-picks a level and never
+// infers one from the reported context. complianceTouched records a real choice so clearing never
+// overwrites one. Mirrors the website and app forms.
+let complianceTouched = false;
 
 // ── Storage change tracer ──────────────────
 // Fires for any change to chrome.storage.local from ANY source (popup, background, etc.)
@@ -720,6 +725,7 @@ function resetSessionConditions() {
   medicationChange = false;
   missedSessions = false;
   complianceLevel = 'typical';
+  complianceTouched = false;
 
   ['envGroup', 'medGroup', 'missedGroup'].forEach(id => {
     const g = document.getElementById(id);
@@ -747,6 +753,29 @@ document.getElementById('locationGroup').addEventListener('click', (e) => {
   updateGenerateBtn();
 });
 
+// An environmental change counts as REPORTED once the toggle is yes AND the RBT has described it.
+function envChangeReported() {
+  const desc = document.getElementById('envDescription');
+  return environmentalChange && !!(desc && desc.value.trim());
+}
+
+// Clear the compliance control when an environmental change is reported (so the RBT must choose),
+// or restore the plain default when it is not — never overriding a level the RBT actually picked.
+function syncComplianceRequirement() {
+  if (complianceTouched) return;
+  complianceLevel = envChangeReported() ? '' : 'typical';
+  const cg = document.getElementById('complianceGroup');
+  if (cg) {
+    cg.querySelectorAll('.toggle-btn').forEach((b, i) => {
+      b.classList.toggle('active', complianceLevel !== '' && i === 0);
+      b.style.background = '';
+      b.style.borderColor = '';
+      b.style.color = '';
+    });
+  }
+  updateGenerateBtn();
+}
+
 // ── Session condition toggles ──────────────
 ['envGroup', 'medGroup', 'missedGroup'].forEach(id => {
   document.getElementById(id).addEventListener('click', e => {
@@ -759,6 +788,7 @@ document.getElementById('locationGroup').addEventListener('click', (e) => {
       environmentalChange = isYes;
       const desc = document.getElementById('envDescription');
       if (desc) desc.style.display = isYes ? '' : 'none';
+      syncComplianceRequirement();
     } else if (id === 'medGroup') {
       medicationChange = isYes;
       const desc = document.getElementById('medDescription');
@@ -771,10 +801,15 @@ document.getElementById('locationGroup').addEventListener('click', (e) => {
   });
 });
 
+// Describing the change is what makes it "reported", so re-check the requirement as they type.
+document.getElementById('envDescription')?.addEventListener('input', syncComplianceRequirement);
+
 document.getElementById('complianceGroup').addEventListener('click', e => {
   const btn = e.target.closest('.toggle-btn');
   if (!btn) return;
   complianceLevel = btn.dataset.val;
+  complianceTouched = true;
+  updateGenerateBtn();
   document.querySelectorAll('#complianceGroup .toggle-btn').forEach(b => {
     b.classList.remove('active');
     b.style.background = '';
@@ -812,6 +847,9 @@ document.getElementById('dataModeGroup').addEventListener('click', (e) => {
 function updateGenerateBtn() {
   const dateVal = document.getElementById('genDate').value;
   let canGenerate = !!dateVal && !!selectedLocation && !!selectedClientId && selectedPresent.length > 0;
+  // An environmental change was reported, so the session's compliance level must be the RBT's own
+  // active choice before a note can be generated (it is only ever '' in that case).
+  canGenerate = canGenerate && complianceLevel !== '';
 
   if (userRole === 'rbt') {
     // >= so selecting more than the minimum doesn't silently block the button
@@ -824,6 +862,7 @@ function updateGenerateBtn() {
       if (selectedPresent.length === 0) missing.push('who was present');
       if (selectedBehaviors.length < 5) missing.push(`${5 - selectedBehaviors.length} more behavior(s) (${selectedBehaviors.length}/5)`);
       if (selectedSkills.length < 2) missing.push(`${2 - selectedSkills.length} more skill(s) (${selectedSkills.length}/2)`);
+      if (complianceLevel === '') missing.push("the session's compliance level (you reported an environmental change)");
       console.log('[debug] missing fields:', missing);
       hint.textContent = missing.length ? 'Still needed: ' + missing.join(', ') : '';
       hint.style.display = missing.length ? '' : 'none';

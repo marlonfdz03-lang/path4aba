@@ -196,7 +196,14 @@ export default function ClientProfilePage() {
   const [environmentalChange, setEnvironmentalChange] = useState(false);
   const [environmentalChangeDesc, setEnvironmentalChangeDesc] = useState("");
   const [medicationConsumed, setMedicationConsumed] = useState(false);
-  const [complianceLevel, setComplianceLevel] = useState<"typical" | "below_typical" | "poor">("typical");
+  // When the RBT reports an environmental change, the compliance control is UNSET ("") until they
+  // actively choose — the system never pre-picks how the session went, and never infers it from the
+  // reported context. Derived rather than stored, so a real choice can never be overwritten.
+  const [complianceChoice, setComplianceChoice] = useState<"typical" | "below_typical" | "poor">("typical");
+  const [complianceTouched, setComplianceTouched] = useState(false);
+  const envChangeReported = environmentalChange && environmentalChangeDesc.trim() !== "";
+  const complianceLevel: "" | "typical" | "below_typical" | "poor" =
+    complianceTouched ? complianceChoice : envChangeReported ? "" : "typical";
   const [missedHoursToggle, setMissedHoursToggle] = useState(false);
   const [missedHoursCount, setMissedHoursCount] = useState("");
   const [missedHoursReason, setMissedHoursReason] = useState("");
@@ -422,7 +429,10 @@ export default function ClientProfilePage() {
   const canGenerate =
     date.trim() !== "" && location !== "" && selectedPresent.length > 0 &&
     selectedBehaviors.length >= 1 && selectedSkills.length >= 1 &&
-    date && location && selectedPresent.length > 0;
+    date && location && selectedPresent.length > 0 &&
+    // An environmental change was reported, so the session's compliance level must be the RBT's
+    // own active choice before this note can be generated.
+    complianceLevel !== "";
 
   async function handleGenerateNote() {
     if (!canGenerate) return;
@@ -543,7 +553,8 @@ export default function ClientProfilePage() {
       setSelectedBehaviors([]);
       setSelectedSkills([]);
       setSelectedPresent([]);
-      setComplianceLevel("typical");
+      setComplianceChoice("typical");
+      setComplianceTouched(false);
       setMedicationConsumed(false);
       setEnvironmentalChange(false);
       setEnvironmentalChangeDesc("");
@@ -1694,6 +1705,11 @@ export default function ClientProfilePage() {
                 {/* Compliance */}
                 <div className="py-3">
                   <p className="text-[13px] font-medium mb-2" style={{ color: "var(--text1)" }}>Client Compliance Today</p>
+                  {envChangeReported && complianceLevel === "" && (
+                    <p className="text-[11px] mb-2" style={{ color: "#B45309" }}>
+                      You reported an environmental change — please indicate the session&apos;s compliance level.
+                    </p>
+                  )}
                   <div className="flex gap-2">
                     {(["typical", "below_typical", "poor"] as const).map((level) => {
                       const labels = { typical: "Typical", below_typical: "Below typical", poor: "Poor" };
@@ -1701,7 +1717,7 @@ export default function ClientProfilePage() {
                       return (
                         <button
                           key={level} type="button"
-                          onClick={() => setComplianceLevel(level)}
+                          onClick={() => { setComplianceChoice(level); setComplianceTouched(true); }}
                           className="flex-1 py-2 rounded-xl border text-[13px] font-medium transition-colors"
                           style={{
                             background: isSelected ? (level === "typical" ? "var(--teal)" : level === "below_typical" ? "#F59E0B" : "#DC2626") : "white",
@@ -1858,7 +1874,9 @@ export default function ClientProfilePage() {
               </button>
               {!canGenerate && !generating && (
                 <p className="mt-3 text-[13px]" style={{ color: "var(--text3)" }}>
-                  Complete all fields: date, location, someone present, 5 behaviors, and 2 skills.
+                  {envChangeReported && complianceLevel === ""
+                    ? "You reported an environmental change — please indicate the session's compliance level."
+                    : "Complete all fields: date, location, someone present, 5 behaviors, and 2 skills."}
                 </p>
               )}
               {status && <p className="mt-2 text-[13px] text-red-500">{status}</p>}
@@ -2007,7 +2025,7 @@ export default function ClientProfilePage() {
         )}
 
         {/* ── Data Tab ── */}
-        {activeTab === "data" && <DataTab client={client} complianceLevel={complianceLevel} missedHours={missedHoursToggle && missedHoursCount ? parseFloat(missedHoursCount) : 0} />}
+        {activeTab === "data" && <DataTab client={client} complianceLevel={complianceLevel || "typical"} missedHours={missedHoursToggle && missedHoursCount ? parseFloat(missedHoursCount) : 0} />}
 
       </div>
 

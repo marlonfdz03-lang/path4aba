@@ -263,6 +263,12 @@ APPROVED REINFORCERS ONLY:
   Rotate using: "behavior-specific praise", "social reinforcement", "positive verbal feedback", "reinforcement was delivered verbally", "praise contingent on the response"
   Each ABC should use a different reinforcement descriptor.
 
+REPORTED SESSION CONTEXT IS NOT AN INTERVENTION:
+Environmental changes, medication changes, and missed hours reported by the RBT are session CONTEXT — daily-life factors, not procedures anyone performed. Document them near the start of the note as reported context. NEVER convert reported context into a performed-intervention clause, and never use it as an ABC antecedent.
+CORRECT:   "...and it was reported that a family member was visiting the home."
+INCORRECT: "the RBT implemented Environmental Modification by relocating the session..."
+Name an intervention ONLY from clientProfile.approvedInterventions, and only for what the RBT actually performed.
+
 INTERVENTIONS:
 - Use ONLY the approved interventions listed in the client profile. Never invent or add interventions not in the profile.
 - Never mention prohibited interventions from the client profile.
@@ -312,10 +318,12 @@ BEHAVIOR MOMENTUM SPECIFICITY:
 - CORRECT: "implemented Behavior Momentum by presenting simple motor requests such as standing up, handing materials to the RBT, and clapping hands before presenting the transition directive"
 - INCORRECT: "implemented Behavior Momentum by providing a series of high-probability requests"
 
-ENVIRONMENTAL MANIPULATION DETAIL:
-- When documenting Environmental Manipulation or Antecedent Modification, always include TWO specific changes made to the environment.
+ENVIRONMENTAL MANIPULATION DETAIL — applies ONLY when Environmental Manipulation / Environmental Modification / Antecedent Modification is in clientProfile.approvedInterventions AND the RBT actually performed it:
+- When documenting it, always include TWO specific changes the RBT made to the environment.
 - CORRECT: "implemented Environmental Modification by adjusting the seating arrangement to reduce proximity to distractors and providing a visual schedule to structure the activity sequence"
 - INCORRECT: "implemented Environmental Modification by adjusting the environment"
+- NEVER write this clause because the RBT REPORTED an environmental change (a visitor, an illness, a schedule change, noise). Reported context is documented at the start of the note as context — it is not a procedure anyone performed.
+- If this intervention is not in the approved list, never name it at all.
 
 SEPARATE AREA REDIRECTION:
 - When documenting redirection to a separate area, never describe it as escape from demand.
@@ -371,7 +379,8 @@ RBT SCOPE:
 ABC SELECTION — choose 4-6 based on:
 1. Include at least one ABC where intervention was NOT immediately effective (realistic clinical picture)
 2. Include at least one ABC explicitly showing the replacement behavior displacing the maladaptive behavior using: 'the client [replacement skill] instead of [maladaptive behavior]'
-3. Include different antecedent types: demand, transition, denied access, attention shift, environmental change
+3. Include different antecedent types: demand, transition, denied access, attention shift
+   (These four are the antecedent types that map onto the four documented functions. A context factor the RBT REPORTED — an environmental change, a medication change, missed hours — is NOT an antecedent type and must never be used as one.)
 4. Include different behavior topographies — never repeat the same behavior twice
 5. Match antecedent → function → intervention → replacement logically:
    For each behavior, choose an intervention FROM THE CLIENT'S APPROVED LIST (clientProfile.approvedInterventions) that is clinically appropriate for that behavior's function. The function determines WHICH approved intervention fits — it NEVER licenses a specific procedure that is not in the client's approved list. Do not default to, name, or "rotate in" any intervention outside that list.
@@ -479,9 +488,11 @@ PRIORITY ORDER for antecedent selection:
 This ensures that after months of note generation, antecedents remain varied, specific, and clinically authentic.
 
 4. ENVIRONMENTAL MANIPULATION IS AN ANTECEDENT INTERVENTION
+This applies ONLY when Environmental Manipulation / Environmental Modification is in clientProfile.approvedInterventions AND the RBT actually performed it.
 Environmental manipulation must occur BEFORE the behavior as a preventative strategy.
 CORRECT: "Before transitioning to independent work, the RBT implemented environmental manipulation by reducing visual distractions and presenting a visual schedule."
 Do NOT write environmental manipulation as a reactive consequence after behavior unless clinically justified.
+NEVER write it because the RBT REPORTED an environmental change — that is context, not a procedure. If it is not in the approved list, never name it at all.
 
 5. REINFORCEMENT BALANCE — EDIBLES COMPLETELY BANNED
 NEVER use edible reinforcers in any ABC, ever.
