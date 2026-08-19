@@ -19,6 +19,9 @@ import {
 import { stripInvalidNextSession } from '@/lib/nextSessionDate';
 import { findRedFlagFlags } from '@/lib/redFlagPhrases';
 import { decideUniqueness } from '@/lib/noteSimilarity';
+import {
+  runCombinedComplianceGate, interventionViolationNames, type ComplianceState,
+} from '@/lib/complianceGate';
 
 const openai = new OpenAI({
   apiKey: process.env.AZURE_OPENAI_API_KEY || 'azure-openai',
@@ -483,50 +486,43 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   };
   note = applyBlockedFilter(note);
 
-  // Step 7c: TREATMENT-PLAN INTERVENTION GATE (compliance, not quality). An RBT may document ONLY
-  // interventions in the client's approved assessment — an out-of-plan procedure records work
-  // outside scope, bills against an authorization that does not cover it, and exposes the
-  // supervising BCBA to liability. A prompt instruction is not enough (the model has generated RIRD
-  // despite the constraint), so this is a hard gate: if the note documents a prohibited (e.g. RIRD)
-  // or unapproved intervention, regenerate ONCE naming the violation; if it still violates, throw an
-  // error naming the intervention rather than return a note the RBT might sign. With NO approved
-  // list captured we cannot know the plan, so only the always-prohibited set applies — we never
+  // Step 7c: COMBINED COMPLIANCE GATE (consolidated). Four independent compliance checks —
+  // approved-intervention, approved-function (validity), function-coverage (Bug 3), and teaching-method —
+  // each used to run as its own sequential gate that regenerated on its own violation, so a note defective
+  // in N ways cost N full LLM calls (the 3-4x regeneration RBTs saw). They are consolidated here: run ALL
+  // FOUR checks, COLLECT every violation, and if ANY fail, regenerate ONCE with a single combined
+  // instruction naming every defect, then re-run ALL FOUR on the regenerated note. This changes WHEN they
+  // regenerate (once, combined) — never WHAT each requires. Worst case drops from 5 LLM calls to 2; a clean
+  // note still costs 1, a single-defect note still 2. Every guarantee is preserved: an intervention
+  // survivor still THROWS (an unapproved/prohibited procedure must NEVER ship), and approved-function,
+  // coverage, and teaching-method survivors are still surfaced as coherence flags (never auto-rewritten).
+  // Re-checking the intervention gate AFTER the combined regen also closes a latent hole in the old
+  // sequential design, where a later gate's regen could reintroduce an out-of-plan intervention that the
+  // first-only intervention gate never re-checked — the combined design is strictly safer.
+  //
+  // The approved-intervention detail: an RBT may document ONLY interventions in the client's approved
+  // assessment — an out-of-plan procedure records work outside scope, bills against an authorization that
+  // does not cover it, and exposes the supervising BCBA to liability. A prompt instruction is not enough
+  // (the model has generated RIRD despite the constraint), so persistence is a hard error, not a flag. With
+  // NO approved list captured we cannot know the plan, so only the always-prohibited set applies — we never
   // block every note for a client whose approved interventions were never synced.
   const approvedInterventions: string[] = resolvedProfile.approvedInterventions || [];
   // Skill programs (replacement skills). Role-awareness: a skill like FCT is valid documented as a
   // skill being taught, but INVALID documented as a behavior-reduction intervention unless it is also
   // an approved reduction intervention.
   const skillPrograms: string[] = resolvedProfile.activePrograms?.replacementSkills || [];
-  let violations = findInterventionViolations(note, approvedInterventions, skillPrograms);
-  const violatingNames = () => [...new Set([...violations.prohibited, ...violations.unapproved, ...violations.skillAsReduction])];
-  if (violatingNames().length > 0) {
-    const bad = violatingNames();
-    const roleNote = violations.skillAsReduction.length
-      ? ` NOTE: ${violations.skillAsReduction.join(', ')} ${violations.skillAsReduction.length === 1 ? 'is a skill program' : 'are skill programs'}, not an approved reduction intervention — document ${violations.skillAsReduction.length === 1 ? 'it' : 'them'} ONLY as a skill being taught, never as a behavior-reduction intervention.`
-      : '';
-    const approvedClause = approvedInterventions.length
-      ? `ONLY these approved interventions: ${approvedInterventions.join(', ')}`
-      : `ONLY interventions named in the session data's approved list`;
-    if (onChunk) onChunk('\n__REGEN__\n');
-    const violationInstruction = `\n\nCOMPLIANCE VIOLATION — REGENERATE: the previous note documented ${bad.join(', ')}, which ${bad.length === 1 ? 'is' : 'are'} NOT permitted as documented for this client.${roleNote} An RBT may only document reduction interventions the BCBA has approved. Rewrite the entire note using ${approvedClause}. Never mention response interruption and redirection (RIRD) or any intervention outside the approved list.`;
-    note = applyBlockedFilter(await callOpenAI(MASTER_RBT_NOTE_PROMPT + contextualFactors + violationInstruction));
-    violations = findInterventionViolations(note, approvedInterventions, skillPrograms);
-    if (violatingNames().length > 0) {
-      const still = violatingNames();
-      throw new Error(
-        `Note could not be generated within the client's approved treatment plan: it repeatedly documented ${still.join(', ')}, which ${still.length === 1 ? 'is' : 'are'} not approved for this client. ` +
-        `An RBT may only document interventions in the approved plan — please review the client's assessment or regenerate.`
-      );
-    }
-  }
-
-  // Step 7c2: APPROVED-FUNCTION GATE. The function written for each behavior must be a member of that
-  // behavior's assessment-approved set (allowedFunctions, from clinical_profile). We derive the written
-  // function per behavior from the note; if any behavior asserts a function the assessment did NOT
-  // approve for it (e.g. "Throwing Objects" written as Automatic when the assessment approved only
-  // Escape/Tangible/Attention), regenerate ONCE naming the violation; if it still violates, surface a
-  // coherence flag rather than return a note asserting an unapproved function. With no approved set
-  // captured for a behavior, it is not constrained (we enforce only what the assessment specifies).
+  // Skill names mark where an ABC body ends so skill-paragraph prose can never satisfy an ABC's function.
+  const coverageSkillNames = [
+    ...input.replacementSkillsAddressed.map((s) => s.name),
+    ...(resolvedProfile.activePrograms?.replacementSkills || []),
+  ].filter(Boolean);
+  // Approved-function (validity) check: the function written for each behavior must be a member of that
+  // behavior's assessment-approved set (allowedFunctions). Derives the written function per behavior; a
+  // behavior asserting a function the assessment did NOT approve for it (e.g. "Throwing Objects" written as
+  // Automatic when only Escape/Tangible/Attention were approved) is a violation. Distinct from the coverage
+  // check below: validity asks "is the stated function APPROVED?" and is blind to an ABSENT function; a note
+  // with only 1/5 ABCs naming a function passes validity but fails coverage. With no approved set captured
+  // for a behavior, it is not constrained (we enforce only what the assessment specifies).
   const findFunctionViolations = (text: string): { name: string; wrote: string; approved: string[] }[] => {
     const gated = input.behaviorsObserved.filter((b) => Array.isArray(b.allowedFunctions) && b.allowedFunctions.length);
     if (!gated.length) return [];
@@ -543,54 +539,41 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     });
     return out;
   };
-  let functionViolations = findFunctionViolations(note);
-  if (functionViolations.length > 0) {
-    if (onChunk) onChunk('\n__REGEN__\n');
-    const detail = functionViolations
-      .map((v) => `${v.name} (written as ${v.wrote}; approved: ${v.approved.map(functionDisplayLabel).join(', ')})`)
-      .join('; ');
-    const functionInstruction = `\n\nBEHAVIOR-FUNCTION VIOLATION — REGENERATE: the note assigned a behavior a function the assessment did NOT approve for it — ${detail}. For EACH behavior, assign ONLY a function from its approved set, and write an antecedent consistent with that approved function. Never write a function outside a behavior's approved set.`;
-    note = applyBlockedFilter(await callOpenAI(MASTER_RBT_NOTE_PROMPT + contextualFactors + functionInstruction));
-    functionViolations = findFunctionViolations(note);
-  }
 
-  // Step 7c2b: FUNCTION-COVERAGE GATE (Bug 3). SEPARATE from the approved-set (validity) gate above:
-  // validity asks "is the stated function APPROVED?" and is blind to an ABSENT function, so a note with
-  // only 1/5 ABCs naming a function passes it (this is exactly what shipped). This gate checks that EACH
-  // ABC actually STATES a documented function in its PROSE (RULE A: every ABC). Skill names mark where the
-  // ABC body ends so skill-paragraph prose can never satisfy an ABC. If any ABC is missing its function,
-  // regenerate ONCE naming the missing ABCs; if still missing (or the note can't be segmented), surface a
-  // coherence flag — never auto-insert a function (a regenerated coherent ABC beats a pasted clause).
-  const coverageSkillNames = [
-    ...input.replacementSkillsAddressed.map((s) => s.name),
-    ...(resolvedProfile.activePrograms?.replacementSkills || []),
-  ].filter(Boolean);
-  let coverage = findMissingFunctionABCs(note, input.behaviorsObserved, coverageSkillNames);
-  if (coverage.segmentable && coverage.missing.length > 0) {
-    if (onChunk) onChunk('\n__REGEN__\n');
-    const missingNames = coverage.missing.map((m) => m.name).filter(Boolean).join(', ');
-    const coverageInstruction = `\n\nFUNCTION-COVERAGE VIOLATION — REGENERATE: these ABCs do not state a documented function in their prose — ${missingNames}. EVERY ABC must NAME its documented function (escape/attention/tangible/automatic-reinforcement) in the prose, before the intervention — RULE A, no exceptions. Do not drop the function name for the sake of variety.`;
-    note = applyBlockedFilter(await callOpenAI(MASTER_RBT_NOTE_PROMPT + contextualFactors + coverageInstruction));
-    coverage = findMissingFunctionABCs(note, input.behaviorsObserved, coverageSkillNames);
-    // The coverage regen produced a fresh note; re-check the approved-set (validity) gate on it so any
-    // surfaced validity flags reflect the FINAL note, not the pre-coverage one.
-    functionViolations = findFunctionViolations(note);
-  }
+  // Detect all four compliance checks on one note. Passed to the combined gate, which runs it on the
+  // initial note and once more on the (single) regenerated note.
+  const detectCompliance = (text: string): ComplianceState => ({
+    intervention: findInterventionViolations(text, approvedInterventions, skillPrograms),
+    functionViolations: findFunctionViolations(text),
+    coverage: findMissingFunctionABCs(text, input.behaviorsObserved, coverageSkillNames),
+    methodViolations: findTeachingMethodViolations(text, resolvedProfile.approvedInterventions),
+    approvedInterventions,
+    approvedMethodSet,
+  });
 
-  // Step 7c3: TEACHING-METHOD GATE (Commit 4, Part 1). A teaching procedure named in the note must be in
-  // the client's approved set (interventions ∩ teaching-method vocabulary). The generator defaults to
-  // "Modeling"/"DTT" as filler regardless of the plan; if the note names an unapproved method, regenerate
-  // ONCE naming the violation, then flag. The fill (Part 2) copies the note's method, so this keeps the
-  // copied method always approved.
-  let methodViolations = findTeachingMethodViolations(note, resolvedProfile.approvedInterventions);
-  if (methodViolations.length > 0) {
-    if (onChunk) onChunk('\n__REGEN__\n');
-    const methodClause = approvedMethodSet.length
-      ? `ONLY teaching methods the plan approves: ${approvedMethodSet.join(', ')}`
-      : `NO named teaching procedure — describe how the skill was practiced without naming a method`;
-    const methodInstruction = `\n\nTEACHING-METHOD VIOLATION — REGENERATE: the note named teaching method(s) the assessment did NOT approve for this client — ${methodViolations.join(', ')}. When you describe how a replacement skill was practiced, name ${methodClause}. Never name a teaching procedure outside the approved list.`;
-    note = applyBlockedFilter(await callOpenAI(MASTER_RBT_NOTE_PROMPT + contextualFactors + methodInstruction));
-    methodViolations = findTeachingMethodViolations(note, resolvedProfile.approvedInterventions);
+  // ONE combined regeneration: collect every violation → one instruction naming all of them → regenerate
+  // ONCE → re-check all four. regenCount is 0 (clean note) or 1 (any defect) — never the old 3-4.
+  const gate = await runCombinedComplianceGate({
+    initialNote: note,
+    detect: detectCompliance,
+    regenerate: (instruction) =>
+      callOpenAI(MASTER_RBT_NOTE_PROMPT + contextualFactors + instruction).then(applyBlockedFilter),
+    onRegen: onChunk ? () => onChunk('\n__REGEN__\n') : undefined,
+  });
+  note = gate.note;
+  const functionViolations = gate.state.functionViolations;
+  const methodViolations = gate.state.methodViolations;
+
+  // Intervention survivor → hard stop. An unapproved/prohibited intervention must NEVER ship, so this
+  // throws rather than flags. Checking the FINAL state also catches an intervention reintroduced by the
+  // combined regen — the latent hole the old first-only intervention gate could not see. (Safe to check
+  // unconditionally: a clean note produced no combined instruction, so its intervention set is empty.)
+  const survivingInterventions = interventionViolationNames(gate.state.intervention);
+  if (survivingInterventions.length > 0) {
+    throw new Error(
+      `Note could not be generated within the client's approved treatment plan: it repeatedly documented ${survivingInterventions.join(', ')}, which ${survivingInterventions.length === 1 ? 'is' : 'are'} not approved for this client. ` +
+      `An RBT may only document interventions in the approved plan — please review the client's assessment or regenerate.`
+    );
   }
 
   // Step 7d: Function↔antecedent coherence flags. Automatic reinforcement requires the ABSENCE of a
@@ -614,9 +597,10 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
       `Teaching method "${m}" was named but the assessment does not approve it for this client — verify before using.`,
     );
   }
-  // Function-coverage flags, recomputed on the FINAL note (the teaching-method gate above may have
-  // regenerated after the coverage gate). An ABC missing its documented function after the single retry is
-  // surfaced (never auto-inserted); an unsegmentable note fails loud rather than silently passing.
+  // Function-coverage flags, recomputed on the FINAL note (identical to `coverage` after the combined regen
+  // above; recomputed here defensively so the flags never depend on gate ordering). An ABC missing its
+  // documented function after the single combined retry is surfaced (never auto-inserted); an unsegmentable
+  // note fails loud rather than silently passing.
   const finalCoverage = findMissingFunctionABCs(note, input.behaviorsObserved, coverageSkillNames);
   if (!finalCoverage.segmentable) {
     coherenceFlags.push(
