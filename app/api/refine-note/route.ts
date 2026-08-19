@@ -140,7 +140,12 @@ export async function POST(req: NextRequest) {
           // FCT-as-skill false-fail on rewrite but pass on generation — a path-dependent gap.
           const skillPrograms: string[] = Array.isArray(clientProfile?.activePrograms?.replacementSkills)
             ? clientProfile.activePrograms.replacementSkills : [];
-          let violations = findInterventionViolations(finalNote, approvedInterventions, skillPrograms);
+          // Same reported-context exemption as generation. The extension sends the reported change as
+          // a structured "Environmental change: <text>" entry in clinicalEvents, so match that prefix
+          // — never the bare noun, which appears in ordinary session prose.
+          const reportedEnvironmentalChange =
+            typeof clinicalEvents === 'string' && /(?:^|;|\n)\s*environmental change\s*:/i.test(clinicalEvents);
+          let violations = findInterventionViolations(finalNote, approvedInterventions, skillPrograms, { reportedEnvironmentalChange });
           const violatingNames = () => [...new Set([...violations.prohibited, ...violations.unapproved, ...violations.skillAsReduction])];
           if (violatingNames().length > 0) {
             const bad = violatingNames();
@@ -162,7 +167,7 @@ export async function POST(req: NextRequest) {
               if (delta) { regenNote += delta; controller.enqueue(encoder.encode(delta)); }
             }
             finalNote = regenNote;
-            violations = findInterventionViolations(finalNote, approvedInterventions, skillPrograms);
+            violations = findInterventionViolations(finalNote, approvedInterventions, skillPrograms, { reportedEnvironmentalChange });
             if (violatingNames().length > 0) {
               const still = violatingNames();
               controller.enqueue(encoder.encode(`\n__META__${JSON.stringify({ error: `Refined note repeatedly documented ${still.join(', ')}, which ${still.length === 1 ? 'is' : 'are'} not in this client's approved treatment plan. An RBT may only document approved interventions — please review the assessment or regenerate.` })}`));

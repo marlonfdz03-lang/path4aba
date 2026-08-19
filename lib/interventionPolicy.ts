@@ -31,7 +31,12 @@ export const INTERVENTION_CATALOG: { canonical: string; re: RegExp }[] = [
   { canonical: 'NCR', re: /\bNCR\b|non[- ]?contingent reinforcement/i },
   { canonical: 'Premack', re: /premack/i },
   { canonical: 'Behavior Momentum', re: /behavior(?:al)? momentum|high[- ]?p(?:robability)?\s+(?:request|sequence)/i },
-  { canonical: 'Environmental Modification', re: /environmental modification/i },
+  // Modification / manipulation / arrangement are the same procedure under three names. The catalog
+  // used to recognize only "modification", but the assessment extractor preserves the plan's own
+  // wording and its vocabulary says "Environmental Manipulation" — so a plan that DID approve this
+  // never mapped onto the catalog key, and a note naming it was flagged unapproved. All three are
+  // procedure-asserting phrases, not bare nouns, so widening does not risk innocent prose.
+  { canonical: 'Environmental Modification', re: /environmental (?:modification|manipulation|arrangement)/i },
   { canonical: 'Planned Ignoring', re: /planned ignor/i },
   { canonical: 'Response Cost', re: /response cost/i },
   { canonical: 'Time Out', re: /\btime[- ]?out\b/i },
@@ -42,7 +47,7 @@ export const INTERVENTION_CATALOG: { canonical: string; re: RegExp }[] = [
   { canonical: 'Demand Fading', re: /demand fading/i },
   { canonical: 'Errorless Teaching', re: /errorless (?:teaching|learning)/i },
   { canonical: 'Task Modification', re: /task modification/i },
-  { canonical: 'Antecedent Modification', re: /antecedent modification/i },
+  { canonical: 'Antecedent Modification', re: /antecedent (?:modification|manipulation)/i },
   // Long-tail interventions real plans prescribe. Added so the allowlist can NAME them: a procedure
   // the gate cannot name passes by default, which defeats the closed set. Each matches a named
   // procedure or acronym, never a bare noun.
@@ -74,6 +79,32 @@ export const INTERVENTION_CATALOG: { canonical: string; re: RegExp }[] = [
 export const PROHIBITED_INTERVENTIONS = new Set<string>([
   'RIRD', 'Response Cost', 'Time Out', 'Overcorrection', 'Restraint', 'Punishment',
 ])
+
+// ── REPORTED-CONTEXT EXEMPTION (defense in depth for the prompt fix) ─────────────────────────
+// The note form collects session-context factors — an environmental change, a medication change,
+// missed hours. None is an intervention and none needs approval: the RBT reports what was DIFFERENT
+// that day ("a family member was visiting", "the client had a fever"), they do not perform it.
+//
+// The prompt is where that distinction is enforced (reported context is documented at the start of
+// the note, never as "the RBT implemented …", never as an ABC antecedent). This set is the backstop
+// for when the model slips anyway: an environmental-modification phrase in a note whose RBT REPORTED
+// an environmental change is read as that context leaking into intervention phrasing, not as a
+// procedure performed outside the plan — so it never hard-stops the note.
+//
+// SCOPED, NOT BLANKET. The exemption applies only when the caller says the RBT reported the context,
+// and only to the `unapproved` bucket. Environmental Modification as a genuinely CHOSEN intervention
+// — named in a note with no reported context — is still gated exactly as before, and the prohibited
+// set (RIRD, restraint, punishment, …) is never exempt under any circumstances.
+//
+// The honest limit: this proves context was REPORTED, not that the phrase CAME FROM it. That is a
+// deliberate, conservative coupling — the same "never block on what the RBT told us" stance the
+// function gate takes on missing data.
+export interface ReportedContext {
+  /** The RBT reported an environmental change for this session (the form's context field). */
+  reportedEnvironmentalChange?: boolean
+}
+const CONTEXT_EXEMPT = new Set<string>(['Environmental Modification'])
+const EMPTY_EXEMPT = new Set<string>()
 
 // Detect which canonical interventions a note ASSERTS. Deduped, in catalog order.
 export function detectInterventions(text: string): string[] {
@@ -132,16 +163,19 @@ export function findInterventionViolations(
   note: string,
   approved: string[] | undefined | null,
   skillPrograms?: string[] | undefined | null,
+  context?: ReportedContext,
 ): { detected: string[]; prohibited: string[]; unapproved: string[]; skillAsReduction: string[] } {
   const detected = detectInterventions(note)
   const prohibited = detected.filter((d) => PROHIBITED_INTERVENTIONS.has(d))
   const approvedSet = normalizeApproved(approved)
   const skillSet = normalizeApproved(skillPrograms)
+  const contextExempt = context?.reportedEnvironmentalChange ? CONTEXT_EXEMPT : EMPTY_EXEMPT
   const unapproved: string[] = []
   const skillAsReduction: string[] = []
   if (approvedSet.size) {
     for (const d of detected) {
       if (PROHIBITED_INTERVENTIONS.has(d) || approvedSet.has(d)) continue // approved reduction — OK
+      if (contextExempt.has(d)) continue // traceable to a context factor the RBT REPORTED — see above
       if (skillSet.has(d)) {
         // It is a skill program, not an approved reduction intervention. Only a violation if the note
         // documents it AS a reduction intervention; documented as a skill, it passes.

@@ -576,7 +576,13 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   // Detect all four compliance checks on one note. Passed to the combined gate, which runs it on the
   // initial note and once more on the (single) regenerated note.
   const detectCompliance = (text: string): ComplianceState => ({
-    intervention: findInterventionViolations(text, approvedInterventions, skillPrograms),
+    intervention: findInterventionViolations(text, approvedInterventions, skillPrograms, {
+      // The RBT reported an environmental change in the form's Session Conditions. The prompt now
+      // documents that as context rather than as "implemented Environmental Modification"; this is
+      // the backstop for a model slip, so reported context can never hard-stop the note. Scoped:
+      // with no reported change, the intervention is gated exactly as before.
+      reportedEnvironmentalChange: !!input.environmentalChangeDescription?.trim(),
+    }),
     functionViolations: findFunctionViolations(text),
     coverage: findMissingFunctionABCs(text, input.behaviorsObserved, coverageSkillNames),
     methodViolations: findTeachingMethodViolations(text, resolvedProfile.approvedInterventions),
