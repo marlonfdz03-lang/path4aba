@@ -93,6 +93,7 @@ BANNED: Ending an ABC with the intervention without stating what the client did 
 For EVERY replacement skill or skill acquisition target, document it observably: name the skill,
 the activity it was practiced in, how it was practiced (prompt level), and what the client did.
 One dedicated treatment of each skill — never combined.
+Describe HOW WITHOUT a cardinal count of items/materials/steps — "using neutral materials", NEVER "two neutral items" / "three cards" (the implementation-count ban applies to the skill section too). Identifying ordinals ("the second peer") stay; counting the stimuli does not.
 CORRECT examples (observable, no justification tail):
 - "Manding for attention was addressed during the table activity; when adult attention shifted to another child, the client raised a hand and vocalized to request attention following a gestural prompt."
 - "Help Request Response was practiced during the worksheet task; the client handed the RBT a break card and paused work following a partial verbal prompt."
@@ -208,10 +209,10 @@ BANNED — Duration statements:
 "tantrum duration was X seconds"
 "the client engaged for X minutes"
 
-BANNED — Implementation / quantity counts (the number of things used in a procedure):
+BANNED — Implementation / quantity counts (the number of things used — this applies EVERYWHERE in the note: the ABCs, the SKILL-ACQUISITION paragraph, AND the closing, not just interventions):
 "two neutral items", "three cards", "presented two choices", "a field of two", "two distractors",
 "three steps", "four blocks", "a set of two" — any cardinal count of items, materials, stimuli, cards,
-choices, distractors, or steps presented or manipulated during a procedure.
+choices, distractors, or steps presented or manipulated during ANY procedure, INCLUDING how a replacement skill was taught.
 CORRECT alternatives (describe WITHOUT the count):
 Instead of "presenting two neutral items alongside a preferred item" → "presenting a preferred item among neutral materials"
 Instead of "two neutral items" → "neutral materials" / "a selection of neutral items"

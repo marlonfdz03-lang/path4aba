@@ -151,10 +151,10 @@ BANNED — Duration statements:
 "tantrum duration was X seconds"
 "the client engaged for X minutes"
 
-BANNED — Implementation / quantity counts (the number of things used in a procedure):
+BANNED — Implementation / quantity counts (the number of things used — this applies EVERYWHERE in the note: the ABCs, the SKILL-ACQUISITION paragraph, AND the closing, not just interventions):
 "two neutral items", "three cards", "presented two choices", "a field of two", "two distractors",
 "three steps", "four blocks", "a set of two" — any cardinal count of items, materials, stimuli, cards,
-choices, distractors, or steps presented or manipulated during a procedure.
+choices, distractors, or steps presented or manipulated during ANY procedure, INCLUDING how a replacement skill was taught.
 CORRECT alternatives (describe WITHOUT the count):
 Instead of "presenting two neutral items alongside a preferred item" → "presenting a preferred item among neutral materials"
 Instead of "two neutral items" → "neutral materials" / "a selection of neutral items"
@@ -676,6 +676,7 @@ This paragraph must:
 - Name each replacement skill/skill acquisition program EXACTLY as written in the treatment plan
 - Describe HOW it was taught as active programming — not as a consequence of a behavior episode
 - Include prompting level and client response
+- Describe HOW WITHOUT a cardinal count of items/materials/steps — "using neutral materials" or "a preferred item among neutral materials", NEVER "two neutral items" / "three cards" (the implementation-count ban applies here too). Identifying ordinals ("the second peer") are fine; counting the stimuli is not.
 - Be woven naturally into the continuous paragraph — no separate heading
 
 CORRECT example:
