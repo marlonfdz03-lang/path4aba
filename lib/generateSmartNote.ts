@@ -18,6 +18,7 @@ import {
 } from '@/lib/functionPatterns';
 import { stripInvalidNextSession } from '@/lib/nextSessionDate';
 import { findRedFlagFlags } from '@/lib/redFlagPhrases';
+import { decideUniqueness } from '@/lib/noteSimilarity';
 
 const openai = new OpenAI({
   apiKey: process.env.AZURE_OPENAI_API_KEY || 'azure-openai',
@@ -118,13 +119,6 @@ export interface GeneratedNote {
   redFlags?: string[];
 }
 
-function calculateSimilarity(text1: string, text2: string): number {
-  const words1 = new Set(text1.toLowerCase().split(/\s+/));
-  const words2 = new Set(text2.toLowerCase().split(/\s+/));
-  const intersection = new Set([...words1].filter(w => words2.has(w)));
-  const union = new Set([...words1, ...words2]);
-  return intersection.size / union.size;
-}
 
 function buildContextualFactors(input: SessionInput): string {
   const blocks: string[] = [];
@@ -457,23 +451,14 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
 
   let note = await callOpenAI(MASTER_RBT_NOTE_PROMPT + contextualFactors);
 
-  // Step 7: Similarity check — compare against entire note history
-  let similarityWarning = false;
-  if (previousTexts.length > 0) {
-    const tooSimilar = previousTexts.some(prev => calculateSimilarity(note, prev) > 0.60);
-    if (tooSimilar) {
-      if (onChunk) onChunk('\n__REGEN__\n');
-      const variationInstruction = `\n\nIMPORTANT: This note is too similar to a previous session note. You must vary the sentence starters, intervention descriptions, behavior topographies used, and narrative structure significantly. Use completely different ABC sequences and different order of events. The note must read as a distinctly different session.`;
-      note = await callOpenAI(MASTER_RBT_NOTE_PROMPT + contextualFactors + variationInstruction);
-
-      // If still too similar after regeneration, flag it but return the note
-      const stillTooSimilar = previousTexts.some(prev => calculateSimilarity(note, prev) > 0.60);
-      if (stillTooSimilar) {
-        similarityWarning = true;
-        console.warn('[generateSmartNote] Note similarity still >60% after regeneration for client:', input.clientId);
-      }
-    }
-  }
+  // Step 7: Similarity — WARN, NEVER REGENERATE (Bug 6, Option C). Uniqueness is cosmetic; after the
+  // function phrasing became uniform by clinical requirement, same-client notes legitimately share more
+  // vocabulary, so a regenerate-on-similarity gate fired repeatedly and burned multiple LLM calls per note.
+  // We now surface a warning (like the coherence/red flags) and never regenerate for it. The four
+  // COMPLIANCE gates below are unaffected — they still regenerate on clinically-defective notes.
+  const similarityWarning = previousTexts.length > 0
+    ? decideUniqueness(note, previousTexts).warn
+    : false;
 
   // Step 7b: Strip host-EHR-blocked narrative terms (payer-compliance on ABA Matrix's side — e.g.
   // "sensory" is not billable under 97153 and is rejected on submit). Substitute where we can, flag
