@@ -237,7 +237,9 @@ function NoteForm() {
         return;
       }
 
-      let metaError = "";
+      // Only a BLOCKING stop discards the result. An advisory message is surfaced like the other
+      // review flags, alongside the note and its summary tables.
+      let blockingError = "";
       const finalText = await consumeNoteStream(res, {
         onText: (t) => setGeneratedNote(t),
         onRegen: () => {
@@ -245,21 +247,24 @@ function NoteForm() {
           setStatus("Regenerating for uniqueness…");
         },
         onMeta: (meta) => {
-          if (meta.error) {
-            metaError = meta.error;
+          if (meta.error && meta.blocking !== false) {
+            blockingError = meta.error;
             setGenError(meta.error);
-          } else {
-            setSimilarityWarning(!!meta.similarityWarning);
-            setCoherenceFlags(Array.isArray(meta.coherenceFlags) ? meta.coherenceFlags : []);
-            setRedFlags(Array.isArray(meta.redFlags) ? meta.redFlags : []);
+            return;
           }
+          setSimilarityWarning(!!meta.similarityWarning);
+          setCoherenceFlags([
+            ...(Array.isArray(meta.coherenceFlags) ? meta.coherenceFlags : []),
+            ...(meta.error ? [meta.error] : []),
+          ]);
+          setRedFlags(Array.isArray(meta.redFlags) ? meta.redFlags : []);
         },
       });
       setStatus("");
 
       // Build the summary from state at generation time + the final note text
       // (matches the website — /api/generate-note does not return these).
-      if (!metaError && finalText.trim()) {
+      if (!blockingError && finalText.trim()) {
         setSummary({
           behaviors: selectedBehaviors,
           skills: selectedSkills,

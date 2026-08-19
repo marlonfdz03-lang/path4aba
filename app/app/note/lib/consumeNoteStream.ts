@@ -2,7 +2,10 @@
 // parsing the inline __REGEN__ marker (clear & restart) and the trailing
 // __META__{...} JSON tail. App-only helper — not imported by any website file.
 
-export type NoteStreamMeta = { similarityWarning?: boolean; error?: string; blockedFlagged?: string[]; coherenceFlags?: string[]; redFlags?: string[]; filteredText?: string };
+// `blocking` separates "the note must not be used" (hide it, no summary tables, no saving) from an
+// advisory the RBT should read alongside a note that is still usable. Absent/true = blocking, so an
+// older server that only sends `error` keeps its current fail-safe behaviour.
+export type NoteStreamMeta = { similarityWarning?: boolean; error?: string; blocking?: boolean; blockedFlagged?: string[]; coherenceFlags?: string[]; redFlags?: string[]; filteredText?: string };
 
 export type NoteStreamHandlers = {
   onText: (fullText: string) => void; // called as the note streams in

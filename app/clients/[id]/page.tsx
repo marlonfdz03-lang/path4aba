@@ -477,6 +477,9 @@ export default function ClientProfilePage() {
       // build tag + first-try defects + regen count after completion. Remove with the server diag hooks.
       let regenSeen = 0;
       let diagLine = "";
+      // A message on the meta channel is not the same as "throw the result away". Only a BLOCKING
+      // stop hides the note and skips the session-summary tables; an advisory is shown alongside them.
+      let advisory = "";
       outer: while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -484,7 +487,7 @@ export default function ClientProfilePage() {
         if (chunk.includes("__META__")) {
           const parts = chunk.split("__META__");
           if (parts[0]) { fullText += parts[0]; setGeneratedNote(fullText); }
-          try { const meta = JSON.parse(parts[1]); if (meta.error) { setStatus(meta.error); return; } setSimilarityWarning(!!meta.similarityWarning); if (typeof meta.filteredText === "string") { fullText = meta.filteredText; setGeneratedNote(fullText); } diagLine = `DIAG · build ${meta.buildTag || "?"} · first-try defects: ${(meta.firstTryDefects || []).join(", ") || "none (clean)"} · regens this generate: ${regenSeen}`; } catch {}
+          try { const meta = JSON.parse(parts[1]); if (meta.error && meta.blocking !== false) { setStatus(meta.error); setGeneratedNote(""); return; } if (meta.error) { advisory = meta.error; } setSimilarityWarning(!!meta.similarityWarning); if (typeof meta.filteredText === "string") { fullText = meta.filteredText; setGeneratedNote(fullText); } diagLine = `DIAG · build ${meta.buildTag || "?"} · first-try defects: ${(meta.firstTryDefects || []).join(", ") || "none (clean)"} · regens this generate: ${regenSeen}`; } catch {}
           break outer;
         }
         if (chunk.includes("__REGEN__")) {
@@ -499,7 +502,7 @@ export default function ClientProfilePage() {
         fullText += chunk;
         setGeneratedNote(fullText);
       }
-      setStatus(diagLine);
+      setStatus(advisory || diagLine);
       if (fullText.trim()) {
         const backupNote = { id: crypto.randomUUID(), clientId: client.id, date: date || new Date().toLocaleDateString(), note: fullText };
         saveNote(backupNote);
@@ -617,7 +620,7 @@ export default function ClientProfilePage() {
         if (chunk.includes("__META__")) {
           const parts = chunk.split("__META__");
           if (parts[0]) { fullText += parts[0]; setPerfectedNote(fullText); }
-          try { const meta = JSON.parse(parts[1]); if (meta.error) { setPerfectStatus(meta.error); return; } setPerfectSimilarityWarning(!!meta.similarityWarning); if (typeof meta.filteredText === "string") { fullText = meta.filteredText; setPerfectedNote(fullText); } } catch {}
+          try { const meta = JSON.parse(parts[1]); if (meta.error && meta.blocking !== false) { setPerfectStatus(meta.error); setPerfectedNote(""); return; } if (meta.error) { setPerfectStatus(meta.error); } setPerfectSimilarityWarning(!!meta.similarityWarning); if (typeof meta.filteredText === "string") { fullText = meta.filteredText; setPerfectedNote(fullText); } } catch {}
           break outer2;
         }
         if (chunk.includes("__REGEN__")) {

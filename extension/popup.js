@@ -1057,7 +1057,8 @@ async function streamGenerate(endpoint, body, method = 'POST') {
           if (parts[0]) fullText += parts[0];
           try {
             const meta = JSON.parse(parts[1]);
-            if (meta.error) { showError(meta.error); return; }
+            // Only a BLOCKING stop discards the note. An advisory is shown and the note is kept.
+            if (meta.error) { showError(meta.error); if (meta.blocking !== false) return; }
             hasSimilarityWarning = !!meta.similarityWarning;
             if (Array.isArray(meta.blockedFlagged)) blockedFlagged = meta.blockedFlagged;
             if (typeof meta.filteredText === 'string') filteredText = meta.filteredText;

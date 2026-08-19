@@ -170,7 +170,8 @@ export async function POST(req: NextRequest) {
             violations = findInterventionViolations(finalNote, approvedInterventions, skillPrograms, { reportedEnvironmentalChange });
             if (violatingNames().length > 0) {
               const still = violatingNames();
-              controller.enqueue(encoder.encode(`\n__META__${JSON.stringify({ error: `Refined note repeatedly documented ${still.join(', ')}, which ${still.length === 1 ? 'is' : 'are'} not in this client's approved treatment plan. An RBT may only document approved interventions — please review the assessment or regenerate.` })}`));
+              // BLOCKING: an out-of-plan intervention survived the rewrite, so the note must not be used.
+              controller.enqueue(encoder.encode(`\n__META__${JSON.stringify({ blocking: true, error: `Refined note repeatedly documented ${still.join(', ')}, which ${still.length === 1 ? 'is' : 'are'} not in this client's approved treatment plan. An RBT may only document approved interventions — please review the assessment or regenerate.` })}`));
               return;
             }
           }
@@ -199,7 +200,7 @@ export async function POST(req: NextRequest) {
           const redFlags = findRedFlagFlags(cleaned);
           controller.enqueue(encoder.encode(`\n__META__${JSON.stringify({ similarityWarning, blockedFlagged: flagged, redFlags, filteredText: cleaned })}`));
         } catch (e) {
-          controller.enqueue(encoder.encode(`\n__META__${JSON.stringify({ error: 'Stream error' })}`));
+          controller.enqueue(encoder.encode(`\n__META__${JSON.stringify({ error: 'Stream error', blocking: true })}`));
         } finally {
           controller.close();
         }

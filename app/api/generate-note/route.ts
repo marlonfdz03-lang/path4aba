@@ -80,8 +80,12 @@ export async function POST(req: NextRequest) {
             `\n__META__${JSON.stringify({ similarityWarning: result.similarityWarning || false, blockedFlagged: result.blockedFlagged || [], coherenceFlags: result.coherenceFlags || [], redFlags: result.redFlags || [], firstTryDefects: result.firstTryDefects || [], buildTag: result.buildTag || 'unknown', filteredText: result.note })}`
           ));
         } catch (e: any) {
+          // BLOCKING: the note must not be used (a compliance hard-stop, or generation failed
+          // outright). Clients hide the note, skip the session-summary tables, and disable saving.
+          // An advisory message would carry `blocking: false` and leave both in place — the point of
+          // the flag is that "there is a message" no longer means "throw the whole result away".
           controller.enqueue(encoder.encode(
-            `\n__META__${JSON.stringify({ error: e.message || 'Generation failed' })}`
+            `\n__META__${JSON.stringify({ error: e.message || 'Generation failed', blocking: true })}`
           ));
         } finally {
           controller.close();
