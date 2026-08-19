@@ -30,7 +30,13 @@ export const INTERVENTION_CATALOG: { canonical: string; re: RegExp }[] = [
   { canonical: 'FCT', re: /\bFCT\b|functional communication training/i },
   { canonical: 'NCR', re: /\bNCR\b|non[- ]?contingent reinforcement/i },
   { canonical: 'Premack', re: /premack/i },
-  { canonical: 'Behavior Momentum', re: /behavior(?:al)? momentum|high[- ]?p(?:robability)?\s+(?:request|sequence)/i },
+  // One procedure under many names. Plans write "Behavioural Momentum" (British), "High-Probability
+  // Instructional Sequence", "High-P Command Sequence", "high-probability demands" — none of which the
+  // original `high[- ]?p(?:robability)?\s+(?:request|sequence)` matched, so a plan that DID approve it
+  // failed to map onto this key and the note naming it was flagged unapproved. The head noun is
+  // enumerated (request/instruction/command/demand/sequence) rather than left open, so ordinary prose
+  // like "a high probability of escape-maintained behavior" stays unmatched — see the battery.
+  { canonical: 'Behavior Momentum', re: /behavio(?:u)?r(?:al)? momentum|high[- ]?p(?:robability)?[- ](?:request|instruction(?:al)?|command|demand)s?(?:[- ](?:sequence|series))?|high[- ]?p(?:robability)?[- ]sequence/i },
   // Modification / manipulation / arrangement are the same procedure under three names. The catalog
   // used to recognize only "modification", but the assessment extractor preserves the plan's own
   // wording and its vocabulary says "Environmental Manipulation" — so a plan that DID approve this
