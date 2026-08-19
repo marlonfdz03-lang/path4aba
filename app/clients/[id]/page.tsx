@@ -462,6 +462,11 @@ export default function ClientProfilePage() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let fullText = "";
+      // DIAGNOSTIC (temporary — 2x-regen trace): count regens this generate and show each regen's REAL
+      // source (an UNTAGGED __REGEN__ = old pre-consolidation bundle running). diagLine persists the
+      // build tag + first-try defects + regen count after completion. Remove with the server diag hooks.
+      let regenSeen = 0;
+      let diagLine = "";
       outer: while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -469,19 +474,22 @@ export default function ClientProfilePage() {
         if (chunk.includes("__META__")) {
           const parts = chunk.split("__META__");
           if (parts[0]) { fullText += parts[0]; setGeneratedNote(fullText); }
-          try { const meta = JSON.parse(parts[1]); if (meta.error) { setStatus(meta.error); return; } setSimilarityWarning(!!meta.similarityWarning); if (typeof meta.filteredText === "string") { fullText = meta.filteredText; setGeneratedNote(fullText); } } catch {}
+          try { const meta = JSON.parse(parts[1]); if (meta.error) { setStatus(meta.error); return; } setSimilarityWarning(!!meta.similarityWarning); if (typeof meta.filteredText === "string") { fullText = meta.filteredText; setGeneratedNote(fullText); } diagLine = `DIAG · build ${meta.buildTag || "?"} · first-try defects: ${(meta.firstTryDefects || []).join(", ") || "none (clean)"} · regens this generate: ${regenSeen}`; } catch {}
           break outer;
         }
         if (chunk.includes("__REGEN__")) {
+          const m = chunk.match(/__REGEN__(:[^\n]*)?/);
+          const src = m && m[1] ? m[1].slice(1) : "(UNTAGGED — OLD BUILD)";
+          regenSeen += 1;
           fullText = "";
           setGeneratedNote("");
-          setStatus("Regenerating for uniqueness…");
+          setStatus(`Regen #${regenSeen} — source: ${src}`);
           continue;
         }
         fullText += chunk;
         setGeneratedNote(fullText);
       }
-      setStatus("");
+      setStatus(diagLine);
       if (fullText.trim()) {
         const backupNote = { id: crypto.randomUUID(), clientId: client.id, date: date || new Date().toLocaleDateString(), note: fullText };
         saveNote(backupNote);

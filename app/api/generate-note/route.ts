@@ -75,7 +75,9 @@ export async function POST(req: NextRequest) {
             controller.enqueue(encoder.encode(text));
           });
           controller.enqueue(encoder.encode(
-            `\n__META__${JSON.stringify({ similarityWarning: result.similarityWarning || false, blockedFlagged: result.blockedFlagged || [], coherenceFlags: result.coherenceFlags || [], redFlags: result.redFlags || [], filteredText: result.note })}`
+            // DIAGNOSTIC (temporary — 2x-regen trace): firstTryDefects + buildTag surfaced so a generate
+            // proves the running bundle and the dominant first-try defect. Remove with the other diag hooks.
+            `\n__META__${JSON.stringify({ similarityWarning: result.similarityWarning || false, blockedFlagged: result.blockedFlagged || [], coherenceFlags: result.coherenceFlags || [], redFlags: result.redFlags || [], firstTryDefects: result.firstTryDefects || [], buildTag: result.buildTag || 'unknown', filteredText: result.note })}`
           ));
         } catch (e: any) {
           controller.enqueue(encoder.encode(

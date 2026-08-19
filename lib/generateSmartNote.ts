@@ -120,7 +120,16 @@ export interface GeneratedNote {
   // Universal 97153 red-flag phrases (vague/mentalistic/generic-intervention/filler) present in the
   // note — surfaced for the RBT to rewrite with observable detail; never auto-deleted (see redFlagPhrases.ts).
   redFlags?: string[];
+  // DIAGNOSTIC (temporary — 2x-regen trace). Which compliance gate(s) the FIRST generated note failed,
+  // before any regen. Empty = clean first try (regenCount 0). Tells us the dominant first-try defect.
+  firstTryDefects?: string[];
+  // DIAGNOSTIC (temporary). Build marker so a generate proves which server bundle is actually running.
+  buildTag?: string;
 }
+
+// DIAGNOSTIC (temporary — 2x-regen trace). Bump on each diagnostic redeploy so a generate proves the
+// running bundle. Surfaced in __META__ and in the tagged __REGEN__ marker.
+const BUILD_TAG = 'diag-2x-v1';
 
 
 function buildContextualFactors(input: SessionInput): string {
@@ -551,14 +560,29 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     approvedMethodSet,
   });
 
+  // DIAGNOSTIC (temporary — 2x-regen trace). Capture WHICH gate(s) the FIRST note failed, before any
+  // regen. This is the same detection the gate runs internally on the initial note (a cheap pure re-run on
+  // the identical text), surfaced so we can see the dominant first-try defect and confirm the running
+  // bundle. Remove once the first-try analysis is done.
+  const firstTryState = detectCompliance(note);
+  const firstTryDefects: string[] = [
+    ...(firstTryState.coverage.segmentable && firstTryState.coverage.missing.length ? ['coverage'] : []),
+    ...(firstTryState.functionViolations.length ? ['approved-function'] : []),
+    ...(interventionViolationNames(firstTryState.intervention).length ? ['intervention'] : []),
+    ...(firstTryState.methodViolations.length ? ['teaching-method'] : []),
+  ];
+  console.log('[note-diag]', JSON.stringify({ buildTag: BUILD_TAG, firstTryDefects }));
+
   // ONE combined regeneration: collect every violation → one instruction naming all of them → regenerate
   // ONCE → re-check all four. regenCount is 0 (clean note) or 1 (any defect) — never the old 3-4.
+  // DIAGNOSTIC: the __REGEN__ marker is tagged with its source + the first-try defects. An UNTAGGED
+  // __REGEN__ reaching the client means an OLD (pre-consolidation) bundle is running.
   const gate = await runCombinedComplianceGate({
     initialNote: note,
     detect: detectCompliance,
     regenerate: (instruction) =>
       callOpenAI(MASTER_RBT_NOTE_PROMPT + contextualFactors + instruction).then(applyBlockedFilter),
-    onRegen: onChunk ? () => onChunk('\n__REGEN__\n') : undefined,
+    onRegen: onChunk ? () => onChunk(`\n__REGEN__:compliance[${firstTryDefects.join(',')}]\n`) : undefined,
   });
   note = gate.note;
   const functionViolations = gate.state.functionViolations;
@@ -632,5 +656,7 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     blockedFlagged,
     coherenceFlags,
     redFlags,
+    firstTryDefects,  // DIAGNOSTIC (temporary — 2x-regen trace)
+    buildTag: BUILD_TAG,  // DIAGNOSTIC (temporary)
   };
 }
