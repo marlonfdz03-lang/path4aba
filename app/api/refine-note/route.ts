@@ -7,6 +7,7 @@ import { findInterventionViolations } from '@/lib/interventionPolicy';
 import { isValidNextSessionDate, stripInvalidNextSession, stripInvalidNextSessionSentence } from '@/lib/nextSessionDate';
 import { findRedFlagFlags } from '@/lib/redFlagPhrases';
 import { getExtensionAuth } from '@/lib/extensionAuth';
+import { decideUniqueness } from '@/lib/noteSimilarity';
 
 export const runtime = 'nodejs';
 
@@ -16,14 +17,6 @@ const openai = new OpenAI({
   defaultQuery: { 'api-version': '2025-01-01-preview' },
   defaultHeaders: { 'api-key': process.env.AZURE_OPENAI_API_KEY },
 });
-
-function calculateSimilarity(text1: string, text2: string): number {
-  const words1 = new Set(text1.toLowerCase().split(/\s+/));
-  const words2 = new Set(text2.toLowerCase().split(/\s+/));
-  const intersection = new Set([...words1].filter(w => words2.has(w)));
-  const union = new Set([...words1, ...words2]);
-  return intersection.size / union.size;
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -121,29 +114,18 @@ export async function POST(req: NextRequest) {
             if (delta) { refinedNote += delta; controller.enqueue(encoder.encode(delta)); }
           }
 
+          // UNIQUENESS — WARN, NEVER REGENERATE (Bug 6, Option C — mirrors generateSmartNote). Uniqueness
+          // is cosmetic; after the note-language work made the function/opening/closing phrasing uniform by
+          // clinical requirement, same-client notes legitimately share more vocabulary, so a
+          // regenerate-on-similarity pass fired repeatedly and burned an extra gpt-4o call per refine. We
+          // now surface a warning (like the coherence/red flags — surface, don't auto-rewrite) via the
+          // shared 0.80-threshold helper, and never regenerate for it. The intervention COMPLIANCE gate
+          // below is unaffected — it still regenerates once and errors on a persistent violation.
+          // `finalNote` stays `let`: the intervention gate reassigns it on a compliance regen.
           let finalNote = refinedNote;
-          let similarityWarning = false;
-          const tooSimilar = previousTexts.length > 0 &&
-            previousTexts.some(prev => calculateSimilarity(refinedNote, prev) > 0.55);
-
-          if (tooSimilar) {
-            controller.enqueue(encoder.encode('\n__REGEN__\n'));
-            const variationHint = '\n\nIMPORTANT: The refined note is too similar to a previous session note for this client. You must significantly vary the sentence starters, narrative structure, intervention descriptions, and behavior topographies. The note must read as a distinctly different session.';
-            const stream2 = await openai.chat.completions.create({
-              model: 'gpt-4o', temperature: 0.7, max_tokens: 1500, stream: true,
-              messages: [
-                { role: 'system', content: NOTE_PERFECTOR_PROMPT },
-                { role: 'user', content: userMessage(originalNote, variationHint) }
-              ]
-            });
-            let regenNote = '';
-            for await (const chunk of stream2) {
-              const delta = chunk.choices[0]?.delta?.content || '';
-              if (delta) { regenNote += delta; controller.enqueue(encoder.encode(delta)); }
-            }
-            finalNote = regenNote;
-            similarityWarning = previousTexts.some(prev => calculateSimilarity(regenNote, prev) > 0.55);
-          }
+          const similarityWarning = previousTexts.length > 0
+            ? decideUniqueness(refinedNote, previousTexts).warn
+            : false;
 
           // TREATMENT-PLAN INTERVENTION GATE — a REFINED note may document ONLY interventions in the
           // client's approved plan, same compliance invariant as generation (interventionPolicy.ts).
