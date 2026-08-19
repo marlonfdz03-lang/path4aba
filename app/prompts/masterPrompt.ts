@@ -236,8 +236,10 @@ BANNED in SCHOOL sessions: meal routine, hygiene routine, Play-Doh activity, sen
 RULE: If the session input says location is "home" — every activity in the note must be a home activity. If location is "school" — every activity must be a school activity. Never use a school activity in a home note or vice versa. If an activity in activitiesUsed does not fit the session location, omit it rather than relocating or replacing it.
 
 REINFORCEMENT DOCUMENTATION:
-- Always specify: type (non-edible/social) + exact item + when delivered.
-- CORRECT: "verbal praise delivered immediately following appropriate request", "access to (tablet) provided contingent on task completion"
+- Always specify WHEN reinforcement was delivered and what it followed — the contingency is the clinical content.
+- Name a specific reinforcer ONLY when the session data's reinforcersUsed list provides one. The RBT is not asked which items they used, so in most notes there is none to name.
+- CORRECT with an item provided: "access to (tablet) provided contingent on task completion"
+- CORRECT with none provided: "verbal praise delivered immediately following the appropriate request", "reinforcement was delivered contingent on appropriate task engagement", "the client accessed preferred reinforcement following task completion"
 - BANNED: "favorite snack", "enthusiastic acknowledgment", "rewarded with fun activity"
 
 EDIBLE REINFORCERS — COMPLETELY BANNED:
@@ -247,17 +249,11 @@ NEVER use the phrases: "edible reinforcer", "preferred edible", "food reinforcer
 NEVER use parentheses around food items like (strawberries) or (cookies) — parentheses do not make food acceptable.
 IF the session form or client profile lists food as a reinforcer — IGNORE IT entirely and substitute with "preferred toy", "access to preferred sensory item", or "preferred tangible item".
 
-APPROVED REINFORCERS ONLY:
-- Preferred toys (e.g., "access to (fidget toy)", "access to (toy car)")
-- Sensory items (e.g., "access to (sensory bin)", "access to (kinetic sand)")
-- Music or songs (e.g., "access to preferred music")
-- Videos or tablet access (e.g., "access to (tablet)")
-- Social reinforcement (e.g., "behavior-specific praise", "high five")
-- Movement breaks (e.g., "access to (trampoline)")
-- Always use the most specific reinforcer name possible from the client profile for non-food items.
-  CORRECT: "access to (Pokémon cards)", "access to (tablet)", "access to preferred toy"
-  INCORRECT: "preferred edible", "preferred item", "tangible reinforcer", "small portion of strawberries"
-  Specific non-food reinforcer names make notes sound authentic — generic names are a red flag for auditors.
+REINFORCER SOURCE — MANDATORY (do not invent reinforcers):
+- Every named reinforcer in the note MUST come from the session data's reinforcersUsed list.
+- NEVER introduce a specific named reinforcer that is not in that list. Do not invent one to fill an ABC, and do not pull one from the client profile or from any example in this prompt.
+- GRACEFUL FALLBACK — when reinforcersUsed is empty or missing, describe reinforcement by its CATEGORY and CONTINGENCY without naming an item: "verbal praise", "behavior-specific praise", "a high five", "access to a preferred item", "a movement break", "preferred reinforcement", each tied to what it followed. A vaguer note is correct; a fabricated reinforcer is not — naming an item the RBT never reported is a false clinical record, which is far worse for an audit than a general description.
+- When an item IS provided, use it in parentheses: "access to (tablet) contingent on task completion".
 
 - VERBAL PRAISE ROTATION: Never use "verbal praise" more than twice in one note.
   Rotate using: "behavior-specific praise", "social reinforcement", "positive verbal feedback", "reinforcement was delivered verbally", "praise contingent on the response"
@@ -891,9 +887,7 @@ RULE: Not every ABC should end with the client succeeding — when the note has 
 - "The final portion of the session showed [client] responding to [intervention] with [outcome], suggesting continued need for [support type]."
 RULE: Never use the same closing structure in consecutive notes — rotate through all available closings.
 
-4. EXPANDED REINFORCER ROTATION — add these approved non-food reinforcers to the rotation:
-sensory break, movement activity, bubbles, music access, choice of next activity, drawing materials, gross motor game, preferred song, stickers, computer time, spinning top.
-RULE: Each note must use at least 3 different reinforcers, and never the same combination twice across notes.
+4. REINFORCEMENT VARIETY — vary the CONTINGENCY and the delivery wording across ABCs (what the reinforcement followed, and how it is described), not by introducing reinforcer items the session data did not provide. Never repeat one stock reinforcement sentence in every ABC.
 
 ═══════════════════════════════════════
 ANTI-REPETITION — STARTERS, FUNCTION PHRASING, SKILL STRUCTURE, RESPONSE SPECIFICITY, BANNED PHRASES

@@ -859,16 +859,19 @@ function updateGenerateBtn() {
   canGenerate = canGenerate && complianceLevel !== '';
 
   if (userRole === 'rbt') {
-    // >= so selecting more than the minimum doesn't silently block the button
-    canGenerate = canGenerate && selectedBehaviors.length >= 5 && selectedSkills.length >= 2;
+    // AT LEAST ONE behavior — the note documents exactly what the RBT marks, so the count is theirs
+    // to choose. This required FIVE, which is what made a fixed five-ABC note look normal; the note
+    // then padded from the client's treatment plan when fewer actually occurred. One is the floor
+    // (a session note needs at least one documented behavior); there is no ceiling and no target.
+    canGenerate = canGenerate && selectedBehaviors.length >= 1 && selectedSkills.length >= 1;
     const hint = document.getElementById('generateHint');
     if (!canGenerate && selectedClientId) {
       const missing = [];
       if (!dateVal) missing.push('date');
       if (!selectedLocation) missing.push('location');
       if (selectedPresent.length === 0) missing.push('who was present');
-      if (selectedBehaviors.length < 5) missing.push(`${5 - selectedBehaviors.length} more behavior(s) (${selectedBehaviors.length}/5)`);
-      if (selectedSkills.length < 2) missing.push(`${2 - selectedSkills.length} more skill(s) (${selectedSkills.length}/2)`);
+      if (selectedBehaviors.length < 1) missing.push('at least one behavior');
+      if (selectedSkills.length < 1) missing.push('at least one skill');
       if (complianceLevel === '') missing.push("the session's compliance level (you reported an environmental change)");
       console.log('[debug] missing fields:', missing);
       hint.textContent = missing.length ? 'Still needed: ' + missing.join(', ') : '';

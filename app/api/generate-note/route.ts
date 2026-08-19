@@ -36,6 +36,15 @@ export async function POST(req: NextRequest) {
     if (!input.clientId) {
       return NextResponse.json({ error: "clientId is required" }, { status: 400 });
     }
+    // AT LEAST ONE documented behavior. The note now writes one ABC per behavior the RBT marked, so
+    // zero behaviors would ask for a note with no ABCs at all. Enforced here as well as in each
+    // form, because a UI-only minimum is not a minimum.
+    if (!input.behaviorsObserved?.length) {
+      return NextResponse.json(
+        { error: "Mark at least one behavior — a session note must document at least one behavior." },
+        { status: 400 },
+      );
+    }
     if (!input.sessionInfo?.date) {
       // Shape-aware message. A slim payload sends `date` (+ selectedBehaviors[]); a full payload sends
       // sessionInfo.date. If the request carried a top-level `date` but we still have none, it was NOT

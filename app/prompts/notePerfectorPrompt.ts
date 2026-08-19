@@ -375,10 +375,10 @@ Never prefix observable behavior with a category label ("engaged in X behavior b
   NEVER use parentheses around food items like (strawberries) or (cookies) — parentheses do not make food acceptable.
   REPLACE ALL food reinforcers with: "preferred toy", "access to preferred sensory item", or "preferred tangible item"
   CORRECT replacements: "access to preferred toy" / "access to preferred sensory item" / "access to (Pokémon cards)" / "access to (tablet)"
-- REINFORCER SPECIFICITY: NEVER say "preferred edible", "preferred item", or "tangible reinforcer" — these are audit red flags.
-  Use the actual non-food item name from the original note or the client profile context provided.
-  CORRECT: "access to (Pokémon cards)" / "access to (tablet)" / "access to preferred sensory item"
-  INCORRECT: "preferred edible" / "preferred item" / "tangible reinforcer" / "small portion of strawberries" / any food item
+- REINFORCER SPECIFICITY: keep the actual non-food item name the ORIGINAL NOTE gives — that is what the RBT reported, and it must survive the rewrite.
+  NEVER add a reinforcer name the original note does not contain. Do not pull one from the client profile context, and do not invent one to replace a general phrase: a reinforcer the RBT never reported is a false clinical record.
+  When the original names no item, describe reinforcement by category and contingency: "access to preferred sensory item", "preferred reinforcement delivered following task completion".
+  INCORRECT: "preferred edible" / "small portion of strawberries" / any food item
 
 8. REPLACEMENT BEHAVIOR HIGHLIGHT:
 - At least one ABC must show replacement behavior displacing maladaptive behavior

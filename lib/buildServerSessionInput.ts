@@ -9,7 +9,6 @@
 import type { SessionInput } from "./generateSmartNote";
 import { nextSessionClause } from "./nextSessionDate.ts";
 import { matrixFunctionsForBehavior } from "./functionPatterns.ts";
-import { splitReinforcerValue } from "./reinforcers.ts";
 
 // The slim payload the clients POST. Everything NOT here is derived from the DB profile.
 export type SlimNoteRequest = {
@@ -72,14 +71,11 @@ export function buildServerSessionInput(
 ): SessionInput {
   const p = profile || {};
   const mal = asArray(p.maladaptiveBehaviors);
-  const home = asArray(p.homeActivities) as string[];
-  const school = asArray(p.schoolActivities) as string[];
-  // Read-time reinforcer normalization: the stored profile array may still hold an unresolved
-  // alternative ("tablet or phone") — either persisted before the ingest-time " or " split shipped, or
-  // written by a path that skipped parseReinforcers. Re-split here so the note names a single item and
-  // never renders "(tablet or phone)". Reuses the tested split; idempotent (an already-split value is a
-  // no-op), so it also fixes every existing client with no data migration.
-  const reinforcers = splitReinforcerValue(asArray(p.reinforcers)) as string[];
+  // NOTE: p.homeActivities / p.schoolActivities / p.reinforcers are deliberately NOT read here any
+  // more. They are the client's approved OPTIONS, not a record of what this session used, and
+  // feeding them to the note made it assert activities and reinforcers nobody reported. They stay in
+  // the profile for the clinical record and for the day the form collects them (reinforcers.ts still
+  // owns their read-time normalization for whichever path reads them).
   const caregivers = asArray(p.caregivers) as string[];
   const present = slim.present ?? [];
   const presentPerson = present.join(" and ");
@@ -155,12 +151,16 @@ export function buildServerSessionInput(
     // selection instead (see the SESSION QUALITY block), which is real data they already provide.
     replacementSkillsAddressed: (slim.selectedSkills ?? []).map((name) => ({ name })),
 
-    activitiesUsed: (slim.location === "school" ? school : home)
-      .slice(0, 4).map((name) => ({ name, preferred: true })),
-
-    reinforcersUsed: reinforcers.slice(0, 3).map((item) => ({
-      type: "non-edible" as const, item, deliveredWhen: "contingent on task engagement",
-    })),
+    // ACTIVITIES AND REINFORCERS ARE NOT COLLECTED FROM THE RBT, SO THE NOTE NAMES NEITHER.
+    // These used to be filled from the client profile — four activities and three reinforcers per
+    // note, each stamped `preferred: true` / `deliveredWhen: "contingent on task engagement"` — so
+    // the note asserted which activities the session ran and which items were delivered when, none
+    // of it reported by anyone. The prompt's ACTIVITY SOURCE and REINFORCER SOURCE rules both fall
+    // back to general, non-naming language when these are empty, which is the correct record: a
+    // vaguer note is accurate, a fabricated activity or reinforcer is not.
+    // If either is ever collected in the form, populate it here and the naming turns back on.
+    activitiesUsed: [],
+    reinforcersUsed: [],
 
     clinicalEvents: [
       // HIPAA-conservative med handling (decided during consolidation): state THAT a medication change
@@ -190,10 +190,14 @@ export function buildServerSessionInput(
       setting: slim.location === "other" ? (slim.otherLocation || "community setting") : slim.location,
       approvedInterventions: asArray(p.interventions).map(getName),
       prohibitedInterventions: PROHIBITED,
+      // Only `people` is real session input (who the RBT marked present). The tangible/activity
+      // name lists and a hardcoded social-reinforcer literal used to sit here too, and the model
+      // read them as a menu of what to name in the note — the same fill-the-gap route the profile
+      // behavior list provided. Reinforcement is now described by category and contingency.
       reinforcers: {
-        tangibles: reinforcers.slice(0, 5).join(", "),
-        activities: home.slice(0, 3).join(", "),
-        social: "verbal praise, high fives, behavior-specific praise",
+        tangibles: "",
+        activities: "",
+        social: "",
         people: presentPerson,
       },
       activePrograms: {

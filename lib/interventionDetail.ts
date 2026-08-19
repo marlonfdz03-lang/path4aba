@@ -26,7 +26,7 @@ export const INTERVENTION_DETAIL: Record<string, string> = {
   DRA: `DRA DEFINITION:
 - DRA = delivering reinforcement contingent on the ALTERNATIVE BEHAVIOR occurring. It is not about withholding.
 - Always name the specific alternative behavior being reinforced — not just "appropriate behavior" or "task engagement".
-  CORRECT: "implemented DRA by reinforcing appropriate worksheet engagement and hands-on-task behavior with verbal praise and access to (fidget toy)"
+  CORRECT: "implemented DRA by reinforcing appropriate worksheet engagement and hands-on-task behavior with verbal praise" (add a named reinforcer ONLY if the session data provides one: "…and access to (fidget toy)")
   INCORRECT: "implemented DRA by delivering reinforcement contingent on appropriate task engagement" — too vague, does not name the alternative behavior
 - Never frame DRA as a deprivation or withholding strategy.
 - NEVER say just "the RBT implemented DRA" — always describe HOW.
@@ -63,12 +63,12 @@ Each note must use a DIFFERENT combination of 2-3 requests from different pools.
 
   Premack: `PREMACK DETAIL:
 - Name both sides of the contingency — the lower-probability task completed first and the higher-probability activity that followed.
-  CORRECT: "implemented the Premack Principle by presenting the sorting task before access to (bubbles)"
+  CORRECT: "implemented the Premack Principle by presenting the sorting task before access to a preferred activity" (name the activity only if the session data provides it)
 - Natural shorthand: "Premack Principle" may become "Premack strategy" after the first mention.`,
 
   'Token Economy': `TOKEN ECONOMY DETAIL:
-- Name what earned a token and what the tokens were exchanged for.
-  CORRECT: "implemented the token economy by delivering a token contingent on each completed sorting trial, exchanged for access to (bubbles)"
+- Name what earned a token, and what the tokens were exchanged for ONLY if the session data provides that reinforcer.
+  CORRECT: "implemented the token economy by delivering a token contingent on each completed sorting trial, exchanged for preferred reinforcement"
 - Do NOT state a count of tokens earned or required — numbers are banned everywhere in the note.
 - Tokens may be documented as reinforcement ONLY for a client whose plan approves this procedure.`,
 
