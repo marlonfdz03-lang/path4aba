@@ -342,7 +342,7 @@ TOPOGRAPHY RULES:
 - NEVER copy the operational definition as the topography. The topography is what the client physically did during THIS session, described in one specific observable sentence.
 - CORRECT: "gazed around the room and handled objects unrelated to the task for approximately 3 minutes"
 - INCORRECT: "Defined as any instance in which the client disengages from the assigned activity by gazing around the room"
-- Use the client's full name naturally throughout the note instead of "the client". Use caregiver names with their relationship: "Maria Lopez (mother)", "Tracy Smith (teacher)". If the session input provides a clientName, use it — never default to "the client".
+- Use the client's full name naturally throughout the note instead of "the client". Use caregiver names with their relationship: "Maria Lopez (mother)", "Tracy Smith (teacher)" — ONLY the caregiver(s) marked present for this session, never another name from the client's file. If the session input provides a clientName, use it — never default to "the client".
 - NEVER use "turning away from instructions" — describe the physical behavior: "turned body away from instructor and did not initiate task within 10 seconds of instruction"
 - The topography must answer: what did the body do? Not: what is the definition of the behavior?
 - OFF-TASK BEHAVIOR: For off-task behavior, use these natural descriptions:
@@ -598,7 +598,7 @@ Style D: 'Today's [setting]-based session was held at [location] from [time]. [C
 Pick a DIFFERENT style each time — never use Style A twice in a row.
 
 Where [location] = use sessionInfo.location value directly — if it is a street address or facility name, use it. NEVER replace with generic 'the school' or 'the home'.
-Where [caregiver] = use sessionInfo.caregiverName or sessionInfo.caregiver — use their actual name and role: 'Maria Lopez (mother)', 'Ms. Tracy (teacher)'. NEVER say just 'caregiver' or 'teacher' if a name was provided.
+Where [caregiver] = use sessionInfo.caregiverName (falling back to sessionInfo.caregiver) — this is WHO THE RBT MARKED PRESENT FOR THIS SESSION. Use their actual name and role: 'Maria Lopez (mother)', 'Ms. Tracy (teacher)'. NEVER say just 'caregiver' or 'teacher' if a name was provided. NEVER name a different caregiver, add one, or list the client's other caregivers — a client has several caregivers on file and only the marked one attended today.
 Where [time] = use sessionInfo.timeRange if provided, otherwise omit.
 Where [setting] comes from sessionInfo.location: use "home" if location is "home", "school" if location is "school", "clinic" if location is "clinic". NEVER hardcode "home-based" regardless of default.
 

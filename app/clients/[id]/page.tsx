@@ -249,6 +249,18 @@ export default function ClientProfilePage() {
   const [refinedNoteSaved, setRefinedNoteSaved] = useState(false);
   const [nextApptDate, setNextApptDate] = useState("");
   const [lastSavedNote, setLastSavedNote] = useState("");
+
+  // A session selection belongs to ONE client's note. The App Router can reuse this component
+  // across /clients/[id] param changes, so without this a selection survives the switch — and a
+  // stale name that is not in the new client's pill list renders NO pill at all, staying invisible
+  // in the form while still being submitted. Adjust-during-render (React's documented pattern for
+  // resetting state when a prop changes) rather than an effect, which would cascade a second
+  // render. Declared with the other hooks, above the loading/not-found early returns.
+  const [prevClientId, setPrevClientId] = useState(params.id);
+  if (params.id !== prevClientId) {
+    setPrevClientId(params.id);
+    resetNoteForm();
+  }
   const [bcbaOverlapContext, setBcbaOverlapContext] = useState<{
     empty: boolean;
     behaviors?: string[];
@@ -389,6 +401,39 @@ export default function ClientProfilePage() {
     return typeof item === "string" ? item : item?.name || "";
   }
 
+  // ONE reset for every path that ends a note — switching client, saving, and Start New Note — so
+  // the three can never drift (a field added to the form is cleared by all of them or none).
+  //   keepDateAndLocation: the post-save path keeps them; an RBT writing several notes in one
+  //                        sitting is still in the same day and location.
+  //   keepGeneratedNote:   the post-save path keeps the note on screen to read or copy.
+  function resetNoteForm({ keepDateAndLocation = false, keepGeneratedNote = false } = {}) {
+    setSelectedPresent([]);
+    setCustomPresent("");
+    setSelectedBehaviors([]);
+    setSelectedSkills([]);
+    setComplianceChoice("typical");
+    setComplianceTouched(false);
+    setMedicationConsumed(false);
+    setEnvironmentalChange(false);
+    setEnvironmentalChangeDesc("");
+    setMissedHoursToggle(false);
+    setMissedHoursCount("");
+    setMissedHoursReason("");
+    setNextApptDate("");
+    setStatus("");
+    if (!keepDateAndLocation) { setDate(""); setLocation(""); setOtherLocation(""); }
+    if (!keepGeneratedNote) {
+      // NOTE: sessionSummaryRef is deliberately not touched here — this runs during render on a
+      // client switch, and mutating a ref during render is invalid. It is cleared at the start of
+      // handleGenerateNote instead, and it can never be read stale: saving requires a generated
+      // note, and clearing generatedNote below makes that impossible until the next generation.
+      setGeneratedNote("");
+      setSessionSummary(null);
+      setSimilarityWarning(false);
+      setLastSavedNote("");
+    }
+  }
+
   const presentPerson = selectedPresent.join(" and ");
 
   function togglePresent(name: string) {
@@ -439,6 +484,7 @@ export default function ClientProfilePage() {
     setGenerating(true);
     setStatus("Generating note...");
     setGeneratedNote("");
+    sessionSummaryRef.current = null;
 
     // Slim payload: the server builds the full SessionInput from the authoritative DB profile
     // (dual-accept in /api/generate-note). Constraint sets (allowedFunctions, matrixFunctions,
@@ -553,18 +599,7 @@ export default function ClientProfilePage() {
       setTimeout(() => setNoteSaved(false), 3000);
       await loadNotesFromSupabase(client.id);
       setLastSavedNote(generatedNote);
-      setSelectedBehaviors([]);
-      setSelectedSkills([]);
-      setSelectedPresent([]);
-      setComplianceChoice("typical");
-      setComplianceTouched(false);
-      setMedicationConsumed(false);
-      setEnvironmentalChange(false);
-      setEnvironmentalChangeDesc("");
-      setMissedHoursToggle(false);
-      setMissedHoursCount("");
-      setMissedHoursReason("");
-      setNextApptDate("");
+      resetNoteForm({ keepDateAndLocation: true, keepGeneratedNote: true });
     } else {
       setDailyNotes(prev => [backupNote, ...prev]);
     }

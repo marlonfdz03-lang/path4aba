@@ -287,6 +287,27 @@ function NoteForm() {
     setSummary(null);
   }
 
+  // A session selection belongs to ONE client's note; switching client must not carry it over.
+  // Adjust-during-render (React's documented pattern) rather than an effect. Mirrors the website.
+  const [prevClientId, setPrevClientId] = useState(clientId);
+  if (clientId !== prevClientId) {
+    setPrevClientId(clientId);
+    setSelectedPresent([]);
+    setCustomPresent("");
+    setSelectedBehaviors([]);
+    setSelectedSkills([]);
+    setComplianceChoice("typical");
+    setComplianceTouched(false);
+    setMedicationChange(false);
+    setEnvChange(false);
+    setEnvChangeDesc("");
+    setMissedHours(false);
+    setMissedCount("");
+    setMissedReason("");
+    setNextAppt("");
+    backToForm();
+  }
+
   // ── Non-ready states ──
   if (state !== "ready") {
     const message =

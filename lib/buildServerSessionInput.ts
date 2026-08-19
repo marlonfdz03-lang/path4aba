@@ -50,6 +50,19 @@ const getName = (item: unknown): string =>
 
 const asArray = (v: unknown): any[] => (Array.isArray(v) ? v : []);
 
+// The note names WHO THE RBT MARKED PRESENT. The client's caregiver roster is a set of options, not
+// an attendance record, so it may only add the relationship the roster records for a name the RBT
+// actually selected ("Margot Villar" + roster "Margot Villar (mother)" -> the annotated form).
+// Matching is on the bare name because either side may carry a "(relationship)" suffix; an unmatched
+// selection — "RBT", a substitute teacher, a name typed today — prints exactly as the RBT entered it.
+// A roster entry the RBT did NOT select can never reach the note through this function.
+function annotatePresent(present: string[], roster: string[]): string {
+  const bare = (s: string) => String(s).replace(/\s*\(.*?\)\s*/g, " ").trim().toLowerCase();
+  return present
+    .map((sel) => roster.find((r) => bare(r) === bare(sel) && r.length > sel.length) ?? sel)
+    .join(" and ");
+}
+
 // Build the full SessionInput from a slim request + the authoritative DB clinical_profile.
 // `columnDiagnosis` is the clients.diagnosis column, used only if the profile JSON has none.
 export function buildServerSessionInput(
@@ -95,8 +108,15 @@ export function buildServerSessionInput(
       date: slim.date,
       timeRange: "",
       location: slim.location,
+      // WHO WAS PRESENT THIS SESSION is the RBT's live selection, and it is the identity that
+      // prints. `p.caregivers` is the client's roster of AVAILABLE caregiver options — a client
+      // normally has several (mother, father, grandmother, teacher) — NOT a statement about who
+      // attended today. The roster used to win here, so every note printed the whole roster joined
+      // with "and" and silently discarded the RBT's choice: the RBT marked one caregiver and the
+      // note named a different one, unchangeable from the form. The roster now only ANNOTATES —
+      // it can never substitute, add, or reorder a name.
       caregiver: presentPerson,
-      caregiverName: caregivers.join(" and ") || presentPerson,
+      caregiverName: annotatePresent(present, caregivers) || presentPerson,
     },
     // gender/pronouns are TOP-LEVEL on SessionInput (generateSmartNote reads input.gender/pronouns);
     // the old client builders nested them under clientProfile, where they were silently ignored.

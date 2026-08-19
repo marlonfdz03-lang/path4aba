@@ -18,11 +18,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ clientI
   if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
 
   const profile = (client.clinical_profile as any) || {}
+  // whoWasPresent is the RBT's pill list for this client — the people they can MARK present.
+  // `caregivers` is the assessment-derived roster and must NOT grow from a one-off attendee: a
+  // substitute teacher present for a single session is not a caregiver of record. This used to
+  // write into both, so anyone typed once became a permanent roster entry.
   const whoWasPresent = profile.whoWasPresent || []
-  const caregivers = profile.caregivers || []
-
   if (!whoWasPresent.includes(name)) whoWasPresent.push(name)
-  if (!caregivers.includes(name)) caregivers.push(name)
 
   await prisma.clients.update({
     where: { id: clientId },
@@ -30,10 +31,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ clientI
       clinical_profile: {
         ...profile,
         whoWasPresent,
-        caregivers,
       },
     },
   })
 
-  return NextResponse.json({ ok: true, whoWasPresent, caregivers })
+  return NextResponse.json({ ok: true, whoWasPresent, caregivers: profile.caregivers || [] })
 }
