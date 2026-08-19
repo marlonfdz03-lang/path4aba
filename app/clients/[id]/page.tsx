@@ -124,6 +124,7 @@ function NoteOutput({
   onChange,
   onCopy,
   onSave,
+  onStartNew,
   saved,
   generating,
 }: {
@@ -131,6 +132,7 @@ function NoteOutput({
   onChange: (v: string) => void;
   onCopy: () => void;
   onSave?: () => void;
+  onStartNew?: () => void;
   saved?: boolean;
   generating?: boolean;
 }) {
@@ -153,6 +155,16 @@ function NoteOutput({
           >
             {generating ? "Generating..." : copied ? "✓ Copied" : "Copy"}
           </button>
+          {onStartNew && (
+            <button
+              onClick={onStartNew}
+              disabled={generating}
+              className="px-3 py-1.5 rounded-lg text-[13px] font-medium border transition-colors disabled:opacity-40"
+              style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+            >
+              Start New Note
+            </button>
+          )}
           {onSave && (
             <button
               onClick={onSave}
@@ -569,6 +581,15 @@ export default function ClientProfilePage() {
     } finally {
       setGenerating(false);
     }
+  }
+
+  // Clears the whole form for a fresh note. ALWAYS confirms — this discards everything, including a
+  // note that was already saved and might still be wanted on screen, so a misclick should never be
+  // destructive. Shares resetNoteForm with the client-switch and post-save paths.
+  function handleStartNewNote() {
+    if (!confirm("Start a new note? This clears the form.")) return;
+    resetNoteForm();
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function handleSaveNote() {
@@ -1929,6 +1950,7 @@ export default function ClientProfilePage() {
                   onChange={setGeneratedNote}
                   onCopy={() => navigator.clipboard.writeText(generatedNote)}
                   onSave={handleSaveNote}
+                  onStartNew={handleStartNewNote}
                   generating={generating}
                 />
               )}
