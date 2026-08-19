@@ -73,12 +73,13 @@ LANGUAGE:
 - FILLER (content-free): "no concerns were noted", "nothing notable", "next session will continue the same goals". State the actual clinical observations for THIS session; never close with a content-free line.
 
 PROMPT LEVEL DOCUMENTATION:
-When documenting prompting, describe the type and context — never just say "with prompting":
+Name a prompt level ONLY when the session data provides one for that skill or behavior. The RBT is not asked for a per-skill prompt level, so in most notes there is none to name — inventing one asserts a clinical observation nobody made.
+WHEN THE DATA PROVIDES A PROMPT LEVEL, describe the type and context — never just say "with prompting":
 CORRECT: "the client completed the task following verbal prompts"
 CORRECT: "the RBT provided gestural prompting during task initiation"
 CORRECT: "the client required partial physical prompting to transition"
-CORRECT: "the client responded independently on 3 of 5 opportunities"
-BANNED: "with prompting", "with help", "with support" — always specify the prompt type
+BANNED when a level IS provided: "with prompting", "with help", "with support" — specify the prompt type.
+WHEN THE DATA PROVIDES NONE, describe the support generally and observably, consistent with the session's compliance level: "the RBT provided additional support to initiate the activity", "the client engaged with the materials following support from the RBT". NEVER pick a specific level to fill the gap, and NEVER state a count of opportunities or trials.
 
 MEDICAL NECESSITY — MANDATORY IN EVERY NOTE:
 Every note must demonstrate WHY this client needs ABA services at the current intensity. This is the most important function of the note for insurance compliance.
@@ -550,7 +551,11 @@ BANNED: Ending an ABC with the intervention without stating what the client did 
 
 5. SKILL DOCUMENTATION — OBSERVABLE, PER SKILL:
 For EVERY replacement skill or skill acquisition target, document it observably: name the skill,
-the activity it was practiced in, how it was practiced (prompt level), and what the client did.
+the activity it was practiced in, how it was practiced (naming a prompt level ONLY if the session
+data provides one — otherwise describe the support generally), and what the client did.
+Do NOT declare a skill successful, mastered, or unsuccessful: the RBT reports WHICH programs were
+addressed, not how each one turned out. Describe engagement consistent with the session's compliance
+level, without a verdict.
 One dedicated treatment of each skill — never combined.
 CORRECT examples (observable, no justification tail):
 - "Manding for attention was addressed during the table activity; when adult attention shifted to another child, the client raised a hand and vocalized to request attention following a gestural prompt."

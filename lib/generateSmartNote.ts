@@ -63,9 +63,13 @@ export interface SessionInput {
   matrixFunctions?: string[];
   replacementSkillsAddressed: {
     name: string;
-    promptLevel: string;
-    clientResponse: string;
-    successful: boolean;
+    // The RBT marks WHICH programs were addressed. Everything below is optional because they are NOT
+    // asked for it: a per-skill prompt level, client response, or success verdict the RBT never gave
+    // must not be asserted by the system. Absent = the note documents the skill generally, consistent
+    // with the session compliance level the RBT DID select.
+    promptLevel?: string;
+    clientResponse?: string;
+    successful?: boolean;
   }[];
   activitiesUsed: {
     name: string;
@@ -181,14 +185,22 @@ function buildContextualFactors(input: SessionInput): string {
   // The rule the replacement encodes: ENTAILMENT, NOT INVENTION. Prose that restates what the
   // selected level MEANS is documenting the RBT's judgment; prose that needs a count, a rate, a
   // duration, or a comparison to baseline needs data the RBT never supplied, and is fabrication.
-  if (input.complianceLevel === 'below_typical' || input.complianceLevel === 'poor') {
-    const level = input.complianceLevel === 'poor' ? 'poor' : 'below typical';
+  if (input.complianceLevel) {
+    const level = input.complianceLevel === 'poor' ? 'poor'
+      : input.complianceLevel === 'below_typical' ? 'below typical' : 'typical';
+    // The ONE real signal for how the session went. The RBT is not asked for a per-skill prompt
+    // level, response, or success verdict — so the note must not state one. It reads consistently
+    // with the level the RBT selected, in general terms, and invents no specifics beneath it.
+    const reading = level === 'typical'
+      ? `The ABCs and the skill programs may read as generally going well — the client engaging with the programs and responding to the support provided.`
+      : `The ABCs and the skill programs may read as a harder session — the client needing more support to engage, and responding less readily than usual.`;
     blocks.push(
       `SESSION QUALITY — THE RBT'S OWN ASSESSMENT:\n` +
       `The RBT indicated that the client's overall compliance today was ${level}. This is the RBT's clinical judgment of the session — document it, do not elaborate beyond it.\n` +
-      `- Let the ABC prose read CONSISTENTLY with a ${level} session, using ONLY the prompt levels and client responses already present in the session data.\n` +
-      `- Do NOT add a separate sentence announcing the compliance level ("The RBT indicated compliance was ${level}") — it reads as assembled. The level shows through the ABCs themselves.\n` +
-      `- Do NOT assert anything the RBT did not enter: no invented latency, no number of prompt repetitions, no comparison to the client's baseline or to recent sessions, no claim that behaviors occurred more or less often than usual, no duration.\n` +
+      `- ${reading}\n` +
+      `- Do NOT add a separate sentence announcing the compliance level ("The RBT indicated compliance was ${level}") — it reads as assembled. The level shows through the prose itself.\n` +
+      `- The RBT did NOT report a prompt level, a client response, or a success verdict for any individual skill. Do NOT state one. Never name a specific prompt level ("gestural", "partial physical", "verbal") for a skill unless the session data provides it, and never declare a skill successful or unsuccessful.\n` +
+      `- Do NOT assert anything else the RBT did not enter: no invented latency, no number of prompt repetitions, no trial counts ("4 of 5"), no comparison to the client's baseline or to recent sessions, no claim that behaviors occurred more or less often than usual, no duration.\n` +
       `- Do NOT state any count or percentage.\n` +
       `- Do NOT say the session went badly, and never use mentalistic language ("didn't want to", "refused").`
     );

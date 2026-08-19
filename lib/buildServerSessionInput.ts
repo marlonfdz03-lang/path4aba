@@ -107,7 +107,11 @@ export function buildServerSessionInput(
     sessionInfo: {
       date: slim.date,
       timeRange: "",
-      location: slim.location,
+      // When the RBT picks "Other" and types where the session happened, the NOTE must say that
+      // place. This used to pass the literal selector value through, and the prompt uses
+      // sessionInfo.location verbatim — so a note for a session at the grandmother's house opened
+      // "services were provided at other".
+      location: slim.location === "other" ? (slim.otherLocation?.trim() || "community setting") : slim.location,
       // WHO WAS PRESENT THIS SESSION is the RBT's live selection, and it is the identity that
       // prints. `p.caregivers` is the client's roster of AVAILABLE caregiver options — a client
       // normally has several (mother, father, grandmother, teacher) — NOT a statement about who
@@ -145,9 +149,11 @@ export function buildServerSessionInput(
     // Derived from the DB, never client-supplied.
     matrixFunctions,
 
-    replacementSkillsAddressed: (slim.selectedSkills ?? []).map((name) => ({
-      name, promptLevel: "", clientResponse: "", successful: true,
-    })),
+    // ONLY the skill NAME is real input — the RBT marks which programs were addressed, nothing more.
+    // This used to assert `successful: true` for every skill, so the system decided how each program
+    // went and the note documented that as fact. How the session went comes from the RBT's compliance
+    // selection instead (see the SESSION QUALITY block), which is real data they already provide.
+    replacementSkillsAddressed: (slim.selectedSkills ?? []).map((name) => ({ name })),
 
     activitiesUsed: (slim.location === "school" ? school : home)
       .slice(0, 4).map((name) => ({ name, preferred: true })),
@@ -164,10 +170,13 @@ export function buildServerSessionInput(
       nextSessionClause(slim.nextAppt ?? "", slim.date),
     ].filter(Boolean).join(" "),
 
-    complianceLevel:
-      slim.compliance && slim.compliance !== "typical"
-        ? (slim.compliance as SessionInput["complianceLevel"])
-        : undefined,
+    // Passed through as selected, INCLUDING "typical". It used to be dropped when typical, so the
+    // note had nothing real to shape the skill prose with and the model filled in on its own. This
+    // is the RBT's own judgment of the session and it is the only thing that shapes how the skills
+    // and behaviors READ.
+    complianceLevel: ["typical", "below_typical", "poor"].includes(String(slim.compliance))
+      ? (slim.compliance as SessionInput["complianceLevel"])
+      : undefined,
     environmentalChangeDescription:
       slim.envChange && slim.envChangeDesc ? slim.envChangeDesc : undefined,
     missedHoursData:
