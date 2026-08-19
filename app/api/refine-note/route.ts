@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { NOTE_PERFECTOR_PROMPT } from '@/app/prompts/notePerfectorPrompt';
+import { buildInterventionDetail } from '@/lib/interventionDetail';
 import { prisma } from '@/lib/prisma';
 import { filterBlockedNarrative, type BlockedTerm } from '@/lib/blockedNarrativeTerms';
 import { findInterventionViolations } from '@/lib/interventionPolicy';
@@ -95,6 +96,13 @@ export async function POST(req: NextRequest) {
 
     const encoder = new TextEncoder();
 
+    // Same conditional detail as generation: the refiner is only told how to document the
+    // procedures THIS client's plan approves, so it cannot introduce an out-of-plan intervention
+    // that its own gate would then reject. Built once and used by both passes.
+    const perfectorPrompt = NOTE_PERFECTOR_PROMPT + buildInterventionDetail(
+      Array.isArray(clientProfile?.approvedInterventions) ? clientProfile.approvedInterventions : [],
+    );
+
     const readable = new ReadableStream({
       async start(controller) {
         try {
@@ -102,7 +110,7 @@ export async function POST(req: NextRequest) {
           const stream1 = await openai.chat.completions.create({
             model: 'gpt-4o', temperature: 0.3, max_tokens: 1500, stream: true,
             messages: [
-              { role: 'system', content: NOTE_PERFECTOR_PROMPT },
+              { role: 'system', content: perfectorPrompt },
               { role: 'user', content: userMessage(originalNote) }
             ]
           });
@@ -157,7 +165,7 @@ export async function POST(req: NextRequest) {
             const streamV = await openai.chat.completions.create({
               model: 'gpt-4o', temperature: 0.5, max_tokens: 1500, stream: true,
               messages: [
-                { role: 'system', content: NOTE_PERFECTOR_PROMPT },
+                { role: 'system', content: perfectorPrompt },
                 { role: 'user', content: userMessage(originalNote, violationHint) }
               ]
             });

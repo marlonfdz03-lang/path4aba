@@ -22,6 +22,7 @@ import { decideUniqueness } from '@/lib/noteSimilarity';
 import {
   runCombinedComplianceGate, interventionViolationNames, type ComplianceState,
 } from '@/lib/complianceGate';
+import { buildInterventionDetail } from '@/lib/interventionDetail';
 
 const openai = new OpenAI({
   apiKey: process.env.AZURE_OPENAI_API_KEY || 'azure-openai',
@@ -485,7 +486,15 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     return resp.choices[0].message.content || '';
   }
 
-  let note = await callOpenAI(MASTER_RBT_NOTE_PROMPT + contextualFactors);
+  // ONE system prompt, built once and reused by the regeneration below so the two can never drift.
+  // The per-intervention detail is derived from THIS client's approved list, so the prompt can no
+  // longer teach a procedure the plan does not authorize (which the gate would then reject, turning
+  // an intervention the system itself advertised into a note that would not generate at all).
+  const systemPrompt = MASTER_RBT_NOTE_PROMPT
+    + buildInterventionDetail(resolvedProfile.approvedInterventions)
+    + contextualFactors;
+
+  let note = await callOpenAI(systemPrompt);
 
   // Step 7: Similarity — WARN, NEVER REGENERATE (Bug 6, Option C). Uniqueness is cosmetic; after the
   // function phrasing became uniform by clinical requirement, same-client notes legitimately share more
@@ -610,8 +619,7 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   const gate = await runCombinedComplianceGate({
     initialNote: note,
     detect: detectCompliance,
-    regenerate: (instruction) =>
-      callOpenAI(MASTER_RBT_NOTE_PROMPT + contextualFactors + instruction).then(applyBlockedFilter),
+    regenerate: (instruction) => callOpenAI(systemPrompt + instruction).then(applyBlockedFilter),
     onRegen: onChunk ? () => onChunk(`\n__REGEN__:compliance[${firstTryDefects.join(',')}]\n`) : undefined,
   });
   note = gate.note;

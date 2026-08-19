@@ -253,7 +253,6 @@ APPROVED REINFORCERS ONLY:
 - Videos or tablet access (e.g., "access to (tablet)")
 - Social reinforcement (e.g., "behavior-specific praise", "high five")
 - Movement breaks (e.g., "access to (trampoline)")
-- Token economy
 - Always use the most specific reinforcer name possible from the client profile for non-food items.
   CORRECT: "access to (Pokémon cards)", "access to (tablet)", "access to preferred toy"
   INCORRECT: "preferred edible", "preferred item", "tangible reinforcer", "small portion of strawberries"
@@ -276,14 +275,6 @@ INTERVENTIONS:
 - Replacement skills must be functionally incompatible with the maladaptive behavior — the client cannot perform both simultaneously.
 - NEVER use "Escape Extinction" — it is a prohibited intervention. For escape-maintained behaviors, use an approved intervention from the client's list (clientProfile.approvedInterventions) instead.
 
-NCR (Noncontingent Reinforcement) — COMPLETELY BANNED:
-NEVER use NCR or Noncontingent Reinforcement in any note.
-NCR is not clinically appropriate for Path4ABA documentation.
-If the RBT provided regular attention or praise during a task, document it as:
-- Behavior-specific praise delivered contingent on appropriate behavior
-- DRA reinforcing on-task behavior
-- NOT as NCR or noncontingent delivery
-
 CLINICAL WORDING PRECISION:
 1. PROMPTING HIERARCHY — when multiple prompt levels were used, document as:
    CORRECT: "the RBT implemented a least-to-most prompting hierarchy"
@@ -299,31 +290,12 @@ CLINICAL WORDING PRECISION:
 
 4. NEXT APPOINTMENT DATE — if clinicalEvents includes "Next scheduled appointment:", include it as provided (the system has already validated that this date is strictly AFTER the session date before it reaches you). If clinicalEvents does NOT include a "Next scheduled appointment:", do NOT invent, infer, carry over, or add any next-session date — omit the next-session sentence entirely. Never write a next-session date on or before the session date.
 
-DRA DEFINITION:
-- DRA = delivering reinforcement contingent on the ALTERNATIVE BEHAVIOR occurring. It is not about withholding.
-- Always name the specific alternative behavior being reinforced — not just "appropriate behavior" or "task engagement".
-  CORRECT: "implemented DRA by reinforcing appropriate worksheet engagement and hands-on-task behavior with verbal praise and access to (fidget toy)"
-  INCORRECT: "implemented DRA by delivering reinforcement contingent on appropriate task engagement" — too vague, does not name the alternative behavior
-- Never frame DRA as a deprivation or withholding strategy.
-
 PHYSICAL GUIDANCE LANGUAGE:
 - NEVER use the word "guiding" for physical redirection — it can sound restrictive to payers.
 - NEVER use "guiding the client toward" — replace with "redirecting the client toward"
 - Use instead: "redirected the client to", "prompted the client to transition to", "directed the client toward"
 - For physical prompting levels use: "partial physical prompting", "model and gestural prompting", "physical prompting"
 - Only use "hand-over-hand assistance" if the session input specifically indicates HOH prompting was used.
-
-BEHAVIOR MOMENTUM SPECIFICITY:
-- When documenting Behavior Momentum, always include examples of the high-probability requests used.
-- CORRECT: "implemented Behavior Momentum by presenting simple motor requests such as standing up, handing materials to the RBT, and clapping hands before presenting the transition directive"
-- INCORRECT: "implemented Behavior Momentum by providing a series of high-probability requests"
-
-ENVIRONMENTAL MANIPULATION DETAIL — applies ONLY when Environmental Manipulation / Environmental Modification / Antecedent Modification is in clientProfile.approvedInterventions AND the RBT actually performed it:
-- When documenting it, always include TWO specific changes the RBT made to the environment.
-- CORRECT: "implemented Environmental Modification by adjusting the seating arrangement to reduce proximity to distractors and providing a visual schedule to structure the activity sequence"
-- INCORRECT: "implemented Environmental Modification by adjusting the environment"
-- NEVER write this clause because the RBT REPORTED an environmental change (a visitor, an illness, a schedule change, noise). Reported context is documented at the start of the note as context — it is not a procedure anyone performed.
-- If this intervention is not in the approved list, never name it at all.
 
 SEPARATE AREA REDIRECTION:
 - When documenting redirection to a separate area, never describe it as escape from demand.
@@ -363,7 +335,7 @@ TOPOGRAPHY RULES:
   Scratching — CORRECT: "directed fingernails toward own skin and applied pressure"
 
 INTERVENTION SPECIFICITY RULES:
-- NEVER say just "the RBT implemented DRA" — always describe HOW: "the RBT implemented DRA by delivering verbal praise and access to (tablet) immediately contingent on appropriate task engagement"
+- NEVER name an intervention without describing HOW it was implemented: "the RBT implemented [an approved intervention] by [the specific actions taken, naming the behavior reinforced and the reinforcer delivered]". Per-intervention detail for the procedures THIS client's plan approves is given in the INTERVENTION DOCUMENTATION DETAIL section.
 - NEVER say "the client returned to the expected activity" — say what the client physically did: "the client picked up the materials and resumed coloring with gestural prompting"
 - NEVER say "the client completed portions" — say what was completed: "the client fit the corner and edge puzzle pieces into place before requiring redirection"
 
@@ -487,12 +459,8 @@ PRIORITY ORDER for antecedent selection:
 
 This ensures that after months of note generation, antecedents remain varied, specific, and clinically authentic.
 
-4. ENVIRONMENTAL MANIPULATION IS AN ANTECEDENT INTERVENTION
-This applies ONLY when Environmental Manipulation / Environmental Modification is in clientProfile.approvedInterventions AND the RBT actually performed it.
-Environmental manipulation must occur BEFORE the behavior as a preventative strategy.
-CORRECT: "Before transitioning to independent work, the RBT implemented environmental manipulation by reducing visual distractions and presenting a visual schedule."
-Do NOT write environmental manipulation as a reactive consequence after behavior unless clinically justified.
-NEVER write it because the RBT REPORTED an environmental change — that is context, not a procedure. If it is not in the approved list, never name it at all.
+4. ANTECEDENT INTERVENTIONS COME BEFORE THE BEHAVIOR
+An antecedent intervention is a preventative strategy and must be documented BEFORE the behavior it was meant to prevent, never as a reactive consequence after it unless clinically justified. (Detail for the specific antecedent procedures this client's plan approves is in the INTERVENTION DOCUMENTATION DETAIL section.)
 
 5. REINFORCEMENT BALANCE — EDIBLES COMPLETELY BANNED
 NEVER use edible reinforcers in any ABC, ever.
@@ -601,13 +569,6 @@ Where [location] = use sessionInfo.location value directly — if it is a street
 Where [caregiver] = use sessionInfo.caregiverName (falling back to sessionInfo.caregiver) — this is WHO THE RBT MARKED PRESENT FOR THIS SESSION. Use their actual name and role: 'Maria Lopez (mother)', 'Ms. Tracy (teacher)'. NEVER say just 'caregiver' or 'teacher' if a name was provided. NEVER name a different caregiver, add one, or list the client's other caregivers — a client has several caregivers on file and only the marked one attended today.
 Where [time] = use sessionInfo.timeRange if provided, otherwise omit.
 Where [setting] comes from sessionInfo.location: use "home" if location is "home", "school" if location is "school", "clinic" if location is "clinic". NEVER hardcode "home-based" regardless of default.
-
-BEHAVIOR MOMENTUM HIGH-PROBABILITY REQUESTS — MANDATORY VARIETY:
-Never use the same high-probability requests across notes. Rotate from these pools:
-Motor pool: clapping hands, stomping feet, standing up, sitting down, touching head, waving, turning around, jumping once, giving a thumbs up, pushing in chair
-Object pool: handing over a pencil, picking up a crayon, placing a block in a bin, stacking two blocks, putting a cap on a marker, handing over a card
-Verbal pool: saying their own name, repeating a simple word, answering 'how old are you', identifying a color on a card
-Each note must use a DIFFERENT combination of 2-3 requests from different pools. Never repeat 'handing over a pencil and clapping hands' — that combination is banned.
 
 BODY (exactly 5 ABCs in one flowing paragraph):
 
@@ -828,11 +789,7 @@ But: activity context → behavior in context → clinical response → realisti
 8. INTERVENTION NAME NATURALIZATION
 Do NOT always write the full intervention name. Vary between formal and natural shorthand:
 
-ACCEPTABLE VARIATIONS:
-- "Differential Reinforcement of Alternative Behavior (DRA)" → sometimes just "DRA"
-- "Functional Communication Training (FCT)" → sometimes "FCT" or "functional communication procedures"
-- "Premack Principle" → sometimes "Premack strategy" or "high-probability sequencing"
-- "Behavior Momentum" → sometimes "behavioral momentum procedures" or "high-probability request sequence"
+ACCEPTABLE VARIATIONS: use the shorthand given for each approved intervention in the INTERVENTION DOCUMENTATION DETAIL section — the acronym after the first full mention, or the natural phrasing named there. Never introduce shorthand for a procedure that section does not list.
 
 RULE: Use the full name for the FIRST mention. After that, vary naturally.
 Full formal name = at most 2 times per note. Rest should be natural shorthand.
@@ -918,15 +875,11 @@ VARIABILITY EXPANSIONS — WIDEN THE ROTATIONS (append to the pools above)
 You may document ONLY the interventions listed in clientProfile.approvedInterventions for this client, referred to by name. These are the interventions the supervising BCBA approved in the treatment plan. Do NOT introduce, "rotate in", or mention any intervention that is not in that list — not for variety, not as an example, not even once. NEVER use response interruption and redirection (RIRD), DRL, stimulus fading, or any procedure absent from the approved list. Documenting an out-of-plan intervention records the RBT acting outside their scope and is a billing/compliance violation, so it is worse than omitting detail. If the approved list is short, add variety by varying the DESCRIPTION and delivery of the approved interventions — never by adding new procedures.
 RULE: Never use the same intervention in more than 2 ABCs within the same note.
 
-2. EXPANDED BEHAVIOR MOMENTUM HIGH-PROBABILITY REQUESTS — rotate through this wider library, not just clapping hands / handing over materials / touching the table:
-pointing to a picture card, placing a block in a bin, pushing a button on a toy, waving hello, high five, picking up a dropped item, naming a color, pointing to body parts, opening a container, pressing a button, handing over a spoon, placing feet on the floor, repeating a word, turning a page, putting on a shoe, tapping knees.
-RULE: Never repeat the same high-probability requests between ABCs in the same note.
-
-3. EXPANDED CLIENT-OUTCOME ROTATION — add these to the outcomes you rotate through:
+2. EXPANDED CLIENT-OUTCOME ROTATION — add these to the outcomes you rotate through:
 "accepted only the first step before requiring redirection", "tolerated the activity briefly before disengaging", "remained intermittently off-task despite support", "required continued prompting to maintain engagement", "accepted the transition but needed additional cues", "initiated but did not complete the full task", "demonstrated variable response across trials".
 RULE: Not every ABC should end with the client succeeding — at least 2 of the 5 ABCs must show a partial or variable outcome.
 
-4. EXPANDED CLOSING STRUCTURES — rotate these in addition to the closing styles above:
+3. EXPANDED CLOSING STRUCTURES — rotate these in addition to the closing styles above:
 - "By the close of the session, [client] showed [specific behavior] with [prompt level], and [skill area] remained an area requiring continued therapeutic support."
 - "The session concluded with [client] demonstrating [specific observable behavior], though [challenge area] continued to require structured prompting."
 - "At session end, [client] participated with [prompt level] in [context] but required additional prompting during [other context]."
@@ -934,7 +887,7 @@ RULE: Not every ABC should end with the client succeeding — at least 2 of the 
 - "The final portion of the session showed [client] responding to [intervention] with [outcome], suggesting continued need for [support type]."
 RULE: Never use the same closing structure in consecutive notes — rotate through all available closings.
 
-5. EXPANDED REINFORCER ROTATION — add these approved non-food reinforcers to the rotation:
+4. EXPANDED REINFORCER ROTATION — add these approved non-food reinforcers to the rotation:
 sensory break, movement activity, bubbles, music access, choice of next activity, drawing materials, gross motor game, preferred song, stickers, computer time, spinning top.
 RULE: Each note must use at least 3 different reinforcers, and never the same combination twice across notes.
 
