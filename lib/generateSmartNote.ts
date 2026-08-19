@@ -267,7 +267,7 @@ function buildContextualFactors(input: SessionInput): string {
     `CONTEXTUAL CLINICAL FACTORS — MUST BE WOVEN NATURALLY INTO THE NOTE\n` +
     `═══════════════════════════════════════\n\n` +
     blocks.join('\n\n') +
-    `\n\nIMPORTANT: Do not list these factors as a separate section. Integrate them into the narrative of the note naturally. The note must still contain exactly 5 ABCs, still be one paragraph, and still read as professional clinical documentation.`
+    `\n\nIMPORTANT: Do not list these factors as a separate section. Integrate them into the narrative of the note naturally. The note must still contain one ABC per documented behavior, still be one paragraph, and still read as professional clinical documentation.`
   );
 }
 
@@ -451,7 +451,16 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   const approvedMethodConstraint = approvedMethodSet.length
     ? `\n\nAPPROVED TEACHING METHODS — HARD CONSTRAINT (do not violate): when you state how a replacement skill was practiced, name ONLY a teaching method from this approved set — ${approvedMethodSet.join(', ')}. NEVER name a method outside it; never default to "Modeling" or "DTT" unless it is in this set.`
     : '';
-  const userPrompt = `Generate a clinical ABA session note using this session data:\n\n${JSON.stringify(sessionContext, null, 2)}${approvedFunctionConstraint}${approvedMethodConstraint}\n\nRemember: ONE continuous paragraph, EXACTLY 5 ABCs, no mentalistic language, no prohibited interventions, all activities in parentheses format, every behavior must have an intervention.`;
+  // The ABC count IS the number of behaviors the RBT documented — never a fixed target. A fixed
+  // "exactly 5" forced the model to invent ABCs for behaviors the RBT never marked, sourcing them
+  // from the client's treatment-plan behavior list, which put behaviors that did not occur into a
+  // billable note. One ABC per documented behavior, no padding.
+  const abcCount = input.behaviorsObserved.length;
+  const documentedBehaviorNames = input.behaviorsObserved.map((b) => b.name).filter(Boolean);
+  const behaviorScopeConstraint = documentedBehaviorNames.length
+    ? `\n\nDOCUMENTED BEHAVIORS — CLOSED SET (do not violate): the RBT documented ${abcCount} behavior${abcCount === 1 ? '' : 's'} this session: ${documentedBehaviorNames.join(', ')}. Write EXACTLY ${abcCount} ABC${abcCount === 1 ? '' : 's'} — one for each, and NOT ONE MORE. Never add an ABC for any other behavior: a behavior not in this list did not occur this session, and documenting it is a false clinical record.`
+    : '';
+  const userPrompt = `Generate a clinical ABA session note using this session data:\n\n${JSON.stringify(sessionContext, null, 2)}${behaviorScopeConstraint}${approvedFunctionConstraint}${approvedMethodConstraint}\n\nRemember: ONE continuous paragraph, EXACTLY ${abcCount} ABC${abcCount === 1 ? '' : 's'} (one per documented behavior), no mentalistic language, no prohibited interventions, all activities in parentheses format, every behavior must have an intervention.`;
 
   async function callOpenAI(systemContent: string): Promise<string> {
     if (onChunk) {

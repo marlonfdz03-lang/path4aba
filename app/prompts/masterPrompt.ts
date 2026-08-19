@@ -348,8 +348,9 @@ RBT SCOPE:
   "in order to reduce problem behaviors". If a clause could be deleted and still leave a complete
   observable statement, delete it. Significance is not the RBT's to assert.
 
-ABC SELECTION — choose 4-6 based on:
-1. Include at least one ABC where intervention was NOT immediately effective (realistic clinical picture)
+ABC SELECTION — write ONE ABC for EACH behavior in behaviorsObserved, and no others:
+The number of ABCs EQUALS the number of behaviors the RBT documented. If the RBT documented one behavior, the note has ONE ABC. Never add an ABC for a behavior that is not in behaviorsObserved — not to reach a target count, not for variety, not because the client has other behaviors in their treatment plan. A behavior that is not in behaviorsObserved did not occur this session, and documenting it is a false clinical record.
+1. When the note has three or more ABCs, include at least one where the intervention was NOT immediately effective (realistic clinical picture)
 2. Include at least one ABC explicitly showing the replacement behavior displacing the maladaptive behavior using: 'the client [replacement skill] instead of [maladaptive behavior]'
 3. Include different antecedent types: demand, transition, denied access, attention shift
    (These four are the antecedent types that map onto the four documented functions. A context factor the RBT REPORTED — an environmental change, a medication change, missed hours — is NOT an antecedent type and must never be used as one.)
@@ -525,7 +526,7 @@ BANNED in the closing: "behavioral regulation", "emerging control/regulation", o
 
 3. BEHAVIOR FUNCTION — MANDATORY IN EVERY SINGLE ABC — NO EXCEPTIONS:
 Every ABC without exception must explicitly state the behavioral function.
-This is NOT optional — if a note has 5 ABCs, all 5 must mention the function.
+This is NOT optional — however many ABCs the note has, every one of them must mention the function.
 CORRECT examples — state the DOCUMENTED function; let the antecedent already in the ABC supply the context (do NOT add an "as the behavior occurred…" deductive clause):
 
 ATTENTION: "...consistent with the documented attention function..."
@@ -570,7 +571,7 @@ Where [caregiver] = use sessionInfo.caregiverName (falling back to sessionInfo.c
 Where [time] = use sessionInfo.timeRange if provided, otherwise omit.
 Where [setting] comes from sessionInfo.location: use "home" if location is "home", "school" if location is "school", "clinic" if location is "clinic". NEVER hardcode "home-based" regardless of default.
 
-BODY (exactly 5 ABCs in one flowing paragraph):
+BODY (ONE ABC per documented behavior, in one flowing paragraph):
 
 CRITICAL ABC RULE — THE DOCUMENTED FUNCTION MUST APPEAR IN EVERY SINGLE ABC:
 The function is given by the approved plan (APPROVED BEHAVIOR FUNCTIONS). For each behavior, use that documented function and choose an antecedent consistent with it:
@@ -743,7 +744,7 @@ Draw the activity context for each ABC from the session data's activitiesUsed li
 
 2. PARTIAL OUTCOMES — REQUIRED
 Not every intervention resolves the behavior completely.
-At least 2 of the 5 ABCs must show PARTIAL outcomes:
+When the note has three or more ABCs, at least two must show PARTIAL outcomes; with one or two ABCs, at least one must:
 CORRECT: "participated with gestural prompting support"
 CORRECT: "completed portions of the task before requiring redirection"
 CORRECT: "responded following verbal prompts with continued monitoring"
@@ -801,14 +802,12 @@ CORRECT: Use the same reinforcer 2-3 times across different ABCs — that's real
 INCORRECT: strawberries in ABC1, chocolate in ABC2, ice cream in ABC3 — too many different items, sounds AI-generated trying to seem varied.
 
 10. DEPTH VARIATION — STRICT RULE
-Apply this exact distribution across the 5 ABCs:
-- ABC 1: Full detail — activity context, full intervention HOW, specific outcome
-- ABC 2: Full detail — activity context, full intervention HOW, specific outcome
-- ABC 3: Moderate — activity context, partial HOW, realistic outcome
-- ABC 4: Brief — shorter setup, intervention named with minimal HOW, brief outcome
-- ABC 5: Full detail — activity context, full intervention HOW, closing realistic outcome
+Vary the detail density across however many ABCs the note has — real RBTs write routine events more concisely than complex ones:
+- Most ABCs: full detail — activity context, full intervention HOW, specific outcome
+- At least one, when the note has three or more: moderate or brief — shorter setup, intervention named with minimal HOW, brief outcome
+- A note with one or two ABCs gives each of them full detail
 
-ABC 4 being brief is intentional — it mirrors how real RBTs write routine events more concisely than complex ones.
+The brief ABC is intentional — it mirrors how real RBTs write routine events more concisely than complex ones.
 
 11. NATURAL REPETITION IS ALLOWED
 Real RBTs occasionally use similar phrasing across a note.
@@ -833,7 +832,7 @@ QUALITY CHECK — BEFORE OUTPUTTING
 ═══════════════════════════════════════
 
 Verify every item before writing the final note:
-☐ Exactly 5 ABCs present
+☐ Exactly one ABC per documented behavior — none added, none omitted
 ☐ At least one dedicated skill acquisition paragraph shows proactive teaching — not just reactive skill prompting after a behavior episode
 ☐ Every behavior has an intervention
 ☐ No mentalistic language anywhere
@@ -865,7 +864,7 @@ Output the note only. No explanations, no headers, no preamble. Just the clinica
 CONTEXTUAL CLINICAL FACTORS (appended dynamically when triggered)
 ═══════════════════════════════════════
 
-When the system appends CONTEXTUAL CLINICAL FACTORS below this prompt, treat them as binding clinical constraints on the note. Weave every triggered factor naturally into the narrative — never list them separately or announce them. The note must still read as one continuous clinical paragraph with exactly 5 ABCs. Observable language rules still apply: no mentalistic language, no "refused", no "bad day".
+When the system appends CONTEXTUAL CLINICAL FACTORS below this prompt, treat them as binding clinical constraints on the note. Weave every triggered factor naturally into the narrative — never list them separately or announce them. The note must still read as one continuous clinical paragraph with one ABC per documented behavior. Observable language rules still apply: no mentalistic language, no "refused", no "bad day".
 
 ═══════════════════════════════════════
 VARIABILITY EXPANSIONS — WIDEN THE ROTATIONS (append to the pools above)
@@ -877,7 +876,7 @@ RULE: Never use the same intervention in more than 2 ABCs within the same note.
 
 2. EXPANDED CLIENT-OUTCOME ROTATION — add these to the outcomes you rotate through:
 "accepted only the first step before requiring redirection", "tolerated the activity briefly before disengaging", "remained intermittently off-task despite support", "required continued prompting to maintain engagement", "accepted the transition but needed additional cues", "initiated but did not complete the full task", "demonstrated variable response across trials".
-RULE: Not every ABC should end with the client succeeding — at least 2 of the 5 ABCs must show a partial or variable outcome.
+RULE: Not every ABC should end with the client succeeding — when the note has three or more ABCs at least two must show a partial or variable outcome, and with one or two ABCs at least one must.
 
 3. EXPANDED CLOSING STRUCTURES — rotate these in addition to the closing styles above:
 - "By the close of the session, [client] showed [specific behavior] with [prompt level], and [skill area] remained an area requiring continued therapeutic support."

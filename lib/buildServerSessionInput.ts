@@ -188,7 +188,11 @@ export function buildServerSessionInput(
         people: presentPerson,
       },
       activePrograms: {
-        maladaptive: mal.map(getName),
+        // ONLY the behaviors the RBT documented this session. This used to send the client's ENTIRE
+        // treatment-plan behavior list, which the model then used as fill material to reach the old
+        // fixed ABC count — putting behaviors that did not occur into a billable note. The plan's
+        // other behaviors are not needed to write this note, so they are not sent.
+        maladaptive: (slim.selectedBehaviors ?? []).slice(),
         replacementSkills: [
           ...asArray(p.replacementBehaviors).map(getName),
           ...asArray(p.skillAcquisition).map(getName),
