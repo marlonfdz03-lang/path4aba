@@ -192,7 +192,11 @@ function NoteForm() {
         }),
       });
       // 409 = the exact note is already saved (duplicate guard) — treat as saved, not an error.
-      setSaveState(res.ok || res.status === 409 ? "saved" : "error");
+      const ok = res.ok || res.status === 409;
+      setSaveState(ok ? "saved" : "error");
+      // The note is filed, so this one is finished: clear the per-note state so nothing carries
+      // into the next note. Date and location stay — the RBT is usually still in the same session day.
+      if (ok) { resetNoteForm({ keepDateAndLocation: true }); setSaveState("saved"); }
     } catch {
       setSaveState("error");
     }
@@ -279,19 +283,24 @@ function NoteForm() {
     }
   }
 
+  // Leaves the result view without discarding the session selections — the RBT may want to adjust
+  // one and regenerate. This is navigation, NOT the end of a note; resetNoteForm is that.
   function backToForm() {
     setGenError("");
     setGeneratedNote("");
     setStatus("");
     setSimilarityWarning(false);
+    setCoherenceFlags([]);
+    setRedFlags([]);
     setSummary(null);
   }
 
-  // A session selection belongs to ONE client's note; switching client must not carry it over.
-  // Adjust-during-render (React's documented pattern) rather than an effect. Mirrors the website.
-  const [prevClientId, setPrevClientId] = useState(clientId);
-  if (clientId !== prevClientId) {
-    setPrevClientId(clientId);
+  // ONE reset for the COMPLETE per-note state, mirroring the website. Every path that ENDS a note
+  // calls this — saving and switching client — so nothing survives into the next note. Before this,
+  // saving on the app reset nothing at all: the RBT saved, went back, and every selection from the
+  // previous note was still there, ready to be submitted again.
+  //   keepDateAndLocation: after a save the RBT is usually writing another note the same day.
+  function resetNoteForm({ keepDateAndLocation = false } = {}) {
     setSelectedPresent([]);
     setCustomPresent("");
     setSelectedBehaviors([]);
@@ -305,7 +314,17 @@ function NoteForm() {
     setMissedCount("");
     setMissedReason("");
     setNextAppt("");
+    setSaveState("idle");
+    if (!keepDateAndLocation) { setDate(""); setLocation("home"); setOtherLocation(""); }
     backToForm();
+  }
+
+  // A session selection belongs to ONE client's note; switching client must not carry it over.
+  // Adjust-during-render (React's documented pattern) rather than an effect. Mirrors the website.
+  const [prevClientId, setPrevClientId] = useState(clientId);
+  if (clientId !== prevClientId) {
+    setPrevClientId(clientId);
+    resetNoteForm();
   }
 
   // ── Non-ready states ──

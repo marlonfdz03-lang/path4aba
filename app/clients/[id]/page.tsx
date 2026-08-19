@@ -433,6 +433,13 @@ export default function ClientProfilePage() {
     setMissedHoursReason("");
     setNextApptDate("");
     setStatus("");
+    // The refine ("perfect note") sub-form is per-note state too. It used to reset at NO point, so
+    // switching client left the previous client's perfected note on screen — copyable and saveable.
+    setPastedNote("");
+    setPerfectedNote("");
+    setPerfectStatus("");
+    setPerfectSimilarityWarning(false);
+    setRefinedNoteSaved(false);
     if (!keepDateAndLocation) { setDate(""); setLocation(""); setOtherLocation(""); }
     if (!keepGeneratedNote) {
       // NOTE: sessionSummaryRef is deliberately not touched here — this runs during render on a

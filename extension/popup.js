@@ -395,6 +395,13 @@ document.getElementById('clientSelect').addEventListener('change', async (e) => 
   currentWeekForData = null;
   currentClientForData = null;
   resetSessionConditions();
+  // Per-note text belongs to the client it was written for — never carry it to another client.
+  const prevOutput = document.getElementById('outputNote');
+  if (prevOutput) prevOutput.value = '';
+  const prevPaste = document.getElementById('pasteNote');
+  if (prevPaste) prevPaste.value = '';
+  const refineBtnOnSwitch = document.getElementById('refineBtn');
+  if (refineBtnOnSwitch) refineBtnOnSwitch.disabled = true;
 
   const actionSection = document.getElementById('actionSection');
   const outputSection = document.getElementById('outputSection');
@@ -1138,6 +1145,11 @@ function resetAfterSave() {
   document.querySelectorAll('#presentGrid .check-item').forEach(el => {
     el.classList.remove('checked');
   });
+  // The refine pane is per-note state too — a pasted note left behind belongs to the note just filed.
+  const pasteNoteEl = document.getElementById('pasteNote');
+  if (pasteNoteEl) pasteNoteEl.value = '';
+  const refineBtnEl = document.getElementById('refineBtn');
+  if (refineBtnEl) refineBtnEl.disabled = true;
   // Reset all session condition toggles and description fields (env/med/missed/compliance)
   resetSessionConditions();
   // Reset next appointment date fields
