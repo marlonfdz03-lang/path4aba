@@ -238,6 +238,119 @@ export function deriveBehaviorFunction(segment: string, behavior: any):
   return { resolved, matchedPattern, segment: segment || '', conflict: null }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// FUNCTION-COVERAGE GATE (Bug 3). SEPARATE from the approved-set (validity) gate: this checks that EACH
+// ABC actually STATES a documented function IN ITS PROSE (RULE A: every ABC names its function). The
+// validity gate only asks "is the stated function approved?" — it is blind to an ABSENT function, so a
+// note with 1/5 ABCs naming a function passes validity. This gate closes that hole.
+//
+// Segmentation (never let SKILL prose satisfy an ABC):
+//   - Behavior anchors: keyword overlap of each behavior's name+topography against the note's sentences
+//     (the note REWORDS the stored topography, so raw substring is too brittle — overlap is robust).
+//   - ABC_i (i<N) window = anchor_i → anchor_{i+1} (anchors sorted by position).
+//   - ABC_N end = the FIRST replacement-skill anchor AFTER the last behavior anchor. Skill NAMES are data
+//     (mandated verbatim in the note), so a RAW SUBSTRING match is safe and phrase-independent — it keys
+//     on the skill name, not the transition wording. This excludes the entire skill-acquisition paragraph
+//     from ABC_N, so skill prose can never satisfy ABC_N's function check.
+//   - Fallback ladder: skill-anchor → transition-marker whitelist → neither ⇒ segmentable=false (FAIL
+//     LOUD). NEVER anchor_N → end of note as a silent pass.
+//   - A behavior with no anchor FAILS ("couldn't locate its ABC") — never a silent pass.
+//
+// Presence is measured over the PROSE ALONE via deriveBehaviorFunction(window, {}) — the empty behavior
+// means metadata (stored topography/antecedent/function) is NOT consulted; only what the ABC text says.
+
+// Secondary fallback ONLY (skill-anchor is primary): the skill-acquisition paragraph openers the prompt
+// mandates. Used to find ABC_N's end when no skill name is anchorable.
+const SKILL_TRANSITION_MARKERS = new RegExp([
+  'in addition to behavior[- ]reduction programming',
+  'skill[- ]acquisition programming',
+  'skill acquisition (?:section|paragraph|programming|focused|targeted)',
+  'programming also addressed',
+  'the session then targeted the replacement program',
+  'structured opportunities targeting',
+  'replacement program for',
+].join('|'), 'i')
+
+export type FunctionCoverage = {
+  segmentable: boolean
+  missing: { name: string }[]
+  results: { name: string; present: boolean }[]
+}
+
+// For each ABC (one per behavior), does its PROSE name a documented function? Returns the per-behavior
+// results, the subset missing a function, and whether the note could be segmented at all. `skillNames`
+// marks where the ABC body ends (the skill-acquisition paragraph) — pass
+// input.replacementSkillsAddressed[].name plus activePrograms.replacementSkills.
+export function findMissingFunctionABCs(note: string, behaviors: any[], skillNames: string[] = []): FunctionCoverage {
+  const empty: FunctionCoverage = { segmentable: false, missing: [], results: [] }
+  if (!note || !Array.isArray(behaviors) || !behaviors.length) return empty
+
+  const noteL = note.toLowerCase()
+  const sents = splitSentences(note)
+  if (!sents.length) return empty
+
+  // Sentence offsets in the original note (splitSentences trims/filters, so recover positions by scan).
+  let cursor = 0
+  const offsets = sents.map((s) => {
+    const idx = note.indexOf(s, cursor)
+    const at = idx >= 0 ? idx : cursor
+    cursor = at + s.length
+    return at
+  })
+
+  // Behavior anchor = offset of the FIRST sentence this behavior best-matches (keyword overlap, score>0).
+  const behKw = behaviors.map((b) => new Set([
+    ...significantWords(b?.name), ...significantWords(b?.topography),
+  ]))
+  const anchors: number[] = behaviors.map(() => -1)
+  sents.forEach((s, si) => {
+    const words = significantWords(s)
+    let best = -1
+    let bestScore = 0
+    behKw.forEach((kw, bi) => {
+      const score = words.reduce((n, w) => n + (kw.has(w) ? 1 : 0), 0)
+      if (score > bestScore) { bestScore = score; best = bi }
+    })
+    if (best >= 0 && anchors[best] < 0) anchors[best] = offsets[si]
+  })
+
+  const anchored = anchors
+    .map((pos, i) => ({ i, pos }))
+    .filter((a) => a.pos >= 0)
+    .sort((a, b) => a.pos - b.pos)
+
+  // No behavior could be located at all → degenerate, fail loud.
+  if (!anchored.length) return empty
+
+  // ABC_N end = first skill-name occurrence AFTER the last behavior anchor (raw substring; skill names are
+  // mandated verbatim). Fallback to the transition-marker whitelist; else unsegmentable (fail loud).
+  const lastAnchor = anchored[anchored.length - 1].pos
+  let skillBoundary = Infinity
+  for (const raw of skillNames || []) {
+    const n = String(raw || '').trim().toLowerCase()
+    if (n.length < 3) continue
+    const idx = noteL.indexOf(n, lastAnchor + 1)
+    if (idx >= 0 && idx < skillBoundary) skillBoundary = idx
+  }
+  if (skillBoundary === Infinity) {
+    const m = SKILL_TRANSITION_MARKERS.exec(note.slice(lastAnchor + 1))
+    if (m) skillBoundary = lastAnchor + 1 + m.index
+  }
+  if (skillBoundary === Infinity) return empty // could not find ABC_N end → fail loud, never scan to end
+
+  // Window each anchored behavior and check the PROSE alone for a documented function.
+  const present: boolean[] = behaviors.map(() => false)
+  anchored.forEach((a, j) => {
+    const end = j < anchored.length - 1 ? anchored[j + 1].pos : skillBoundary
+    const window = note.slice(a.pos, end)
+    present[a.i] = deriveBehaviorFunction(window, {}).matchedPattern !== null
+  })
+
+  const results = behaviors.map((b, i) => ({ name: String(b?.name || ''), present: present[i] }))
+  const missing = results.filter((r) => !r.present).map((r) => ({ name: r.name }))
+  return { segmentable: true, missing, results }
+}
+
 // Assessment stores functions as lowercase canonical ('attention'|'escape'|'tangible'|'automatic').
 // FUNCTION_PATTERNS / the ABA-Matrix form use display labels. Map between them.
 export function functionToCanonical(label: string | null | undefined): string | null {

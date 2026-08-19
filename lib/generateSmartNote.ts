@@ -14,6 +14,7 @@ import {
   findFunctionAntecedentContradictions,
   segmentNoteByBehavior, deriveBehaviorFunction, functionToCanonical,
   normalizeApprovedFunctions, functionDisplayLabel, effectiveAllowedFunctions,
+  findMissingFunctionABCs,
 } from '@/lib/functionPatterns';
 import { stripInvalidNextSession } from '@/lib/nextSessionDate';
 import { findRedFlagFlags } from '@/lib/redFlagPhrases';
@@ -568,6 +569,29 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     functionViolations = findFunctionViolations(note);
   }
 
+  // Step 7c2b: FUNCTION-COVERAGE GATE (Bug 3). SEPARATE from the approved-set (validity) gate above:
+  // validity asks "is the stated function APPROVED?" and is blind to an ABSENT function, so a note with
+  // only 1/5 ABCs naming a function passes it (this is exactly what shipped). This gate checks that EACH
+  // ABC actually STATES a documented function in its PROSE (RULE A: every ABC). Skill names mark where the
+  // ABC body ends so skill-paragraph prose can never satisfy an ABC. If any ABC is missing its function,
+  // regenerate ONCE naming the missing ABCs; if still missing (or the note can't be segmented), surface a
+  // coherence flag — never auto-insert a function (a regenerated coherent ABC beats a pasted clause).
+  const coverageSkillNames = [
+    ...input.replacementSkillsAddressed.map((s) => s.name),
+    ...(resolvedProfile.activePrograms?.replacementSkills || []),
+  ].filter(Boolean);
+  let coverage = findMissingFunctionABCs(note, input.behaviorsObserved, coverageSkillNames);
+  if (coverage.segmentable && coverage.missing.length > 0) {
+    if (onChunk) onChunk('\n__REGEN__\n');
+    const missingNames = coverage.missing.map((m) => m.name).filter(Boolean).join(', ');
+    const coverageInstruction = `\n\nFUNCTION-COVERAGE VIOLATION — REGENERATE: these ABCs do not state a documented function in their prose — ${missingNames}. EVERY ABC must NAME its documented function (escape/attention/tangible/automatic-reinforcement) in the prose, before the intervention — RULE A, no exceptions. Do not drop the function name for the sake of variety.`;
+    note = applyBlockedFilter(await callOpenAI(MASTER_RBT_NOTE_PROMPT + contextualFactors + coverageInstruction));
+    coverage = findMissingFunctionABCs(note, input.behaviorsObserved, coverageSkillNames);
+    // The coverage regen produced a fresh note; re-check the approved-set (validity) gate on it so any
+    // surfaced validity flags reflect the FINAL note, not the pre-coverage one.
+    functionViolations = findFunctionViolations(note);
+  }
+
   // Step 7c3: TEACHING-METHOD GATE (Commit 4, Part 1). A teaching procedure named in the note must be in
   // the client's approved set (interventions ∩ teaching-method vocabulary). The generator defaults to
   // "Modeling"/"DTT" as filler regardless of the plan; if the note names an unapproved method, regenerate
@@ -604,6 +628,21 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     coherenceFlags.push(
       `Teaching method "${m}" was named but the assessment does not approve it for this client — verify before using.`,
     );
+  }
+  // Function-coverage flags, recomputed on the FINAL note (the teaching-method gate above may have
+  // regenerated after the coverage gate). An ABC missing its documented function after the single retry is
+  // surfaced (never auto-inserted); an unsegmentable note fails loud rather than silently passing.
+  const finalCoverage = findMissingFunctionABCs(note, input.behaviorsObserved, coverageSkillNames);
+  if (!finalCoverage.segmentable) {
+    coherenceFlags.push(
+      `Could not segment the note into per-ABC sections to verify documented-function coverage — verify manually that every ABC names its documented function.`,
+    );
+  } else {
+    for (const m of finalCoverage.missing) {
+      coherenceFlags.push(
+        `The ABC for "${m.name}" does not state a documented function — verify before using.`,
+      );
+    }
   }
 
   // Step 8: NO auto-save. Generation (and every regeneration) used to persist a row here, so a single
