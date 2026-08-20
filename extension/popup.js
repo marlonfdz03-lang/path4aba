@@ -398,6 +398,15 @@ document.getElementById('clientSelect').addEventListener('change', async (e) => 
   const prevOutput = document.getElementById('outputNote');
   if (prevOutput) prevOutput.value = '';
 
+  // Location (incl. a typed "Other place of service") belongs to one client — reset it so client A's
+  // location never carries to client B, and the saved-location chips re-render for the new client.
+  selectedLocation = null;
+  document.querySelectorAll('#locationGroup .toggle-btn').forEach(b => b.classList.remove('active'));
+  const otherField = document.getElementById('otherLocationField');
+  if (otherField) otherField.style.display = 'none';
+  const otherInput = document.getElementById('otherLocationInput');
+  if (otherInput) otherInput.value = '';
+
   const actionSection = document.getElementById('actionSection');
   const outputSection = document.getElementById('outputSection');
   outputSection.style.display = 'none';
@@ -482,7 +491,7 @@ function renderBehaviors() {
   noMsg.style.display = 'none';
 
   const maxSel = 99;
-  hint.textContent = userRole === 'rbt' ? `(recommended: at least 5)` : '(optional)';
+  hint.textContent = userRole === 'rbt' ? `(select at least 1)` : '(optional)';
 
   grid.innerHTML = '';
   behaviors.forEach(({ name, functions }) => {
@@ -536,7 +545,7 @@ function renderSkills() {
   noMsg.style.display = 'none';
 
   const maxSel = 99;
-  hint.textContent = userRole === 'rbt' ? `(recommended: at least 2)` : '(optional)';
+  hint.textContent = userRole === 'rbt' ? `(select at least 1)` : '(optional)';
 
   grid.innerHTML = '';
 
@@ -748,7 +757,69 @@ document.getElementById('locationGroup').addEventListener('click', (e) => {
   if (!btn) return;
   document.querySelectorAll('#locationGroup .toggle-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  selectedLocation = btn.dataset.val;
+  const val = btn.dataset.val;
+  const otherField = document.getElementById('otherLocationField');
+  if (val === 'other') {
+    // NEVER send the literal "other" — the location is whatever the RBT saves/types/picks below. Until
+    // then selectedLocation stays null (generation is gated), so a stray "other" can't reach the note.
+    if (otherField) otherField.style.display = '';
+    renderSavedLocations();
+    const typed = document.getElementById('otherLocationInput')?.value?.trim() || '';
+    selectedLocation = typed || null;
+  } else {
+    if (otherField) otherField.style.display = 'none';
+    selectedLocation = val;
+  }
+  updateGenerateBtn();
+});
+
+// Per-client saved "Other place of service" options (mirrors who-was-present). Rendered when "Other" is
+// selected; each chip picks that saved location; the input + Save adds a new one for this client.
+function renderSavedLocations() {
+  const row = document.getElementById('savedLocationsRow');
+  if (!row) return;
+  const saved = (selectedProfile && Array.isArray(selectedProfile.savedLocations)) ? selectedProfile.savedLocations : [];
+  row.innerHTML = '';
+  saved.forEach(loc => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'toggle-btn' + (selectedLocation === loc ? ' active' : '');
+    b.textContent = loc;
+    b.addEventListener('click', () => {
+      selectedLocation = loc;
+      const input = document.getElementById('otherLocationInput');
+      if (input) input.value = loc;
+      renderSavedLocations();
+      updateGenerateBtn();
+    });
+    row.appendChild(b);
+  });
+}
+
+document.getElementById('otherLocationInput').addEventListener('input', (e) => {
+  selectedLocation = e.target.value.trim() || null;
+  // A freshly typed value deselects the saved chips (until it matches one).
+  document.querySelectorAll('#savedLocationsRow .toggle-btn').forEach(b => b.classList.toggle('active', b.textContent === selectedLocation));
+  updateGenerateBtn();
+});
+
+document.getElementById('saveLocationBtn').addEventListener('click', () => {
+  const input = document.getElementById('otherLocationInput');
+  const name = (input?.value || '').trim();
+  if (!name) return;
+  if (!selectedProfile) selectedProfile = {};
+  if (!Array.isArray(selectedProfile.savedLocations)) selectedProfile.savedLocations = [];
+  if (!selectedProfile.savedLocations.some(l => l.toLowerCase() === name.toLowerCase())) {
+    selectedProfile.savedLocations.push(name);
+  }
+  selectedLocation = name; // the TYPED text reaches the note, never "other"
+  if (selectedClientId) {
+    api(`/api/rbt/clients/${selectedClientId}/saved-locations`, {
+      method: 'POST',
+      body: JSON.stringify({ location: name }),
+    }).catch(() => {});
+  }
+  renderSavedLocations();
   updateGenerateBtn();
 });
 
