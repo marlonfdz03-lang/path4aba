@@ -24,6 +24,8 @@
 // re-introduces a bare-noun match will fail that test.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { INTERVENTION_CATALOG } from './interventionPolicy.ts'
+
 // Behavior-function phrase patterns (tolerant to phrasing variants). Output strings are the
 // canonical labels; plan-fill normalizes 'Tangibles' -> the exact ABA Matrix dropdown option.
 export const FUNCTION_PATTERNS: { re: RegExp; label: string }[] = [
@@ -34,6 +36,38 @@ export const FUNCTION_PATTERNS: { re: RegExp; label: string }[] = [
   // sensory reinforcers/activities (sensory bin, sensory break).
   { re: /automatic[-\s]?(reinforcement|maintained)|automatically[-\s]?maintained|sensory[-\s]?(reinforcement|maintained|stimulation|seeking|input)|self[-\s]?stimulat|stereotyp/i, label: 'Automatic Reinforcement' },
 ]
+
+// The intervention clause opens with "the RBT [verb]…" — the grammar anchor for where the intervention
+// begins, used alongside the named-intervention catalog so position can be checked even when the named
+// procedure isn't in the catalog.
+const RBT_INTERVENTION_CLAUSE = /\bthe RBT\s+(implemented|provided|delivered|applied|used|redirected|prompted|initiated|introduced|offered)\b/i
+
+// Earliest character index where a documented-function pattern matches `text`, or -1 if none. Patterns are
+// case-insensitive and NON-global, so exec is stateless.
+export function documentedFunctionIndex(text: string): number {
+  const s = String(text || '')
+  let min = -1
+  for (const { re } of FUNCTION_PATTERNS) {
+    const m = re.exec(s)
+    if (m && (min < 0 || m.index < min)) min = m.index
+  }
+  return min
+}
+
+// Earliest character index of the intervention clause in `text` — the first named intervention
+// (INTERVENTION_CATALOG) OR the "the RBT [verb]…" grammar anchor — or -1 if the intervention can't be
+// located (in which case position cannot be verified and the caller falls back to presence).
+export function interventionAnchorIndex(text: string): number {
+  const s = String(text || '')
+  let min = -1
+  for (const { re } of INTERVENTION_CATALOG) {
+    const m = re.exec(s)
+    if (m && (min < 0 || m.index < min)) min = m.index
+  }
+  const g = RBT_INTERVENTION_CLAUSE.exec(s)
+  if (g && (min < 0 || g.index < min)) min = g.index
+  return min
+}
 
 // Antecedent -> function FALLBACK. Used ONLY when FUNCTION_PATTERNS return no match: the note always
 // states the function, so an 'unknown' means extraction missed it — infer from the antecedent, which
@@ -338,12 +372,18 @@ export function findMissingFunctionABCs(note: string, behaviors: any[], skillNam
   }
   if (skillBoundary === Infinity) return empty // could not find ABC_N end → fail loud, never scan to end
 
-  // Window each anchored behavior and check the PROSE alone for a documented function.
+  // Window each anchored behavior and check the PROSE for a documented function that is CORRECTLY PLACED —
+  // present AND before the intervention clause (Problem 2). A function absent, or relocated after the
+  // intervention (e.g. attached to the client's response by a retry), fails and regenerates. When the
+  // intervention clause can't be located in the window, we can't verify order, so we fall back to presence.
   const present: boolean[] = behaviors.map(() => false)
   anchored.forEach((a, j) => {
     const end = j < anchored.length - 1 ? anchored[j + 1].pos : skillBoundary
     const window = note.slice(a.pos, end)
-    present[a.i] = deriveBehaviorFunction(window, {}).matchedPattern !== null
+    const fIdx = documentedFunctionIndex(window)
+    if (fIdx < 0) { present[a.i] = false; return }               // function absent
+    const iIdx = interventionAnchorIndex(window)
+    present[a.i] = iIdx < 0 ? true : fIdx < iIdx                  // must precede the intervention clause
   })
 
   const results = behaviors.map((b, i) => ({ name: String(b?.name || ''), present: present[i] }))

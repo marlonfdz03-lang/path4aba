@@ -56,7 +56,7 @@ export function buildComplianceRegenInstruction(state: ComplianceState): string 
 
   if (state.coverage.segmentable && state.coverage.missing.length > 0) {
     const missingNames = state.coverage.missing.map((m) => m.name).filter(Boolean).join(', ');
-    parts.push(`FUNCTION COVERAGE: these ABCs do not state a documented function in their prose — ${missingNames}. EVERY ABC must NAME its documented function (escape/attention/tangible/automatic-reinforcement) in the prose, before the intervention — RULE A, no exceptions. Do not drop the function name for the sake of variety.`);
+    parts.push(`FUNCTION COVERAGE: these ABCs do not name their documented function in the correct position — ${missingNames}. EVERY ABC must NAME its documented function (escape/attention/tangible/automatic-reinforcement) immediately after the behavior/topography and BEFORE the intervention clause — never attached to the client's response and never at the end of the ABC (RULE A, no exceptions). Do not drop the function name for the sake of variety.`);
   }
 
   if (state.functionViolations.length > 0) {

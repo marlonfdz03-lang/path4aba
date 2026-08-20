@@ -77,7 +77,7 @@ If you are about to write "chose", "decided", or "selected" — STOP. Describe t
 STRUCTURE:
 - Write ONE CONTINUOUS PARAGRAPH only. No line breaks, no bullet points, no headers, no numbering.
 - Include between 4 and 6 ABCs per note. Vary the number — do not always write exactly 5. Sometimes 4, sometimes 5, sometimes 6.
-- Each ABC follows this exact pattern: When [antecedent], the client [exact observable topography]; the RBT implemented [intervention name] by [specific description of how]; the client [observable response only].
+- Each ABC follows this exact pattern: When [antecedent], the client [exact observable topography], consistent with the documented [function] function; the RBT implemented [intervention name] by [specific description of how]; the client [observable response only]. (For the automatic function, write "consistent with the documented automatic-reinforcement function".) The function slot is ALWAYS between the behavior/topography and the intervention — never attached to the client's response and never at the end of the ABC.
 
 SENTENCE STARTER VARIETY:
 - NEVER start more than one ABC with the same word or phrase.
