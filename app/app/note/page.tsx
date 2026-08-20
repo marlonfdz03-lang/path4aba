@@ -248,7 +248,7 @@ function NoteForm() {
         onText: (t) => setGeneratedNote(t),
         onRegen: () => {
           setGeneratedNote("");
-          setStatus("Regenerating for uniqueness…");
+          setStatus("Refining note…");
         },
         onMeta: (meta) => {
           if (meta.error && meta.blocking !== false) {

@@ -969,8 +969,9 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
 });
 
 // ── Stream handler (generate) ──
-// Buffers the full note before displaying. If the server flags similarity,
-// auto-retries up to MAX_RETRIES times before showing the final result.
+// Buffers the full note before displaying. Uniqueness NEVER regenerates (it is a cosmetic warning, warn-only
+// server-side); the only server-driven restart is the class-B compliance coverage retry, shown as
+// "Refining note…". There is no client-side retry loop.
 async function streamGenerate(endpoint, body, method = 'POST') {
   const outputSection = document.getElementById('outputSection');
   const outputNote = document.getElementById('outputNote');
@@ -986,11 +987,9 @@ async function streamGenerate(endpoint, body, method = 'POST') {
   let finalText = '';
   let blockedFlagged = [];
   let filteredText = null; // authoritative host-EHR-filtered note (what actually gets filled)
-  let retries = 0;
-  const MAX_RETRIES = 2;
 
   try {
-    while (true) {
+    {
       const res = await api(endpoint, { method, body: JSON.stringify(body) });
 
       if (!res.ok || !res.body) {
@@ -1003,7 +1002,6 @@ async function streamGenerate(endpoint, body, method = 'POST') {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let fullText = '';
-      let hasSimilarityWarning = false;
 
       outer: while (true) {
         const { done, value } = await reader.read();
@@ -1017,7 +1015,6 @@ async function streamGenerate(endpoint, body, method = 'POST') {
             const meta = JSON.parse(parts[1]);
             // Only a BLOCKING stop discards the note. An advisory is shown and the note is kept.
             if (meta.error) { showError(meta.error); if (meta.blocking !== false) return; }
-            hasSimilarityWarning = !!meta.similarityWarning;
             if (Array.isArray(meta.blockedFlagged)) blockedFlagged = meta.blockedFlagged;
             if (typeof meta.filteredText === 'string') filteredText = meta.filteredText;
           } catch {}
@@ -1026,7 +1023,7 @@ async function streamGenerate(endpoint, body, method = 'POST') {
 
         if (chunk.includes('__REGEN__')) {
           fullText = '';
-          streamStatus.textContent = 'Regenerating for uniqueness…';
+          streamStatus.textContent = 'Refining note…';
           continue;
         }
 
@@ -1034,14 +1031,6 @@ async function streamGenerate(endpoint, body, method = 'POST') {
       }
 
       finalText = fullText;
-
-      if (hasSimilarityWarning && retries < MAX_RETRIES) {
-        retries++;
-        streamStatus.textContent = `Checking uniqueness… regenerating (${retries}/${MAX_RETRIES})`;
-        continue;
-      }
-
-      break;
     }
 
     // The live stream is raw (for progressive display); patch to the host-EHR-filtered text so the

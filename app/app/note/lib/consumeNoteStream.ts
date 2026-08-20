@@ -9,7 +9,7 @@ export type NoteStreamMeta = { similarityWarning?: boolean; error?: string; bloc
 
 export type NoteStreamHandlers = {
   onText: (fullText: string) => void; // called as the note streams in
-  onRegen: () => void;                // note was too similar; stream restarts
+  onRegen: () => void;                // compliance coverage retry — the note is being refined; stream restarts
   onMeta: (meta: NoteStreamMeta) => void;
 };
 
