@@ -213,12 +213,18 @@ export default function ClientProfilePage() {
   // reported context. Derived rather than stored, so a real choice can never be overwritten.
   const [complianceChoice, setComplianceChoice] = useState<"typical" | "below_typical" | "poor">("typical");
   const [complianceTouched, setComplianceTouched] = useState(false);
-  const envChangeReported = environmentalChange && environmentalChangeDesc.trim() !== "";
-  const complianceLevel: "" | "typical" | "below_typical" | "poor" =
-    complianceTouched ? complianceChoice : envChangeReported ? "" : "typical";
   const [missedHoursToggle, setMissedHoursToggle] = useState(false);
   const [missedHoursCount, setMissedHoursCount] = useState("");
   const [missedHoursReason, setMissedHoursReason] = useState("");
+  // Something out of the ordinary was reported (environmental change, medication change, or a missed
+  // session). When ANY is marked, the session cannot be "typical": the RBT must actively pick below
+  // typical or poor. `typical` is disabled and compliance starts UNSET until they choose — and even a
+  // prior "typical" choice is neutralized to "" (never a rubber-stamp).
+  const outOfOrdinary = environmentalChange || medicationConsumed || missedHoursToggle;
+  const complianceLevel: "" | "typical" | "below_typical" | "poor" =
+    outOfOrdinary
+      ? (complianceTouched && complianceChoice !== "typical" ? complianceChoice : "")
+      : (complianceTouched ? complianceChoice : "typical");
   const [selectedBehaviors, setSelectedBehaviors] = useState<string[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [generatedNote, setGeneratedNote] = useState("");
@@ -1667,20 +1673,24 @@ export default function ClientProfilePage() {
                 {/* Compliance */}
                 <div className="py-3">
                   <p className="text-[13px] font-medium mb-2" style={{ color: "var(--text1)" }}>Client Compliance Today</p>
-                  {envChangeReported && complianceLevel === "" && (
+                  {outOfOrdinary && complianceLevel === "" && (
                     <p className="text-[11px] mb-2" style={{ color: "#B45309" }}>
-                      You reported an environmental change — please indicate the session&apos;s compliance level.
+                      Something out of the ordinary was reported — please indicate the session&apos;s compliance level (below typical or poor).
                     </p>
                   )}
                   <div className="flex gap-2">
                     {(["typical", "below_typical", "poor"] as const).map((level) => {
                       const labels = { typical: "Typical", below_typical: "Below typical", poor: "Poor" };
                       const isSelected = complianceLevel === level;
+                      // When something out of the ordinary was reported, "typical" is unavailable.
+                      const disabled = outOfOrdinary && level === "typical";
                       return (
                         <button
                           key={level} type="button"
-                          onClick={() => { setComplianceChoice(level); setComplianceTouched(true); }}
-                          className="flex-1 py-2 rounded-xl border text-[13px] font-medium transition-colors"
+                          disabled={disabled}
+                          title={disabled ? "Something out of the ordinary was reported — choose below typical or poor" : undefined}
+                          onClick={() => { if (disabled) return; setComplianceChoice(level); setComplianceTouched(true); }}
+                          className="flex-1 py-2 rounded-xl border text-[13px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                           style={{
                             background: isSelected ? (level === "typical" ? "var(--teal)" : level === "below_typical" ? "#F59E0B" : "#DC2626") : "white",
                             borderColor: isSelected ? (level === "typical" ? "var(--teal)" : level === "below_typical" ? "#F59E0B" : "#DC2626") : "var(--border)",
@@ -1836,8 +1846,8 @@ export default function ClientProfilePage() {
               </button>
               {!canGenerate && !generating && (
                 <p className="mt-3 text-[13px]" style={{ color: "var(--text3)" }}>
-                  {envChangeReported && complianceLevel === ""
-                    ? "You reported an environmental change — please indicate the session's compliance level."
+                  {outOfOrdinary && complianceLevel === ""
+                    ? "Something out of the ordinary was reported — please indicate the session's compliance level (below typical or poor)."
                     : "Complete all fields: date, location, someone present, at least one behavior, and at least one skill."}
                 </p>
               )}

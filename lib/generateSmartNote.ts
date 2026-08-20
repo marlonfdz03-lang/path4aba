@@ -25,6 +25,7 @@ import {
 import { buildInterventionDetail } from '@/lib/interventionDetail';
 import { preselect, buildFixedAssignmentsBlock, type PreselectResult } from '@/lib/preselect';
 import { readGenerationHistory } from '@/lib/rotationHistory';
+import { assignTiers } from '@/lib/complianceTiers';
 import { collectGateFindings, recordGateFindings } from '@/lib/gateFindings';
 
 const openai = new OpenAI({
@@ -187,36 +188,11 @@ function buildContextualFactors(input: SessionInput): string {
     );
   }
 
-  // SESSION QUALITY IS THE RBT'S JUDGMENT — the firewall. How the session went is a clinical call
-  // the RBT makes by selecting typical / below typical / poor; the system never infers it from a
-  // reported context factor. This block used to ASSERT specifics the RBT never entered ("increased
-  // latency to instructions", "did not initiate several activities independently") and modelled a
-  // fabricated count ("2–3 prompt repetitions across most tasks") — the same fabrication defect the
-  // environmental block carried, so sealing only that one would have moved the leak, not closed it.
-  //
-  // The rule the replacement encodes: ENTAILMENT, NOT INVENTION. Prose that restates what the
-  // selected level MEANS is documenting the RBT's judgment; prose that needs a count, a rate, a
-  // duration, or a comparison to baseline needs data the RBT never supplied, and is fabrication.
-  if (input.complianceLevel) {
-    const level = input.complianceLevel === 'poor' ? 'poor'
-      : input.complianceLevel === 'below_typical' ? 'below typical' : 'typical';
-    // The compliance level is the ONE real signal for how the session went, and it GUIDES the
-    // authorized generation of prompt levels, client responses, and skill outcomes — Path generates
-    // those implementation details, consistent with this level. What stays banned is data that needs a
-    // measurement the RBT never took: a count, a rate, a duration, or a comparison to baseline.
-    const reading = level === 'typical'
-      ? `The ABCs and the skill programs may read as generally going well — the client engaging with the programs and responding to the support provided.`
-      : `The ABCs and the skill programs may read as a harder session — the client needing more support to engage, and responding less readily than usual.`;
-    blocks.push(
-      `SESSION QUALITY — THE RBT'S OWN ASSESSMENT:\n` +
-      `The RBT indicated that the client's overall compliance today was ${level}. This is the RBT's clinical judgment of the session — document it, do not elaborate beyond it.\n` +
-      `- ${reading}\n` +
-      `- Do NOT add a separate sentence announcing the compliance level ("The RBT indicated compliance was ${level}") — it reads as assembled. The level shows through the prose itself.\n` +
-      `- Prompt levels, client responses, and skill outcomes are generated consistent with this level. What you may NOT do is assert a MEASUREMENT the RBT never took: no invented latency, no number of prompt repetitions, no trial counts ("4 of 5"), no comparison to the client's baseline or to recent sessions, no claim that behaviors occurred more or less often than usual, no duration.\n` +
-      `- Do NOT state any count or percentage.\n` +
-      `- Do NOT say the session went badly, and never use mentalistic language ("didn't want to", "refused").`
-    );
-  }
+  // SESSION QUALITY is now the compliance CONTROLLER (Commit 5): the RBT's typical/below/poor selection is
+  // turned into a deterministic outcome TIER per ABC and per skill (assignTiers), handed to GPT inside the
+  // FIXED ASSIGNMENTS block, and explained by the static SESSION QUALITY section in the master prompt. There
+  // is no per-note prose block here any more — the tier IS the signal, and the entailment/no-quantification
+  // rule lives with that static section.
 
   if (input.continuityContext && Object.keys(input.continuityContext.behaviorTrends || {}).length > 0) {
     const ctx = input.continuityContext;
@@ -487,6 +463,10 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   let fixedAssignmentsBlock = '';
   try {
     const history = await readGenerationHistory(prisma, input.clientId, { window: 3 });
+    // Compliance controller: deterministic outcome tier per ABC and per skill from the RBT's level. Below
+    // typical / poor never make every item fail; typical never all-perfect — guaranteed by assignTiers.
+    const behaviorTiers = assignTiers(input.complianceLevel, input.behaviorsObserved.length);
+    const skillTiers = assignTiers(input.complianceLevel, input.replacementSkillsAddressed.length);
     generationContext = preselect({
       behaviors: input.behaviorsObserved.map((b) => ({
         name: b.name,
@@ -500,6 +480,8 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
       homeActivities: activityNames,
       schoolActivities: activityNames,
       complianceLevel: input.complianceLevel,
+      behaviorTiers,
+      skillTiers,
       history,
     });
     fixedAssignmentsBlock = buildFixedAssignmentsBlock(generationContext);

@@ -36,6 +36,20 @@ export async function POST(req: NextRequest) {
     if (!input.clientId) {
       return NextResponse.json({ error: "clientId is required" }, { status: 400 });
     }
+    // FORM DEPENDENCY (server backstop, not UI-only): when something out of the ordinary was reported —
+    // an environmental change, a medication change, or a missed session — the session cannot be "typical".
+    // The RBT must actively pick below typical or poor. Checked on the slim payload's own flags; the copy
+    // reads as a form prompt ("please indicate"), never a generation failure.
+    if (wasSlim) {
+      const b = body as { envChange?: unknown; medicationChange?: unknown; missedHours?: unknown; compliance?: unknown };
+      const outOfOrdinary = !!(b.envChange || b.medicationChange || b.missedHours);
+      if (outOfOrdinary && b.compliance !== "below_typical" && b.compliance !== "poor") {
+        return NextResponse.json(
+          { error: "Something out of the ordinary was reported — please indicate the session's compliance level (below typical or poor)." },
+          { status: 400 },
+        );
+      }
+    }
     // AT LEAST ONE documented behavior. The note now writes one ABC per behavior the RBT marked, so
     // zero behaviors would ask for a note with no ABCs at all. Enforced here as well as in each
     // form, because a UI-only minimum is not a minimum.

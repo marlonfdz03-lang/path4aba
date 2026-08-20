@@ -85,12 +85,14 @@ function NoteForm() {
   const [missedCount, setMissedCount] = useState("");
   const [missedReason, setMissedReason] = useState("");
   const [nextAppt, setNextAppt] = useState("");
-  // When the RBT reports an environmental change, the compliance control is UNSET until they
-  // actively choose — the system never pre-picks how the session went, and never infers it from the
-  // reported context. Derived rather than stored, so a real choice can never be overwritten.
-  // Mirrors the website form.
-  const envChangeReported = envChange && envChangeDesc.trim() !== "";
-  const compliance = complianceTouched ? complianceChoice : envChangeReported ? "" : "typical";
+  // Something out of the ordinary was reported (environmental change, medication change, or a missed
+  // session). When ANY is marked, the session cannot be "typical": the RBT must actively pick below
+  // typical or poor. `typical` is disabled and compliance starts UNSET; even a prior "typical" choice is
+  // neutralized to "". Mirrors the website form.
+  const outOfOrdinary = envChange || medicationChange || missedHours;
+  const compliance = outOfOrdinary
+    ? (complianceTouched && complianceChoice !== "typical" ? complianceChoice : "")
+    : (complianceTouched ? complianceChoice : "typical");
 
   // ── Generation state ──
   const [generating, setGenerating] = useState(false);
@@ -609,22 +611,27 @@ function NoteForm() {
       {/* Compliance level */}
       <div className="app-form-group">
         <p className="app-section-label">Compliance level</p>
-        {envChangeReported && compliance === "" && (
+        {outOfOrdinary && compliance === "" && (
           <p className="app-warning">
-            You reported an environmental change — please indicate the session&apos;s compliance level.
+            Something out of the ordinary was reported — please indicate the session&apos;s compliance level (below typical or poor).
           </p>
         )}
         <div className="app-seg">
-          {COMPLIANCE_OPTIONS.map((opt) => (
+          {COMPLIANCE_OPTIONS.map((opt) => {
+            const disabled = outOfOrdinary && opt.value === "typical";
+            return (
             <button
               key={opt.value}
               type="button"
+              disabled={disabled}
+              title={disabled ? "Something out of the ordinary was reported — choose below typical or poor" : undefined}
               className={`app-seg__btn ${compliance === opt.value ? "app-seg__btn--active" : ""}`}
-              onClick={() => { setComplianceChoice(opt.value); setComplianceTouched(true); }}
+              onClick={() => { if (disabled) return; setComplianceChoice(opt.value); setComplianceTouched(true); }}
             >
               {opt.label}
             </button>
-          ))}
+            );
+          })}
         </div>
       </div>
 

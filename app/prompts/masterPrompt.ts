@@ -52,6 +52,14 @@ ANTECEDENT KEYS — render each assigned key as observable prose (NEVER print th
 - unstructured-moment: an unstructured moment with low demands
 - low-stimulation-period: a low-stimulation period
 
+SESSION QUALITY — PER-ABC AND PER-SKILL OUTCOME TIERS:
+Each behavior's ABC and each skill in the FIXED ASSIGNMENTS carries an outcome TIER — FAVORABLE, PARTIAL, or DIFFICULT — chosen for you from the RBT's compliance selection. Narrate each within its tier:
+- FAVORABLE: the client engaged and responded readily, with light support.
+- PARTIAL: the client engaged with more support and responded with variable success.
+- DIFFICULT: the client needed substantial support and responded less readily.
+The tier licenses the general PICTURE ONLY — how much support was needed and how readily the client responded. It does NOT license any specific the RBT did not enter: NO counts of attempts or trials, NO durations, NO comparison to baseline or to previous sessions, NO numbers of any kind, NO claim a behavior occurred more or less often than usual. A DIFFICULT tier means "needed more support", never "failed" or "went badly".
+Do NOT add a sentence announcing the compliance level ("compliance was below typical") — it reads as assembled; the level shows through the tiered ABC and skill prose itself. Never use mentalistic language ("didn't want to", "refused").
+
 ═══════════════════════════════════════
 ABSOLUTE RULES — NEVER VIOLATE ANY OF THESE
 ═══════════════════════════════════════

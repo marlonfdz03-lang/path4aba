@@ -10,6 +10,7 @@
 // system only ever hands GPT approved values.
 
 import type { NoteContext } from './rotationHistory.ts';
+import { TIER_PROMPTS, TIER_RESPONSES, type OutcomeTier } from './complianceTiers.ts';
 
 // ── Clinical data maps ────────────────────────────────────────────────────────────────────────────────
 // These NARROW a choice WITHIN an already-approved set (or ARE the locked set, for antecedents). They are a
@@ -96,6 +97,11 @@ export interface PreselectInput {
   homeActivities: string[];        // LOCKED
   schoolActivities: string[];      // LOCKED
   complianceLevel?: string;        // 'typical' | 'below_typical' | 'poor'
+  // Per-ABC / per-skill outcome tiers from the compliance controller (assignTiers), aligned by index with
+  // `behaviors` / `skills`. When present the tier's vocab drives promptKey/responseKey; absent → the
+  // compliance-gated vocab is the fallback.
+  behaviorTiers?: OutcomeTier[];
+  skillTiers?: OutcomeTier[];
   history: NoteContext[];          // readGenerationHistory(clientId, { window: 3 })
 }
 
@@ -105,12 +111,14 @@ export interface BehaviorAssignment {
   interventionName?: string;
   activity?: string;
   topography?: string;
+  tier?: string;
   promptKey?: string;
   responseKey?: string;
 }
 export interface SkillAssignment {
   method?: string;
   activity?: string;
+  tier?: string;
   promptKey?: string;
   responseKey?: string;
 }
@@ -134,8 +142,13 @@ export function preselect(input: PreselectInput): PreselectResult {
   const integrityFlags: string[] = [];
   const activities = new Set<string>();
 
-  for (const b of input.behaviors) {
+  input.behaviors.forEach((b, i) => {
     const a: BehaviorAssignment = {};
+    // Outcome tier (compliance controller). Its vocab subset drives prompt/response; absent → compliance-gated fallback.
+    const tier = input.behaviorTiers?.[i];
+    if (tier) a.tier = tier;
+    const promptVocab = tier ? TIER_PROMPTS[tier] : promptSet(input.complianceLevel);
+    const responseVocab = tier ? TIER_RESPONSES[tier] : responseSet(input.complianceLevel);
 
     // 1. FUNCTION — LRU within this behavior's approved set. Single-function behaviors always use theirs.
     if (b.allowedFunctions?.length) {
@@ -166,22 +179,26 @@ export function preselect(input: PreselectInput): PreselectResult {
       a.topography = lruPick(b.topographies, behaviorAxis(history, b.name, 'topography'));
     }
 
-    // 6/7. PROMPT + RESPONSE — compliance-gated vocabularies (variety axes).
-    a.promptKey = lruPick(promptSet(input.complianceLevel), behaviorAxis(history, b.name, 'promptKey'));
-    a.responseKey = lruPick(responseSet(input.complianceLevel), behaviorAxis(history, b.name, 'responseKey'));
+    // 6/7. PROMPT + RESPONSE — the tier's vocab subset (or compliance-gated fallback), LRU-rotated.
+    a.promptKey = lruPick(promptVocab, behaviorAxis(history, b.name, 'promptKey'));
+    a.responseKey = lruPick(responseVocab, behaviorAxis(history, b.name, 'responseKey'));
 
     perBehavior[b.name] = a;
-  }
+  });
 
-  for (const s of input.skills) {
+  input.skills.forEach((s, i) => {
     const a: SkillAssignment = {};
+    const tier = input.skillTiers?.[i];
+    if (tier) a.tier = tier;
+    const promptVocab = tier ? TIER_PROMPTS[tier] : promptSet(input.complianceLevel);
+    const responseVocab = tier ? TIER_RESPONSES[tier] : responseSet(input.complianceLevel);
     a.method = lruPick(input.approvedMethods, skillAxis(history, s.name, 'method'));
     a.activity = lruPick(activityLockedSet, skillAxis(history, s.name, 'activity'));
     if (a.activity) activities.add(a.activity);
-    a.promptKey = lruPick(promptSet(input.complianceLevel), skillAxis(history, s.name, 'promptKey'));
-    a.responseKey = lruPick(responseSet(input.complianceLevel), skillAxis(history, s.name, 'responseKey'));
+    a.promptKey = lruPick(promptVocab, skillAxis(history, s.name, 'promptKey'));
+    a.responseKey = lruPick(responseVocab, skillAxis(history, s.name, 'responseKey'));
     perSkill[s.name] = a;
-  }
+  });
 
   return { perBehavior, perSkill, activities: [...activities], integrityFlags };
 }
@@ -198,6 +215,7 @@ export function buildFixedAssignmentsBlock(result: PreselectResult): string {
     if (a.interventionName) parts.push(`intervention: ${a.interventionName}`);
     if (a.activity) parts.push(`activity: ${a.activity}`);
     if (a.topography) parts.push(`topography: ${a.topography}`);
+    if (a.tier) parts.push(`outcome tier: ${a.tier}`);
     if (a.promptKey) parts.push(`prompt level: ${a.promptKey}`);
     if (a.responseKey) parts.push(`client-response tenor: ${a.responseKey}`);
     lines.push(`- Behavior "${name}" → ${parts.join('; ')}`);
@@ -206,6 +224,7 @@ export function buildFixedAssignmentsBlock(result: PreselectResult): string {
     const parts: string[] = [];
     if (a.method) parts.push(`teaching method: ${a.method}`);
     if (a.activity) parts.push(`activity: ${a.activity}`);
+    if (a.tier) parts.push(`outcome tier: ${a.tier}`);
     if (a.promptKey) parts.push(`prompt level: ${a.promptKey}`);
     if (a.responseKey) parts.push(`client-response tenor: ${a.responseKey}`);
     lines.push(`- Skill "${name}" → ${parts.join('; ')}`);

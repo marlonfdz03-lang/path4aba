@@ -26,6 +26,9 @@ export interface AxisSelection {
   // Topography the preselector assigned (so it can rotate across notes too). Additive: absent on legacy
   // rows and on Commit-3 notes; the reader passes it through verbatim from generation_context.
   topography?: string;
+  // Outcome tier the compliance controller assigned (Commit 5) — carried so continuity can trend how a
+  // client has been doing across recent notes.
+  tier?: string;
 }
 
 export interface NoteContext {

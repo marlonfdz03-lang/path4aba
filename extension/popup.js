@@ -756,24 +756,32 @@ document.getElementById('locationGroup').addEventListener('click', (e) => {
   updateGenerateBtn();
 });
 
-// An environmental change counts as REPORTED once the toggle is yes AND the RBT has described it.
-function envChangeReported() {
-  const desc = document.getElementById('envDescription');
-  return environmentalChange && !!(desc && desc.value.trim());
+// Something out of the ordinary was reported (environmental change, medication change, or a missed
+// session). When ANY is marked YES, the session cannot be "typical" — the RBT must actively pick below
+// typical or poor.
+function outOfOrdinaryReported() {
+  return environmentalChange || medicationChange || missedSessions;
 }
 
-// Clear the compliance control when an environmental change is reported (so the RBT must choose),
-// or restore the plain default when it is not — never overriding a level the RBT actually picked.
+// When something out of the ordinary is reported the compliance control is UNSET and "typical" is
+// disabled (the RBT must choose below typical or poor); otherwise restore the plain default — never
+// overriding a level the RBT actually picked (unless that pick was "typical", which is neutralized).
 function syncComplianceRequirement() {
-  if (complianceTouched) return;
-  complianceLevel = envChangeReported() ? '' : 'typical';
+  const ooo = outOfOrdinaryReported();
+  if (ooo && complianceLevel === 'typical') { complianceLevel = ''; complianceTouched = false; }
+  if (!complianceTouched) complianceLevel = ooo ? '' : 'typical';
   const cg = document.getElementById('complianceGroup');
   if (cg) {
     cg.querySelectorAll('.toggle-btn').forEach((b, i) => {
-      b.classList.toggle('active', complianceLevel !== '' && i === 0);
-      b.style.background = '';
-      b.style.borderColor = '';
-      b.style.color = '';
+      const isTypical = b.dataset.val === 'typical';
+      // Disable "typical" (the first option) when something out of the ordinary was reported.
+      b.disabled = ooo && isTypical;
+      b.style.opacity = (ooo && isTypical) ? '0.4' : '';
+      b.style.cursor = (ooo && isTypical) ? 'not-allowed' : '';
+      if (b.disabled) b.title = 'Something out of the ordinary was reported — choose below typical or poor';
+      else b.removeAttribute('title');
+      b.classList.toggle('active', complianceLevel !== '' && complianceLevel === b.dataset.val);
+      if (complianceLevel !== b.dataset.val) { b.style.background = ''; b.style.borderColor = ''; b.style.color = ''; }
     });
   }
   updateGenerateBtn();
@@ -796,10 +804,12 @@ function syncComplianceRequirement() {
       medicationChange = isYes;
       const desc = document.getElementById('medDescription');
       if (desc) desc.style.display = isYes ? '' : 'none';
+      syncComplianceRequirement();
     } else if (id === 'missedGroup') {
       missedSessions = isYes;
       const desc = document.getElementById('missedDescription');
       if (desc) desc.style.display = isYes ? '' : 'none';
+      syncComplianceRequirement();
     }
   });
 });
@@ -810,6 +820,8 @@ document.getElementById('envDescription')?.addEventListener('input', syncComplia
 document.getElementById('complianceGroup').addEventListener('click', e => {
   const btn = e.target.closest('.toggle-btn');
   if (!btn) return;
+  // "typical" is unavailable when something out of the ordinary was reported.
+  if (btn.dataset.val === 'typical' && outOfOrdinaryReported()) return;
   complianceLevel = btn.dataset.val;
   complianceTouched = true;
   updateGenerateBtn();
@@ -868,7 +880,7 @@ function updateGenerateBtn() {
       if (selectedPresent.length === 0) missing.push('who was present');
       if (selectedBehaviors.length < 1) missing.push('at least one behavior');
       if (selectedSkills.length < 1) missing.push('at least one skill');
-      if (complianceLevel === '') missing.push("the session's compliance level (you reported an environmental change)");
+      if (complianceLevel === '') missing.push("the session's compliance level (something out of the ordinary was reported — choose below typical or poor)");
       console.log('[debug] missing fields:', missing);
       hint.textContent = missing.length ? 'Still needed: ' + missing.join(', ') : '';
       hint.style.display = missing.length ? '' : 'none';
