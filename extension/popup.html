@@ -146,7 +146,6 @@
 
       <div class="tab-bar">
         <button class="tab active" data-tab="generate" id="tabGenerate">Generate Note</button>
-        <button class="tab" data-tab="refine" id="tabRefine">Refine Note</button>
         <button class="tab" data-tab="data" id="tabData">Data</button>
       </div>
 
@@ -236,26 +235,6 @@
         </button>
         <p id="generateHint" class="hint center-text" style="display:none"></p>
 
-      </div>
-
-      <!-- ── Refine Tab ── -->
-      <div id="tabContent-refine" class="tab-content" style="display:none">
-        <div class="field">
-          <label class="field-label">Paste existing note</label>
-          <textarea
-            id="pasteNote"
-            class="textarea"
-            placeholder="Paste a note from ABA Matrix, Office Puzzle, or any other tool…"
-            rows="7"
-          ></textarea>
-        </div>
-        <div class="field">
-          <label class="field-label">Next Appointment Date <span class="hint">(optional)</span></label>
-          <input type="date" id="nextApptDateRefine" class="input-field" />
-        </div>
-        <button id="refineBtn" class="btn-primary full-width" disabled>
-          ✦ Refine Note
-        </button>
       </div>
 
       <!-- ── Data Autofill Tab ── -->

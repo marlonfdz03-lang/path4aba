@@ -1,4 +1,4 @@
-// Reads the streamed text response from /api/generate-note (or /api/refine-note),
+// Reads the streamed text response from /api/generate-note,
 // parsing the inline __REGEN__ marker (clear & restart) and the trailing
 // __META__{...} JSON tail. App-only helper — not imported by any website file.
 

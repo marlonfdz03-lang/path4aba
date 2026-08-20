@@ -620,100 +620,6 @@ export default function ClientProfilePage() {
     alert("Note saved successfully.");
   }
 
-  async function handlePerfectNote() {
-    if (!pastedNote.trim()) return;
-    setPerfectingNote(true);
-    setPerfectStatus("Perfecting your note...");
-    setPerfectedNote("");
-
-    const body = {
-      originalNote: pastedNote,
-      clientId: client.id,
-      nextAppointmentDate: nextApptDate || "",
-      sessionDate: date || "",
-      clientProfile: {
-        approvedInterventions: client.clinicalProfile?.interventions?.map((i: any) => typeof i === "string" ? i : i.name) || [],
-        prohibitedInterventions: ["Punishment", "ResponseCost", "Restraint", "StandaloneExtinction", "TimeOut", "Overcorrection", "Aversive"],
-        reinforcers: {
-          tangibles: client.clinicalProfile?.reinforcers?.slice(0, 5).join(", ") || "",
-          activities: client.clinicalProfile?.homeActivities?.slice(0, 3).join(", ") || "",
-          social: "verbal praise, behavior-specific praise, high fives",
-          people: (client.clinicalProfile?.caregivers || []).join(", "),
-        },
-        activePrograms: {
-          maladaptive: (client.clinicalProfile?.maladaptiveBehaviors || []).map((b: any) => typeof b === "string" ? b : b?.name || ""),
-          // Reconciled (Layer 2): active programs (mastered subtracted) + mastered skills — no duplicate skill
-          // name reaches note generation.
-          replacementSkills: skills.map((s: any) => (typeof s === "string" ? s : s?.name || "")),
-        },
-        diagnosis: client.clinicalProfile?.diagnosis || [],
-        setting: client.primary_setting || "",
-      },
-    };
-
-    try {
-      const res = await fetch("/api/refine-note", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok || !res.body) {
-        const data = await res.json().catch(() => ({}));
-        setPerfectStatus(data?.error || "Note perfection failed.");
-        return;
-      }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let fullText = "";
-      setPerfectSimilarityWarning(false);
-      outer2: while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        if (chunk.includes("__META__")) {
-          const parts = chunk.split("__META__");
-          if (parts[0]) { fullText += parts[0]; setPerfectedNote(fullText); }
-          try { const meta = JSON.parse(parts[1]); if (meta.error && meta.blocking !== false) { setPerfectStatus(meta.error); setPerfectedNote(""); return; } if (meta.error) { setPerfectStatus(meta.error); } setPerfectSimilarityWarning(!!meta.similarityWarning); if (typeof meta.filteredText === "string") { fullText = meta.filteredText; setPerfectedNote(fullText); } } catch {}
-          break outer2;
-        }
-        if (chunk.includes("__REGEN__")) {
-          fullText = "";
-          setPerfectedNote("");
-          setPerfectStatus("Regenerating for uniqueness…");
-          continue;
-        }
-        fullText += chunk;
-        setPerfectedNote(fullText);
-      }
-      setPerfectStatus("");
-    } catch {
-      setPerfectStatus("Network error. Please try again.");
-    } finally {
-      setPerfectingNote(false);
-    }
-  }
-
-  async function handleSaveRefinedNote() {
-    if (!perfectedNote.trim()) return;
-    if (perfectedNote === lastSavedNote) { alert("This note has already been saved."); return; }
-    setLastSavedNote(perfectedNote);
-    const today = new Date();
-    const noteObject = {
-      id: crypto.randomUUID(),
-      clientId: client.id,
-      date: today.toLocaleDateString(),
-      note: perfectedNote,
-    };
-    saveNote(noteObject);
-    const res = await fetch("/api/session-notes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientId: client.id, noteText: perfectedNote, sessionDate: date || today.toISOString().split("T")[0] }),
-    });
-    if (res.ok) {
-      await loadNotesFromSupabase(client.id);
-    } else {
-      setDailyNotes(prev => [noteObject, ...prev]);
-    }
-    setRefinedNoteSaved(true);
-    setTimeout(() => setRefinedNoteSaved(false), 2000);
-  }
 
   async function fetchBcbaOverlapContext(sessionDate: string) {
     if (!sessionDate || !client.id) return;
@@ -835,7 +741,6 @@ export default function ClientProfilePage() {
     { key: "fast", label: "FAST" },
     ...(client?.treatmentMapApproved ? [{ key: "treatment_map" as Tab, label: "Treatment Map" }] : []),
     { key: "generate", label: "Generate Note" },
-    { key: "refine", label: "Refine Note" },
     { key: "notes", label: "Notes" },
     { key: "data", label: "Data" },
   ];
@@ -1990,59 +1895,6 @@ export default function ClientProfilePage() {
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ── Refine Note Tab ── */}
-        {activeTab === "refine" && (
-          <div className="max-w-[780px]">
-            <div className="bg-white rounded-[10px] border p-6" style={{ borderColor: "var(--border)" }}>
-              <SectionHeader title="Refine Note" />
-              <p className="text-[13px] mb-5" style={{ color: "var(--text3)" }}>
-                Paste a note from ABA Matrix or any other system. Path4ABA will elevate it to audit-ready quality without changing the clinical facts.
-              </p>
-              <div className="mb-4">
-                <label className="text-[12px] font-semibold uppercase tracking-wide mb-1 block" style={{ color: "var(--text3)" }}>Next Appointment Date</label>
-                <input
-                  type="date"
-                  value={nextApptDate}
-                  onChange={e => setNextApptDate(e.target.value)}
-                  className="border rounded-lg px-3 py-2 text-[13px]"
-                  style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-                />
-              </div>
-              <textarea
-                value={pastedNote}
-                onChange={(e) => setPastedNote(e.target.value)}
-                placeholder="Paste your note here..."
-                className="w-full border rounded-xl px-4 py-3 text-sm leading-7 resize-none mb-4 focus:outline-none"
-                style={{ borderColor: "var(--border)", color: "var(--text1)", minHeight: 200 }}
-              />
-              <button
-                onClick={handlePerfectNote}
-                disabled={!pastedNote.trim() || perfectingNote}
-                className="px-6 py-2.5 rounded-lg text-[13px] font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
-                style={{ background: "var(--teal)" }}
-              >
-                {perfectingNote ? "Refining..." : "Refine Note"}
-              </button>
-              {perfectStatus && <p className="mt-3 text-[13px] text-red-500">{perfectStatus}</p>}
-              {perfectSimilarityWarning && (
-                <p className="mt-3 text-[13px] px-3 py-2 rounded-lg border" style={{ background: "#FFFBEB", borderColor: "#FCD34D", color: "#92400E" }}>
-                  ⚠️ This refined note may be similar to a previous session. Consider editing before submitting.
-                </p>
-              )}
-              {perfectedNote && (
-                <NoteOutput
-                  note={perfectedNote}
-                  onChange={setPerfectedNote}
-                  onCopy={() => navigator.clipboard.writeText(perfectedNote)}
-                  onSave={handleSaveRefinedNote}
-                  saved={refinedNoteSaved}
-                  generating={perfectingNote}
-                />
               )}
             </div>
           </div>

@@ -398,10 +398,6 @@ document.getElementById('clientSelect').addEventListener('change', async (e) => 
   // Per-note text belongs to the client it was written for — never carry it to another client.
   const prevOutput = document.getElementById('outputNote');
   if (prevOutput) prevOutput.value = '';
-  const prevPaste = document.getElementById('pasteNote');
-  if (prevPaste) prevPaste.value = '';
-  const refineBtnOnSwitch = document.getElementById('refineBtn');
-  if (refineBtnOnSwitch) refineBtnOnSwitch.disabled = true;
 
   const actionSection = document.getElementById('actionSection');
   const outputSection = document.getElementById('outputSection');
@@ -886,11 +882,6 @@ function updateGenerateBtn() {
 
 document.getElementById('genDate').addEventListener('change', updateGenerateBtn);
 
-// ── Refine button state ────────────────────
-document.getElementById('pasteNote').addEventListener('input', (e) => {
-  document.getElementById('refineBtn').disabled = e.target.value.trim().length < 50;
-});
-
 // ── Tabs ───────────────────────────────────
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
@@ -977,48 +968,7 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
   await streamGenerate('/api/generate-note', body, 'POST');
 });
 
-// ── Refine note ────────────────────────────
-document.getElementById('refineBtn').addEventListener('click', async () => {
-  document.querySelectorAll('.error-msg').forEach(el => el.remove());
-  const originalNote = document.getElementById('pasteNote').value.trim();
-  const profile = selectedProfile || {};
-  const nextApptRefine = document.getElementById('nextApptDateRefine')?.value || '';
-  const body = {
-    originalNote,
-    clientId: selectedClientId,
-    nextAppointmentDate: nextApptRefine || undefined,
-    continuityContext: profile.continuityContext || null,
-    clinicalEvents: [
-      profile.environmentalChange ? `Environmental change: ${profile.environmentalChangeDescription || 'yes'}` : null,
-      profile.medicationChange ? `Medication change: ${profile.medDescription || 'yes'}` : null,
-    ].filter(Boolean).join('; ') || undefined,
-    clientProfile: {
-      approvedInterventions: (profile.interventions || []).map(i => typeof i === 'string' ? i : i?.name || ''),
-      prohibitedInterventions: ['Punishment', 'ResponseCost', 'Restraint', 'StandaloneExtinction', 'TimeOut', 'Overcorrection', 'Aversive'],
-      reinforcers: {
-        tangibles: (profile.reinforcers || []).slice(0, 5).join(', '),
-        activities: (profile.homeActivities || []).slice(0, 3).join(', '),
-        social: 'verbal praise, behavior-specific praise, high fives',
-        people: (profile.caregivers || []).join(', '),
-      },
-      activePrograms: {
-        maladaptive: (profile.maladaptiveBehaviors || []).map(b => typeof b === 'string' ? b : b?.name || ''),
-        replacementSkills: [
-          ...(profile.replacementBehaviors || []).map(s => typeof s === 'string' ? s : s?.name || ''),
-          ...(profile.skillAcquisition || []).map(s => typeof s === 'string' ? s : s?.name || ''),
-        ],
-      },
-      continuityContext: {
-        summary: profile.continuityContext?.summary || '',
-      },
-      diagnosis: profile.diagnosis || [],
-      setting: selectedLocation || '',
-    },
-  };
-  await streamGenerate('/api/refine-note', body, 'POST');
-});
-
-// ── Stream handler (shared for generate + refine) ──
+// ── Stream handler (generate) ──
 // Buffers the full note before displaying. If the server flags similarity,
 // auto-retries up to MAX_RETRIES times before showing the final result.
 async function streamGenerate(endpoint, body, method = 'POST') {
@@ -1026,14 +976,12 @@ async function streamGenerate(endpoint, body, method = 'POST') {
   const outputNote = document.getElementById('outputNote');
   const streamStatus = document.getElementById('streamStatus');
   const generateBtn = document.getElementById('generateBtn');
-  const refineBtn = document.getElementById('refineBtn');
 
   outputNote.value = '';
   outputSection.style.display = '';
   streamStatus.style.display = '';
   streamStatus.textContent = 'Generating note…';
   generateBtn.disabled = true;
-  refineBtn.disabled = true;
 
   let finalText = '';
   let blockedFlagged = [];
@@ -1111,8 +1059,6 @@ async function streamGenerate(endpoint, body, method = 'POST') {
     showError('Network error. Make sure you are logged into Path4ABA.');
   } finally {
     updateGenerateBtn();
-    const pasteNote = document.getElementById('pasteNote').value.trim();
-    refineBtn.disabled = pasteNote.length < 50;
   }
 }
 
@@ -1148,18 +1094,11 @@ function resetAfterSave() {
   document.querySelectorAll('#presentGrid .check-item').forEach(el => {
     el.classList.remove('checked');
   });
-  // The refine pane is per-note state too — a pasted note left behind belongs to the note just filed.
-  const pasteNoteEl = document.getElementById('pasteNote');
-  if (pasteNoteEl) pasteNoteEl.value = '';
-  const refineBtnEl = document.getElementById('refineBtn');
-  if (refineBtnEl) refineBtnEl.disabled = true;
   // Reset all session condition toggles and description fields (env/med/missed/compliance)
   resetSessionConditions();
-  // Reset next appointment date fields
+  // Reset next appointment date field
   const nextApptEl = document.getElementById('nextApptDate');
   if (nextApptEl) nextApptEl.value = '';
-  const nextApptRefineEl = document.getElementById('nextApptDateRefine');
-  if (nextApptRefineEl) nextApptRefineEl.value = '';
   // Reset date to today
   const genDate = document.getElementById('genDate');
   if (genDate) genDate.value = new Date().toISOString().split('T')[0];
