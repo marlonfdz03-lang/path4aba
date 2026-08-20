@@ -87,8 +87,8 @@ export const PROHIBITED_INTERVENTIONS = new Set<string>([
 ])
 
 // ── REPORTED-CONTEXT EXEMPTION (defense in depth for the prompt fix) ─────────────────────────
-// The note form collects session-context factors — an environmental change, a medication change,
-// missed hours. None is an intervention and none needs approval: the RBT reports what was DIFFERENT
+// The note form collects session-context factors — an environmental change or a medication change.
+// Neither is an intervention and neither needs approval: the RBT reports what was DIFFERENT
 // that day ("a family member was visiting", "the client had a fever"), they do not perform it.
 //
 // The prompt is where that distinction is enforced (reported context is documented at the start of

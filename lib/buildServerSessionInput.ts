@@ -25,9 +25,6 @@ export type SlimNoteRequest = {
   medicationChange?: boolean;
   envChange?: boolean;
   envChangeDesc?: string;
-  missedHours?: boolean;
-  missedCount?: string;
-  missedReason?: string;
   nextAppt?: string;
   continuityContext?: SessionInput["continuityContext"];
 };
@@ -195,10 +192,6 @@ export function buildServerSessionInput(
       : undefined,
     environmentalChangeDescription:
       slim.envChange && slim.envChangeDesc ? slim.envChangeDesc : undefined,
-    missedHoursData:
-      slim.missedHours && slim.missedCount
-        ? { totalHours: parseFloat(slim.missedCount), reason: slim.missedReason ?? "" }
-        : undefined,
     continuityContext: slim.continuityContext || undefined,
 
     clientProfile: {

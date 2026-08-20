@@ -37,7 +37,6 @@ let extractedClientName = null;
 let selectedPresent = [];
 let environmentalChange = false;
 let medicationChange = false;
-let missedSessions = false;
 let complianceLevel = 'typical';
 // '' = no active selection. When the RBT reports an environmental change the control is CLEARED and
 // they must actively choose how the session went — the system never pre-picks a level and never
@@ -723,14 +722,11 @@ function resetSessionConditions() {
   if (envDesc) { envDesc.style.display = 'none'; envDesc.value = ''; }
   const medDesc = document.getElementById('medDescription');
   if (medDesc) { medDesc.style.display = 'none'; medDesc.value = ''; }
-  const missedDesc = document.getElementById('missedDescription');
-  if (missedDesc) { missedDesc.style.display = 'none'; missedDesc.value = ''; }
   medicationChange = false;
-  missedSessions = false;
   complianceLevel = 'typical';
   complianceTouched = false;
 
-  ['envGroup', 'medGroup', 'missedGroup'].forEach(id => {
+  ['envGroup', 'medGroup'].forEach(id => {
     const g = document.getElementById(id);
     if (!g) return;
     g.querySelectorAll('.toggle-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
@@ -760,7 +756,7 @@ document.getElementById('locationGroup').addEventListener('click', (e) => {
 // session). When ANY is marked YES, the session cannot be "typical" — the RBT must actively pick below
 // typical or poor.
 function outOfOrdinaryReported() {
-  return environmentalChange || medicationChange || missedSessions;
+  return environmentalChange || medicationChange;
 }
 
 // When something out of the ordinary is reported the compliance control is UNSET and "typical" is
@@ -788,7 +784,7 @@ function syncComplianceRequirement() {
 }
 
 // ── Session condition toggles ──────────────
-['envGroup', 'medGroup', 'missedGroup'].forEach(id => {
+['envGroup', 'medGroup'].forEach(id => {
   document.getElementById(id).addEventListener('click', e => {
     const btn = e.target.closest('.toggle-btn');
     if (!btn) return;
@@ -803,11 +799,6 @@ function syncComplianceRequirement() {
     } else if (id === 'medGroup') {
       medicationChange = isYes;
       const desc = document.getElementById('medDescription');
-      if (desc) desc.style.display = isYes ? '' : 'none';
-      syncComplianceRequirement();
-    } else if (id === 'missedGroup') {
-      missedSessions = isYes;
-      const desc = document.getElementById('missedDescription');
       if (desc) desc.style.display = isYes ? '' : 'none';
       syncComplianceRequirement();
     }
@@ -943,10 +934,6 @@ async function checkSuggestionBanner() {
   } catch {}
 }
 
-function getMissedReason() {
-  return 'an unplanned absence reported by caregiver';
-}
-
 // ── Generate note ──────────────────────────
 document.getElementById('generateBtn').addEventListener('click', async () => {
   document.querySelectorAll('.error-msg').forEach(el => el.remove());
@@ -971,9 +958,6 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     medicationChange,
     envChange: environmentalChange,
     envChangeDesc: document.getElementById('envDescription')?.value?.trim() || '',
-    missedHours: missedSessions,
-    missedCount: missedSessions ? '1' : '',
-    missedReason: document.getElementById('missedDescription')?.value?.trim() || '',
     nextAppt: document.getElementById('nextApptDate')?.value || '',
   };
 
@@ -1808,15 +1792,12 @@ document.getElementById('weekStartDate').addEventListener('change', (e) => {
 });
 
 function applySessionQualityAdjustment(items) {
-  if (complianceLevel === 'typical' && !missedSessions && !environmentalChange) return items;
+  if (complianceLevel === 'typical' && !environmentalChange) return items;
   return items.map(item => {
     let adjusted = { ...item };
     if (item.type === 'maladaptive') {
       let increase = 0;
-      if (missedSessions) {
-        // Missed sessions: move 6-7
-        increase = Math.floor(Math.random() * 2) + 6;
-      } else if (environmentalChange && complianceLevel === 'poor') {
+      if (environmentalChange && complianceLevel === 'poor') {
         // Poor compliance + environmental change: move 5-6
         increase = Math.floor(Math.random() * 2) + 5;
       } else if (complianceLevel === 'poor') {
@@ -1837,10 +1818,7 @@ function applySessionQualityAdjustment(items) {
         : undefined;
     } else if (item.type === 'replacement') {
       let change = 0;
-      if (missedSessions) {
-        // Missed sessions: drop 6-7%
-        change = -(Math.floor(Math.random() * 2) + 6);
-      } else if (environmentalChange && complianceLevel === 'poor') {
+      if (environmentalChange && complianceLevel === 'poor') {
         // Poor compliance + environmental change: drop 5-6%
         change = -(Math.floor(Math.random() * 2) + 5);
       } else if (complianceLevel === 'poor') {

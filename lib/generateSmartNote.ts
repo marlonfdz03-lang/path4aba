@@ -92,7 +92,6 @@ export interface SessionInput {
   clinicalEvents?: string;
   complianceLevel?: 'typical' | 'below_typical' | 'poor';
   environmentalChangeDescription?: string;
-  missedHoursData?: { totalHours: number; reason: string };
   continuityContext?: {
     periodLabel: string;
     behaviorTrends: Record<string, 'improving' | 'stable' | 'worsening' | 'insufficient_data'>;
@@ -152,19 +151,6 @@ const BUILD_TAG = 'diag-2x-v1';
 
 function buildContextualFactors(input: SessionInput): string {
   const blocks: string[] = [];
-
-  if (input.missedHoursData && input.missedHoursData.totalHours > 0) {
-    const { totalHours, reason } = input.missedHoursData;
-    blocks.push(
-      `MISSED HOURS CONTEXT — WEAVE NATURALLY INTO NOTE:\n` +
-      `This client missed ${totalHours} hour${totalHours !== 1 ? 's' : ''} of service in the past 7 days${reason ? ` due to ${reason}` : ''}. ` +
-      `Clinical context: when a client does not receive the full recommended hours of ABA therapy, behavioral gains may regress and maladaptive behaviors may increase in frequency and intensity. ` +
-      `Reflect this by documenting increased behavior frequency compared to baseline, reduced response to interventions, and slower task initiation. ` +
-      `Include one clinical statement noting that interruptions in service delivery can adversely impact behavioral progress. ` +
-      `Do NOT say the session went poorly — document it observationally. ` +
-      `Example language: "Following a gap in service delivery earlier this week, the client demonstrated increased frequency of [behavior] compared to recent baseline. Compliance with task demands required additional prompting, and initiation of preferred activities was delayed."`
-    );
-  }
 
   // REPORTED CONTEXT, NOT AN INTERVENTION. The RBT reports what was DIFFERENT in the client's
   // environment that day (a visitor, an illness, a schedule change) — a daily-life factor nobody
@@ -318,32 +304,6 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
       resolvedProfile.activePrograms.replacementSkills.filter((s: string) =>
         isValidSkillForLocation(s, input.sessionInfo.location)
       );
-  }
-
-  // ── Missed session: generate absence note instead of full clinical note ──
-  if (input.missedHoursData && input.missedHoursData.totalHours > 0) {
-    const { totalHours, reason } = input.missedHoursData;
-    const location = input.sessionInfo.location || 'home';
-    const caregiver = input.sessionInfo.caregiverName || input.sessionInfo.caregiver || 'caregiver';
-    const date = input.sessionInfo.date || new Date().toISOString().split('T')[0];
-    const setting = location === 'school' ? 'school-based' : location === 'clinic' ? 'clinic-based' : 'home-based';
-
-    const absenceNote = `Scheduled ${setting} ABA session on ${date} was not held. ${caregiver} reported that the client was unable to attend due to ${reason || 'an unplanned absence'}. A total of ${totalHours} hour${totalHours !== 1 ? 's' : ''} of authorized ABA services were not rendered during this period. Clinical literature and ABA research support that interruptions in consistent service delivery can adversely affect behavioral progress, including increased frequency and intensity of targeted maladaptive behaviors and reduced maintenance of acquired replacement skills. The treating BCBA has been notified of the missed service hours. This note documents the absence in accordance with the current treatment plan and insurance authorization requirements. Makeup hours will be scheduled as clinically indicated and as authorized under the current service plan.`;
-
-    // No auto-save (persistence is explicit-save-only, same as the main note path) — the absence note
-    // is written to session_notes only when the RBT saves it, so it can't accumulate on regeneration.
-
-    if (onChunk) onChunk(absenceNote);
-
-    return {
-      note: absenceNote,
-      clientId: input.clientId,
-      sessionDate: date,
-      behaviorsDocumented: [],
-      replacementSkillsDocumented: [],
-      generatedAt: new Date().toISOString(),
-      similarityWarning: false,
-    };
   }
 
   // Steps 2, 3, 5: Run all DB queries in parallel

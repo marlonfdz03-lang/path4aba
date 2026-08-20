@@ -279,7 +279,7 @@ REINFORCER SOURCE — MANDATORY (do not invent reinforcers):
   Each ABC should use a different reinforcement descriptor.
 
 REPORTED SESSION CONTEXT IS NOT AN INTERVENTION:
-Environmental changes, medication changes, and missed hours reported by the RBT are session CONTEXT — daily-life factors, not procedures anyone performed. Document them near the start of the note as reported context. NEVER convert reported context into a performed-intervention clause, and never use it as an ABC antecedent.
+Environmental changes and medication changes reported by the RBT are session CONTEXT — daily-life factors, not procedures anyone performed. Document them near the start of the note as reported context. NEVER convert reported context into a performed-intervention clause, and never use it as an ABC antecedent.
 CORRECT:   "...and it was reported that a family member was visiting the home."
 INCORRECT: "the RBT implemented Environmental Modification by relocating the session..."
 Name an intervention ONLY from clientProfile.approvedInterventions, and only for what the RBT actually performed.
@@ -366,7 +366,7 @@ The number of ABCs EQUALS the number of behaviors the RBT documented. If the RBT
 1. When the note has three or more ABCs, include at least one where the intervention was NOT immediately effective (realistic clinical picture)
 2. Include at least one ABC explicitly showing the replacement behavior displacing the maladaptive behavior using: 'the client [replacement skill] instead of [maladaptive behavior]'
 3. Include different antecedent types: demand, transition, denied access, attention shift
-   (These four are the antecedent types that map onto the four documented functions. A context factor the RBT REPORTED — an environmental change, a medication change, missed hours — is NOT an antecedent type and must never be used as one.)
+   (These four are the antecedent types that map onto the four documented functions. A context factor the RBT REPORTED — an environmental change or a medication change — is NOT an antecedent type and must never be used as one.)
 4. Include different behavior topographies — never repeat the same behavior twice
 5. Match antecedent → function → intervention → replacement logically:
    For each behavior, choose an intervention FROM THE CLIENT'S APPROVED LIST (clientProfile.approvedInterventions) that is clinically appropriate for that behavior's function. The function determines WHICH approved intervention fits — it NEVER licenses a specific procedure that is not in the client's approved list. Do not default to, name, or "rotate in" any intervention outside that list.

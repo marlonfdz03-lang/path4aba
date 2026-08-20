@@ -213,14 +213,11 @@ export default function ClientProfilePage() {
   // reported context. Derived rather than stored, so a real choice can never be overwritten.
   const [complianceChoice, setComplianceChoice] = useState<"typical" | "below_typical" | "poor">("typical");
   const [complianceTouched, setComplianceTouched] = useState(false);
-  const [missedHoursToggle, setMissedHoursToggle] = useState(false);
-  const [missedHoursCount, setMissedHoursCount] = useState("");
-  const [missedHoursReason, setMissedHoursReason] = useState("");
-  // Something out of the ordinary was reported (environmental change, medication change, or a missed
-  // session). When ANY is marked, the session cannot be "typical": the RBT must actively pick below
-  // typical or poor. `typical` is disabled and compliance starts UNSET until they choose — and even a
-  // prior "typical" choice is neutralized to "" (never a rubber-stamp).
-  const outOfOrdinary = environmentalChange || medicationConsumed || missedHoursToggle;
+  // Something out of the ordinary was reported (environmental change or medication change). When either
+  // is marked, the session cannot be "typical": the RBT must actively pick below typical or poor.
+  // `typical` is disabled and compliance starts UNSET until they choose — and even a prior "typical"
+  // choice is neutralized to "" (never a rubber-stamp).
+  const outOfOrdinary = environmentalChange || medicationConsumed;
   const complianceLevel: "" | "typical" | "below_typical" | "poor" =
     outOfOrdinary
       ? (complianceTouched && complianceChoice !== "typical" ? complianceChoice : "")
@@ -429,9 +426,6 @@ export default function ClientProfilePage() {
     setMedicationConsumed(false);
     setEnvironmentalChange(false);
     setEnvironmentalChangeDesc("");
-    setMissedHoursToggle(false);
-    setMissedHoursCount("");
-    setMissedHoursReason("");
     setNextApptDate("");
     setStatus("");
     if (!keepDateAndLocation) { setDate(""); setLocation(""); setOtherLocation(""); }
@@ -515,9 +509,6 @@ export default function ClientProfilePage() {
       medicationChange: medicationConsumed,
       envChange: environmentalChange,
       envChangeDesc: environmentalChangeDesc,
-      missedHours: missedHoursToggle,
-      missedCount: missedHoursCount,
-      missedReason: missedHoursReason,
       nextAppt: nextApptDate,
       continuityContext: continuityCtx || undefined,
     };
@@ -1638,38 +1629,6 @@ export default function ClientProfilePage() {
                   <Toggle checked={medicationConsumed} onChange={setMedicationConsumed} />
                 </div>
 
-                {/* Missed hours */}
-                <div className="flex items-center justify-between py-3" style={{ borderBottom: missedHoursToggle ? "none" : "1px solid var(--border)" }}>
-                  <div>
-                    <p className="text-[13px] font-medium" style={{ color: "var(--text1)" }}>Missed Sessions This Week</p>
-                    <p className="text-[11px]" style={{ color: "var(--text3)" }}>Did this client miss any scheduled hours in the last 7 days?</p>
-                  </div>
-                  <Toggle checked={missedHoursToggle} onChange={setMissedHoursToggle} />
-                </div>
-                {missedHoursToggle && (
-                  <div className="pb-3 space-y-2" style={{ borderBottom: "1px solid var(--border)" }}>
-                    <div className="flex gap-2 items-center">
-                      <input
-                        type="number" min="0.5" max="40" step="0.5"
-                        value={missedHoursCount}
-                        onChange={(e) => setMissedHoursCount(e.target.value)}
-                        placeholder="Hours missed"
-                        className="w-32 border rounded-xl px-3 py-2 text-sm focus:outline-none"
-                        style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-                      />
-                      <span className="text-[13px]" style={{ color: "var(--text3)" }}>hours missed</span>
-                    </div>
-                    <input
-                      type="text"
-                      value={missedHoursReason}
-                      onChange={(e) => setMissedHoursReason(e.target.value)}
-                      placeholder="Reason (e.g. illness, family travel)"
-                      className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none"
-                      style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-                    />
-                  </div>
-                )}
-
                 {/* Compliance */}
                 <div className="py-3">
                   <p className="text-[13px] font-medium mb-2" style={{ color: "var(--text1)" }}>Client Compliance Today</p>
@@ -1945,7 +1904,7 @@ export default function ClientProfilePage() {
         )}
 
         {/* ── Data Tab ── */}
-        {activeTab === "data" && <DataTab client={client} complianceLevel={complianceLevel || "typical"} missedHours={missedHoursToggle && missedHoursCount ? parseFloat(missedHoursCount) : 0} />}
+        {activeTab === "data" && <DataTab client={client} complianceLevel={complianceLevel || "typical"} />}
 
       </div>
 

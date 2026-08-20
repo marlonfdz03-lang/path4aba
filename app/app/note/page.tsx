@@ -81,15 +81,12 @@ function NoteForm() {
   const [medicationChange, setMedicationChange] = useState(false);
   const [envChange, setEnvChange] = useState(false);
   const [envChangeDesc, setEnvChangeDesc] = useState("");
-  const [missedHours, setMissedHours] = useState(false);
-  const [missedCount, setMissedCount] = useState("");
-  const [missedReason, setMissedReason] = useState("");
   const [nextAppt, setNextAppt] = useState("");
-  // Something out of the ordinary was reported (environmental change, medication change, or a missed
-  // session). When ANY is marked, the session cannot be "typical": the RBT must actively pick below
-  // typical or poor. `typical` is disabled and compliance starts UNSET; even a prior "typical" choice is
-  // neutralized to "". Mirrors the website form.
-  const outOfOrdinary = envChange || medicationChange || missedHours;
+  // Something out of the ordinary was reported (environmental change or medication change). When either
+  // is marked, the session cannot be "typical": the RBT must actively pick below typical or poor.
+  // `typical` is disabled and compliance starts UNSET; even a prior "typical" choice is neutralized to
+  // "". Mirrors the website form.
+  const outOfOrdinary = envChange || medicationChange;
   const compliance = outOfOrdinary
     ? (complianceTouched && complianceChoice !== "typical" ? complianceChoice : "")
     : (complianceTouched ? complianceChoice : "typical");
@@ -225,7 +222,6 @@ function NoteForm() {
         selectedSkills,
         compliance, medicationChange,
         envChange, envChangeDesc,
-        missedHours, missedCount, missedReason,
         nextAppt,
         continuityContext: continuity,
       };
@@ -312,9 +308,6 @@ function NoteForm() {
     setMedicationChange(false);
     setEnvChange(false);
     setEnvChangeDesc("");
-    setMissedHours(false);
-    setMissedCount("");
-    setMissedReason("");
     setNextAppt("");
     setSaveState("idle");
     if (!keepDateAndLocation) { setDate(""); setLocation("home"); setOtherLocation(""); }
@@ -672,50 +665,6 @@ function NoteForm() {
             value={envChangeDesc}
             onChange={(e) => setEnvChangeDesc(e.target.value)}
           />
-        )}
-      </div>
-
-      {/* Missed hours */}
-      <div className="app-form-group">
-        <div className="app-toggle-row">
-          <span className="app-toggle-row__label">Missed hours</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={missedHours}
-            className={`app-toggle ${missedHours ? "app-toggle--on" : ""}`}
-            onClick={() => setMissedHours((v) => !v)}
-          >
-            <span className="app-toggle__knob" />
-          </button>
-        </div>
-        {missedHours && (
-          <>
-            <div className="app-subfield">
-              <label className="app-field">
-                <input
-                  className="app-input"
-                  type="number"
-                  inputMode="numeric"
-                  min="0"
-                  placeholder="Hours missed"
-                  value={missedCount}
-                  onChange={(e) => setMissedCount(e.target.value)}
-                />
-              </label>
-            </div>
-            <div className="app-subfield">
-              <label className="app-field">
-                <input
-                  className="app-input"
-                  type="text"
-                  placeholder="Reason"
-                  value={missedReason}
-                  onChange={(e) => setMissedReason(e.target.value)}
-                />
-              </label>
-            </div>
-          </>
         )}
       </div>
 
