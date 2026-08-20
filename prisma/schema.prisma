@@ -73,6 +73,10 @@ model session_notes {
   // 'saved' (kept via the web note UI) | 'used' (pushed into the EHR by the extension) | 'draft'
   // (reserved). NULL = legacy row written before this marker existed (provenance unknown).
   status              String?
+  // What the preselector chose per note (rotation + continuity history source; keys/labels only, no
+  // narrative). NULL for legacy rows — the reader derives function from note_text and treats axes the
+  // legacy save path never stored as UNKNOWN. See migration 20260819100000_add_generation_context.
+  generation_context  Json?     @db.JsonB
   created_at          DateTime? @default(now()) @db.Timestamptz(6)
   client              clients?  @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }

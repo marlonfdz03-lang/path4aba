@@ -1,0 +1,13 @@
+-- What the preselector chose per note: per behavior (function / antecedentKey / interventionName /
+-- promptKey / responseKey / activity), per skill (method / promptKey / responseKey / activity), and the
+-- global activities[]. Read by the shared rotation + continuity history reader so the next note rotates
+-- WITHIN each locked set (rotation asks "what haven't we used lately"; continuity asks "what's been running
+-- and trending"). Holds keys/labels only — never note narrative — so its PHI exposure equals the row it
+-- sits on.
+--
+-- Additive, nullable, no default and NO backfill: every existing row becomes NULL, and the reader derives
+-- what it can from note_text for those (function only) while treating every axis the legacy save path never
+-- stored (e.g. activities) as UNKNOWN — never as "used nothing".
+--
+-- RUN MANUALLY WITH psql. Never `prisma db push`.
+ALTER TABLE "session_notes" ADD COLUMN "generation_context" JSONB;
