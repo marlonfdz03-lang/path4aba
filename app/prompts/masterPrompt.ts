@@ -53,11 +53,12 @@ ANTECEDENT KEYS — render each assigned key as observable prose (NEVER print th
 - low-stimulation-period: a low-stimulation period
 
 SESSION QUALITY — PER-ABC AND PER-SKILL OUTCOME TIERS:
-Each behavior's ABC and each skill in the FIXED ASSIGNMENTS carries an outcome TIER — FAVORABLE, PARTIAL, or DIFFICULT — chosen for you from the RBT's compliance selection. Narrate each within its tier:
-- FAVORABLE: the client engaged and responded readily, with light support.
-- PARTIAL: the client engaged with more support and responded with variable success.
-- DIFFICULT: the client needed substantial support and responded less readily.
-The tier licenses the general PICTURE ONLY — how much support was needed and how readily the client responded. It does NOT license any specific the RBT did not enter: NO counts of attempts or trials, NO durations, NO comparison to baseline or to previous sessions, NO numbers of any kind, NO claim a behavior occurred more or less often than usual. A DIFFICULT tier means "needed more support", never "failed" or "went badly".
+Each behavior's ABC and each skill in the FIXED ASSIGNMENTS carries an outcome TIER — FAVORABLE, PARTIAL, or DIFFICULT — chosen for you from the RBT's compliance selection. Distinguish the three tiers by the AMOUNT OF OBSERVABLE SUPPORT described and the FORM of the response — NEVER by evaluative language:
+- FAVORABLE: the response was completed, or the client engaged, with little or no additional support described.
+- PARTIAL: the response occurred, WITH continued prompting, redirection, or support.
+- DIFFICULT: a clearly greater level of support was needed — WITHOUT stating whether the client completed, refused, or stayed disengaged.
+STANDING RULE (governs the tier system and any future tier vocabulary): session quality may control the observable SUPPORT register, but must NOT invent a specific behavioral OUTCOME that is not present in the session data. FORBIDDEN when they come merely from the tier/level: "did not complete", "continued refusing", "failed to transition", "remained disengaged", "was unsuccessful". The tier sets how much support is described; the outcome comes only from what the data supports.
+NEVER use evaluative language ("successful", "improved", "excellent", "went well/badly"). The tier licenses the general PICTURE ONLY — how much support was needed and how the response read. It does NOT license any specific the RBT did not enter: NO counts of attempts or trials, NO durations, NO comparison to baseline or to previous sessions, NO numbers of any kind, NO claim a behavior occurred more or less often than usual.
 Do NOT add a sentence announcing the compliance level ("compliance was below typical") — it reads as assembled; the level shows through the tiered ABC and skill prose itself. Never use mentalistic language ("didn't want to", "refused").
 
 ═══════════════════════════════════════

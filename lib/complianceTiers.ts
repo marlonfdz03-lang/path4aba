@@ -11,16 +11,24 @@ export type OutcomeTier = 'FAVORABLE' | 'PARTIAL' | 'DIFFICULT';
 
 // Each tier maps to a support-level (promptKey) and observable-response (responseKey) vocabulary subset. The
 // preselector rotates LRU WITHIN the subset, so prompt/support level and response read consistently with the
-// tier. These are the locked sets for those axes once a tier is assigned.
+// tier.
+//
+// DISJOINT registers (Problem 1 #1): NO category is shared between ADJACENT tiers — the old overlap
+// (FAVORABLE and PARTIAL both had "partial-success"; FAVORABLE/PARTIAL shared "verbal", PARTIAL/DIFFICULT
+// shared "model") let mathematically-different tiers render identically, so typical and below_typical read
+// the same. The registers now differentiate purely by the AMOUNT OF OBSERVABLE SUPPORT and the FORM of the
+// response — never by evaluative language ("success/improved/excellent" are gone). DIFFICULT describes a
+// clearly greater level of support WITHOUT asserting whether the client completed, refused, or disengaged
+// (that outcome must come from the data, not the tier).
 export const TIER_PROMPTS: Record<OutcomeTier, string[]> = {
-  FAVORABLE: ['independent', 'gestural', 'verbal'],
+  FAVORABLE: ['independent', 'gestural'],
   PARTIAL: ['verbal', 'model'],
-  DIFFICULT: ['model', 'partial-physical', 'full-physical'],
+  DIFFICULT: ['partial-physical', 'full-physical'],
 };
 export const TIER_RESPONSES: Record<OutcomeTier, string[]> = {
-  FAVORABLE: ['success', 'partial-success'],
-  PARTIAL: ['partial-success', 'variable'],
-  DIFFICULT: ['variable', 'required-support'],
+  FAVORABLE: ['completed-independently', 'engaged-with-minimal-support'],
+  PARTIAL: ['completed-with-prompting', 'engaged-with-continued-redirection'],
+  DIFFICULT: ['required-substantial-support', 'required-continued-support'],
 };
 
 // Assign an outcome tier to each of `n` ABCs (or skills), deterministically, honouring the level's rules.
