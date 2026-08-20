@@ -51,32 +51,3 @@ export function stripInvalidNextSession(
   if (isValidNextSessionDate(m[1].trim(), sessionDate)) return text
   return text.replace(NEXT_APPT_CLAUSE, '').replace(/\s{2,}/g, ' ').trim()
 }
-
-const NEXT_SESSION_SENTENCE = /\s*The next scheduled session is on\s+([^.\n]+?)\s*\./i
-
-// Remove a note's "The next scheduled session is on <date>." closing sentence when its date is
-// DEFINITIVELY not strictly after the session date (parses AND is on/before). Used on GENERATED note
-// prose (e.g. after a refine pass) so a wrong date carried in from the original note cannot survive a
-// rewrite. An UNPARSEABLE date, or an unknown session date, is left untouched — we only strip what we
-// can prove is wrong, never risk deleting a valid closing sentence.
-export function stripInvalidNextSessionSentence(
-  noteText: string | null | undefined,
-  sessionDate: string | null | undefined,
-): string {
-  const text = String(noteText ?? '')
-  const s = String(sessionDate ?? '').trim()
-  if (!s) return text
-  const m = text.match(NEXT_SESSION_SENTENCE)
-  if (!m) return text
-  const dateStr = m[1].trim()
-  const iso = /^\d{4}-\d{2}-\d{2}$/
-  let provablyNotFuture: boolean
-  if (iso.test(dateStr) && iso.test(s)) {
-    provablyNotFuture = !(dateStr > s)
-  } else {
-    const d = Date.parse(dateStr), sd = Date.parse(s)
-    if (Number.isNaN(d) || Number.isNaN(sd)) return text // can't prove it's wrong -> leave it
-    provablyNotFuture = !(d > sd)
-  }
-  return provablyNotFuture ? text.replace(NEXT_SESSION_SENTENCE, '').replace(/\s{2,}/g, ' ').trim() : text
-}

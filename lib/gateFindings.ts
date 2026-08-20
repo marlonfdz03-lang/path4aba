@@ -138,7 +138,10 @@ export async function recordGateFindings(params: {
   clientId?: string | null
   userId?: string | null
   noteId?: string | null
-  source: 'generate' | 'refine'
+  // Only 'generate' remains — the refiner is gone. The COLUMN stays permissive text so a future
+  // second generation path can record without a migration; the type is narrow so today's callers
+  // cannot invent a source value that nothing reads.
+  source: 'generate'
   regenCount?: number
 }): Promise<void> {
   if (!params.findings.length) return

@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS gate_findings (
   client_id   uuid REFERENCES clients(id) ON DELETE CASCADE,
   user_id     text,
   note_id     uuid,
-  source      text        NOT NULL,   -- 'generate' | 'refine'
+  source      text        NOT NULL,   -- 'generate' (kept permissive for a future generation path)
   gate        text        NOT NULL,   -- 'intervention' | 'approved-function' | 'coverage' | 'teaching-method' | 'coherence' | 'red-flag' | 'similarity' | 'blocked-term' | 'data-integrity'
   severity    text        NOT NULL,   -- 'critical' (prohibited procedure) | 'warning' | 'info'
   detail      text        NOT NULL,   -- short, human-readable
