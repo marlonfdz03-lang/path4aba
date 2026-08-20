@@ -698,6 +698,18 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
       );
     }
   }
+  // C6 DATA INTEGRITY: a behavior with NO documented function in the assessment cannot have a function
+  // written for it or gated — surface it for assessment review rather than guessing one or silently
+  // omitting the behavior. The note still generates for every other behavior. This should not happen
+  // (locally 0/87 behaviors have empty functions); if it fires it points at extraction, which is where
+  // the fix belongs — the assessment-refresh proof harness catches the same defect at upload.
+  for (const b of input.behaviorsObserved) {
+    if (!(b.allowedFunctions?.length)) {
+      coherenceFlags.push(
+        `"${b.name}" has no documented function in the assessment — verify the assessment.`,
+      );
+    }
+  }
 
   // Step 7f: RECORD every gate finding for the admin panel. Silent to the RBT — their note is
   // already complete and on its way. Fail-soft by contract: recordGateFindings never throws, so a

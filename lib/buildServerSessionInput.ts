@@ -202,7 +202,11 @@ export function buildServerSessionInput(
       diagnosis,
       setting: slim.location === "other" ? (slim.otherLocation || "community setting") : slim.location,
       approvedInterventions: asArray(p.interventions).map(getName),
-      prohibitedInterventions: PROHIBITED,
+      // Read the assessment's prohibited list when it has one; the PROHIBITED constant is only the
+      // fallback for a profile that never captured it (so the always-banned set still applies).
+      prohibitedInterventions: asArray(p.prohibitedInterventions).length
+        ? asArray(p.prohibitedInterventions).map(getName)
+        : PROHIBITED,
       // Locked-source reinforcer names restored (tangibles + activities from the assessment). The
       // REINFORCER SOURCE prompt rule governs naming (name only from reinforcersUsed, which draws from
       // the same assessment source, so the two channels are consistent). `social` is left EMPTY: the

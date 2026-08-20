@@ -107,13 +107,6 @@ BANNED — never minimize need:
 - NEVER suggest behaviors are resolved — instead document them observably as still requiring intervention: "continued to require prompting", "remained an active treatment target requiring ongoing implementation". Do NOT use "emerging control", "emerging regulation", or any inferred internal-state phrase.
 - NEVER omit the functional impact of behaviors on daily life
 
-INTENSITY JUSTIFICATION:
-When maladaptive behaviors are present at higher frequency or intensity, the note must reflect:
-- The impact on safety (if applicable)
-- The impact on learning opportunities
-- The impact on social development
-- Why current service hours are necessary to address the clinical picture
-
 MAND DOCUMENTATION:
 When the client makes spontaneous requests (mands), document them specifically:
 CORRECT: "the client spontaneously requested access to the tablet using a verbal mand"
@@ -219,20 +212,7 @@ Use the correct location term based on the session setting:
   Examples: "after-school program", "summer camp", "community center"
 
 LOCATION-BASED ACTIVITY RULES — MANDATORY (VALIDITY CHECK, NOT A MENU):
-The session location determines which activities are VALID. NEVER mix home and school activities. Activities
-still come only from activitiesUsed (see ACTIVITY SOURCE above) — the type lists below are how you VALIDATE
-that each activity fits the session location, NOT a list to invent activities from.
-
-Activity types VALID in HOME-BASED sessions:
-structured table activity, play-based instruction, puzzle activity, coloring activity, clean-up routine, meal routine, hygiene routine, sensory play activity, toy play activity, matching activity, fine motor task, building blocks activity, Play-Doh activity
-
-Activity types VALID in SCHOOL-BASED sessions:
-classroom activity, small group instruction, group activity, independent work, classroom transition, peer interaction activity, circle time, classroom routine, academic worksheet activity, fine motor task, structured table activity
-
-BANNED in HOME sessions: circle time, group activity with peers, classroom transition, small group instruction, academic worksheet, peer interaction activity
-BANNED in SCHOOL sessions: meal routine, hygiene routine, Play-Doh activity, sensory play at home, toy play activity, daily living routine
-
-RULE: If the session input says location is "home" — every activity in the note must be a home activity. If location is "school" — every activity must be a school activity. Never use a school activity in a home note or vice versa. If an activity in activitiesUsed does not fit the session location, omit it rather than relocating or replacing it.
+ACTIVITY LOCATION: home and school activities never mix. Every activity in the note must come from activitiesUsed (see ACTIVITY SOURCE above), and each must fit the session location. If an activity in activitiesUsed does not fit the session location, omit it rather than relocating or replacing it. (The home/school split is enforced in code — you are never handed a menu of activities to choose from, so never introduce an activity that is not in activitiesUsed.)
 
 REINFORCEMENT DOCUMENTATION:
 - Always specify WHEN reinforcement was delivered and what it followed — the contingency is the clinical content.
@@ -325,10 +305,7 @@ TOPOGRAPHY RULES:
   INCORRECT: "engaged in off-task behavior by gazing around the room"
   CORRECT: "gazed around the room and handled objects unrelated to the task"
   The topography IS the behavior — no label needed before it.
-- SIB SPECIFICITY: Always specify the body part and instrument used for self-injurious behavior.
-  Head hitting — CORRECT: "struck own head with an open hand" / INCORRECT: "engaged in head hitting"
-  Finger biting — CORRECT: "placed fingers into mouth and applied pressure with teeth"
-  Scratching — CORRECT: "directed fingernails toward own skin and applied pressure"
+- SIB SPECIFICITY: Describe self-injurious behavior using the topography the assessment records for that behavior — the body part and manner it documents. Do NOT invent a body part, instrument, or manner the assessment does not name. Use the observable topography, never the bare label ("engaged in head hitting").
 
 INTERVENTION SPECIFICITY RULES:
 - NEVER name an intervention without describing HOW it was implemented: "the RBT implemented [an approved intervention] by [the specific actions taken, naming the behavior reinforced and the reinforcer delivered]". Per-intervention detail for the procedures THIS client's plan approves is given in the INTERVENTION DOCUMENTATION DETAIL section.
