@@ -185,3 +185,37 @@ export function preselect(input: PreselectInput): PreselectResult {
 
   return { perBehavior, perSkill, activities: [...activities], integrityFlags };
 }
+
+// Render the assignments as the FIXED ASSIGNMENTS block handed to GPT. Every value here came from a locked
+// set (the invariant), so this block, by construction, contains only approved content — GPT narrates it, it
+// does not choose. Empty result → empty string (no behaviors/skills to assign).
+export function buildFixedAssignmentsBlock(result: PreselectResult): string {
+  const lines: string[] = [];
+  for (const [name, a] of Object.entries(result.perBehavior)) {
+    const parts: string[] = [];
+    if (a.function) parts.push(`function: ${a.function}`);
+    if (a.antecedentKey) parts.push(`antecedent: ${a.antecedentKey}`);
+    if (a.interventionName) parts.push(`intervention: ${a.interventionName}`);
+    if (a.activity) parts.push(`activity: ${a.activity}`);
+    if (a.topography) parts.push(`topography: ${a.topography}`);
+    if (a.promptKey) parts.push(`prompt level: ${a.promptKey}`);
+    if (a.responseKey) parts.push(`client-response tenor: ${a.responseKey}`);
+    lines.push(`- Behavior "${name}" → ${parts.join('; ')}`);
+  }
+  for (const [name, a] of Object.entries(result.perSkill)) {
+    const parts: string[] = [];
+    if (a.method) parts.push(`teaching method: ${a.method}`);
+    if (a.activity) parts.push(`activity: ${a.activity}`);
+    if (a.promptKey) parts.push(`prompt level: ${a.promptKey}`);
+    if (a.responseKey) parts.push(`client-response tenor: ${a.responseKey}`);
+    lines.push(`- Skill "${name}" → ${parts.join('; ')}`);
+  }
+  if (!lines.length) return '';
+  return (
+    `\n\nFIXED ASSIGNMENTS — SELECTED FOR YOU FROM THE CLIENT'S APPROVED PLAN. Do NOT choose, substitute, ` +
+    `or add. Narrate EXACTLY what is assigned below — your job is observable prose, not selection. Never ` +
+    `name a function, intervention, teaching method, or activity that is not in this list. Render each ` +
+    `antecedent key as observable prose per the ANTECEDENT KEYS guide (never print the key itself).\n` +
+    lines.join('\n')
+  );
+}

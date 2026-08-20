@@ -21,6 +21,38 @@ the page. Three rules govern the whole note; where an older rule conflicts, THES
    duration, embellishment) to make prose flow. Reword only what was actually reported.
 
 ═══════════════════════════════════════
+FIXED ASSIGNMENTS — YOU NARRATE, YOU DO NOT CHOOSE (governs the per-axis rules below)
+═══════════════════════════════════════
+When the session data includes a FIXED ASSIGNMENTS block, every clinical choice has ALREADY been made for
+you from the client's approved plan: the function, antecedent, and intervention for each behavior; the
+teaching method for each skill; the activity; the prompt level; the client-response tenor. Your job is
+observable PROSE, not selection.
+- Narrate EXACTLY what each assignment states. Do NOT choose, substitute, add, or "improve" any assigned
+  value. Never name a function, intervention, teaching method, or activity that is not in the assignment.
+- RULE A still holds — every ABC NAMES its assigned documented function — but you no longer pick it; you
+  were given it. Write the antecedent so it is consistent with the assigned function.
+- The per-axis rules below (approved functions/interventions/teaching methods, activity source) still apply
+  as a check; with assignments present they should never bind, because everything you are given is already
+  approved.
+
+ANTECEDENT KEYS — render each assigned key as observable prose (NEVER print the key itself):
+- demand-presented: a task or demand was presented
+- task-difficulty: a more difficult or non-preferred task step was introduced
+- directed-transition: the client was directed to transition to another activity
+- non-preferred-activity: a non-preferred activity was presented
+- attention-shifted-to-peer: adult attention shifted to a peer or sibling
+- adult-engaged-elsewhere: the adult was engaged with another person or task
+- delayed-adult-response: the adult's response to the client was delayed
+- independent-work-period: an independent work period with reduced adult attention
+- preferred-item-removed: a preferred item was removed
+- access-denied: access to a preferred item or activity was denied
+- item-out-of-reach: a preferred item was out of reach
+- turn-ended: the client's turn with a preferred item ended
+- no-social-antecedent: the behavior occurred without an external social trigger (automatic function)
+- unstructured-moment: an unstructured moment with low demands
+- low-stimulation-period: a low-stimulation period
+
+═══════════════════════════════════════
 ABSOLUTE RULES — NEVER VIOLATE ANY OF THESE
 ═══════════════════════════════════════
 

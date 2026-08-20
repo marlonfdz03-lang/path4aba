@@ -23,6 +23,8 @@ import {
   runCombinedComplianceGate, interventionViolationNames, type ComplianceState,
 } from '@/lib/complianceGate';
 import { buildInterventionDetail } from '@/lib/interventionDetail';
+import { preselect, buildFixedAssignmentsBlock, type PreselectResult } from '@/lib/preselect';
+import { readGenerationHistory } from '@/lib/rotationHistory';
 import { collectGateFindings, recordGateFindings } from '@/lib/gateFindings';
 
 const openai = new OpenAI({
@@ -47,6 +49,9 @@ export interface SessionInput {
   behaviorsObserved: {
     name: string;
     topography: string;
+    // The FULL assessment topography set for this behavior (the locked set the preselector rotates over).
+    // `topography` above is a stable fallback; the preselected one is what the note narrates.
+    topographies?: string[];
     frequency: number;
     antecedentContext: string;
     function: string;
@@ -133,6 +138,10 @@ export interface GeneratedNote {
   firstTryDefects?: string[];
   // DIAGNOSTIC (temporary). Build marker so a generate proves which server bundle is actually running.
   buildTag?: string;
+  // The preselector's per-note assignments (Commit 4) — returned so the save path can persist it as
+  // session_notes.generation_context, which the shared rotation/continuity reader consumes next time.
+  // null when preselection was skipped (best-effort fallback). See preselect.ts.
+  generationContext?: PreselectResult | null;
 }
 
 // DIAGNOSTIC (temporary — 2x-regen trace). Bump on each diagnostic redeploy so a generate proves the
@@ -466,6 +475,40 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   const approvedMethodConstraint = approvedMethodSet.length
     ? `\n\nAPPROVED TEACHING METHODS — HARD CONSTRAINT (do not violate): when you state how a replacement skill was practiced, name ONLY a teaching method from this approved set — ${approvedMethodSet.join(', ')}. NEVER name a method outside it; never default to "Modeling" or "DTT" unless it is in this set.`
     : '';
+
+  // PRESELECTION (Commit 4). Choose every axis FROM its locked set, rotating LRU over the last 3 saved
+  // notes, and hand GPT fixed assignments to NARRATE — so it can no longer invent an unapproved function /
+  // intervention / method and be rejected after. Every value is a member of its locked set by construction
+  // (see preselect.ts + its invariant tests), which makes the class-A gates unable to fire. The activity
+  // locked set is input.activitiesUsed (already setting-filtered by the builder); the same list is passed
+  // for home and school so the location branch inside preselect is a no-op here.
+  const activityNames = (input.activitiesUsed ?? []).map((a) => a.name).filter(Boolean);
+  let generationContext: PreselectResult | null = null;
+  let fixedAssignmentsBlock = '';
+  try {
+    const history = await readGenerationHistory(prisma, input.clientId, { window: 3 });
+    generationContext = preselect({
+      behaviors: input.behaviorsObserved.map((b) => ({
+        name: b.name,
+        allowedFunctions: b.allowedFunctions ?? [],
+        topographies: b.topographies ?? (b.topography ? [b.topography] : []),
+      })),
+      skills: input.replacementSkillsAddressed.map((s) => ({ name: s.name })),
+      approvedInterventions: resolvedProfile.approvedInterventions ?? [],
+      approvedMethods: approvedMethodSet,
+      location: input.sessionInfo.location,
+      homeActivities: activityNames,
+      schoolActivities: activityNames,
+      complianceLevel: input.complianceLevel,
+      history,
+    });
+    fixedAssignmentsBlock = buildFixedAssignmentsBlock(generationContext);
+  } catch {
+    // Preselection is best-effort: if history read or selection fails, fall back to the pre-preselection
+    // path (GPT chooses, the gates still enforce). A rotation hiccup must never cost a note.
+    generationContext = null;
+    fixedAssignmentsBlock = '';
+  }
   // The ABC count IS the number of behaviors the RBT documented — never a fixed target. A fixed
   // "exactly 5" forced the model to invent ABCs for behaviors the RBT never marked, sourcing them
   // from the client's treatment-plan behavior list, which put behaviors that did not occur into a
@@ -516,7 +559,8 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   // an intervention the system itself advertised into a note that would not generate at all).
   const systemPrompt = MASTER_RBT_NOTE_PROMPT
     + buildInterventionDetail(resolvedProfile.approvedInterventions)
-    + contextualFactors;
+    + contextualFactors
+    + fixedAssignmentsBlock;
 
   let note = await callOpenAI(systemPrompt);
 
@@ -751,5 +795,6 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     redFlags,
     firstTryDefects,  // DIAGNOSTIC (temporary — 2x-regen trace)
     buildTag: BUILD_TAG,  // DIAGNOSTIC (temporary)
+    generationContext,
   };
 }

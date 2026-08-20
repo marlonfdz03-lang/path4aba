@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const userId = (session.user as any).id as string
-  const { clientId, noteText, sessionDate, behaviorsAddressed, skillsAddressed, interventionsUsed } = await req.json()
+  const { clientId, noteText, sessionDate, behaviorsAddressed, skillsAddressed, interventionsUsed, activitiesUsed, generationContext } = await req.json()
   if (!clientId || !noteText) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
 
   // Block duplicate: check if identical note already exists for this client
@@ -49,6 +49,11 @@ export async function POST(req: Request) {
       behaviors_addressed: behaviorsAddressed || [],
       skills_addressed: skillsAddressed || [],
       interventions_used: interventionsUsed || [],
+      // Persisted so the rotation/continuity reader learns from this note (Commit 4). activities_used was
+      // never stored before; generation_context is exactly what the preselector chose. A note saved
+      // without them (legacy client, other surface) contributes only the derivable axes — never wrong.
+      activities_used: activitiesUsed || [],
+      generation_context: generationContext ?? undefined,
       // Saved via the web note UI — authoritative unless a later 'used' row (EHR push) exists.
       status: 'saved',
     },

@@ -136,13 +136,15 @@ export function mapRowsToHistory(rows: SessionNoteRow[]): NoteContext[] {
 // session_notes ONLY when the RBT saved (persistence is explicit-save-only), so this window advances on
 // save and never on a bare regeneration. `prisma` is injected so this stays free of a hard prisma import
 // for tests; the callers pass the app's client.
+// `prisma` is typed loosely at this DB boundary (the real PrismaClient's generic findMany does not match a
+// hand-written signature, and tests inject a mock). The select below fixes the shape we read.
 export async function readGenerationHistory(
-  prisma: { session_notes: { findMany: (args: unknown) => Promise<SessionNoteRow[]> } },
+  prisma: { session_notes: { findMany: (args: any) => Promise<any[]> } },
   clientId: string,
   opts: { window?: number } = {},
 ): Promise<NoteContext[]> {
   const window = opts.window ?? 3;
-  const rows = await prisma.session_notes.findMany({
+  const rows: SessionNoteRow[] = await prisma.session_notes.findMany({
     where: { client_id: clientId },
     orderBy: { created_at: 'desc' },
     take: window,

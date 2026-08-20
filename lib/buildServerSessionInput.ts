@@ -140,7 +140,10 @@ export function buildServerSessionInput(
       const functions = pb?.functions ?? [];
       return {
         name,
-        topography: topographies[Math.floor(Math.random() * Math.max(topographies.length, 1))] || "",
+        // Deterministic stable fallback (no Math.random — the preselector rotates topography LRU over the
+        // full set below and the note narrates that choice).
+        topography: topographies[0] || "",
+        topographies,
         frequency: 1,
         antecedentContext: "",
         function: functions[0] || "",

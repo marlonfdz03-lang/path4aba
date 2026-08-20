@@ -228,6 +228,8 @@ export default function ClientProfilePage() {
     interventions: string[];
   } | null>(null);
   const sessionSummaryRef = useRef<{ behaviors: string[]; skills: string[]; interventions: string[] } | null>(null);
+  // The preselector's per-note assignments + activities from __META__, persisted on save so rotation learns.
+  const generationContextRef = useRef<{ generationContext: any; activities: string[] } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [status, setStatus] = useState("");
   const [similarityWarning, setSimilarityWarning] = useState(false);
@@ -490,6 +492,7 @@ export default function ClientProfilePage() {
     setStatus("Generating note...");
     setGeneratedNote("");
     sessionSummaryRef.current = null;
+    generationContextRef.current = null;
 
     // Slim payload: the server builds the full SessionInput from the authoritative DB profile
     // (dual-accept in /api/generate-note). Constraint sets (allowedFunctions, matrixFunctions,
@@ -538,7 +541,7 @@ export default function ClientProfilePage() {
         if (chunk.includes("__META__")) {
           const parts = chunk.split("__META__");
           if (parts[0]) { fullText += parts[0]; setGeneratedNote(fullText); }
-          try { const meta = JSON.parse(parts[1]); if (meta.error && meta.blocking !== false) { setStatus(meta.error); setGeneratedNote(""); return; } if (meta.error) { advisory = meta.error; } setSimilarityWarning(!!meta.similarityWarning); if (typeof meta.filteredText === "string") { fullText = meta.filteredText; setGeneratedNote(fullText); } diagLine = `DIAG · build ${meta.buildTag || "?"} · first-try defects: ${(meta.firstTryDefects || []).join(", ") || "none (clean)"} · regens this generate: ${regenSeen}`; } catch {}
+          try { const meta = JSON.parse(parts[1]); if (meta.error && meta.blocking !== false) { setStatus(meta.error); setGeneratedNote(""); return; } if (meta.error) { advisory = meta.error; } setSimilarityWarning(!!meta.similarityWarning); if (typeof meta.filteredText === "string") { fullText = meta.filteredText; setGeneratedNote(fullText); } generationContextRef.current = { generationContext: meta.generationContext ?? null, activities: Array.isArray(meta.activitiesUsed) ? meta.activitiesUsed : [] }; diagLine = `DIAG · build ${meta.buildTag || "?"} · first-try defects: ${(meta.firstTryDefects || []).join(", ") || "none (clean)"} · regens this generate: ${regenSeen}`; } catch {}
           break outer;
         }
         if (chunk.includes("__REGEN__")) {
@@ -601,6 +604,8 @@ export default function ClientProfilePage() {
         behaviorsAddressed: sessionSummaryRef.current?.behaviors || selectedBehaviors,
         skillsAddressed: sessionSummaryRef.current?.skills || selectedSkills,
         interventionsUsed: sessionSummaryRef.current?.interventions || [],
+        activitiesUsed: generationContextRef.current?.activities || [],
+        generationContext: generationContextRef.current?.generationContext || null,
       }),
     });
     if (res.status === 409) {
