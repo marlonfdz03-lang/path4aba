@@ -469,16 +469,35 @@ async function loadClientProfile(clientId) {
   }
 }
 
+// ── Active-only helpers (mirror lib/activePrograms.ts; the extension can't import TS) ──
+// A MASTERED behavior/skill is progress history and must NOT be selectable for a note. Read the existing
+// status + the separate mastered fields (masteredBehaviors / skillAcquisition). Mastered items stay in the
+// profile untouched — only the SELECTION lists here are filtered.
+function extNameOf(x) { return (typeof x === 'string' ? x : (x && x.name) || '').toString().trim(); }
+function extIsMastered(x) { return x && typeof x === 'object' && String(x.status || '').toLowerCase() === 'mastered'; }
+function extMasteredBehaviorNameSet(profile) {
+  const set = new Set();
+  (profile && Array.isArray(profile.masteredBehaviors) ? profile.masteredBehaviors : []).forEach(n => { const k = extNameOf(n).toLowerCase(); if (k) set.add(k); });
+  (profile && Array.isArray(profile.maladaptiveBehaviors) ? profile.maladaptiveBehaviors : []).forEach(b => { if (extIsMastered(b)) { const k = extNameOf(b).toLowerCase(); if (k) set.add(k); } });
+  return set;
+}
+function extMasteredSkillNameSet(profile) {
+  const set = new Set();
+  (profile && Array.isArray(profile.skillAcquisition) ? profile.skillAcquisition : []).forEach(s => { const k = extNameOf(s).toLowerCase(); if (k) set.add(k); });
+  return set;
+}
+
 // ── Behaviors grid ─────────────────────────
 function renderBehaviors() {
   const grid = document.getElementById('behaviorsGrid');
   const noMsg = document.getElementById('noBehaviors');
   const hint = document.getElementById('behaviorsHint');
 
+  const masteredBeh = extMasteredBehaviorNameSet(selectedProfile);
   const rawBehaviors = [
     ...(selectedProfile?.maladaptiveBehaviors || []),
     ...(selectedProfile?.activePrograms?.maladaptive || []),
-  ];
+  ].filter(b => !extIsMastered(b) && !masteredBeh.has(extNameOf(b).toLowerCase())); // ACTIVE only
   const behaviors = rawBehaviors
     .map(b => (typeof b === 'string' ? { name: b, functions: [] } : { name: b?.name || '', functions: b?.functions || [] }))
     .filter(b => b.name);
@@ -528,11 +547,12 @@ function renderSkills() {
   const noMsg = document.getElementById('noSkills');
   const hint = document.getElementById('skillsHint');
 
+  // ACTIVE skills only — skillAcquisition (mastered) is EXCLUDED, and any name the profile marks mastered.
+  const masteredSk = extMasteredSkillNameSet(selectedProfile);
   const rawSkills = [
     ...(selectedProfile?.replacementBehaviors || []),
-    ...(selectedProfile?.skillAcquisition || []),
     ...(selectedProfile?.activePrograms?.replacementSkills || []),
-  ];
+  ].filter(s => !extIsMastered(s) && !masteredSk.has(extNameOf(s).toLowerCase()));
   const skills = rawSkills
     .map(s => (typeof s === 'string' ? { name: s, targetFunction: '' } : { name: s?.name || '', targetFunction: s?.targetFunction || '' }))
     .filter(s => s.name);

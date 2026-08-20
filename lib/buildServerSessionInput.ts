@@ -11,6 +11,7 @@ import { nextSessionClause } from "./nextSessionDate.ts";
 import { matrixFunctionsForBehavior } from "./functionPatterns.ts";
 import { splitReinforcerValue } from "./reinforcers.ts";
 import { buildActivityLists } from "./curatedActivities.ts";
+import { keepActiveBehaviorNames, keepActiveSkillNames, activeSkills } from "./activePrograms.ts";
 
 // The slim payload the clients POST. Everything NOT here is derived from the DB profile.
 export type SlimNoteRequest = {
@@ -83,6 +84,12 @@ export function buildServerSessionInput(
     school: asArray(p.schoolActivities) as string[],
   });
   const caregivers = asArray(p.caregivers) as string[];
+  // SERVER BACKSTOP for the mastered-programs filter (a UI-only filter is not a filter). Drop any selected
+  // behavior/skill that is MASTERED on this client's profile, so a stale or tampered client can never
+  // document work on a program no longer in active programming — and preselection / the locked sets below
+  // never see a mastered item.
+  const activeSelectedBehaviors = keepActiveBehaviorNames(slim.selectedBehaviors ?? [], p);
+  const activeSelectedSkills = keepActiveSkillNames(slim.selectedSkills ?? [], p);
   const present = slim.present ?? [];
   const presentPerson = present.join(" and ");
 
@@ -129,7 +136,7 @@ export function buildServerSessionInput(
     gender: p.gender ?? "",
     pronouns: p.pronouns ?? "",
 
-    behaviorsObserved: (slim.selectedBehaviors ?? []).map((name) => {
+    behaviorsObserved: activeSelectedBehaviors.map((name) => {
       const pb = mal.find((b) => getName(b) === name) as
         | { topographies?: string[]; functions?: string[] }
         | undefined;
@@ -159,7 +166,7 @@ export function buildServerSessionInput(
     // compliance level. They are sent empty so the prompt generates them. `successful` is deliberately
     // NOT set: it does not come back as a hardcoded constant — a compliance-controlled outcome value
     // arrives in a later commit. For now the outcome is generative (the SESSION QUALITY block guides it).
-    replacementSkillsAddressed: (slim.selectedSkills ?? []).map((name) => ({
+    replacementSkillsAddressed: activeSelectedSkills.map((name) => ({
       name, promptLevel: "", clientResponse: "",
     })),
 
@@ -221,11 +228,10 @@ export function buildServerSessionInput(
         // treatment-plan behavior list, which the model then used as fill material to reach the old
         // fixed ABC count — putting behaviors that did not occur into a billable note. The plan's
         // other behaviors are not needed to write this note, so they are not sent.
-        maladaptive: (slim.selectedBehaviors ?? []).slice(),
-        replacementSkills: [
-          ...asArray(p.replacementBehaviors).map(getName),
-          ...asArray(p.skillAcquisition).map(getName),
-        ],
+        maladaptive: activeSelectedBehaviors.slice(),
+        // ACTIVE replacement programs only — skillAcquisition (mastered) is excluded so the locked sets and
+        // the coverage gate never treat a mastered program as active.
+        replacementSkills: activeSkills(asArray(p.replacementBehaviors), p).map(getName),
       },
     },
   };

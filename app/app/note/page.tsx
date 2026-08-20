@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { type NoteClientProfile } from "./lib/noteProfile";
 import { consumeNoteStream } from "./lib/consumeNoteStream";
 import { extractInterventions } from "./lib/extractInterventions";
+import { activeBehaviors, activeSkills } from "@/lib/activePrograms";
 
 // ── Constants (mirror the website's note form) ──────────────────────────────
 const LOCATION_OPTIONS = [
@@ -463,11 +464,12 @@ function NoteForm() {
     );
   }
 
-  const behaviors = (profile.maladaptiveBehaviors || []).map(getName).filter(Boolean);
-  const skills = [
-    ...(profile.replacementBehaviors || []),
-    ...(profile.skillAcquisition || []),
-  ].map(getName).filter(Boolean);
+  // NOTE-FORM SELECTION LISTS — ACTIVE ONLY. A mastered behavior/skill is progress history; it must not be
+  // selectable (documenting it records work on a program that no longer exists). Mastered items stay in the
+  // profile (progress reports / dashboard); they are only filtered out of what is selectable here. Only
+  // ACTIVE skills (replacementBehaviors) are offered — skillAcquisition (mastered) is excluded.
+  const behaviors = activeBehaviors(profile.maladaptiveBehaviors || [], profile).map(getName).filter(Boolean);
+  const skills = activeSkills(profile.replacementBehaviors || [], profile).map(getName).filter(Boolean);
   const presentOptions = [...FIXED_PRESENT, ...savedPresent];
 
   return (

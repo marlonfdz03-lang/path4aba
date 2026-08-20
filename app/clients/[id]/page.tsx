@@ -12,6 +12,7 @@ import { saveNote, getNotesByClientId, deleteNote } from "@/lib/noteStorage";
 import { DataTab } from "./DataTab";
 import { CatalogDiffPanel } from "./CatalogDiffPanel";
 import { reviewBannerLines } from "@/lib/reviewFlagCopy";
+import { activeBehaviors, activeSkills } from "@/lib/activePrograms";
 import { subtractMasteredFromActive } from "@/lib/skillReconcile";
 import { functionDisplayLabel, functionToCanonical } from "@/lib/functionPatterns";
 
@@ -397,19 +398,19 @@ export default function ClientProfilePage() {
     );
   }
 
-  const behaviors: any[] = client.clinicalProfile?.maladaptiveBehaviors || [];
-  // Replacement skills are two clinically-distinct fields. A skill the assessment's MASTERED section declares
-  // mastered (skillAcquisition) is NOT an active program — so we subtract mastered names from the active list
-  // for display (Layer 2). This mirrors Layer 1 (assembleRefreshProfile) AND fixes any already-stored
-  // cross-field overlap immediately, before a re-upload. subtractMasteredFromActive keys on the mastered
-  // names via token-subset, so near-dups ("Share a toy" vs "Share a preferred toy") collapse too.
+  // Profile-view fields (the overview lists mastered skills as clinical history — KEEP them here).
   const masteredSkills: any[] = client.clinicalProfile?.skillAcquisition || [];
   const masteredSkillNames: string[] = masteredSkills.map((s: any) => (typeof s === "string" ? s : s?.name || ""));
   const activePrograms: any[] = subtractMasteredFromActive(
     client.clinicalProfile?.replacementBehaviors || [],
     masteredSkillNames,
   );
-  const skills: any[] = [...activePrograms, ...masteredSkills];
+  // NOTE-FORM SELECTION LISTS — ACTIVE ONLY. A MASTERED behavior/skill is progress history; offering it would
+  // let the RBT document work on a program that no longer exists. Mastered items stay in the profile (and in
+  // the overview above, progress reports, dashboard) — they are only filtered out of what is SELECTABLE for a
+  // note. activeBehaviors/activeSkills read the existing status + the separate mastered fields.
+  const behaviors: any[] = activeBehaviors(client.clinicalProfile?.maladaptiveBehaviors || [], client.clinicalProfile);
+  const skills: any[] = activeSkills(activePrograms, client.clinicalProfile);
 
   function getName(item: any): string {
     return typeof item === "string" ? item : item?.name || "";
