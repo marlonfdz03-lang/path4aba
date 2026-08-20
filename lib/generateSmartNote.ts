@@ -74,7 +74,9 @@ export interface SessionInput {
   }[];
   activitiesUsed: {
     name: string;
-    preferred: boolean;
+    // Optional: the profile does not record activity preference, so the builder omits it. A legacy
+    // FAT payload may still send it; the note never asserts preference on its own.
+    preferred?: boolean;
   }[];
   reinforcersUsed: {
     type: 'edible' | 'non-edible' | 'social';
@@ -189,9 +191,10 @@ function buildContextualFactors(input: SessionInput): string {
   if (input.complianceLevel) {
     const level = input.complianceLevel === 'poor' ? 'poor'
       : input.complianceLevel === 'below_typical' ? 'below typical' : 'typical';
-    // The ONE real signal for how the session went. The RBT is not asked for a per-skill prompt
-    // level, response, or success verdict — so the note must not state one. It reads consistently
-    // with the level the RBT selected, in general terms, and invents no specifics beneath it.
+    // The compliance level is the ONE real signal for how the session went, and it GUIDES the
+    // authorized generation of prompt levels, client responses, and skill outcomes — Path generates
+    // those implementation details, consistent with this level. What stays banned is data that needs a
+    // measurement the RBT never took: a count, a rate, a duration, or a comparison to baseline.
     const reading = level === 'typical'
       ? `The ABCs and the skill programs may read as generally going well — the client engaging with the programs and responding to the support provided.`
       : `The ABCs and the skill programs may read as a harder session — the client needing more support to engage, and responding less readily than usual.`;
@@ -200,8 +203,7 @@ function buildContextualFactors(input: SessionInput): string {
       `The RBT indicated that the client's overall compliance today was ${level}. This is the RBT's clinical judgment of the session — document it, do not elaborate beyond it.\n` +
       `- ${reading}\n` +
       `- Do NOT add a separate sentence announcing the compliance level ("The RBT indicated compliance was ${level}") — it reads as assembled. The level shows through the prose itself.\n` +
-      `- The RBT did NOT report a prompt level, a client response, or a success verdict for any individual skill. Do NOT state one. Never name a specific prompt level ("gestural", "partial physical", "verbal") for a skill unless the session data provides it, and never declare a skill successful or unsuccessful.\n` +
-      `- Do NOT assert anything else the RBT did not enter: no invented latency, no number of prompt repetitions, no trial counts ("4 of 5"), no comparison to the client's baseline or to recent sessions, no claim that behaviors occurred more or less often than usual, no duration.\n` +
+      `- Prompt levels, client responses, and skill outcomes are generated consistent with this level. What you may NOT do is assert a MEASUREMENT the RBT never took: no invented latency, no number of prompt repetitions, no trial counts ("4 of 5"), no comparison to the client's baseline or to recent sessions, no claim that behaviors occurred more or less often than usual, no duration.\n` +
       `- Do NOT state any count or percentage.\n` +
       `- Do NOT say the session went badly, and never use mentalistic language ("didn't want to", "refused").`
     );

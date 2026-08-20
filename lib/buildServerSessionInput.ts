@@ -9,6 +9,8 @@
 import type { SessionInput } from "./generateSmartNote";
 import { nextSessionClause } from "./nextSessionDate.ts";
 import { matrixFunctionsForBehavior } from "./functionPatterns.ts";
+import { splitReinforcerValue } from "./reinforcers.ts";
+import { buildActivityLists } from "./curatedActivities.ts";
 
 // The slim payload the clients POST. Everything NOT here is derived from the DB profile.
 export type SlimNoteRequest = {
@@ -71,11 +73,18 @@ export function buildServerSessionInput(
 ): SessionInput {
   const p = profile || {};
   const mal = asArray(p.maladaptiveBehaviors);
-  // NOTE: p.homeActivities / p.schoolActivities / p.reinforcers are deliberately NOT read here any
-  // more. They are the client's approved OPTIONS, not a record of what this session used, and
-  // feeding them to the note made it assert activities and reinforcers nobody reported. They stay in
-  // the profile for the clinical record and for the day the form collects them (reinforcers.ts still
-  // owns their read-time normalization for whichever path reads them).
+  // LOCKED SOURCES (assessment-derived), restored. reinforcers/home/school activities are the client's
+  // approved options FROM THE ASSESSMENT — a locked source, not a fabrication. The note MAY name from
+  // them (the REINFORCER/ACTIVITY SOURCE prompt rules already require naming ONLY from what reaches the
+  // note here, so no prompt change is needed). Reinforcers are read-time re-split so a stored
+  // "tablet or phone" resolves to a single item and the note never renders the unresolved alternative
+  // (idempotent — an already-split value is a no-op — so it also fixes existing clients with no migration).
+  // Activities merge the assessment's split home/school lists with the curated master list (deduped).
+  const reinforcers = splitReinforcerValue(asArray(p.reinforcers)) as string[];
+  const { homeActivities, schoolActivities } = buildActivityLists({
+    home: asArray(p.homeActivities) as string[],
+    school: asArray(p.schoolActivities) as string[],
+  });
   const caregivers = asArray(p.caregivers) as string[];
   const present = slim.present ?? [];
   const presentPerson = present.join(" and ");
@@ -145,22 +154,26 @@ export function buildServerSessionInput(
     // Derived from the DB, never client-supplied.
     matrixFunctions,
 
-    // ONLY the skill NAME is real input — the RBT marks which programs were addressed, nothing more.
-    // This used to assert `successful: true` for every skill, so the system decided how each program
-    // went and the note documented that as fact. How the session went comes from the RBT's compliance
-    // selection instead (see the SESSION QUALITY block), which is real data they already provide.
-    replacementSkillsAddressed: (slim.selectedSkills ?? []).map((name) => ({ name })),
+    // The skill NAME is the locked source; promptLevel and clientResponse are AUTHORIZED GENERATION —
+    // Path generates the implementation detail needed to complete the note, guided by the session's
+    // compliance level. They are sent empty so the prompt generates them. `successful` is deliberately
+    // NOT set: it does not come back as a hardcoded constant — a compliance-controlled outcome value
+    // arrives in a later commit. For now the outcome is generative (the SESSION QUALITY block guides it).
+    replacementSkillsAddressed: (slim.selectedSkills ?? []).map((name) => ({
+      name, promptLevel: "", clientResponse: "",
+    })),
 
-    // ACTIVITIES AND REINFORCERS ARE NOT COLLECTED FROM THE RBT, SO THE NOTE NAMES NEITHER.
-    // These used to be filled from the client profile — four activities and three reinforcers per
-    // note, each stamped `preferred: true` / `deliveredWhen: "contingent on task engagement"` — so
-    // the note asserted which activities the session ran and which items were delivered when, none
-    // of it reported by anyone. The prompt's ACTIVITY SOURCE and REINFORCER SOURCE rules both fall
-    // back to general, non-naming language when these are empty, which is the correct record: a
-    // vaguer note is accurate, a fabricated activity or reinforcer is not.
-    // If either is ever collected in the form, populate it here and the naming turns back on.
-    activitiesUsed: [],
-    reinforcersUsed: [],
+    // ACTIVITIES / REINFORCERS — from the locked assessment sources above. activitiesUsed carries the
+    // location-appropriate list; reinforcersUsed carries the (re-split) reinforcer items. No `preferred`
+    // (the profile does not record preference) and no hardcoded `deliveredWhen` — the contingency is the
+    // one the ABC describes, so it is left blank for the prompt to supply. The REINFORCER/ACTIVITY SOURCE
+    // rules require the note to name ONLY what appears here, so this restores correct naming with no
+    // prompt change; when a list is empty the same rules fall back to general, non-naming language.
+    activitiesUsed: (slim.location === "school" ? schoolActivities : homeActivities)
+      .slice(0, 4).map((name) => ({ name })),
+    reinforcersUsed: reinforcers.slice(0, 3).map((item) => ({
+      type: "non-edible" as const, item, deliveredWhen: "",
+    })),
 
     clinicalEvents: [
       // HIPAA-conservative med handling (decided during consolidation): state THAT a medication change
@@ -190,14 +203,15 @@ export function buildServerSessionInput(
       setting: slim.location === "other" ? (slim.otherLocation || "community setting") : slim.location,
       approvedInterventions: asArray(p.interventions).map(getName),
       prohibitedInterventions: PROHIBITED,
-      // Only `people` is real session input (who the RBT marked present). The tangible/activity
-      // name lists and a hardcoded social-reinforcer literal used to sit here too, and the model
-      // read them as a menu of what to name in the note — the same fill-the-gap route the profile
-      // behavior list provided. Reinforcement is now described by category and contingency.
+      // Locked-source reinforcer names restored (tangibles + activities from the assessment). The
+      // REINFORCER SOURCE prompt rule governs naming (name only from reinforcersUsed, which draws from
+      // the same assessment source, so the two channels are consistent). `social` is generic
+      // authorized-generation vocabulary the prompt can express regardless; `people` is the RBT's
+      // marked-present selection.
       reinforcers: {
-        tangibles: "",
-        activities: "",
-        social: "",
+        tangibles: reinforcers.slice(0, 5).join(", "),
+        activities: homeActivities.slice(0, 3).join(", "),
+        social: "verbal praise, high fives, behavior-specific praise",
         people: presentPerson,
       },
       activePrograms: {
