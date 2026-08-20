@@ -18,9 +18,14 @@ export interface AxisSelection {
   function?: string;
   antecedentKey?: string;
   interventionName?: string;
+  // Teaching method — used on the perSkill side (a skill rotates its method, not a function/intervention).
+  method?: string;
   promptKey?: string;
   responseKey?: string;
   activity?: string;
+  // Topography the preselector assigned (so it can rotate across notes too). Additive: absent on legacy
+  // rows and on Commit-3 notes; the reader passes it through verbatim from generation_context.
+  topography?: string;
 }
 
 export interface NoteContext {
