@@ -205,13 +205,15 @@ export function buildServerSessionInput(
       prohibitedInterventions: PROHIBITED,
       // Locked-source reinforcer names restored (tangibles + activities from the assessment). The
       // REINFORCER SOURCE prompt rule governs naming (name only from reinforcersUsed, which draws from
-      // the same assessment source, so the two channels are consistent). `social` is generic
-      // authorized-generation vocabulary the prompt can express regardless; `people` is the RBT's
-      // marked-present selection.
+      // the same assessment source, so the two channels are consistent). `social` is left EMPTY: the
+      // old literal ("verbal praise, high fives, behavior-specific praise") came from no authorized
+      // source, so it is a hardcoded injection like the others we removed — the prompt's own praise /
+      // verbal-praise-rotation rules generate appropriate social-reinforcement language on their own.
+      // `people` is the RBT's marked-present selection.
       reinforcers: {
         tangibles: reinforcers.slice(0, 5).join(", "),
         activities: homeActivities.slice(0, 3).join(", "),
-        social: "verbal praise, high fives, behavior-specific praise",
+        social: "",
         people: presentPerson,
       },
       activePrograms: {
