@@ -23,6 +23,7 @@ import {
   runCombinedComplianceGate, interventionViolationNames, type ComplianceState,
 } from '@/lib/complianceGate';
 import { buildInterventionDetail } from '@/lib/interventionDetail';
+import { collectGateFindings, recordGateFindings } from '@/lib/gateFindings';
 
 const openai = new OpenAI({
   apiKey: process.env.AZURE_OPENAI_API_KEY || 'azure-openai',
@@ -647,17 +648,16 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   const functionViolations = gate.state.functionViolations;
   const methodViolations = gate.state.methodViolations;
 
-  // Intervention survivor → hard stop. An unapproved/prohibited intervention must NEVER ship, so this
-  // throws rather than flags. Checking the FINAL state also catches an intervention reintroduced by the
-  // combined regen — the latent hole the old first-only intervention gate could not see. (Safe to check
-  // unconditionally: a clean note produced no combined instruction, so its intervention set is empty.)
-  const survivingInterventions = interventionViolationNames(gate.state.intervention);
-  if (survivingInterventions.length > 0) {
-    throw new Error(
-      `Note could not be generated within the client's approved treatment plan: it repeatedly documented ${survivingInterventions.join(', ')}, which ${survivingInterventions.length === 1 ? 'is' : 'are'} not approved for this client. ` +
-      `An RBT may only document interventions in the approved plan — please review the client's assessment or regenerate.`
-    );
-  }
+  // NO CLINICAL BLOCK. An intervention violation that survived the regeneration used to THROW here,
+  // and the RBT saw "Note could not be generated within the client's approved treatment plan" — a
+  // system failure presented as their failure, at the end of a session, with nothing they could do
+  // about it. Blocking never made the note correct; it made the note not exist.
+  //
+  // The gate still runs, unchanged, on the same rules. Its finding is now RECORDED for the admin
+  // panel (see the recordGateFindings call below) and the note ships. Prohibited procedures are
+  // recorded as CRITICAL so they cannot be missed while preselection is still being built — that
+  // work makes an unapproved intervention structurally impossible to generate, at which point this
+  // gate should never fire at all.
 
   // Step 7d: Function↔antecedent coherence flags. Automatic reinforcement requires the ABSENCE of a
   // social antecedent; a clause asserting automatic function while describing a demand, directed
@@ -696,6 +696,26 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
       );
     }
   }
+
+  // Step 7f: RECORD every gate finding for the admin panel. Silent to the RBT — their note is
+  // already complete and on its way. Fail-soft by contract: recordGateFindings never throws, so a
+  // missing table or a database blip cannot cost anyone a note.
+  await recordGateFindings({
+    findings: collectGateFindings({
+      state: gate.state,
+      coherenceFlags,
+      redFlags,
+      blockedFlagged,
+      similarityWarning,
+      behaviorsWithoutFunction: input.behaviorsObserved
+        .filter((b) => !(b.allowedFunctions?.length))
+        .map((b) => b.name),
+    }),
+    clientId: input.clientId,
+    userId: rbtId,
+    source: 'generate',
+    regenCount: gate.regenCount,
+  });
 
   // Step 8: NO auto-save. Generation (and every regeneration) used to persist a row here, so a single
   // session date accumulated one row per generation — the RBT could not tell which version was used,

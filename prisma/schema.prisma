@@ -29,6 +29,7 @@ model clients {
   progress_reports          progress_reports[]
   replacement_data          replacement_data[]
   session_notes             session_notes[]
+  gate_findings             gate_findings[]
   stos                      stos[]
   supervision_notes             supervision_notes[]
   supervision_notes_97153xp     supervision_notes_97153xp[]
@@ -448,4 +449,28 @@ model verification_tokens {
   expires    DateTime @db.Timestamptz(6)
 
   @@id([identifier, token])
+}
+
+// Compliance-gate findings. The gates NEVER block a note reaching the RBT — a clinical gate firing
+// is a signal to us, not a failure for them — so every finding is recorded here silently and
+// reviewed in the admin panel. Deliberately holds NO note text: ids and short clinical labels only,
+// enough to diagnose a root cause, nothing more. Admin-only by route auth.
+model gate_findings {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  client_id   String?   @db.Uuid
+  user_id     String?
+  note_id     String?   @db.Uuid
+  source      String
+  gate        String
+  severity    String
+  detail      String
+  context     Json?
+  regen_count Int?      @db.SmallInt
+  client      clients?  @relation(fields: [client_id], references: [id], onDelete: Cascade)
+
+  @@index([created_at(sort: Desc)])
+  @@index([gate, created_at(sort: Desc)])
+  @@index([severity, created_at(sort: Desc)])
+  @@index([client_id])
 }

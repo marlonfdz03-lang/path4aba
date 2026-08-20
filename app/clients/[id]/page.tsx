@@ -24,7 +24,7 @@ const LOCATION_OPTIONS = [
 
 const FIXED_PRESENT = ["Caregiver", "Teacher"];
 
-type Tab = "overview" | "fast" | "treatment_map" | "generate" | "refine" | "notes" | "data";
+type Tab = "overview" | "fast" | "treatment_map" | "generate" | "notes" | "data";
 
 // ── Shared micro-components ────────────────────────────────────────────────
 
@@ -252,13 +252,6 @@ export default function ClientProfilePage() {
   const [fnSaving, setFnSaving] = useState(false);
   const [fnError, setFnError] = useState("");
 
-  // Refine Note state
-  const [pastedNote, setPastedNote] = useState("");
-  const [perfectingNote, setPerfectingNote] = useState(false);
-  const [perfectStatus, setPerfectStatus] = useState("");
-  const [perfectedNote, setPerfectedNote] = useState("");
-  const [perfectSimilarityWarning, setPerfectSimilarityWarning] = useState(false);
-  const [refinedNoteSaved, setRefinedNoteSaved] = useState(false);
   const [nextApptDate, setNextApptDate] = useState("");
   const [lastSavedNote, setLastSavedNote] = useState("");
 
@@ -433,13 +426,6 @@ export default function ClientProfilePage() {
     setMissedHoursReason("");
     setNextApptDate("");
     setStatus("");
-    // The refine ("perfect note") sub-form is per-note state too. It used to reset at NO point, so
-    // switching client left the previous client's perfected note on screen — copyable and saveable.
-    setPastedNote("");
-    setPerfectedNote("");
-    setPerfectStatus("");
-    setPerfectSimilarityWarning(false);
-    setRefinedNoteSaved(false);
     if (!keepDateAndLocation) { setDate(""); setLocation(""); setOtherLocation(""); }
     if (!keepGeneratedNote) {
       // NOTE: sessionSummaryRef is deliberately not touched here — this runs during render on a
@@ -1942,7 +1928,7 @@ export default function ClientProfilePage() {
                 <p className="mt-3 text-[13px]" style={{ color: "var(--text3)" }}>
                   {envChangeReported && complianceLevel === ""
                     ? "You reported an environmental change — please indicate the session's compliance level."
-                    : "Complete all fields: date, location, someone present, 5 behaviors, and 2 skills."}
+                    : "Complete all fields: date, location, someone present, at least one behavior, and at least one skill."}
                 </p>
               )}
               {status && <p className="mt-2 text-[13px] text-red-500">{status}</p>}
