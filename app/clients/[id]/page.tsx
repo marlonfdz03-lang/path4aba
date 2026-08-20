@@ -203,6 +203,9 @@ export default function ClientProfilePage() {
   const [otherLocation, setOtherLocation] = useState("");
   const [selectedPresent, setSelectedPresent] = useState<string[]>([]);
   const [savedPresent, setSavedPresent] = useState<string[]>([]);
+  // Per-client saved "Other place of service" locations (clinical_profile.savedLocations) — the same
+  // store the extension writes, so a location saved on either surface appears on both for this client.
+  const [savedLocations, setSavedLocations] = useState<string[]>([]);
   const [customPresent, setCustomPresent] = useState("");
   const customPresentRef = useRef<HTMLInputElement>(null);
   const [environmentalChange, setEnvironmentalChange] = useState(false);
@@ -323,6 +326,7 @@ export default function ClientProfilePage() {
           const raw = localStorage.getItem(`path4aba_saved_present_${found.id}`);
           if (raw) { try { setSavedPresent(JSON.parse(raw)); } catch {} }
         }
+        setSavedLocations(Array.isArray(data.clinical_profile?.savedLocations) ? data.clinical_profile.savedLocations : []);
         setClientLoading(false);
         return;
       }
@@ -462,6 +466,23 @@ export default function ClientProfilePage() {
     });
     if (!selectedPresent.includes(name)) setSelectedPresent((prev) => [...prev, name]);
     setCustomPresent("");
+  }
+
+  // Save the typed "Other" location for this client, to the SAME store + route the extension uses
+  // (clinical_profile.savedLocations via /api/rbt/clients/[id]/saved-locations — getExtensionAuth accepts
+  // the web session too). Per-client; a location saved here appears as a chip in the extension and vice
+  // versa. The note still receives the TYPED text (otherLocation), never the literal "other".
+  function handleSaveLocation() {
+    const name = otherLocation.trim();
+    if (!name) return;
+    if (!savedLocations.some((l) => l.toLowerCase() === name.toLowerCase())) {
+      setSavedLocations((prev) => [...prev, name]);
+    }
+    fetch(`/api/rbt/clients/${client.id}/saved-locations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ location: name }),
+    }).catch(() => {});
   }
 
   function toggleBehavior(name: string) {
@@ -1537,14 +1558,49 @@ export default function ClientProfilePage() {
                     ))}
                   </div>
                   {location === "other" && (
-                    <input
-                      type="text"
-                      placeholder="e.g. After school program, Summer camp..."
-                      value={otherLocation}
-                      onChange={e => setOtherLocation(e.target.value)}
-                      className="mt-2 w-full border rounded-lg px-3 py-2 text-[13px]"
-                      style={{ borderColor: "var(--border)", color: "var(--text1)" }}
-                    />
+                    <div className="mt-2">
+                      {savedLocations.length > 0 && (
+                        <div className="flex gap-2 flex-wrap mb-2">
+                          {savedLocations.map((loc) => {
+                            const active = otherLocation.trim().toLowerCase() === loc.toLowerCase();
+                            return (
+                              <button
+                                key={loc}
+                                type="button"
+                                onClick={() => setOtherLocation(loc)}
+                                className="px-3 py-1.5 rounded-lg border text-[12px] font-medium transition-colors"
+                                style={{
+                                  background: active ? "var(--teal)" : "white",
+                                  borderColor: active ? "var(--teal)" : "var(--border)",
+                                  color: active ? "white" : "var(--text2)",
+                                }}
+                              >
+                                {loc}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="e.g. community, after-school program..."
+                          value={otherLocation}
+                          onChange={e => setOtherLocation(e.target.value)}
+                          className="flex-1 border rounded-lg px-3 py-2 text-[13px]"
+                          style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSaveLocation}
+                          disabled={!otherLocation.trim()}
+                          className="px-3 py-2 rounded-lg border text-[12px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                          style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
 
