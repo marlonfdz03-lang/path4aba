@@ -963,7 +963,6 @@ function updateGenerateBtn() {
       if (selectedBehaviors.length < 1) missing.push('at least one behavior');
       if (selectedSkills.length < 1) missing.push('at least one skill');
       if (complianceLevel === '') missing.push("the session's compliance level (something out of the ordinary was reported — choose below typical or poor)");
-      console.log('[debug] missing fields:', missing);
       hint.textContent = missing.length ? 'Still needed: ' + missing.join(', ') : '';
       hint.style.display = missing.length ? '' : 'none';
     } else {
