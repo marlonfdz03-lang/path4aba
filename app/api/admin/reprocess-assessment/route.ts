@@ -7,6 +7,7 @@ import { validateAssessmentProfile, buildRefreshedProfile } from "@/lib/assessme
 import { assembleRefreshProfile } from "@/lib/assembleRefreshProfile";
 import { parsePositioned, clusterRows } from "@/lib/pdfGeometry";
 import { diagnosisColumn } from "@/lib/diagnosis";
+import { buildClinicalPacket } from "@/lib/clinicalPacket";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -55,9 +56,9 @@ export async function POST(req: Request) {
     const text = await parsePdf(buffer);
     if (!text.trim()) return NextResponse.json({ error: "Stored PDF parsed to empty text." }, { status: 422 });
 
-    // Same truncation as the live upload path (extract-assessment/route.ts) — kept identical so re-processing
-    // reflects exactly what production extraction does.
-    const extracted = await extractAssessment(text.slice(0, 90000));
+    // Clinical Extraction Packet — same as the live upload path (locate clinical regions across the WHOLE doc).
+    const { packet, hasFunctionalAssessment, behaviorDomainFound, manifest } = buildClinicalPacket(text);
+    const extracted = await extractAssessment(packet);
     saveKnowledgeBase(extracted).catch((e) => console.error("KB save error (reprocess):", e));
 
     const llmProfile = buildAssessmentProfile(extracted);
@@ -73,6 +74,15 @@ export async function POST(req: Request) {
     }
 
     const refreshed = buildRefreshedProfile(existingProfile, assessmentProfile);
+
+    // Function provenance (see extract-assessment): FA source present → documented; absent → inferred.
+    const functionEvidence = hasFunctionalAssessment ? "documented-functional-assessment" : "inferred";
+    for (const b of ((refreshed as any).maladaptiveBehaviors || [])) {
+      if (b && b.functionsSource !== "human-edited") b.functionsEvidence = functionEvidence;
+    }
+    if (!hasFunctionalAssessment) reviewFlags.push({ field: "functions", source: "llm-fallback", reason: "no functional-assessment (FAST/MAS) source located — functions inferred, verify" });
+    if (!behaviorDomainFound) reviewFlags.push({ field: "behaviors", source: "guard-preserved", reason: "maladaptive-behavior section not located — behaviors not refreshed" });
+
     (refreshed as any).reviewFlags = reviewFlags;
     // MARKER — visible which clients have been through the current pipeline (survives the refresh spread).
     (refreshed as any).reprocessedWith = {
@@ -93,6 +103,11 @@ export async function POST(req: Request) {
       applied: true,
       pipelineVersion: PIPELINE_VERSION,
       confidence: confidence.level,
+      packetChars: packet.length,
+      behaviorDomainFound,
+      hasFunctionalAssessment,
+      functionEvidence,
+      sectionsMissing: manifest.filter((m) => !m.found).map((m) => m.label),
       behaviorSource: (reviewFlags.find((f) => f.field === "behaviors")?.source) || "geometry",
       previousBehaviorCount: (existingProfile.maladaptiveBehaviors || []).length,
       behaviorCount: behaviors.length,

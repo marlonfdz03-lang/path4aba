@@ -8,6 +8,7 @@ import { validateAssessmentProfile, buildRefreshedProfile } from "@/lib/assessme
 import { diagnosisColumn } from "@/lib/diagnosis";
 import { parsePositioned, clusterRows } from "@/lib/pdfGeometry";
 import { assembleRefreshProfile } from "@/lib/assembleRefreshProfile";
+import { buildClinicalPacket } from "@/lib/clinicalPacket";
 
 export const maxDuration = 60;
 
@@ -48,7 +49,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const extracted = await extractAssessment(text.slice(0, 90000));
+    // CLINICAL EXTRACTION PACKET — locate the clinically relevant regions across the WHOLE document (behaviors,
+    // status blocks, FAST/MAS, replacement, reinforcers, …) instead of the first 90K chars, which never reached
+    // the late FAST/MAS tables or late DISCONTINUED blocks in large assessments. Stays under 90K.
+    const { packet, hasFunctionalAssessment, behaviorDomainFound } = buildClinicalPacket(text);
+    const extracted = await extractAssessment(packet);
 
     saveKnowledgeBase(extracted).catch(err =>
       console.error("Knowledge base save error:", err)
@@ -126,6 +131,17 @@ export async function POST(req: NextRequest) {
       // snapshots the pre-refresh profile as `previousProfile` for one-level undo (restored by
       // /api/clients/[id]/profile/restore). A whole-profile snapshot, so it also covers any future key.
       const refreshed = buildRefreshedProfile(existingProfile, assessmentProfile);
+
+      // FUNCTION PROVENANCE (packet-sourced): if a FAST/MAS/functional-assessment source was located and fed
+      // to extraction, functions may be documented; otherwise they are INFERRED — never stored as documented.
+      // Coarse (document-level presence of the source, not a per-row table match — that is a follow-up).
+      const functionEvidence = hasFunctionalAssessment ? "documented-functional-assessment" : "inferred";
+      for (const b of ((refreshed as any).maladaptiveBehaviors || [])) {
+        if (b && b.functionsSource !== "human-edited") b.functionsEvidence = functionEvidence;
+      }
+      if (!hasFunctionalAssessment) reviewFlags.push({ field: "functions", source: "llm-fallback", reason: "no functional-assessment (FAST/MAS) source was located — behavior functions are inferred, not documented; verify with the BCBA" });
+      if (!behaviorDomainFound) reviewFlags.push({ field: "behaviors", source: "guard-preserved", reason: "the maladaptive-behavior section could not be located in this upload — behaviors were not refreshed from it" });
+
       // reviewFlags is a non-clinical key (preserved by buildRefreshedProfile's spread) — surfaced to the
       // RBT/BCBA as a "Needs review" banner. A flagged field is an LLM fallback, never a verified read.
       (refreshed as any).reviewFlags = reviewFlags;

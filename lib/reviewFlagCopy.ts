@@ -34,6 +34,9 @@ export function flagCopy(flag: ReviewFlagLike): string {
     return `${name} is listed as a target behavior but has no operational definition or baseline data — please verify with your BCBA.`;
   }
 
+  if (field === "functions")
+    return "Behavior functions were inferred because no functional-assessment (FAST/MAS) section was found in the upload. Please verify each behavior's function with your BCBA.";
+
   if (field === "diagnosis")
     return "The diagnosis was read from the report text, not a structured table. Please verify the diagnosis is correct.";
 
