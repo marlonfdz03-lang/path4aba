@@ -2,6 +2,7 @@ import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { canonicalKey, unionCI, LibraryKind } from '@/lib/clinicalLibrary'
 import { tokenSubsetMatch } from '@/lib/skillReconcile'
+import { backfillLibraryAll } from '@/lib/assessmentPipeline'
 
 export const dynamic = 'force-dynamic'
 
@@ -99,6 +100,14 @@ export async function POST(req: Request) {
   const action = String(body?.action || '')
 
   try {
+    if (action === 'backfill') {
+      // Populate the library from every existing stored clinical_profile — idempotent (re-running re-unions,
+      // never duplicates). Reads profiles only, never writes back. Excludes activities; applies the extra
+      // reinforcer person-name guard. Same helpers as live ingest.
+      const result = await backfillLibraryAll()
+      return Response.json({ ok: true, ...result })
+    }
+
     if (action === 'update') {
       // Edit display_name and/or replace the variants/functions arrays (the client submits the full new
       // array after editing or removing individual entries). display_name change re-derives canonical_key,

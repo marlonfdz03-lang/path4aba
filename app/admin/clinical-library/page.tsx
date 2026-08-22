@@ -40,6 +40,8 @@ export default function AdminClinicalLibraryPage() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [mergeMode, setMergeMode] = useState<{ sourceId: string } | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<any>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setNotice("");
@@ -78,6 +80,21 @@ export default function AdminClinicalLibraryPage() {
     finally { setBusy(false); }
   }, [load]);
 
+  const runBackfill = useCallback(async () => {
+    if (!confirm("Backfill the library from all existing client profiles?\n\nSafe and idempotent — re-running re-unions the same variants and never duplicates. It reads profiles only (never modifies them), excludes activities, and applies the reinforcer person-name guard.")) return;
+    setBackfilling(true); setNotice(""); setBackfillResult(null);
+    try {
+      const res = await fetch("/api/admin/clinical-library", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "backfill" }),
+      });
+      const data = await res.json();
+      if (data.pendingMigration) { setNotice("Tables not migrated yet — nothing to backfill into."); }
+      else if (!res.ok || data.error) { setNotice(data.error || "Backfill failed."); }
+      else { setBackfillResult(data); await load(); }
+    } catch { setNotice("Backfill failed."); }
+    finally { setBackfilling(false); }
+  }, [load]);
+
   const inKind = useMemo(() => entries.filter((e) => e.kind === activeKind), [entries, activeKind]);
   const countByKind = useMemo(() => {
     const m: Record<string, number> = {};
@@ -88,11 +105,33 @@ export default function AdminClinicalLibraryPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 980 }}>
-      <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>Clinical Library</h1>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginBottom: 4 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700 }}>Clinical Library</h1>
+        <button disabled={backfilling || busy} onClick={runBackfill}
+          style={{ fontSize: 12, fontWeight: 600, padding: "6px 12px", borderRadius: 8, border: `1px solid ${teal}`, background: backfilling ? "#E6F7F5" : teal, color: backfilling ? teal : "white", cursor: backfilling ? "default" : "pointer", whiteSpace: "nowrap" }}>
+          {backfilling ? "Backfilling…" : "Backfill from existing profiles"}
+        </button>
+      </div>
       <p style={{ fontSize: 13, color: "var(--text3, #6B7280)", marginBottom: 16 }}>
         Deduplicated clinical vocabulary accumulated from every ingested assessment — for the Assessment
         Builder. Curate names, prune variants, and merge near-dups. Identifiers are auto-discarded on ingest.
       </p>
+
+      {backfillResult && (
+        <div style={{ padding: 12, borderRadius: 10, background: "#E6F7F5", border: `1px solid ${teal}`, fontSize: 13, marginBottom: 16 }}>
+          <p style={{ fontWeight: 700, color: "#0F766E", marginBottom: 6 }}>
+            Backfill complete — {backfillResult.clients} profile{backfillResult.clients === 1 ? "" : "s"} processed · {backfillResult.created} created · {backfillResult.updated} updated · {backfillResult.discarded} discarded
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {Object.entries(backfillResult.createdByKind || {}).map(([k, n]: any) => (
+              <span key={`c-${k}`} style={{ fontSize: 12, padding: "2px 8px", borderRadius: 999, background: "white", color: "#0F766E" }}>+{n} {KIND_LABEL[k]?.toLowerCase() || k}</span>
+            ))}
+            {Object.entries(backfillResult.discardsByReason || {}).map(([r, n]: any) => (
+              <span key={`d-${r}`} style={{ fontSize: 12, padding: "2px 8px", borderRadius: 999, background: "white", color: "#92400E" }}>discarded {n} · {REASON_LABEL[r] || r}</span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {notice && (
         <div style={{ padding: 12, borderRadius: 10, background: "#FEF3C7", color: "#92400E", fontSize: 13, marginBottom: 16 }}>

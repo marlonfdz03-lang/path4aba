@@ -159,6 +159,71 @@ export function collectLibraryEntries(extracted: any): LibraryEntry[] {
   return e;
 }
 
+// ── Historical backfill (pure part) ─────────────────────────────────────────────────────────────────────
+// The stored clinical_profile (buildAssessmentProfile shape) has DIFFERENT field names than an
+// ExtractedAssessment, so it needs its own collector. Reads ONLY the clinical keys —
+// clientName/name/gender/caregivers/whoWasPresent are PHI and are never touched here (and every string still
+// passes phiDiscardReason downstream). ACTIVITIES are intentionally EXCLUDED: the stored activities are a
+// Path-curated baseline, not the assessment's raw extraction, so importing them would recycle Path's own
+// output back into the corpus as if it were assessment-derived knowledge — a provenance contamination.
+
+// Person-name guard for BACKFILLED reinforcers. The live path drops the whole `people` reinforcer category
+// BEFORE anything reaches the corpus; the stored profile already flattened tangibles/activities/social/people
+// into one array, so that category-level protection is gone at backfill and this compensates — the backfill
+// must not be weaker than live. Reinforcer vocabulary is safe to over-drop (a lost item is harmless; a stored
+// proper name is not). Returns true to DROP. Assessment reinforcers are normally lowercase ("kinetic sand"),
+// so the all-Capitalized rule fires on name-like Title-Case, not ordinary items. Bare single-token first
+// names remain the one residual (indistinguishable from a product like "Legos") — the same class accepted for
+// phiDiscardReason at large; every drop here is logged so it can be eyeballed.
+const KINSHIP = new Set([
+  'mom', 'mommy', 'mama', 'mother', 'dad', 'daddy', 'papa', 'father', 'parent', 'parents',
+  'grandma', 'grandmother', 'grandpa', 'grandfather', 'granny', 'nana', 'nanny', 'aunt', 'auntie',
+  'uncle', 'sister', 'brother', 'cousin', 'sibling', 'guardian', 'caregiver', 'babysitter', 'sitter',
+  'teacher', 'therapist', 'rbt', 'bcba', 'aide', 'tutor', 'grandparent',
+]);
+const TITLED_NAME = /^(mr|mrs|ms|miss|mx|dr|sir|madam|aunt|uncle|grandma|grandpa)\.?\s+[A-Z][a-z]+/i;
+
+export function looksLikePersonReinforcer(value: string): boolean {
+  const t = String(value ?? '').trim();
+  if (!t) return false;
+  if (KINSHIP.has(t.toLowerCase())) return true;           // relationship / role word
+  if (TITLED_NAME.test(t)) return true;                    // "Ms Garcia", "Dr Smith"
+  const tokens = t.split(/\s+/);                            // "John Smith": 2+ tokens, all Capitalized
+  if (tokens.length >= 2 && tokens.every((tok) => /^[A-Z][a-zA-Z'’.-]*$/.test(tok))) return true;
+  return false;
+}
+
+export function collectLibraryEntriesFromProfile(profile: any): LibraryEntry[] {
+  const e: LibraryEntry[] = [];
+  const p = profile || {};
+
+  for (const b of p.maladaptiveBehaviors || []) {
+    if (!b?.name) continue;
+    e.push({ kind: 'behavior', name: String(b.name), variants: unionCI(asArray(b.topographies)), functions: unionCI(asArray(b.functions)) });
+  }
+  // masteredBehaviors are name-only (the mastered section carries no topography/function) — fold in as behavior
+  // entries so a name mastered on one client still contributes its canonical behavior to the corpus.
+  for (const name of p.masteredBehaviors || []) {
+    if (name) e.push({ kind: 'behavior', name: String(name), variants: [], functions: [] });
+  }
+  // Replacement skills live in TWO stored keys (active replacementBehaviors + mastered skillAcquisition).
+  for (const s of [...(p.replacementBehaviors || []), ...(p.skillAcquisition || [])]) {
+    if (!s?.name) continue;
+    e.push({ kind: 'skill', name: String(s.name), variants: [], functions: s.targetFunction ? [String(s.targetFunction)] : [], meta: s.targetFunction ? { targetFunction: String(s.targetFunction) } : undefined });
+  }
+  for (const i of p.interventions || []) {
+    const nm = typeof i === 'string' ? i : i?.name;
+    if (nm) e.push({ kind: 'procedure', name: String(nm), variants: [], functions: [] });
+  }
+  // reinforcers: stored FLAT (tangibles+activities+social+PEOPLE merged). The route applies looksLikePersonReinforcer
+  // to these before the standard PHI filter (see backfillLibraryFromProfile) so person drops can be counted/logged.
+  for (const item of asArray(p.reinforcers)) {
+    if (item) e.push({ kind: 'reinforcer', name: item, variants: [], functions: [] });
+  }
+  // ACTIVITIES intentionally omitted — see header (provenance contamination).
+  return e;
+}
+
 // Apply the PHI discard filter per string: a dirty NAME discards the whole entry; a dirty variant is dropped
 // (the entry survives with its clean variants). functions are canonical labels (escape/attention/…) — never
 // PHI — so they are not filtered. Returns cleaned entries + the discard log (count + reason only).

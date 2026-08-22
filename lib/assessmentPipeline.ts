@@ -9,7 +9,7 @@ import { prisma } from '@/lib/prisma'
 import { parseReinforcers } from '@/lib/reinforcers'
 import { buildActivityLists } from '@/lib/curatedActivities'
 import { normalizeDiagnosis } from '@/lib/diagnosis'
-import { canonicalKey, collectLibraryEntries, filterLibraryEntries, unionCI } from '@/lib/clinicalLibrary'
+import { canonicalKey, collectLibraryEntries, collectLibraryEntriesFromProfile, filterLibraryEntries, looksLikePersonReinforcer, unionCI, LibraryEntry, DiscardRecord } from '@/lib/clinicalLibrary'
 
 // ── PDF parsing ───────────────────────────────────────────────────────────────
 
@@ -204,51 +204,102 @@ export function buildAssessmentProfile(extracted: ExtractedAssessment) {
 // fail-soft: it can never throw into ingest, the KB writes below, or note generation. If the library tables
 // are not migrated yet, it no-ops silently (like recordGateFindings). Separate from the note-gen KB above —
 // curating this corpus cannot affect note generation.
+// Shared library writer: log discards (count + reason only, never text) and upsert entries on
+// UNIQUE(kind, canonical_key) — on a match, UNION new variants/functions into the existing row rather than
+// duplicating (the anti-"diez líneas de tantrum" rule). IDEMPOTENT: re-running with the same input re-unions
+// identical values, so nothing duplicates. Used by BOTH the live ingest and the historical backfill, so both
+// paths get identical treatment. Returns per-run counts. Assumes the tables exist (callers probe first).
+export interface LibraryWriteStats {
+  created: number; updated: number; discarded: number
+  createdByKind: Record<string, number>; updatedByKind: Record<string, number>
+  discardsByReason: Record<string, number>
+}
+function emptyStats(): LibraryWriteStats {
+  return { created: 0, updated: 0, discarded: 0, createdByKind: {}, updatedByKind: {}, discardsByReason: {} }
+}
+function bump(m: Record<string, number>, k: string) { m[k] = (m[k] || 0) + 1 }
+
+async function writeLibrary(kept: LibraryEntry[], discards: DiscardRecord[], stats: LibraryWriteStats = emptyStats()): Promise<LibraryWriteStats> {
+  for (const d of discards) {
+    try { await (prisma as any).clinical_library_discards.create({ data: { kind: d.kind, reason: d.reason } }); stats.discarded++; bump(stats.discardsByReason, d.reason) } catch { /* fail-soft */ }
+  }
+  for (const entry of kept) {
+    const key = canonicalKey(entry.name)
+    if (!key) continue
+    try {
+      const existing = await (prisma as any).clinical_library.findFirst({
+        where: { kind: entry.kind, canonical_key: key },
+        select: { id: true, variants: true, functions: true },
+      })
+      if (existing) {
+        await (prisma as any).clinical_library.update({
+          where: { id: existing.id },
+          data: {
+            variants: unionCI([...(existing.variants || []), ...entry.variants]),
+            functions: unionCI([...(existing.functions || []), ...entry.functions]),
+          },
+        })
+        stats.updated++; bump(stats.updatedByKind, entry.kind)
+      } else {
+        await (prisma as any).clinical_library.create({
+          data: {
+            kind: entry.kind, canonical_key: key, display_name: entry.name.trim(),
+            variants: unionCI(entry.variants), functions: unionCI(entry.functions), meta: entry.meta ?? undefined,
+          },
+        })
+        stats.created++; bump(stats.createdByKind, entry.kind)
+      }
+    } catch { /* one entry failed (or a race on the unique index) — skip it, keep going */ }
+  }
+  return stats
+}
+
+// ── Clinical Library accumulation (Step 3) ────────────────────────────────────
+// Admin-curated corpus for the future Assessment Builder. Runs BEFORE the existing KB writes and is fully
+// fail-soft: it can never throw into ingest, the KB writes below, or note generation. If the library tables
+// are not migrated yet, it no-ops silently (like recordGateFindings). Separate from the note-gen KB above —
+// curating this corpus cannot affect note generation.
 export async function saveClinicalLibrary(extracted: ExtractedAssessment): Promise<void> {
   try {
     // Probe: if the migration hasn't been run, bail silently rather than firing N failing calls.
     await (prisma as any).clinical_library.count()
-
     const { kept, discards } = filterLibraryEntries(collectLibraryEntries(extracted))
-
-    // Discards: log count + reason category only — never the text.
-    for (const d of discards) {
-      try { await (prisma as any).clinical_library_discards.create({ data: { kind: d.kind, reason: d.reason } }) } catch { /* fail-soft */ }
-    }
-
-    // Kept: upsert on UNIQUE(kind, canonical_key). On a match, UNION new variants/functions into the existing
-    // row (dedup case-insensitively) rather than creating a duplicate — the anti-"diez líneas de tantrum" rule.
-    for (const entry of kept) {
-      const key = canonicalKey(entry.name)
-      if (!key) continue
-      try {
-        const existing = await (prisma as any).clinical_library.findFirst({
-          where: { kind: entry.kind, canonical_key: key },
-          select: { id: true, variants: true, functions: true },
-        })
-        if (existing) {
-          await (prisma as any).clinical_library.update({
-            where: { id: existing.id },
-            data: {
-              variants: unionCI([...(existing.variants || []), ...entry.variants]),
-              functions: unionCI([...(existing.functions || []), ...entry.functions]),
-            },
-          })
-        } else {
-          await (prisma as any).clinical_library.create({
-            data: {
-              kind: entry.kind,
-              canonical_key: key,
-              display_name: entry.name.trim(),
-              variants: unionCI(entry.variants),
-              functions: unionCI(entry.functions),
-              meta: entry.meta ?? undefined,
-            },
-          })
-        }
-      } catch { /* one entry failed (or a race on the unique index) — skip it, keep going */ }
-    }
+    await writeLibrary(kept, discards)
   } catch { /* tables missing or DB blip — no-op; the library must never break ingest */ }
+}
+
+// ── Clinical Library backfill (historical) ────────────────────────────────────
+// Populate the library from ONE stored clinical_profile — admin-triggered, one client at a time. Uses the
+// SAME helpers as live (canonicalKey + phiDiscardReason via filterLibraryEntries + writeLibrary upsert), so
+// backfilled entries are treated identically. Extra safeguard: the person-name reinforcer guard (parity with
+// the live path's people-category exclusion, which the flattened stored profile lost) — dropped reinforcers
+// are logged as 'proper-name' discards so they appear in the summary. NEVER writes back to clinical_profile.
+export async function backfillLibraryFromProfile(profile: any, stats: LibraryWriteStats = emptyStats()): Promise<LibraryWriteStats> {
+  const raw = collectLibraryEntriesFromProfile(profile)
+  // Extra reinforcer person guard BEFORE the standard PHI filter, counted as discards.
+  const guardDiscards: DiscardRecord[] = []
+  const guarded = raw.filter((e) => {
+    if (e.kind === 'reinforcer' && looksLikePersonReinforcer(e.name)) { guardDiscards.push({ kind: 'reinforcer', reason: 'proper-name' }); return false }
+    return true
+  })
+  const { kept, discards } = filterLibraryEntries(guarded)
+  return writeLibrary(kept, [...guardDiscards, ...discards], stats)
+}
+
+// Backfill EVERY stored profile into the library. Admin-triggered, idempotent (writeLibrary upserts). Never
+// writes back to clinical_profile — reads it only. Probes the tables first so it reports pendingMigration
+// cleanly rather than throwing.
+export async function backfillLibraryAll(): Promise<LibraryWriteStats & { clients: number } | { pendingMigration: true }> {
+  try { await (prisma as any).clinical_library.count() } catch { return { pendingMigration: true } }
+  const clients = await (prisma as any).clients.findMany({
+    where: { clinical_profile: { not: null } },
+    select: { id: true, clinical_profile: true },
+  })
+  const stats = emptyStats()
+  for (const c of clients) {
+    try { await backfillLibraryFromProfile(c.clinical_profile, stats) } catch { /* skip a bad profile, keep going */ }
+  }
+  return { ...stats, clients: clients.length }
 }
 
 export async function saveKnowledgeBase(extracted: ExtractedAssessment): Promise<void> {
