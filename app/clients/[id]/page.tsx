@@ -916,6 +916,11 @@ export default function ClientProfilePage() {
   // "Needs review" banner: plain-language lines derived from the guard's reviewFlags (persisted in
   // clinical_profile; also merged in after an in-page Update Assessment). Pure display — no mutation.
   const reviewLines = reviewBannerLines(client?.clinicalProfile?.reviewFlags);
+  // Behavior list came from AI fallback (prose-woven upload the geometry couldn't verify) → show a prominent
+  // "Needs verification" indicator next to the Maladaptive Behaviors section until a human confirms it.
+  const behaviorsAiFallback = (client?.clinicalProfile?.reviewFlags || []).some(
+    (f: any) => f?.field === "behaviors" && f?.source === "llm-fallback",
+  );
 
   // FAST tab — save one behavior's edited functions via the gated behavior-functions route (2b). On success,
   // update the row in place with the server's canonical result + human-edited source marker. On failure, keep
@@ -1214,7 +1219,15 @@ export default function ClientProfilePage() {
             {/* Right column */}
             <div className="space-y-5">
               <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
-                <SectionHeader title="Maladaptive Behaviors" />
+                <div className="flex items-center gap-2 flex-wrap">
+                  <SectionHeader title="Maladaptive Behaviors" />
+                  {behaviorsAiFallback && (
+                    <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: "#FEF3C7", color: "#92400E", border: "1px solid #F59E0B" }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                      Needs verification — AI-extracted
+                    </span>
+                  )}
+                </div>
                 <div className="flex flex-wrap gap-2">
                   {(client.clinicalProfile?.maladaptiveBehaviors || []).map((b: any, idx: number) => (
                     <span

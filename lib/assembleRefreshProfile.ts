@@ -14,6 +14,7 @@ import { normalizeDiagnosis } from './diagnosis.ts'
 import { subtractMasteredFromActive } from './skillReconcile.ts'
 import { matchByName, matchByDefinition } from './behaviorReconcile.ts'
 import { tokenSubsetMatch } from './skillReconcile.ts'
+import { reconcileBehaviors, assessLlmBehaviorCredibility } from './llmBehaviorCredibility.ts'
 
 export interface ReviewFlag { field: string; reason: string; source: 'llm-fallback' | 'guard-preserved' | 'behavior-review' | 'target-undefined' }
 
@@ -117,15 +118,38 @@ export function assembleRefreshProfile(
     for (const f of conf.perBehaviorFlags)
       reviewFlags.push({ field: `behavior:${f.name}`, reason: `${f.issue} — not structurally verified, please confirm`, source: 'behavior-review' })
   } else {
-    // LOW / UNREAD — do NOT overwrite. Preserve existing behaviors (refresh) or keep flagged LLM (create).
+    // LOW / UNREAD — geometry could not read the behavior structure (prose-woven layout). Do NOT blindly
+    // preserve: that strands STALE behaviors against a REFRESHED skills/interventions set — an inconsistent
+    // hybrid, worse than a cleanly-stale profile. Instead, run DISCONTINUED-AUTHORITY reconciliation on the
+    // LLM read (a formal "Status: Discontinued" outranks an incidental active mention) and a CONSERVATIVE
+    // credibility check. Credible → use the NEW behaviors (llm-fallback, requires review). Not credible →
+    // preserve previous (guard-preserved), as before. The guard still protects against a bad read.
     const existingBeh: any[] = existingProfile?.maladaptiveBehaviors || []
-    if (existingBeh.length) {
+    const { active: reconciled } = reconcileBehaviors(llmBehaviors)
+    const cred = assessLlmBehaviorCredibility(reconciled, existingBeh.length)
+    const shapeLlm = () => reconciled.map((b) => ({
+      name: String(b.name).trim(),
+      status: 'active',
+      functions: Array.isArray(b.functions) ? b.functions : [],
+      topographies: b.topographies || (b.topography ? [b.topography] : []),
+    }))
+    if (cred.credible) {
+      // USE the new AI-extracted set — but it is NOT structurally verified, so require prominent review.
+      appliedAssessmentSet = true
+      profile.maladaptiveBehaviors = shapeLlm()
+      profile.masteredBehaviors = llmProfile.masteredBehaviors || []
+      reviewFlags.push({ field: 'behaviors', reason: `the assessment layout could not be verified automatically — the behavior list was EXTRACTED BY AI FALLBACK. Review the behavior list before using it for clinical documentation.`, source: 'llm-fallback' })
+    } else if (existingBeh.length) {
+      // Not credible AND we have a prior profile → preserve it (the original guard behavior).
       profile.maladaptiveBehaviors = existingProfile.maladaptiveBehaviors
       profile.masteredBehaviors = existingProfile.masteredBehaviors || []
-      reviewFlags.push({ field: 'behaviors', reason: `read confidence ${conf.level} (${conf.reasons.join('; ')}) — EXISTING behaviors preserved, not overwritten`, source: 'guard-preserved' })
+      reviewFlags.push({ field: 'behaviors', reason: `read confidence ${conf.level} and the AI read was not credible (${cred.reasons.join('; ')}) — behaviors remain from the PREVIOUS assessment, not overwritten. Re-upload a structured assessment or enter behaviors manually.`, source: 'guard-preserved' })
     } else {
-      appliedAssessmentSet = true // create path (no existing to preserve): the LLM behaviors are applied
-      reviewFlags.push({ field: 'behaviors', reason: `read confidence ${conf.level} (${conf.reasons.join('; ')}) — behaviors from LLM (structure not verified)`, source: 'llm-fallback' })
+      // Create path (no prior profile) and not credible: a flagged AI read still beats an empty profile.
+      appliedAssessmentSet = true
+      profile.maladaptiveBehaviors = shapeLlm()
+      profile.masteredBehaviors = llmProfile.masteredBehaviors || []
+      reviewFlags.push({ field: 'behaviors', reason: `the assessment layout could not be verified automatically — the behavior list was extracted by AI fallback. Review before clinical use.`, source: 'llm-fallback' })
     }
   }
 

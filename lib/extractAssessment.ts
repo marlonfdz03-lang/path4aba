@@ -239,6 +239,15 @@ Normalize the document's wording to exactly one value:
   discontinued  ← "Discontinued", "Discontinued/Modified"
   unknown       ← no explicit item-level declaration
 
+DISCONTINUED AUTHORITY — a formal declaration OUTRANKS an incidental narrative mention:
+When the SAME behavior or program is declared "Status: Discontinued" (or under a "(DISCONTINUED)" heading /
+status block) AND also appears elsewhere in prose — e.g. re-listed in a running narrative sentence of
+"current active targets" — the FORMAL status block WINS. Emit that item ONCE with status "discontinued".
+NEVER emit it as "active" (and never emit it twice with conflicting statuses) because a later paragraph
+happens to name it. A document that says "Climbing … Status: Discontinued" in the status section but then
+writes "the 13 active behaviors include … Climbing …" in a summary paragraph has DISCONTINUED Climbing — the
+summary prose does not reactivate it.
+
 STO / OBJECTIVE STATUS — NEVER PROMOTE IT (this is the most common mistake — do not make it):
 Short-term objectives (STOs) and the individual objectives WITHIN a behavior or program each carry their
 own status ("Mastered on 11/15/2025", "In Progress", "Initiated on", "Ongoing"). That is STO-level

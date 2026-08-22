@@ -42,8 +42,8 @@ export function flagCopy(flag: ReviewFlagLike): string {
 
   if (field === "behaviors")
     return flag?.source === "guard-preserved"
-      ? "Behaviors were kept from the previous assessment because this upload couldn't be read clearly. Please review the behavior list to confirm it's current."
-      : "Behaviors were read from the report text, not a structured table. Please verify the behavior list is correct.";
+      ? "Behaviors were kept from the PREVIOUS assessment because this upload's layout couldn't be read automatically. This list may be out of date — re-upload a structured assessment or enter the behaviors manually."
+      : "The behavior list was extracted using AI fallback because the assessment layout couldn't be verified automatically. Review the behavior list before using it for clinical documentation.";
 
   // Defensive fallback for any future field we haven't mapped — still actionable, still no jargon.
   return "One item in this profile needs review — please verify it against the source assessment.";
