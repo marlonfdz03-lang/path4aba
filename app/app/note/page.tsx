@@ -246,12 +246,13 @@ function NoteForm() {
       // review flags, alongside the note and its summary tables.
       let blockingError = "";
       const finalText = await consumeNoteStream(res, {
-        // BUFFER — do not display mid-stream (option b). The note is revealed once, at the end, so the RBT
-        // never watches it stream, get wiped, and restart.
-        onText: () => {},
+        // Option (a): pass 1 streams LIVE. consumeNoteStream freezes (stops calling onText) once a coverage
+        // retry begins and calls onText once more with the final text at the end — so the RBT watches the note
+        // write itself, then it settles, then the finished note appears. No wipe, no restart.
+        onText: (t) => setGeneratedNote(t),
         onRegen: () => {
-          // Compliance coverage retry — presentation only. No visible wipe (nothing is shown yet); switch the
-          // calm label to "Finalizing your note…", never a wipe or an alarming "Regenerating".
+          // Coverage retry — presentation only. Freeze + dim the streamed text and show a calm "Finalizing…"
+          // state; never a wipe, never an alarming "Regenerating".
           setFinalizing(true);
         },
         onMeta: (meta) => {
@@ -269,7 +270,6 @@ function NoteForm() {
         },
       });
       setStatus("");
-      if (!blockingError && finalText.trim()) setGeneratedNote(finalText);  // reveal the finished note once
 
       // Build the summary from state at generation time + the final note text
       // (matches the website — /api/generate-note does not return these).
@@ -462,8 +462,19 @@ function NoteForm() {
                 <ul>{redFlags.map((f, i) => <li key={i}>{f}</li>)}</ul>
               </div>
             )}
-            <div className="app-note-output">
-              {generatedNote || (generating ? (finalizing ? "Finalizing your note…" : "Generating your note…") : "")}
+            <div style={{ position: "relative" }}>
+              <div className="app-note-output" style={{ opacity: finalizing ? 0.5 : 1, transition: "opacity .2s" }}>
+                {generatedNote || (generating && !finalizing ? "Generating your note…" : "")}
+              </div>
+              {finalizing && (
+                <div className="app-note-finalizing" role="status" aria-live="polite"
+                  style={{ position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 999, background: "#F0FDFA", border: "1px solid #99F6E4", color: "#0F766E", fontSize: 13, fontWeight: 600 }}>
+                  <svg className="app-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
+                  </svg>
+                  Finalizing your note…
+                </div>
+              )}
             </div>
           </>
         )}

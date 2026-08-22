@@ -17,6 +17,7 @@ import { splitReinforcerValue } from "@/lib/reinforcers";
 import { looksEdible, EDIBLE_WARNING } from "@/lib/edibleReinforcer";
 import { subtractMasteredFromActive } from "@/lib/skillReconcile";
 import { functionDisplayLabel, functionToCanonical } from "@/lib/functionPatterns";
+import { splitNoteStream } from "@/lib/noteStream";
 
 const LOCATION_OPTIONS = [
   { label: "Home", value: "home" },
@@ -646,38 +647,46 @@ export default function ClientProfilePage() {
       }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let fullText = "";
-      // DIAGNOSTIC (temporary — 2x-regen trace): count regens this generate and show each regen's REAL
-      // source (an UNTAGGED __REGEN__ = old pre-consolidation bundle running). diagLine persists the
-      // build tag + first-try defects + regen count after completion. Remove with the server diag hooks.
-      let regenSeen = 0;
+      // Accumulate the WHOLE stream (splitNoteStream parses over `raw`), so a __META__ JSON tail that spans
+      // reads is handled — that per-chunk parse failure is why generation_context was being saved NULL.
+      let raw = "";
+      let fullText = "";      // the resolved note text (revealed live for pass 1; swapped to final at the end)
       let diagLine = "";
       // A message on the meta channel is not the same as "throw the result away". Only a BLOCKING
       // stop hides the note and skips the session-summary tables; an advisory is shown alongside them.
       let advisory = "";
+      let regenSignaled = false;
       outer: while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        if (chunk.includes("__META__")) {
-          const parts = chunk.split("__META__");
-          if (parts[0]) { fullText += parts[0]; }  // buffer only — revealed once at the end (no mid-stream display)
-          try { const meta = JSON.parse(parts[1]); if (meta.error && meta.blocking !== false) { setStatus(meta.error); setGeneratedNote(""); return; } if (meta.error) { advisory = meta.error; } setSimilarityWarning(!!meta.similarityWarning); if (typeof meta.filteredText === "string") { fullText = meta.filteredText; } generationContextRef.current = { generationContext: meta.generationContext ?? null, activities: Array.isArray(meta.activitiesUsed) ? meta.activitiesUsed : [] }; diagLine = `DIAG · build ${meta.buildTag || "?"} · first-try defects: ${(meta.firstTryDefects || []).join(", ") || "none (clean)"} · regens this generate: ${regenSeen}`; } catch {}
-          break outer;
-        }
-        if (chunk.includes("__REGEN__")) {
-          // The compliance coverage retry. Presentation only: we are BUFFERING (nothing is displayed yet), so
-          // this resets the buffer WITHOUT any visible wipe, and shows a calm "Finalizing…" state — never a
-          // red "Regenerating" banner and never a from-scratch restart the RBT can see. regenSeen still counts
-          // for the diagnostic line; it is not surfaced to the user.
-          regenSeen += 1;
-          fullText = "";
-          setFinalizing(true);
+        raw += decoder.decode(value, { stream: true });
+        const { note, metaRaw, sawRegen } = splitNoteStream(raw);
+
+        // Option (a) — the compliance coverage retry: FREEZE the already-streamed text (stop updating it) and
+        // dim it with a calm "Finalizing…" state. No wipe, no visible restart. Never a red "Regenerating".
+        if (sawRegen && !regenSignaled) { regenSignaled = true; setFinalizing(true); }
+
+        if (metaRaw === null) {
+          // Still streaming. Pass 1 streams LIVE; once a regen has begun, hold the frozen text (do not update).
+          if (!sawRegen) { fullText = note; setGeneratedNote(note); }
           continue;
         }
-        fullText += chunk;  // accumulate; reveal once at the end (option b — no mid-stream display)
+        // __META__ seen — accumulate until the JSON parses (it can span reads).
+        try {
+          const meta = JSON.parse(metaRaw);
+          if (meta.error && meta.blocking !== false) { setStatus(meta.error); setGeneratedNote(""); return; }
+          if (meta.error) { advisory = meta.error; }
+          setSimilarityWarning(!!meta.similarityWarning);
+          fullText = typeof meta.filteredText === "string" ? meta.filteredText : note;
+          generationContextRef.current = { generationContext: meta.generationContext ?? null, activities: Array.isArray(meta.activitiesUsed) ? meta.activitiesUsed : [] };
+          const regenSeen = (raw.match(/__REGEN__/g) || []).length;
+          diagLine = `DIAG · build ${meta.buildTag || "?"} · first-try defects: ${(meta.firstTryDefects || []).join(", ") || "none (clean)"} · regens this generate: ${regenSeen}`;
+          break outer;
+        } catch {
+          /* partial meta JSON — keep reading */
+        }
       }
-      setGeneratedNote(fullText);  // reveal the finished note once
+      setGeneratedNote(fullText);  // swap to the finished note (seamless for pass 1; the reveal after a regen)
       setStatus(advisory || diagLine);
       if (fullText.trim()) {
         const backupNote = { id: crypto.randomUUID(), clientId: client.id, date: date || new Date().toLocaleDateString(), note: fullText };
@@ -2039,12 +2048,13 @@ export default function ClientProfilePage() {
                 </p>
               )}
               {status && <p className="mt-2 text-[13px] text-red-500">{status}</p>}
-              {generating && (
+              {/* Before the first token: a calm indicator (never red). Once tokens arrive the note streams live. */}
+              {generating && !generatedNote && (
                 <div className="mt-4 flex items-center gap-3 rounded-xl px-4 py-3 border" style={{ background: "#F0FDFA", borderColor: "#99F6E4", color: "#0F766E" }}>
                   <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ flexShrink: 0 }}>
                     <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
                   </svg>
-                  <span className="text-[13px] font-medium">{finalizing ? "Finalizing your note…" : "Generating your note…"}</span>
+                  <span className="text-[13px] font-medium">Generating your note…</span>
                 </div>
               )}
               {similarityWarning && (
@@ -2052,15 +2062,30 @@ export default function ClientProfilePage() {
                   ⚠️ This note may be similar to a previous session. Consider editing before submitting.
                 </p>
               )}
-              {generatedNote && !generating && (
-                <NoteOutput
-                  note={generatedNote}
-                  onChange={setGeneratedNote}
-                  onCopy={() => navigator.clipboard.writeText(generatedNote)}
-                  onSave={handleSaveNote}
-                  onStartNew={handleStartNewNote}
-                  generating={generating}
-                />
+              {/* Option (a): the note streams in LIVE. On the coverage retry it FREEZES and dims with a calm
+                  overlay (never a wipe/restart), then swaps to the finished text. */}
+              {generatedNote && (
+                <div style={{ position: "relative" }}>
+                  <div style={{ opacity: finalizing ? 0.45 : 1, transition: "opacity .2s", pointerEvents: finalizing ? "none" : "auto" }}>
+                    <NoteOutput
+                      note={generatedNote}
+                      onChange={setGeneratedNote}
+                      onCopy={() => navigator.clipboard.writeText(generatedNote)}
+                      onSave={handleSaveNote}
+                      onStartNew={handleStartNewNote}
+                      generating={generating}
+                    />
+                  </div>
+                  {finalizing && (
+                    <div role="status" aria-live="polite" className="absolute left-1/2 flex items-center gap-2 rounded-full border px-3 py-1.5 text-[13px] font-semibold"
+                      style={{ top: 12, transform: "translateX(-50%)", background: "#F0FDFA", borderColor: "#99F6E4", color: "#0F766E" }}>
+                      <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
+                      </svg>
+                      Finalizing your note…
+                    </div>
+                  )}
+                </div>
               )}
               {noteSaved && (
                 <div className="mt-2 px-4 py-2 rounded-lg text-[13px] font-semibold" style={{ background: "#DCFCE7", color: "#16A34A" }}>
