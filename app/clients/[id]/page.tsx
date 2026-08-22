@@ -293,6 +293,12 @@ export default function ClientProfilePage() {
   );
   const [savingHours, setSavingHours] = useState(false);
   const [clientFiles, setClientFiles] = useState<any[]>([]);
+  // Profile-overview editing state. MUST live with the other hooks (before any early return below) — React
+  // requires every hook to run on every render, in the same order. It previously sat lower in the body, after
+  // the `if (clientLoading) return …` / `if (!client) return …` early returns, so it was skipped on the
+  // loading render and called on the loaded render → "rendered more hooks than during the previous render"
+  // (React #310), which crashed the client page on open.
+  const [profileSaving, setProfileSaving] = useState(false);
 
   async function loadNotesFromSupabase(clientId: string) {
     try {
@@ -495,8 +501,8 @@ export default function ClientProfilePage() {
   // /api/clients/[id] PATCH shallow-merges clinical_profile and is ownership-checked by canAccessClient.
   // We send only the changed top-level arrays; on success we mirror the change into local `client` state so
   // the overview + the note-form selection lists update immediately. On failure we alert and keep the old
-  // state (no optimistic drift).
-  const [profileSaving, setProfileSaving] = useState(false);
+  // state (no optimistic drift). NOTE: the profileSaving hook was moved UP to the hook cluster (see above) —
+  // it must not be declared here, after the early returns, or it triggers React #310.
   async function patchClinicalProfile(patch: Record<string, any>) {
     if (!client?.id) return;
     setProfileSaving(true);
