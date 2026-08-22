@@ -13,6 +13,7 @@ import { DataTab } from "./DataTab";
 import { CatalogDiffPanel } from "./CatalogDiffPanel";
 import { reviewBannerLines } from "@/lib/reviewFlagCopy";
 import { activeBehaviors, activeSkills } from "@/lib/activePrograms";
+import { splitReinforcerValue } from "@/lib/reinforcers";
 import { subtractMasteredFromActive } from "@/lib/skillReconcile";
 import { functionDisplayLabel, functionToCanonical } from "@/lib/functionPatterns";
 
@@ -207,6 +208,8 @@ export default function ClientProfilePage() {
   // Per-client saved "Other place of service" locations (clinical_profile.savedLocations) — the same
   // store the extension writes, so a location saved on either surface appears on both for this client.
   const [savedLocations, setSavedLocations] = useState<string[]>([]);
+  // Profile-overview "add reinforcer" input.
+  const [newReinforcer, setNewReinforcer] = useState("");
   const [customPresent, setCustomPresent] = useState("");
   const customPresentRef = useRef<HTMLInputElement>(null);
   const [environmentalChange, setEnvironmentalChange] = useState(false);
@@ -484,6 +487,91 @@ export default function ClientProfilePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ location: name }),
     }).catch(() => {});
+  }
+
+  // ── Profile overview editing (reinforcers + mark-mastered). Any assigned RBT can edit; the
+  // /api/clients/[id] PATCH shallow-merges clinical_profile and is ownership-checked by canAccessClient.
+  // We send only the changed top-level arrays; on success we mirror the change into local `client` state so
+  // the overview + the note-form selection lists update immediately. On failure we alert and keep the old
+  // state (no optimistic drift).
+  const [profileSaving, setProfileSaving] = useState(false);
+  async function patchClinicalProfile(patch: Record<string, any>) {
+    if (!client?.id) return;
+    setProfileSaving(true);
+    try {
+      const res = await fetch(`/api/clients/${client.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clinical_profile: patch }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data?.error || "Failed to save the change. Please try again.");
+        return;
+      }
+      setClient((prev: any) => ({ ...prev, clinicalProfile: { ...prev.clinicalProfile, ...patch } }));
+    } catch {
+      alert("Network error saving the change. Please try again.");
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  const reinforcerName = (r: any) => (typeof r === "string" ? r : r?.name || String(r)).trim();
+
+  // Reinforcers: delete removes from clinical_profile.reinforcers (no history kept — Marlon's ruling); add
+  // runs splitReinforcerValue so "tablet or phone" becomes discrete items (the "or" fix stays).
+  function deleteReinforcer(idx: number) {
+    const current = (client.clinicalProfile?.reinforcers || []) as any[];
+    patchClinicalProfile({ reinforcers: current.filter((_, i) => i !== idx) });
+  }
+  function addReinforcer(text: string) {
+    const raw = text.trim();
+    if (!raw) return;
+    const current = (client.clinicalProfile?.reinforcers || []) as any[];
+    // Split " or " into discrete items, then de-dupe (case-insensitive) against existing names.
+    const additions = splitReinforcerValue([raw]) as string[];
+    const existing = new Set(current.map((r) => reinforcerName(r).toLowerCase()));
+    const merged = [...current];
+    for (const a of additions) { if (a.trim() && !existing.has(a.trim().toLowerCase())) merged.push(a.trim()); }
+    patchClinicalProfile({ reinforcers: merged });
+  }
+
+  const nameEq = (x: any, name: string) => reinforcerName(x).toLowerCase() === name.trim().toLowerCase();
+
+  // Skill mastery: MOVE the object between replacementBehaviors (active) and skillAcquisition (mastered) —
+  // the profile view + note filter both key mastered-skills on the skillAcquisition field. Reversible.
+  function setSkillMastered(name: string, mastered: boolean) {
+    const active = (client.clinicalProfile?.replacementBehaviors || []) as any[];
+    const done = (client.clinicalProfile?.skillAcquisition || []) as any[];
+    if (mastered) {
+      const item = active.find((s) => nameEq(s, name)) ?? name;
+      const moved = typeof item === "string" ? { name: item, status: "mastered" } : { ...item, status: "mastered" };
+      patchClinicalProfile({
+        replacementBehaviors: active.filter((s) => !nameEq(s, name)),
+        skillAcquisition: done.some((s) => nameEq(s, name)) ? done : [...done, moved],
+      });
+    } else {
+      const item = done.find((s) => nameEq(s, name)) ?? name;
+      const moved = typeof item === "string" ? { name: item, status: "active" } : { ...item, status: "active" };
+      patchClinicalProfile({
+        skillAcquisition: done.filter((s) => !nameEq(s, name)),
+        replacementBehaviors: active.some((s) => nameEq(s, name)) ? active : [...active, moved],
+      });
+    }
+  }
+
+  // Behavior mastery: flip the `status` on the maladaptiveBehaviors entry (the badge + the note filter both
+  // read status). Reversible.
+  function setBehaviorMastered(name: string, mastered: boolean) {
+    const list = (client.clinicalProfile?.maladaptiveBehaviors || []) as any[];
+    patchClinicalProfile({
+      maladaptiveBehaviors: list.map((b) =>
+        nameEq(b, name)
+          ? (typeof b === "string" ? { name: b, status: mastered ? "mastered" : "active" } : { ...b, status: mastered ? "mastered" : "active" })
+          : b,
+      ),
+    });
   }
 
   function toggleBehavior(name: string) {
@@ -1136,10 +1224,19 @@ export default function ClientProfilePage() {
                       {activePrograms.map((s: any, idx: number) => (
                         <span
                           key={idx}
-                          className="text-[11px] font-medium px-2.5 py-1 rounded-full"
+                          className="text-[11px] font-medium px-2.5 py-1 rounded-full inline-flex items-center gap-1.5"
                           style={{ background: "var(--teal-light)", color: "var(--teal)" }}
                         >
                           {typeof s === "string" ? s : s.name}
+                          <button
+                            type="button"
+                            disabled={profileSaving}
+                            title="Mark this program as mastered (removes it from note selection)"
+                            onClick={() => setSkillMastered(reinforcerName(s), true)}
+                            className="text-[10px] underline disabled:opacity-40 hover:opacity-70"
+                          >
+                            mark mastered
+                          </button>
                         </span>
                       ))}
                       {!activePrograms.length && (
@@ -1153,10 +1250,19 @@ export default function ClientProfilePage() {
                       {masteredSkills.map((s: any, idx: number) => (
                         <span
                           key={idx}
-                          className="text-[11px] font-medium px-2.5 py-1 rounded-full border"
+                          className="text-[11px] font-medium px-2.5 py-1 rounded-full border inline-flex items-center gap-1.5"
                           style={{ background: "var(--bg)", color: "var(--text2)", borderColor: "var(--border)" }}
                         >
                           {typeof s === "string" ? s : s.name}
+                          <button
+                            type="button"
+                            disabled={profileSaving}
+                            title="Move back to active programs (skill regressed)"
+                            onClick={() => setSkillMastered(reinforcerName(s), false)}
+                            className="text-[10px] underline disabled:opacity-40 hover:opacity-70"
+                          >
+                            mark active
+                          </button>
                         </span>
                       ))}
                       {!masteredSkills.length && (
@@ -1173,16 +1279,48 @@ export default function ClientProfilePage() {
                   {(client.clinicalProfile?.reinforcers || []).map((r: any, idx: number) => (
                     <span
                       key={idx}
-                      className="text-[11px] font-medium px-2.5 py-1 rounded-full"
+                      className="text-[11px] font-medium px-2.5 py-1 rounded-full inline-flex items-center gap-1.5"
                       style={{ background: "#F5F3FF", color: "#6D28D9" }}
                     >
                       {typeof r === "string" ? r : r?.name || String(r)}
+                      <button
+                        type="button"
+                        aria-label={`Remove ${reinforcerName(r)}`}
+                        disabled={profileSaving}
+                        onClick={() => deleteReinforcer(idx)}
+                        className="leading-none font-bold disabled:opacity-40 hover:opacity-70"
+                        style={{ color: "#6D28D9" }}
+                      >
+                        ×
+                      </button>
                     </span>
                   ))}
                   {!client.clinicalProfile?.reinforcers?.length && (
                     <p className="text-[13px]" style={{ color: "var(--text3)" }}>No reinforcers recorded.</p>
                   )}
                 </div>
+                {/* Add a reinforcer. Non-edible per the clinical rules; " or " is split into discrete items. */}
+                <form
+                  className="flex gap-2 mt-3"
+                  onSubmit={(e) => { e.preventDefault(); addReinforcer(newReinforcer); setNewReinforcer(""); }}
+                >
+                  <input
+                    type="text"
+                    value={newReinforcer}
+                    onChange={(e) => setNewReinforcer(e.target.value)}
+                    placeholder="Add a reinforcer (non-edible)…"
+                    className="flex-1 border rounded-lg px-3 py-2 text-[13px]"
+                    style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={profileSaving || !newReinforcer.trim()}
+                    className="px-3 py-2 rounded-lg border text-[12px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+                  >
+                    Add
+                  </button>
+                </form>
               </div>
             </div>
           </div>
@@ -1312,9 +1450,21 @@ export default function ClientProfilePage() {
                                 {topos.length ? topos.join(" ") : <span style={{ color: "var(--text3)" }}>—</span>}
                               </td>
                               <td className="px-4 py-3 align-top">
-                                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full" style={{ background: status === "mastered" ? "var(--bg)" : "#E6F9F5", color: status === "mastered" ? "var(--text2)" : "#0D8A6A", border: status === "mastered" ? "1px solid var(--border)" : "none" }}>
-                                  {status}
-                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full" style={{ background: status === "mastered" ? "var(--bg)" : "#E6F9F5", color: status === "mastered" ? "var(--text2)" : "#0D8A6A", border: status === "mastered" ? "1px solid var(--border)" : "none" }}>
+                                    {status}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    disabled={profileSaving}
+                                    title={status === "mastered" ? "Move back to active (behavior regressed)" : "Mark as mastered (removes it from note selection)"}
+                                    onClick={() => setBehaviorMastered(name, status !== "mastered")}
+                                    className="text-[10px] underline disabled:opacity-40 hover:opacity-70"
+                                    style={{ color: "var(--teal)" }}
+                                  >
+                                    {status === "mastered" ? "mark active" : "mark mastered"}
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
