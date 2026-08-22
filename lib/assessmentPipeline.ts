@@ -9,6 +9,7 @@ import { prisma } from '@/lib/prisma'
 import { parseReinforcers } from '@/lib/reinforcers'
 import { buildActivityLists } from '@/lib/curatedActivities'
 import { normalizeDiagnosis } from '@/lib/diagnosis'
+import { looksEdible } from '@/lib/edibleReinforcer'
 import { canonicalKey, collectLibraryEntries, collectLibraryEntriesFromProfile, filterLibraryEntries, looksLikePersonReinforcer, unionCI, LibraryEntry, DiscardRecord } from '@/lib/clinicalLibrary'
 
 // ── PDF parsing ───────────────────────────────────────────────────────────────
@@ -112,6 +113,7 @@ export function mapToLegacyFormat(extracted: ExtractedAssessment) {
       .map(s => ({ name: cleanText(s.name), status: 'active', targetFunction: s.targetFunction || '' })),
     reinforcers: parseReinforcers(extracted.reinforcers)
       .filter(r => !hasBlockedTerm(r))
+      .filter(r => !looksEdible(r))   // edibles never enter the profile from an assessment (defense in depth)
       .map(cleanText),
     // Activities = curated baseline + the assessment's SPLIT activities (home→home, school→school). The
     // assessment's FLAT preferredActivities is intentionally NOT used here — an untagged list has no
@@ -180,7 +182,7 @@ export function buildAssessmentProfile(extracted: ExtractedAssessment) {
     replacementBehaviors: (extracted.replacementSkills || [])
       .filter(s => s.name && behaviorStatus(s) !== 'mastered')
       .map(s => ({ name: s.name.trim(), status: behaviorStatus(s), targetFunction: s.targetFunction || '' })),
-    reinforcers: parseReinforcers(extracted.reinforcers),
+    reinforcers: parseReinforcers(extracted.reinforcers).filter(r => !looksEdible(r)), // edibles never enter the profile (defense in depth; note-gen also filters at selection)
     // Curated clinician-approved baseline (always present) + the assessment's SPLIT activities (home→home,
     // school→school). A FLAT/untagged preferredActivities list is DISCARDED, never misplaced into both. Same
     // buildActivityLists helper the create/merge paths use. On this held branch the extractor may not yet

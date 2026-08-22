@@ -9,6 +9,7 @@ import { diagnosisColumn } from "@/lib/diagnosis";
 import { parsePositioned, clusterRows } from "@/lib/pdfGeometry";
 import { assembleRefreshProfile } from "@/lib/assembleRefreshProfile";
 import { buildClinicalPacket } from "@/lib/clinicalPacket";
+import { assessReplacementCompleteness } from "@/lib/llmBehaviorCredibility";
 
 export const maxDuration = 60;
 
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
     // CLINICAL EXTRACTION PACKET — locate the clinically relevant regions across the WHOLE document (behaviors,
     // status blocks, FAST/MAS, replacement, reinforcers, …) instead of the first 90K chars, which never reached
     // the late FAST/MAS tables or late DISCONTINUED blocks in large assessments. Stays under 90K.
-    const { packet, hasFunctionalAssessment, behaviorDomainFound } = buildClinicalPacket(text);
+    const { packet, hasFunctionalAssessment, behaviorDomainFound, replacementDomainFound } = buildClinicalPacket(text);
     const extracted = await extractAssessment(packet);
 
     saveKnowledgeBase(extracted).catch(err =>
@@ -124,6 +125,16 @@ export async function POST(req: NextRequest) {
           },
           { status: 422 }
         );
+      }
+
+      // REPLACEMENT COMPLETENESS GUARD — the second barrier the skills side lacked. If the replacement domain
+      // wasn't located, or the new catalog is empty / a large unexplained drop, do NOT wholesale-overwrite the
+      // programs (Felix: 18→9 slipped through because skills had no guard). Preserve the previous, flagged.
+      const prevReplacements = (existingProfile.replacementBehaviors || []) as any[];
+      const replCheck = assessReplacementCompleteness((assessmentProfile.replacementBehaviors || []).length, prevReplacements.length, replacementDomainFound);
+      if (!replCheck.refresh && prevReplacements.length) {
+        assessmentProfile.replacementBehaviors = existingProfile.replacementBehaviors;
+        reviewFlags.push({ field: "replacementBehaviors", source: "guard-preserved", reason: replCheck.reason });
       }
 
       // GUARD 2 — the refresh merge (pure, unit-tested): preserves non-assessment keys (observedCatalog,

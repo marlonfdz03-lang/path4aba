@@ -61,6 +61,18 @@ export function reconcileBehaviors(llmBehaviors: any[]): { active: any[]; droppe
   return { active, droppedDiscontinued };
 }
 
+// REPLACEMENT COMPLETENESS GUARD — the second barrier the skills side was missing. A starved packet or a
+// partial extraction must never silently wholesale-overwrite the replacement-program catalog (Felix: 18→9).
+// Conservative: absent domain, empty result, or a large unexplained drop → preserve the previous programs.
+// A reassessment CAN legitimately remove programs, so we only flag a big drop with no corroboration.
+export interface ReplacementCompleteness { refresh: boolean; reason: string }
+export function assessReplacementCompleteness(newCount: number, prevCount: number, domainFound: boolean): ReplacementCompleteness {
+  if (!domainFound) return { refresh: false, reason: 'the replacement-program domain was not located in the assessment — programs preserved from the previous assessment, review' };
+  if (newCount === 0) return { refresh: false, reason: 'no replacement programs were extracted — programs preserved from the previous assessment, review' };
+  if (prevCount >= 5 && newCount < Math.ceil(prevCount * 0.6)) return { refresh: false, reason: `large unexplained drop in replacement programs (${prevCount} → ${newCount}) — programs preserved from the previous assessment, review the assessment` };
+  return { refresh: true, reason: '' };
+}
+
 export interface CredibilityResult { credible: boolean; reasons: string[]; behaviors: any[] }
 
 // Assess whether the reconciled ACTIVE LLM behavior set is credible enough to OVERWRITE the existing profile.

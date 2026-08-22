@@ -8,6 +8,7 @@ import { assembleRefreshProfile } from "@/lib/assembleRefreshProfile";
 import { parsePositioned, clusterRows } from "@/lib/pdfGeometry";
 import { diagnosisColumn } from "@/lib/diagnosis";
 import { buildClinicalPacket } from "@/lib/clinicalPacket";
+import { assessReplacementCompleteness } from "@/lib/llmBehaviorCredibility";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -57,7 +58,7 @@ export async function POST(req: Request) {
     if (!text.trim()) return NextResponse.json({ error: "Stored PDF parsed to empty text." }, { status: 422 });
 
     // Clinical Extraction Packet — same as the live upload path (locate clinical regions across the WHOLE doc).
-    const { packet, hasFunctionalAssessment, behaviorDomainFound, manifest } = buildClinicalPacket(text);
+    const { packet, hasFunctionalAssessment, behaviorDomainFound, replacementDomainFound, manifest } = buildClinicalPacket(text);
     const extracted = await extractAssessment(packet);
     saveKnowledgeBase(extracted).catch((e) => console.error("KB save error (reprocess):", e));
 
@@ -71,6 +72,14 @@ export async function POST(req: Request) {
         { error: `Re-process did not apply — could not read: ${problems.join("; ")}. The stored profile is unchanged.`, applied: false },
         { status: 422 },
       );
+    }
+
+    // Replacement completeness guard (see extract-assessment): never wholesale-overwrite a starved/partial catalog.
+    const prevReplacements = (existingProfile.replacementBehaviors || []) as any[];
+    const replCheck = assessReplacementCompleteness((assessmentProfile.replacementBehaviors || []).length, prevReplacements.length, replacementDomainFound);
+    if (!replCheck.refresh && prevReplacements.length) {
+      assessmentProfile.replacementBehaviors = existingProfile.replacementBehaviors;
+      reviewFlags.push({ field: "replacementBehaviors", source: "guard-preserved", reason: replCheck.reason });
     }
 
     const refreshed = buildRefreshedProfile(existingProfile, assessmentProfile);

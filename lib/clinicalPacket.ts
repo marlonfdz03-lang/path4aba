@@ -32,6 +32,7 @@ export interface PacketResult {
   manifest: SectionMatch[];
   missing: string[];                 // required/expected sections not located
   behaviorDomainFound: boolean;      // the essential behavior domain — gates preserve-vs-overwrite
+  replacementDomainFound: boolean;   // the replacement-program domain — gates the replacement completeness guard
   hasFunctionalAssessment: boolean;  // a FAST/MAS/FA source — gates function provenance
   totalChars: number;                // packet size (must stay < 90000)
 }
@@ -41,27 +42,33 @@ export const PACKET_BUDGET = 80000; // hard ceiling, under the old 90K
 // Function-assessment vocabulary — casing/whitespace/plural tolerant (adjustment 3).
 const FUNCTION_TERMS = [/\bescape\b/i, /\battention\b/i, /\btangibles?\b/i, /\bautomatic(?:\s+reinforcement)?\b/i, /\bsensory\b/i];
 
-interface SectionDef { key: string; label: string; priority: number; cap: number; anchors: RegExp[]; required?: boolean; fa?: boolean }
-// Priority = clinical importance for the budget (1 = keep first). Caps bound each section.
+type Tier = 'required' | 'optional';
+interface SectionDef { key: string; label: string; tier: Tier; priority: number; cap: number; anchors: RegExp[]; fa?: boolean }
+// RESERVED BUDGET (Marlon's rule): every REQUIRED clinical domain is guaranteed its minimum coverage FIRST;
+// OPTIONAL detail/enrichment fills only what remains. This prevents a greedy fill from ever giving a mandatory
+// domain zero space (Felix: behaviorDetail ate 32K while replacement got zero → 18 programs collapsed to 9).
+// The required domains are the compact IDENTITY/SUMMARY lists (names + status) + the functional-assessment
+// evidence — small and cheap; the voluminous per-program detail is optional. `priority` orders within a tier.
 const SECTIONS: SectionDef[] = [
-  { key: 'behaviorDetail', label: 'Detailed behavior programs', priority: 1, cap: 32000, required: true,
-    anchors: [/maladaptive behavior/i, /operational definition/i, /reduction target/i, /behavior program/i, /target behavior/i] },
-  // The summary is the authoritative LIST of behaviors + statuses (names can be name-only and scattered), so it
-  // gets a generous cap — under-capping it drops behavior names that live past the cut (Felix: "Arguing with
-  // Adults" at ~75K, just past the old 6K cap).
-  { key: 'maladaptiveSummary', label: 'Maladaptive behaviors summary', priority: 2, cap: 16000, required: true,
-    anchors: [/maladaptive behaviors? summary/i, /behaviors? to reduce/i, /problem behavior/i, /summary of behaviors/i] },
-  { key: 'functionalAssessment', label: 'FAST / MAS / functional assessment', priority: 3, cap: 9000, fa: true,
+  // ── REQUIRED — identity + status + functional evidence (guaranteed first) ──
+  { key: 'behaviorSummary', label: 'Behavior summary (identity + status)', tier: 'required', priority: 1, cap: 12000,
+    anchors: [/maladaptive behaviors? summary/i, /behaviors? to reduce/i, /summary of behaviors/i, /problem behavior/i, /maladaptive behavior/i, /target behavior/i] },
+  { key: 'replacementSummary', label: 'Replacement-program summary (identity + status)', tier: 'required', priority: 1, cap: 12000,
+    anchors: [/replacement behaviors? summary/i, /summary of replacement/i, /active replacement/i, /replacement programs?/i, /replacement behavior/i, /skill acquisition/i, /alternative behavior/i] },
+  { key: 'functionalAssessment', label: 'FAST / MAS / functional assessment', tier: 'required', priority: 1, cap: 10000, fa: true,
     anchors: [/motivation assessment scale/i, /functional analysis screening/i, /functional (behavior )?assessment/i, /\bQABF\b/] },
-  { key: 'replacement', label: 'Replacement behaviors / programs', priority: 4, cap: 18000,
-    anchors: [/replacement behaviors? summary/i, /replacement behavior/i, /replacement program/i, /skill acquisition/i, /alternative behavior/i] },
-  { key: 'interventions', label: 'Interventions', priority: 5, cap: 4000,
+  // ── OPTIONAL — detail / enrichment (fills only the remaining budget) ──
+  { key: 'behaviorDetail', label: 'Detailed behavior programs', tier: 'optional', priority: 2, cap: 24000,
+    anchors: [/operational definition/i, /reduction target/i, /behavior program/i] },
+  { key: 'replacementDetail', label: 'Detailed replacement programs', tier: 'optional', priority: 3, cap: 24000,
+    anchors: [/replacement program/i, /alternative behavior/i, /replacement behavior/i, /skill acquisition/i] },
+  { key: 'interventions', label: 'Interventions', tier: 'optional', priority: 4, cap: 4000,
     anchors: [/treatment procedure/i, /teaching procedure/i, /\bintervention/i] },
-  { key: 'reinforcers', label: 'Reinforcers', priority: 6, cap: 3000,
+  { key: 'reinforcers', label: 'Reinforcers', tier: 'optional', priority: 5, cap: 3000,
     anchors: [/reinforcer/i, /preference assessment/i] },
-  { key: 'diagnosis', label: 'Diagnosis / background', priority: 7, cap: 3000,
+  { key: 'diagnosis', label: 'Diagnosis / background', tier: 'optional', priority: 6, cap: 3000,
     anchors: [/diagnos/i, /background/i, /recipient/i] },
-  { key: 'changes', label: 'Changes this authorization', priority: 8, cap: 2000,
+  { key: 'changes', label: 'Changes this authorization', tier: 'optional', priority: 7, cap: 2000,
     anchors: [/changes made/i, /modifications/i, /since (the )?last authorization/i] },
 ];
 
@@ -146,7 +153,7 @@ export function buildClinicalPacket(fullText: string): PacketResult {
   // Locate each section; region = anchor → next DIFFERENT-section start (or the section's cap).
   const anchorHits = SECTIONS.map((s) => ({ s, hit: locate(text, s.anchors) }));
 
-  const ranges: Array<{ range: [number, number]; priority: number }> = [];
+  const ranges: Array<{ range: [number, number]; priority: number; tier: Tier }> = [];
   for (const { s, hit } of anchorHits) {
     // FUNCTIONAL ASSESSMENT is located by the function-column SIGNATURE (the real table), NOT a heading word —
     // a bare "Motivation Assessment Scale" can be a table-of-contents mention with no functional data. Requiring
@@ -157,7 +164,7 @@ export function buildClinicalPacket(fullText: string): PacketResult {
       if (sig >= 0) {
         const start = Math.max(0, sig - 300);
         const end = Math.min(sig + s.cap, text.length);
-        ranges.push({ range: [start, end], priority: s.priority });
+        ranges.push({ range: [start, end], priority: s.priority, tier: s.tier });
         manifest.push({ key: s.key, label: s.label, found: true, anchorMatched: 'function-column-signature', confidence: 'strong', start, end, chars: end - start });
       } else {
         manifest.push({ key: s.key, label: s.label, found: false, anchorMatched: null, confidence: 'none', start: -1, end: -1, chars: 0 });
@@ -173,24 +180,24 @@ export function buildClinicalPacket(fullText: string): PacketResult {
       const otherStarts = anchorHits.filter((a) => a.s.key !== s.key && a.s.priority <= s.priority && a.hit.index > hit.index).map((a) => a.hit.index);
       const nextBoundary = otherStarts.length ? Math.min(...otherStarts) : text.length;
       end = Math.min(hit.index + s.cap, nextBoundary);
-      ranges.push({ range: [start, end], priority: s.priority });
+      ranges.push({ range: [start, end], priority: s.priority, tier: s.tier });
     }
     manifest.push({ key: s.key, label: s.label, found, anchorMatched: found ? hit.anchor : null, confidence: found ? (hit.confidence === 'none' ? 'strong' : hit.confidence) : 'none', start: found ? start : -1, end: found ? end : -1, chars: found ? end - start : 0 });
   }
 
-  // Status windows across the whole doc — highest priority (never lose a late DISCONTINUED block).
-  for (const w of statusWindows(text)) ranges.push({ range: w, priority: 0 });
+  // Status windows across the whole doc — REQUIRED (never lose a late DISCONTINUED block).
+  for (const w of statusWindows(text)) ranges.push({ range: w, priority: 0, tier: 'required' });
 
-  // Greedy include by priority within budget (counting the join separators, so the assembled packet never
-  // exceeds budget and never has to be hard-sliced — which would drop the LATE sections, exactly the ones the
-  // old 90K cut lost). Then present in document order.
+  // RESERVED-BUDGET ASSEMBLY. Phase 1: include EVERY required range first (guaranteed minimum coverage of each
+  // mandatory domain — identity/summary + FA + status). Phase 2: fill the remaining budget with optional detail
+  // by priority. Separators are counted so the assembled packet never exceeds budget (no hard slice that would
+  // drop late sections). This is what stops a mandatory domain (e.g. replacement) from ever getting zero space.
   const SEP = '\n\n…\n\n';
-  ranges.sort((a, b) => a.priority - b.priority);
+  const sizeOf = (rs: Array<[number, number]>) => rs.reduce((n, [a, b]) => n + (b - a), 0) + Math.max(0, rs.length - 1) * SEP.length;
   const chosen: Array<[number, number]> = [];
-  for (const { range } of ranges) {
-    const merged = mergeRanges([...chosen, range]);
-    const size = merged.reduce((n, [a, b]) => n + (b - a), 0) + Math.max(0, merged.length - 1) * SEP.length;
-    if (size <= PACKET_BUDGET) chosen.push(range);
+  for (const r of ranges.filter((r) => r.tier === 'required')) chosen.push(r.range); // guaranteed
+  for (const r of ranges.filter((r) => r.tier === 'optional').sort((a, b) => a.priority - b.priority)) {
+    if (sizeOf(mergeRanges([...chosen, r.range])) <= PACKET_BUDGET) chosen.push(r.range);
   }
   const finalRanges = mergeRanges(chosen).sort((a, b) => a[0] - b[0]);
 
@@ -201,9 +208,12 @@ export function buildClinicalPacket(fullText: string): PacketResult {
   // Flags reflect what is ACTUALLY in the assembled packet (not merely detected) — so provenance can never
   // claim a functional assessment the LLM did not receive.
   const inPacket = (m: SectionMatch) => m.found && finalRanges.some(([a, b]) => m.start < b && m.end > a);
-  const behaviorDomainFound = manifest.some((m) => (m.key === 'behaviorDetail' || m.key === 'maladaptiveSummary') && inPacket(m));
-  const hasFunctionalAssessment = manifest.some((m) => m.key === 'functionalAssessment' && inPacket(m));
-  const missing = manifest.filter((m) => (m.key === 'behaviorDetail' || m.key === 'maladaptiveSummary' || m.key === 'functionalAssessment') && !inPacket(m)).map((m) => m.label);
+  const has = (...keys: string[]) => manifest.some((m) => keys.includes(m.key) && inPacket(m));
+  const behaviorDomainFound = has('behaviorSummary', 'behaviorDetail');
+  const replacementDomainFound = has('replacementSummary', 'replacementDetail');
+  const hasFunctionalAssessment = has('functionalAssessment');
+  const REQUIRED_LABELS: Record<string, string> = { behaviorSummary: 'Behavior summary', replacementSummary: 'Replacement-program summary', functionalAssessment: 'Functional assessment' };
+  const missing = Object.keys(REQUIRED_LABELS).filter((k) => !has(k)).map((k) => REQUIRED_LABELS[k]);
 
-  return { packet, manifest, missing, behaviorDomainFound, hasFunctionalAssessment, totalChars: packet.length };
+  return { packet, manifest, missing, behaviorDomainFound, replacementDomainFound, hasFunctionalAssessment, totalChars: packet.length };
 }

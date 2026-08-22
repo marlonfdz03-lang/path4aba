@@ -39,10 +39,13 @@ export function splitReinforcerValue(value: unknown): string[] {
 }
 
 // Parse the reinforcers object { tangibles, activities, social, people } into a flat, deduped item list.
+// The `people` category is DELIBERATELY EXCLUDED: those are caregiver names (e.g. "Mother"), and a person who
+// DELIVERS reinforcement is not a reinforcement ITEM — including them leaks a name into the reinforcer catalog
+// (and is PHI-adjacent). This matches the Clinical Library collector, which already excludes `people`.
 export function parseReinforcers(reinforcers: any): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
-  for (const key of ['tangibles', 'activities', 'social', 'people']) {
+  for (const key of ['tangibles', 'activities', 'social']) {
     for (const item of splitReinforcerValue(reinforcers?.[key])) {
       const k = item.toLowerCase();
       if (!seen.has(k)) { seen.add(k); out.push(item); }
