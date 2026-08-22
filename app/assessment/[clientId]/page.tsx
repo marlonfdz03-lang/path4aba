@@ -1,6 +1,9 @@
 "use client";
 
 import { use, useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { isAssessmentBuilderRole } from "@/lib/assessmentAccess";
 
 // Assessment Builder — OVERVIEW DASHBOARD (Part 3b). Section-by-section traffic-light status for an
 // assessment, computed deterministically server-side (see lib/assessmentStatus.ts — no LLM, no clinical
@@ -28,9 +31,20 @@ const LIGHT: Record<Status, { dot: string; bg: string; border: string; label: st
 
 export default function AssessmentOverviewPage({ params }: { params: Promise<{ clientId: string }> }) {
   const { clientId } = use(params);
+  const router = useRouter();
+  const { data: session, status: authStatus } = useSession();
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
+
+  // BCBA-ONLY: the Builder lives in the BCBA's area — RBTs have no access. Redirect a non-BCBA away (the
+  // server route enforces the same rule, so this is just to avoid rendering a page they can't use). Matches the
+  // wrong-role redirect convention used in app/clients/page.tsx.
+  const allowed = isAssessmentBuilderRole((session?.user as any)?.role);
+  useEffect(() => {
+    if (authStatus === "loading") return;
+    if (!allowed) router.replace("/clients");
+  }, [authStatus, allowed, router]);
 
   const load = useCallback(async () => {
     setLoading(true); setNotice("");
@@ -43,7 +57,10 @@ export default function AssessmentOverviewPage({ params }: { params: Promise<{ c
     finally { setLoading(false); }
   }, [clientId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (allowed) load(); }, [allowed, load]);
+
+  // Non-BCBA: render nothing while the redirect above runs (server route also denies).
+  if (authStatus !== "loading" && !allowed) return null;
 
   const pct = data?.overallPct ?? 0;
   const barColor = pct >= 80 ? "#16A34A" : pct >= 50 ? "#D97706" : "#DC2626";

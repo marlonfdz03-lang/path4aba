@@ -6,6 +6,19 @@ the **Overview Dashboard (3b)** — see `lib/assessmentStatus.ts` + `/assessment
 
 ---
 
+## 0. Access rule (decided)
+
+**BCBA-only.** The Assessment Builder lives in the BCBA's area of the product — RBTs do not do assessments and
+have **no access to it at all**. Enforcement is **role AND assignment**, both required:
+- **Role** must be `bcba` / `bcaba` / `admin` (`isAssessmentBuilderRole`), and
+- **Assignment** must hold (`canAccessClient` — the BCBA is assigned to that client; `admin` satisfies it
+  outright).
+
+Enforced **server-side on every assessment API route** (a UI-only gate is not a gate) and mirrored on the page
+(a non-BCBA is redirected to `/clients`, matching the existing wrong-role redirect convention). There is **no
+RBT-facing entry point** — no nav link or button surfaces the Builder to an RBT. An RBT hitting the route
+directly is denied server-side (403) and redirected client-side.
+
 ## 1. What the Builder is
 
 The BCBA writes a client's assessment **inside Path4ABA**, section by section. A reassessment starts from the
