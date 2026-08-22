@@ -59,7 +59,11 @@ export function phiDiscardReason(text: string): DiscardReason | null {
   if (/[\w.+-]+@[\w-]+\.\w{2,}/.test(s)) return 'hipaa-id';                          // email
   if (/\b\d{3}[-.\s]\d{2}[-.\s]\d{4}\b/.test(s)) return 'hipaa-id';                  // SSN
   if (/\b\+?\d[\d\s().-]{7,}\d\b/.test(s) && /\d{3}[-.\s]?\d{4}/.test(s)) return 'hipaa-id'; // phone-ish
-  if (/\b(mrn|record|chart|patient|id)\s*#?\s*:?\s*[A-Za-z0-9]{4,}\b/i.test(s)) return 'hipaa-id';
+  // Record/patient/MRN/ID followed by an identifier TOKEN that contains a digit. The trailing (?=…\d) is
+  // essential: without it, the bare "id" alternative matches the "Id" in "Identify"/"identify" (a very common
+  // clinical verb — "identify safe situations") and the whole entry is wrongly discarded. A real record/patient
+  // id has a digit; a pure-alpha follow-word is prose, not an identifier.
+  if (/\b(mrn|record|chart|patient|id)\s*#?\s*:?\s*(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{4,}\b/i.test(s)) return 'hipaa-id';
   if (/\b(?=[A-Z0-9-]*\d)[A-Z0-9]{2,}[-]?[A-Z0-9]{4,}\b/.test(s) && /\d/.test(s.replace(/\b\d+\b/g, ''))) return 'hipaa-id'; // MRN-like code (digit+letter mix)
 
   // 2. DATE: a month adjacent to a day/year, or a numeric date, or a bare 4-digit year. A month word alone
@@ -79,18 +83,31 @@ export function phiDiscardReason(text: string): DiscardReason | null {
   if (/\b(street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr|court|ct)\.?\b/i.test(s) && /[A-Z][a-z]+\s+(street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr|court|ct)\b/i.test(s)) return 'location';
   if (/\b(elementary|middle school|high school|academy|preschool|daycare|day care|montessori)\b/i.test(s)) return 'location';
 
-  // 5. PROPER NAME: a Capitalized word EMBEDDED in prose (preceded by a lowercase word) that isn't a clinical
-  //    term or a month. This catches "hit Marlon", "with Ms Garcia" — but NOT Title-Case runs ("Premack
-  //    Principle", "Behavior Momentum") or first-token/acronym names (their capital isn't preceded by a
-  //    lowercase word).
-  const embedded = s.match(/\b[a-z]+\s+([A-Z][a-zA-Z]{1,})/g);
-  if (embedded) {
-    for (const m of embedded) {
-      const cap = m.split(/\s+/).pop() as string;
-      const low = cap.toLowerCase();
-      if (CLINICAL_ALLOWLIST.has(low)) continue;
-      if (MONTHS.test(cap)) continue; // months handled as dates above (a bare month word is not a name)
-      return 'proper-name';
+  // 5a. TITLED NAME: a courtesy/professional title + a capitalized word is a person, in any context
+  //     ("redirected by Ms Garcia", "Dr Smith"). Fires regardless of the prose check below.
+  if (/\b(mr|mrs|ms|miss|mx|dr|sir|madam)\.?\s+[A-Z][a-z]+/i.test(s)) return 'proper-name';
+
+  // 5b. EMBEDDED NAME — gated to PROSE. A capitalized word embedded in a mostly-lowercase sentence is a
+  //     likely person name ("the client hit Marlon", "instance of Alexandra moving out"). But a Title-Case
+  //     clinical LABEL ("Differential Reinforcement of Alternative Behavior", "Manding for Tangibles",
+  //     "Time on Task", "Request for Help") capitalizes most words with only lowercase connectors (of/for/
+  //     with/to/on) between them — running the embedded rule there flags ordinary clinical vocabulary as a
+  //     name. So only apply it when the string reads as prose: 3+ alphabetic words AND fewer than half of
+  //     them capitalized. (Real bug: without this gate the backfill discarded DRA/DRI/DRO and dozens of
+  //     legitimate skills/procedures. See the mixed-case regression battery in the test file.)
+  const alpha = (s.match(/[A-Za-z][A-Za-z'’.\-]*/g) || []).filter((w) => /[A-Za-z]/.test(w));
+  const capitalized = alpha.filter((w) => /^[A-Z]/.test(w));
+  const isProse = alpha.length >= 3 && capitalized.length / alpha.length < 0.5;
+  if (isProse) {
+    const embedded = s.match(/\b[a-z]+\s+([A-Z][a-zA-Z'’.\-]{1,})/g);
+    if (embedded) {
+      for (const m of embedded) {
+        const cap = m.split(/\s+/).pop() as string;
+        const low = cap.toLowerCase();
+        if (CLINICAL_ALLOWLIST.has(low)) continue;
+        if (MONTHS.test(cap)) continue; // months handled as dates above (a bare month word is not a name)
+        return 'proper-name';
+      }
     }
   }
 
@@ -176,10 +193,11 @@ export function collectLibraryEntries(extracted: any): LibraryEntry[] {
 // names remain the one residual (indistinguishable from a product like "Legos") — the same class accepted for
 // phiDiscardReason at large; every drop here is logged so it can be eyeballed.
 const KINSHIP = new Set([
-  'mom', 'mommy', 'mama', 'mother', 'dad', 'daddy', 'papa', 'father', 'parent', 'parents',
+  'mom', 'mommy', 'mama', 'mother', 'mothers', 'dad', 'daddy', 'papa', 'father', 'fathers', 'parent', 'parents',
   'grandma', 'grandmother', 'grandpa', 'grandfather', 'granny', 'nana', 'nanny', 'aunt', 'auntie',
-  'uncle', 'sister', 'brother', 'cousin', 'sibling', 'guardian', 'caregiver', 'babysitter', 'sitter',
-  'teacher', 'therapist', 'rbt', 'bcba', 'aide', 'tutor', 'grandparent',
+  'uncle', 'sister', 'brother', 'cousin', 'sibling', 'siblings', 'guardian', 'guardians', 'caregiver', 'caregivers',
+  'babysitter', 'sitter', 'teacher', 'teachers', 'therapist', 'therapists', 'rbt', 'bcba', 'aide', 'tutor',
+  'grandparent', 'grandparents', 'adult', 'adults',
 ]);
 const TITLED_NAME = /^(mr|mrs|ms|miss|mx|dr|sir|madam|aunt|uncle|grandma|grandpa)\.?\s+[A-Z][a-z]+/i;
 
