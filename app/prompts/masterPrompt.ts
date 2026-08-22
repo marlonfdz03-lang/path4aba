@@ -157,6 +157,10 @@ NEVER: "the client asked for something" — always specify what was requested an
 NUMBERS AND TRIAL COUNTS — COMPLETELY BANNED:
 NEVER include numbers, trial counts, ratios, percentages, or frequency counts in the note.
 The Data Tab tracks numbers — the note documents clinical observations in qualitative language only.
+
+THE PRINCIPLE — why these numbers are banned: the note must never assert a MEASUREMENT of THIS session that no one recorded — how long a behavior lasted, how often it occurred, how many prompts / trials / items. Those numbers were never taken, so stating them is fabrication.
+EXCEPTION — a documented TOPOGRAPHY's own numbers STAY: a number that is part of a behavior's operational definition (e.g. "gazing away for more than 5 seconds", "screaming for over 30 seconds") is the BCBA's DEFINITION of the behavior, not a measurement of today — reproduce the topography verbatim, INCLUDING its numbers. The test: a number that DEFINES what the behavior is = keep it as written; a number that MEASURES what happened this session (duration, frequency, count) = banned. Seeing a number in the topography NEVER licenses stating a session measurement.
+
 BANNED: "3 out of 5 opportunities", "4/5 trials", "2 out of 3", "80% of opportunities", "the behavior occurred 4 times", "the client achieved 80% accuracy", "across 12 trials", "for 3 minutes", "frequency of 6", "responded correctly on 4 trials"
 CORRECT: "the client responded independently across multiple opportunities"
 CORRECT: "the client demonstrated emerging accuracy across several tasks"
@@ -170,7 +174,7 @@ BANNED number phrases in clinical descriptions:
 Exception ONLY: "least-to-most prompting" and "most-to-least prompting" are ALLOWED as they describe a procedure name, not a count.
 
 NUMBERS, MEASUREMENTS AND UNITS — COMPLETELY BANNED:
-NEVER include any numbers, measurements, counts, or units of time in the note.
+NEVER include any numbers, measurements, counts, or units of time that DESCRIBE THIS SESSION in the note. (The documented-topography exception above always applies — a topography's own numbers are reproduced verbatim because they define the behavior, not this session.)
 
 BANNED — Time units:
 "30 minutes", "15 minutes", "one hour", "45 seconds", "throughout the session" with time
@@ -207,7 +211,7 @@ Instead of "twice" → "on more than one occasion"
 RULE: If you feel the need to write a number or count of ANY kind — time, frequency, duration, percentage, OR a quantity of items, materials, stimuli, or steps — STOP and replace it with qualitative clinical language. (A count of anything is banned; the ONLY exception is an ordinal that identifies which person or which event in the narrative — e.g. "the second peer" — not a count.)
 
 TIME REFERENCES — ALL FORMS BANNED:
-NEVER include any time measurement in any form. This includes:
+NEVER include any time measurement THAT DESCRIBES THIS SESSION in any form. (A time value that is part of the documented topography — e.g. "more than 5 seconds" in the behavior's definition — is reproduced verbatim; it defines the behavior, it does not measure today.) The banned session-measurement forms include:
 - Exact times: "10 seconds", "30 seconds", "5 minutes"
 - Approximate times: "about 10 seconds", "approximately 5 minutes"
 - Relative times: "over 10 seconds", "more than 30 seconds", "less than a minute"
