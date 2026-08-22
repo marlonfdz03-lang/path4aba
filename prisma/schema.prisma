@@ -478,3 +478,32 @@ model gate_findings {
   @@index([severity, created_at(sort: Desc)])
   @@index([client_id])
 }
+
+// Clinical Library (admin-curated corpus for the future Assessment Builder). Separate from the note-gen
+// KB (behaviors/topographies/replacement_skills) so curation can't affect note generation. One row per
+// canonical entry (unique kind+canonical_key); variants/functions accumulate. See migration
+// 20260822000000_clinical_library. Populated fail-soft from the ingest hook; a PHI discard filter runs first.
+model clinical_library {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  kind          String
+  canonical_key String
+  display_name  String
+  variants      String[] @default([])
+  functions     String[] @default([])
+  meta          Json?
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@unique([kind, canonical_key])
+  @@index([kind])
+}
+
+model clinical_library_discards {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  kind       String
+  reason     String
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([reason])
+  @@index([created_at])
+}
