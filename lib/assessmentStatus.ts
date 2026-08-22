@@ -145,7 +145,7 @@ export function computeAssessmentStatus(profile: any): AssessmentStatus {
       for (const fn of usedFns) {
         const map = GENERAL_ABA_FUNCTION_INTERVENTIONS[fn];
         if (map && !canon.some((c) => map.includes(c))) {
-          issues.push(`no approved intervention fits the "${fn}" function (Path's general map) — those behaviors will use a non-function-matched fallback`);
+          issues.push(`Path function-fit guidance (general ABA best-practice, NOT from this client's plan): no approved intervention fits the "${fn}" function, so those behaviors will use a non-function-matched fallback`);
         }
       }
     }

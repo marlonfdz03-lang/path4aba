@@ -55,8 +55,10 @@ export default function AssessmentOverviewPage({ params }: { params: Promise<{ c
         <a href={`/clients/${clientId}`} style={{ fontSize: 13, color: "#1BA8A0" }}>← Back to client</a>
       </div>
       <p style={{ fontSize: 13, color: "var(--text3, #6B7280)", marginBottom: 16 }}>
-        Section-by-section status, computed automatically from the assessment data. Green = complete · Yellow =
-        needs attention · Red = missing or problems. These are mechanical checks — not a clinical review.
+        <strong>Structural readiness</strong> of the assessment, computed automatically from the data present.
+        Green / Yellow / Red reflect whether required fields are <strong>present and internally consistent</strong> —
+        these are mechanical checks, <strong>not a clinical review</strong> and not a judgment of whether the content
+        is correct. A section can be green while its content is still clinically unverified.
       </p>
 
       {notice && (
@@ -70,7 +72,7 @@ export default function AssessmentOverviewPage({ params }: { params: Promise<{ c
           {/* overall completion */}
           <div style={{ border: "1px solid var(--border, #E5E7EB)", borderRadius: 12, padding: 16, marginBottom: 20 }}>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
-              <span style={{ fontSize: 14, fontWeight: 700 }}>Overall completion</span>
+              <span style={{ fontSize: 14, fontWeight: 700 }}>Structural completeness</span>
               <span style={{ fontSize: 22, fontWeight: 800, color: barColor }}>{pct}%</span>
             </div>
             <div style={{ height: 10, borderRadius: 999, background: "#F1F5F9", overflow: "hidden" }}>
@@ -78,6 +80,11 @@ export default function AssessmentOverviewPage({ params }: { params: Promise<{ c
             </div>
             <p style={{ fontSize: 12, color: "var(--text3, #6B7280)", marginTop: 8 }}>
               {data.redCount} section{data.redCount === 1 ? "" : "s"} missing/with problems · {data.yellowCount} needing attention
+            </p>
+            <p style={{ fontSize: 12, color: "var(--text3, #9CA3AF)", marginTop: 6 }}>
+              This is <strong>required-field presence and internal consistency</strong> — not clinical correctness or
+              content quality. A profile can reach 100% while still containing unverified functions or definitions
+              that only a clinician can confirm.
             </p>
           </div>
 
