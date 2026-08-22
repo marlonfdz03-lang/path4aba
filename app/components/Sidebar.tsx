@@ -219,6 +219,7 @@ export default function Sidebar() {
 
   const role = (user?.profession || "").toLowerCase();
   const isBCBA = ["bcba", "bcaba"].includes(role);
+  const isAdmin = role === "admin";
   const isStudentOnly = ["bcba_student", "bcaba_student"].includes(role);
   const isOwner = session?.user?.email === "marlonfdz03@gmail.com";
 
@@ -366,6 +367,8 @@ export default function Sidebar() {
               <div className="space-y-0.5">
                 <NavItem href="/dashboard" label="Dashboard" icon={IconDashboard} active={isActive("/dashboard")} expanded={expanded} />
                 <NavItem href="/bcba" label="Clients" icon={IconUsers} active={isActive("/bcba")} expanded={expanded} />
+                {/* BCBA-only: the Assessment Builder lives directly below Clients. RBTs never render this branch. */}
+                <NavItem href="/assessment" label="Assessment Builder" icon={IconFileText} active={isActive("/assessment")} expanded={expanded} />
                 <NavItem href="/schedule" label="Schedule" icon={IconCalendar} active={isActive("/schedule")} expanded={expanded} />
                 <a
                   href="https://chromewebstore.google.com/detail/imignknofjahdlgopbfkpopcdnffchgk"
@@ -406,6 +409,11 @@ export default function Sidebar() {
               <div className="space-y-0.5">
                 <NavItem href="/dashboard" label="Dashboard" icon={IconDashboard} active={isActive("/dashboard")} expanded={expanded} />
                 <NavItem href="/clients" label="Clients" icon={IconUsers} active={isActive("/clients")} badge={clientCount} expanded={expanded} />
+                {/* Assessment Builder is BCBA-only. This branch also renders for admin (and any non-BCBA role),
+                    so it is shown ONLY when admin — never to an RBT. */}
+                {isAdmin && (
+                  <NavItem href="/assessment" label="Assessment Builder" icon={IconFileText} active={isActive("/assessment")} expanded={expanded} />
+                )}
                 <NavItem href="/schedule" label="Schedule" icon={IconCalendar} active={isActive("/schedule")} expanded={expanded} />
                 <a
                   href="https://chromewebstore.google.com/detail/imignknofjahdlgopbfkpopcdnffchgk"
