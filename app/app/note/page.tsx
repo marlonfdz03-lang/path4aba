@@ -94,6 +94,7 @@ function NoteForm() {
 
   // ── Generation state ──
   const [generating, setGenerating] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);  // calm label for the coverage retry (no visible wipe)
   const [generatedNote, setGeneratedNote] = useState("");
   const [status, setStatus] = useState("");
   const [similarityWarning, setSimilarityWarning] = useState(false);
@@ -210,7 +211,8 @@ function NoteForm() {
     setSummary(null);
     setSaveState("idle");
     setGenerating(true);
-    setStatus("Generating note…");
+    setFinalizing(false);
+    setStatus("");  // progress shown by the calm output-area label; status stays for genuine errors
 
     try {
       // Slim payload: the server builds the full SessionInput from the authoritative DB profile
@@ -244,10 +246,13 @@ function NoteForm() {
       // review flags, alongside the note and its summary tables.
       let blockingError = "";
       const finalText = await consumeNoteStream(res, {
-        onText: (t) => setGeneratedNote(t),
+        // BUFFER — do not display mid-stream (option b). The note is revealed once, at the end, so the RBT
+        // never watches it stream, get wiped, and restart.
+        onText: () => {},
         onRegen: () => {
-          setGeneratedNote("");
-          setStatus("Refining note…");
+          // Compliance coverage retry — presentation only. No visible wipe (nothing is shown yet); switch the
+          // calm label to "Finalizing your note…", never a wipe or an alarming "Regenerating".
+          setFinalizing(true);
         },
         onMeta: (meta) => {
           if (meta.error && meta.blocking !== false) {
@@ -264,6 +269,7 @@ function NoteForm() {
         },
       });
       setStatus("");
+      if (!blockingError && finalText.trim()) setGeneratedNote(finalText);  // reveal the finished note once
 
       // Build the summary from state at generation time + the final note text
       // (matches the website — /api/generate-note does not return these).
@@ -279,6 +285,7 @@ function NoteForm() {
       setStatus("");
     } finally {
       setGenerating(false);
+      setFinalizing(false);
     }
   }
 
@@ -456,7 +463,7 @@ function NoteForm() {
               </div>
             )}
             <div className="app-note-output">
-              {generatedNote || (generating ? "Generating…" : "")}
+              {generatedNote || (generating ? (finalizing ? "Finalizing your note…" : "Generating your note…") : "")}
             </div>
           </>
         )}

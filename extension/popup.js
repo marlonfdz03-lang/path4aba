@@ -1055,9 +1055,9 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
 });
 
 // ── Stream handler (generate) ──
-// Buffers the full note before displaying. Uniqueness NEVER regenerates (it is a cosmetic warning, warn-only
-// server-side); the only server-driven restart is the class-B compliance coverage retry, shown as
-// "Refining note…". There is no client-side retry loop.
+// Buffers the full note before displaying (so the RBT never watches a wipe/restart). Uniqueness NEVER
+// regenerates (it is a cosmetic warning, warn-only server-side); the only server-driven restart is the
+// class-B compliance coverage retry, shown calmly as "Finalizing your note…". There is no client-side retry loop.
 async function streamGenerate(endpoint, body, method = 'POST') {
   const outputSection = document.getElementById('outputSection');
   const outputNote = document.getElementById('outputNote');
@@ -1067,7 +1067,7 @@ async function streamGenerate(endpoint, body, method = 'POST') {
   outputNote.value = '';
   outputSection.style.display = '';
   streamStatus.style.display = '';
-  streamStatus.textContent = 'Generating note…';
+  streamStatus.textContent = 'Generating your note…';
   generateBtn.disabled = true;
 
   let finalText = '';
@@ -1108,8 +1108,10 @@ async function streamGenerate(endpoint, body, method = 'POST') {
         }
 
         if (chunk.includes('__REGEN__')) {
+          // Coverage retry. Already buffered (outputNote is untouched until the end), so this buffer reset is
+          // invisible — no wipe. Calm, positive copy; never "Regenerating".
           fullText = '';
-          streamStatus.textContent = 'Refining note…';
+          streamStatus.textContent = 'Finalizing your note…';
           continue;
         }
 

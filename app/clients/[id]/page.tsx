@@ -243,6 +243,9 @@ export default function ClientProfilePage() {
   // The preselector's per-note assignments + activities from __META__, persisted on save so rotation learns.
   const generationContextRef = useRef<{ generationContext: any; activities: string[] } | null>(null);
   const [generating, setGenerating] = useState(false);
+  // Presentation of the compliance coverage retry: while true, the note is being finalized. Drives a calm
+  // progress label — never a visible wipe, restart, or red "Regenerating" banner.
+  const [finalizing, setFinalizing] = useState(false);
   const [status, setStatus] = useState("");
   const [similarityWarning, setSimilarityWarning] = useState(false);
   const [noteSaved, setNoteSaved] = useState(false);
@@ -609,7 +612,8 @@ export default function ClientProfilePage() {
   async function handleGenerateNote() {
     if (!canGenerate) return;
     setGenerating(true);
-    setStatus("Generating note...");
+    setFinalizing(false);
+    setStatus("");           // progress is shown by the calm card, not the red status line (which is for errors)
     setGeneratedNote("");
     sessionSummaryRef.current = null;
     generationContextRef.current = null;
@@ -657,22 +661,23 @@ export default function ClientProfilePage() {
         const chunk = decoder.decode(value, { stream: true });
         if (chunk.includes("__META__")) {
           const parts = chunk.split("__META__");
-          if (parts[0]) { fullText += parts[0]; setGeneratedNote(fullText); }
-          try { const meta = JSON.parse(parts[1]); if (meta.error && meta.blocking !== false) { setStatus(meta.error); setGeneratedNote(""); return; } if (meta.error) { advisory = meta.error; } setSimilarityWarning(!!meta.similarityWarning); if (typeof meta.filteredText === "string") { fullText = meta.filteredText; setGeneratedNote(fullText); } generationContextRef.current = { generationContext: meta.generationContext ?? null, activities: Array.isArray(meta.activitiesUsed) ? meta.activitiesUsed : [] }; diagLine = `DIAG · build ${meta.buildTag || "?"} · first-try defects: ${(meta.firstTryDefects || []).join(", ") || "none (clean)"} · regens this generate: ${regenSeen}`; } catch {}
+          if (parts[0]) { fullText += parts[0]; }  // buffer only — revealed once at the end (no mid-stream display)
+          try { const meta = JSON.parse(parts[1]); if (meta.error && meta.blocking !== false) { setStatus(meta.error); setGeneratedNote(""); return; } if (meta.error) { advisory = meta.error; } setSimilarityWarning(!!meta.similarityWarning); if (typeof meta.filteredText === "string") { fullText = meta.filteredText; } generationContextRef.current = { generationContext: meta.generationContext ?? null, activities: Array.isArray(meta.activitiesUsed) ? meta.activitiesUsed : [] }; diagLine = `DIAG · build ${meta.buildTag || "?"} · first-try defects: ${(meta.firstTryDefects || []).join(", ") || "none (clean)"} · regens this generate: ${regenSeen}`; } catch {}
           break outer;
         }
         if (chunk.includes("__REGEN__")) {
-          const m = chunk.match(/__REGEN__(:[^\n]*)?/);
-          const src = m && m[1] ? m[1].slice(1) : "(UNTAGGED — OLD BUILD)";
+          // The compliance coverage retry. Presentation only: we are BUFFERING (nothing is displayed yet), so
+          // this resets the buffer WITHOUT any visible wipe, and shows a calm "Finalizing…" state — never a
+          // red "Regenerating" banner and never a from-scratch restart the RBT can see. regenSeen still counts
+          // for the diagnostic line; it is not surfaced to the user.
           regenSeen += 1;
           fullText = "";
-          setGeneratedNote("");
-          setStatus(`Regen #${regenSeen} — source: ${src}`);
+          setFinalizing(true);
           continue;
         }
-        fullText += chunk;
-        setGeneratedNote(fullText);
+        fullText += chunk;  // accumulate; reveal once at the end (option b — no mid-stream display)
       }
+      setGeneratedNote(fullText);  // reveal the finished note once
       setStatus(advisory || diagLine);
       if (fullText.trim()) {
         const backupNote = { id: crypto.randomUUID(), clientId: client.id, date: date || new Date().toLocaleDateString(), note: fullText };
@@ -693,6 +698,7 @@ export default function ClientProfilePage() {
       setStatus("Network error. Please try again.");
     } finally {
       setGenerating(false);
+      setFinalizing(false);
     }
   }
 
@@ -2033,12 +2039,20 @@ export default function ClientProfilePage() {
                 </p>
               )}
               {status && <p className="mt-2 text-[13px] text-red-500">{status}</p>}
+              {generating && (
+                <div className="mt-4 flex items-center gap-3 rounded-xl px-4 py-3 border" style={{ background: "#F0FDFA", borderColor: "#99F6E4", color: "#0F766E" }}>
+                  <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ flexShrink: 0 }}>
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
+                  </svg>
+                  <span className="text-[13px] font-medium">{finalizing ? "Finalizing your note…" : "Generating your note…"}</span>
+                </div>
+              )}
               {similarityWarning && (
                 <p className="mt-3 text-[13px] rounded-xl px-4 py-3 border" style={{ background: "#FFFBEB", borderColor: "#FCD34D", color: "#92400E" }}>
                   ⚠️ This note may be similar to a previous session. Consider editing before submitting.
                 </p>
               )}
-              {generatedNote && (
+              {generatedNote && !generating && (
                 <NoteOutput
                   note={generatedNote}
                   onChange={setGeneratedNote}
