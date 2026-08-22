@@ -96,3 +96,85 @@ export function phiDiscardReason(text: string): DiscardReason | null {
 
   return null;
 }
+
+// ── Extraction (Step 3, pure part) ──────────────────────────────────────────────────────────────────────
+// Turn an extracted assessment into candidate library entries, apply the PHI discard filter, and report what
+// was discarded (count + reason only). The DB upsert (saveClinicalLibrary) lives in assessmentPipeline.ts.
+
+export type LibraryKind = 'behavior' | 'skill' | 'procedure' | 'reinforcer' | 'activity';
+export interface LibraryEntry {
+  kind: LibraryKind;
+  name: string;
+  variants: string[];
+  functions: string[];
+  meta?: Record<string, unknown>;
+}
+export interface DiscardRecord { kind: LibraryKind; reason: DiscardReason; }
+
+const asArray = (v: unknown): string[] =>
+  Array.isArray(v) ? v.map((x) => String(x)) : (v == null || v === '' ? [] : [String(v)]);
+
+// De-duplicate strings case-insensitively, preserving first-seen casing.
+export function unionCI(arr: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const x of arr) {
+    const t = String(x ?? '').trim();
+    const k = t.toLowerCase();
+    if (!t || seen.has(k)) continue;
+    seen.add(k);
+    out.push(t);
+  }
+  return out;
+}
+
+export function collectLibraryEntries(extracted: any): LibraryEntry[] {
+  const e: LibraryEntry[] = [];
+  const r = extracted?.reinforcers || {};
+
+  for (const b of extracted?.maladaptiveBehaviors || []) {
+    if (!b?.name) continue;
+    e.push({ kind: 'behavior', name: String(b.name), variants: b.topography ? [String(b.topography)] : [], functions: asArray(b.function) });
+  }
+  for (const s of extracted?.replacementSkills || []) {
+    if (!s?.name) continue;
+    e.push({ kind: 'skill', name: String(s.name), variants: [], functions: s.targetFunction ? [String(s.targetFunction)] : [], meta: s.targetFunction ? { targetFunction: String(s.targetFunction) } : undefined });
+  }
+  // Teaching procedures = the extracted intervention/procedure NAMES. The assessment does not link a
+  // procedure to specific skills, so meta.skills is left empty (a known data gap, not inferred).
+  for (const p of extracted?.approvedInterventions || []) {
+    if (p) e.push({ kind: 'procedure', name: String(p), variants: [], functions: [] });
+  }
+  // Reinforcers: tangibles + social. `people` is deliberately EXCLUDED — those are caregiver names (PHI).
+  for (const item of [...asArray(r.tangibles), ...asArray(r.social)]) {
+    if (item) e.push({ kind: 'reinforcer', name: item, variants: [], functions: [] });
+  }
+  // Activities: a NEW library consumer for the Builder — does not touch curatedActivities (the note-gen
+  // baseline). Setting is recorded when the assessment tied it to home/school.
+  for (const a of asArray(r.activities)) if (a) e.push({ kind: 'activity', name: a, variants: [], functions: [] });
+  for (const a of extracted?.homeActivities || []) if (a) e.push({ kind: 'activity', name: String(a), variants: [], functions: [], meta: { setting: 'home' } });
+  for (const a of extracted?.schoolActivities || []) if (a) e.push({ kind: 'activity', name: String(a), variants: [], functions: [], meta: { setting: 'school' } });
+  for (const a of extracted?.preferredActivities || []) if (a) e.push({ kind: 'activity', name: String(a), variants: [], functions: [] });
+
+  return e;
+}
+
+// Apply the PHI discard filter per string: a dirty NAME discards the whole entry; a dirty variant is dropped
+// (the entry survives with its clean variants). functions are canonical labels (escape/attention/…) — never
+// PHI — so they are not filtered. Returns cleaned entries + the discard log (count + reason only).
+export function filterLibraryEntries(entries: LibraryEntry[]): { kept: LibraryEntry[]; discards: DiscardRecord[] } {
+  const kept: LibraryEntry[] = [];
+  const discards: DiscardRecord[] = [];
+  for (const entry of entries) {
+    const nameReason = phiDiscardReason(entry.name);
+    if (nameReason) { discards.push({ kind: entry.kind, reason: nameReason }); continue; }
+    const cleanVariants: string[] = [];
+    for (const v of entry.variants) {
+      const vr = phiDiscardReason(v);
+      if (vr) discards.push({ kind: entry.kind, reason: vr });
+      else cleanVariants.push(v);
+    }
+    kept.push({ ...entry, variants: cleanVariants });
+  }
+  return { kept, discards };
+}

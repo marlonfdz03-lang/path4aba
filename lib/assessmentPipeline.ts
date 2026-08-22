@@ -9,6 +9,7 @@ import { prisma } from '@/lib/prisma'
 import { parseReinforcers } from '@/lib/reinforcers'
 import { buildActivityLists } from '@/lib/curatedActivities'
 import { normalizeDiagnosis } from '@/lib/diagnosis'
+import { canonicalKey, collectLibraryEntries, filterLibraryEntries, unionCI } from '@/lib/clinicalLibrary'
 
 // ── PDF parsing ───────────────────────────────────────────────────────────────
 
@@ -198,7 +199,63 @@ export function buildAssessmentProfile(extracted: ExtractedAssessment) {
 
 // ── Knowledge base persistence (fire-and-forget) ──────────────────────────────
 
+// ── Clinical Library accumulation (Step 3) ────────────────────────────────────
+// Admin-curated corpus for the future Assessment Builder. Runs BEFORE the existing KB writes and is fully
+// fail-soft: it can never throw into ingest, the KB writes below, or note generation. If the library tables
+// are not migrated yet, it no-ops silently (like recordGateFindings). Separate from the note-gen KB above —
+// curating this corpus cannot affect note generation.
+export async function saveClinicalLibrary(extracted: ExtractedAssessment): Promise<void> {
+  try {
+    // Probe: if the migration hasn't been run, bail silently rather than firing N failing calls.
+    await (prisma as any).clinical_library.count()
+
+    const { kept, discards } = filterLibraryEntries(collectLibraryEntries(extracted))
+
+    // Discards: log count + reason category only — never the text.
+    for (const d of discards) {
+      try { await (prisma as any).clinical_library_discards.create({ data: { kind: d.kind, reason: d.reason } }) } catch { /* fail-soft */ }
+    }
+
+    // Kept: upsert on UNIQUE(kind, canonical_key). On a match, UNION new variants/functions into the existing
+    // row (dedup case-insensitively) rather than creating a duplicate — the anti-"diez líneas de tantrum" rule.
+    for (const entry of kept) {
+      const key = canonicalKey(entry.name)
+      if (!key) continue
+      try {
+        const existing = await (prisma as any).clinical_library.findFirst({
+          where: { kind: entry.kind, canonical_key: key },
+          select: { id: true, variants: true, functions: true },
+        })
+        if (existing) {
+          await (prisma as any).clinical_library.update({
+            where: { id: existing.id },
+            data: {
+              variants: unionCI([...(existing.variants || []), ...entry.variants]),
+              functions: unionCI([...(existing.functions || []), ...entry.functions]),
+            },
+          })
+        } else {
+          await (prisma as any).clinical_library.create({
+            data: {
+              kind: entry.kind,
+              canonical_key: key,
+              display_name: entry.name.trim(),
+              variants: unionCI(entry.variants),
+              functions: unionCI(entry.functions),
+              meta: entry.meta ?? undefined,
+            },
+          })
+        }
+      } catch { /* one entry failed (or a race on the unique index) — skip it, keep going */ }
+    }
+  } catch { /* tables missing or DB blip — no-op; the library must never break ingest */ }
+}
+
 export async function saveKnowledgeBase(extracted: ExtractedAssessment): Promise<void> {
+  // Accumulate the admin Clinical Library first, isolated — it never throws (see above), so a library
+  // failure cannot affect the note-gen KB writes that follow.
+  await saveClinicalLibrary(extracted).catch(() => {})
+
   for (const behavior of extracted.maladaptiveBehaviors) {
     if (!behavior.name || hasBlockedTerm(behavior.name)) continue
     const cleanName = cleanText(behavior.name)
