@@ -111,14 +111,14 @@ export interface BehaviorAssignment {
   interventionName?: string;
   activity?: string;
   topography?: string;
-  tier?: string;
+  tier?: OutcomeTier;
   promptKey?: string;
   responseKey?: string;
 }
 export interface SkillAssignment {
   method?: string;
   activity?: string;
-  tier?: string;
+  tier?: OutcomeTier;
   promptKey?: string;
   responseKey?: string;
 }
@@ -130,6 +130,12 @@ export interface PreselectResult {
   // and does not silently drop the behavior — it skips the function/antecedent axes and surfaces this so
   // the assessment can be fixed. (Built in Commit 2; the preselector emits the same message.)
   integrityFlags: string[];
+  // AUDITABILITY: the assigned outcome tier per behavior / per skill, name→tier, mirrored to the top level so
+  // a saved note's generation_context answers "what tier was this skill assigned?" with a single lookup
+  // (generation_context->'skillTiers'->'Request Break') instead of digging into perSkill[...].tier. The math
+  // is assignTiers(); this only records what it decided, so tier questions are answerable from data, not prose.
+  behaviorTiers: Record<string, OutcomeTier>;
+  skillTiers: Record<string, OutcomeTier>;
 }
 
 // ── The selector ──────────────────────────────────────────────────────────────────────────────────────
@@ -200,7 +206,13 @@ export function preselect(input: PreselectInput): PreselectResult {
     perSkill[s.name] = a;
   });
 
-  return { perBehavior, perSkill, activities: [...activities], integrityFlags };
+  // Mirror the assigned tiers (already on each perBehavior/perSkill entry) to top-level name→tier maps.
+  const behaviorTiers: Record<string, OutcomeTier> = {};
+  for (const [name, a] of Object.entries(perBehavior)) if (a.tier) behaviorTiers[name] = a.tier;
+  const skillTiers: Record<string, OutcomeTier> = {};
+  for (const [name, a] of Object.entries(perSkill)) if (a.tier) skillTiers[name] = a.tier;
+
+  return { perBehavior, perSkill, activities: [...activities], integrityFlags, behaviorTiers, skillTiers };
 }
 
 // Render the assignments as the FIXED ASSIGNMENTS block handed to GPT. Every value here came from a locked
