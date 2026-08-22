@@ -14,6 +14,7 @@ import { CatalogDiffPanel } from "./CatalogDiffPanel";
 import { reviewBannerLines } from "@/lib/reviewFlagCopy";
 import { activeBehaviors, activeSkills } from "@/lib/activePrograms";
 import { splitReinforcerValue } from "@/lib/reinforcers";
+import { looksEdible, EDIBLE_WARNING } from "@/lib/edibleReinforcer";
 import { subtractMasteredFromActive } from "@/lib/skillReconcile";
 import { functionDisplayLabel, functionToCanonical } from "@/lib/functionPatterns";
 
@@ -208,8 +209,9 @@ export default function ClientProfilePage() {
   // Per-client saved "Other place of service" locations (clinical_profile.savedLocations) — the same
   // store the extension writes, so a location saved on either surface appears on both for this client.
   const [savedLocations, setSavedLocations] = useState<string[]>([]);
-  // Profile-overview "add reinforcer" input.
+  // Profile-overview "add reinforcer" input + advisory edible warning (shown after adding an edible).
   const [newReinforcer, setNewReinforcer] = useState("");
+  const [edibleWarning, setEdibleWarning] = useState("");
   const [customPresent, setCustomPresent] = useState("");
   const customPresentRef = useRef<HTMLInputElement>(null);
   const [environmentalChange, setEnvironmentalChange] = useState(false);
@@ -528,6 +530,8 @@ export default function ClientProfilePage() {
   function addReinforcer(text: string) {
     const raw = text.trim();
     if (!raw) return;
+    // Advisory only — warn if it looks edible, but still add it (Marlon's ruling: inform, don't block).
+    setEdibleWarning(looksEdible(raw) ? EDIBLE_WARNING : "");
     const current = (client.clinicalProfile?.reinforcers || []) as any[];
     // Split " or " into discrete items, then de-dupe (case-insensitive) against existing names.
     const additions = splitReinforcerValue([raw]) as string[];
@@ -1321,6 +1325,11 @@ export default function ClientProfilePage() {
                     Add
                   </button>
                 </form>
+                {edibleWarning && (
+                  <p className="mt-2 text-[12px] px-3 py-2 rounded-lg border" style={{ background: "#FFFBEB", borderColor: "#FCD34D", color: "#92400E" }}>
+                    ⚠️ {edibleWarning}
+                  </p>
+                )}
               </div>
             </div>
           </div>
