@@ -5,6 +5,7 @@ import Sidebar from "./components/Sidebar";
 import { ContentShell } from "./components/ContentShell";
 import { Providers } from "./components/Providers";
 import { PushInit } from "./components/PushInit";
+import { ChunkReloadHandler } from "./components/ChunkReloadHandler";
 
 const dmSans = DM_Sans({
   subsets: ["latin"],
@@ -36,6 +37,7 @@ export default function RootLayout({
     <html lang="en" className={`${dmSans.variable} h-full antialiased`}>
       <body className="min-h-full font-[family-name:var(--font-dm-sans)]">
         <Providers>
+          <ChunkReloadHandler />
           <PushInit />
           <Sidebar />
           <ContentShell>{children}</ContentShell>
