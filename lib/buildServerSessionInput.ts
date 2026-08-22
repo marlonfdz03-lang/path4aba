@@ -10,6 +10,7 @@ import type { SessionInput } from "./generateSmartNote";
 import { nextSessionClause } from "./nextSessionDate.ts";
 import { matrixFunctionsForBehavior } from "./functionPatterns.ts";
 import { splitReinforcerValue } from "./reinforcers.ts";
+import { looksEdible } from "./edibleReinforcer.ts";
 import { buildActivityLists } from "./curatedActivities.ts";
 import { keepActiveBehaviorNames, keepActiveSkillNames, activeSkills } from "./activePrograms.ts";
 
@@ -78,7 +79,15 @@ export function buildServerSessionInput(
   // "tablet or phone" resolves to a single item and the note never renders the unresolved alternative
   // (idempotent — an already-split value is a no-op — so it also fixes existing clients with no migration).
   // Activities merge the assessment's split home/school lists with the curated master list (deduped).
-  const reinforcers = splitReinforcerValue(asArray(p.reinforcers)) as string[];
+  // EDIBLE FIREWALL (clinical-safety): filter edibles at SELECTION so they never reach the note, even though
+  // the profile stores them (Marlon's warn-don't-block ruling — the profile keeps them; the note never uses
+  // them). This is the layer that makes it true: the prompt's prose ban was being overridden because
+  // reinforcersUsed handed the edible to GPT as a locked, approved value ("name ONLY from this list"), so the
+  // ban never applied. Removing it here closes both downstream channels (reinforcersUsed + tangibles). Reuses
+  // the tested looksEdible (conservative — "fidget toy"/"poker chip" do not false-trigger). If a client's
+  // reinforcers are ALL edible, the list empties and the prompt's graceful fallback describes reinforcement by
+  // category/contingency without naming an item.
+  const reinforcers = (splitReinforcerValue(asArray(p.reinforcers)) as string[]).filter((r) => !looksEdible(r));
   const { homeActivities, schoolActivities } = buildActivityLists({
     home: asArray(p.homeActivities) as string[],
     school: asArray(p.schoolActivities) as string[],
@@ -179,7 +188,11 @@ export function buildServerSessionInput(
     activitiesUsed: (slim.location === "school" ? schoolActivities : homeActivities)
       .slice(0, 4).map((name) => ({ name })),
     reinforcersUsed: reinforcers.slice(0, 3).map((item) => ({
-      type: "non-edible" as const, item, deliveredWhen: "",
+      // Type is DERIVED, never asserted. The list is already edible-filtered above, so this is non-edible in
+      // practice — but deriving it means no value can ever be mislabeled "non-edible" the way the old hardcoded
+      // literal was (that false tag actively helped defeat the prompt's edible ban).
+      type: looksEdible(item) ? ("edible" as const) : ("non-edible" as const),
+      item, deliveredWhen: "",
     })),
 
     clinicalEvents: [
