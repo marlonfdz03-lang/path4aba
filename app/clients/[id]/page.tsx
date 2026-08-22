@@ -651,7 +651,6 @@ export default function ClientProfilePage() {
       // reads is handled — that per-chunk parse failure is why generation_context was being saved NULL.
       let raw = "";
       let fullText = "";      // the resolved note text (revealed live for pass 1; swapped to final at the end)
-      let diagLine = "";
       // A message on the meta channel is not the same as "throw the result away". Only a BLOCKING
       // stop hides the note and skips the session-summary tables; an advisory is shown alongside them.
       let advisory = "";
@@ -679,15 +678,13 @@ export default function ClientProfilePage() {
           setSimilarityWarning(!!meta.similarityWarning);
           fullText = typeof meta.filteredText === "string" ? meta.filteredText : note;
           generationContextRef.current = { generationContext: meta.generationContext ?? null, activities: Array.isArray(meta.activitiesUsed) ? meta.activitiesUsed : [] };
-          const regenSeen = (raw.match(/__REGEN__/g) || []).length;
-          diagLine = `DIAG · build ${meta.buildTag || "?"} · first-try defects: ${(meta.firstTryDefects || []).join(", ") || "none (clean)"} · regens this generate: ${regenSeen}`;
           break outer;
         } catch {
           /* partial meta JSON — keep reading */
         }
       }
       setGeneratedNote(fullText);  // swap to the finished note (seamless for pass 1; the reveal after a regen)
-      setStatus(advisory || diagLine);
+      setStatus(advisory);  // only a genuine advisory ever shows here — no regeneration reporting
       if (fullText.trim()) {
         const backupNote = { id: crypto.randomUUID(), clientId: client.id, date: date || new Date().toLocaleDateString(), note: fullText };
         saveNote(backupNote);

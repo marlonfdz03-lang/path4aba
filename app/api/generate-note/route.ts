@@ -98,11 +98,9 @@ export async function POST(req: NextRequest) {
             controller.enqueue(encoder.encode(text));
           });
           controller.enqueue(encoder.encode(
-            // DIAGNOSTIC (temporary — 2x-regen trace): firstTryDefects + buildTag surfaced so a generate
-            // proves the running bundle and the dominant first-try defect. Remove with the other diag hooks.
             // generationContext + activitiesUsed flow to the client so it can persist them on save (the
             // rotation/continuity history the next note reads).
-            `\n__META__${JSON.stringify({ similarityWarning: result.similarityWarning || false, blockedFlagged: result.blockedFlagged || [], coherenceFlags: result.coherenceFlags || [], redFlags: result.redFlags || [], firstTryDefects: result.firstTryDefects || [], buildTag: result.buildTag || 'unknown', generationContext: result.generationContext || null, activitiesUsed: result.generationContext?.activities || [], filteredText: result.note })}`
+            `\n__META__${JSON.stringify({ similarityWarning: result.similarityWarning || false, blockedFlagged: result.blockedFlagged || [], coherenceFlags: result.coherenceFlags || [], redFlags: result.redFlags || [], generationContext: result.generationContext || null, activitiesUsed: result.generationContext?.activities || [], filteredText: result.note })}`
           ));
         } catch (e: any) {
           // BLOCKING: the note must not be used (a compliance hard-stop, or generation failed
