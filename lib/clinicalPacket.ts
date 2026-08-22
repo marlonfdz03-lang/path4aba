@@ -44,9 +44,12 @@ const FUNCTION_TERMS = [/\bescape\b/i, /\battention\b/i, /\btangibles?\b/i, /\ba
 interface SectionDef { key: string; label: string; priority: number; cap: number; anchors: RegExp[]; required?: boolean; fa?: boolean }
 // Priority = clinical importance for the budget (1 = keep first). Caps bound each section.
 const SECTIONS: SectionDef[] = [
-  { key: 'behaviorDetail', label: 'Detailed behavior programs', priority: 1, cap: 30000, required: true,
+  { key: 'behaviorDetail', label: 'Detailed behavior programs', priority: 1, cap: 32000, required: true,
     anchors: [/maladaptive behavior/i, /operational definition/i, /reduction target/i, /behavior program/i, /target behavior/i] },
-  { key: 'maladaptiveSummary', label: 'Maladaptive behaviors summary', priority: 2, cap: 6000, required: true,
+  // The summary is the authoritative LIST of behaviors + statuses (names can be name-only and scattered), so it
+  // gets a generous cap — under-capping it drops behavior names that live past the cut (Felix: "Arguing with
+  // Adults" at ~75K, just past the old 6K cap).
+  { key: 'maladaptiveSummary', label: 'Maladaptive behaviors summary', priority: 2, cap: 16000, required: true,
     anchors: [/maladaptive behaviors? summary/i, /behaviors? to reduce/i, /problem behavior/i, /summary of behaviors/i] },
   { key: 'functionalAssessment', label: 'FAST / MAS / functional assessment', priority: 3, cap: 9000, fa: true,
     anchors: [/motivation assessment scale/i, /functional analysis screening/i, /functional (behavior )?assessment/i, /\bQABF\b/] },
@@ -108,10 +111,13 @@ function detectFunctionTable(text: string): number {
   return -1;
 }
 
-// Collect small windows around every status marker across the WHOLE doc, so a formal DISCONTINUED block that
-// appears very late (Felix: ~99-101K) is never missed even if the main behavior region is early.
+// Collect small windows around every DISCONTINUED / MASTERED marker across the WHOLE doc, so a formal status
+// CHANGE that appears very late (Felix: DISCONTINUED at ~99-101K) is never missed even if the main behavior
+// region is early. Deliberately NOT "status:" / "maintenance" — those recur on every item and would flood the
+// budget; active/unknown items are already inside the behavior/replacement regions. Only the authoritative
+// status CHANGES (which can be name-only and late) need doc-wide capture.
 function statusWindows(text: string, radius = 450): Array<[number, number]> {
-  const rx = /\b(discontinued|status\s*:|\bmastered\b|\bmaintenance\b)/gi;
+  const rx = /\b(discontinued|mastered)\b/gi;
   const ranges: Array<[number, number]> = [];
   let m: RegExpExecArray | null;
   while ((m = rx.exec(text)) !== null) {
@@ -161,8 +167,10 @@ export function buildClinicalPacket(fullText: string): PacketResult {
     const found = hit.index >= 0;
     let start = hit.index, end = hit.index;
     if (found) {
-      // Extend to the next OTHER section's anchor (not this section's own later anchors), capped.
-      const otherStarts = anchorHits.filter((a) => a.s.key !== s.key && a.hit.index > hit.index).map((a) => a.hit.index);
+      // Extend to the next SAME-OR-HIGHER-priority section's anchor (not this section's own later anchors, and
+      // not a LOWER-priority anchor that merely happens to appear mid-section — e.g. a "changes made" mention
+      // inside the behavior detail must not truncate it), capped.
+      const otherStarts = anchorHits.filter((a) => a.s.key !== s.key && a.s.priority <= s.priority && a.hit.index > hit.index).map((a) => a.hit.index);
       const nextBoundary = otherStarts.length ? Math.min(...otherStarts) : text.length;
       end = Math.min(hit.index + s.cap, nextBoundary);
       ranges.push({ range: [start, end], priority: s.priority });
@@ -173,26 +181,29 @@ export function buildClinicalPacket(fullText: string): PacketResult {
   // Status windows across the whole doc — highest priority (never lose a late DISCONTINUED block).
   for (const w of statusWindows(text)) ranges.push({ range: w, priority: 0 });
 
-  // Greedy include by priority within budget, then present in document order.
+  // Greedy include by priority within budget (counting the join separators, so the assembled packet never
+  // exceeds budget and never has to be hard-sliced — which would drop the LATE sections, exactly the ones the
+  // old 90K cut lost). Then present in document order.
+  const SEP = '\n\n…\n\n';
   ranges.sort((a, b) => a.priority - b.priority);
   const chosen: Array<[number, number]> = [];
-  let used = 0;
   for (const { range } of ranges) {
     const merged = mergeRanges([...chosen, range]);
-    const size = merged.reduce((n, [a, b]) => n + (b - a), 0);
-    if (size <= PACKET_BUDGET) { chosen.push(range); used = size; }
+    const size = merged.reduce((n, [a, b]) => n + (b - a), 0) + Math.max(0, merged.length - 1) * SEP.length;
+    if (size <= PACKET_BUDGET) chosen.push(range);
   }
   const finalRanges = mergeRanges(chosen).sort((a, b) => a[0] - b[0]);
 
-  // Fail-safe: located nothing → bounded fallback slice (never worse than today), flagged by behaviorDomainFound=false.
-  let packet: string;
-  if (!finalRanges.length) packet = text.slice(0, PACKET_BUDGET);
-  else packet = finalRanges.map(([a, b]) => text.slice(a, b)).join('\n\n…\n\n');
-  if (packet.length > PACKET_BUDGET) packet = packet.slice(0, PACKET_BUDGET);
+  // Fail-safe: located nothing → bounded fallback slice (never worse than today), flagged behaviorDomainFound=false.
+  let packet = finalRanges.length ? finalRanges.map(([a, b]) => text.slice(a, b)).join(SEP) : text.slice(0, PACKET_BUDGET);
+  if (packet.length > PACKET_BUDGET) packet = packet.slice(0, PACKET_BUDGET); // defensive; greedy already fits
 
-  const behaviorDomainFound = manifest.some((m) => (m.key === 'behaviorDetail' || m.key === 'maladaptiveSummary') && m.found);
-  const hasFunctionalAssessment = manifest.some((m) => m.key === 'functionalAssessment' && m.found);
-  const missing = manifest.filter((m) => (m.key === 'behaviorDetail' || m.key === 'maladaptiveSummary' || m.key === 'functionalAssessment') && !m.found).map((m) => m.label);
+  // Flags reflect what is ACTUALLY in the assembled packet (not merely detected) — so provenance can never
+  // claim a functional assessment the LLM did not receive.
+  const inPacket = (m: SectionMatch) => m.found && finalRanges.some(([a, b]) => m.start < b && m.end > a);
+  const behaviorDomainFound = manifest.some((m) => (m.key === 'behaviorDetail' || m.key === 'maladaptiveSummary') && inPacket(m));
+  const hasFunctionalAssessment = manifest.some((m) => m.key === 'functionalAssessment' && inPacket(m));
+  const missing = manifest.filter((m) => (m.key === 'behaviorDetail' || m.key === 'maladaptiveSummary' || m.key === 'functionalAssessment') && !inPacket(m)).map((m) => m.label);
 
   return { packet, manifest, missing, behaviorDomainFound, hasFunctionalAssessment, totalChars: packet.length };
 }
