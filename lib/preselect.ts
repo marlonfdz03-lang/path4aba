@@ -11,6 +11,7 @@
 
 import type { NoteContext } from './rotationHistory.ts';
 import { TIER_PROMPTS, TIER_RESPONSES, type OutcomeTier } from './complianceTiers.ts';
+import { canonicalIntervention } from './interventionCanonical.ts';
 
 // ── Clinical data maps ────────────────────────────────────────────────────────────────────────────────
 // These NARROW a choice WITHIN an already-approved set (or ARE the locked set, for antecedents). They are a
@@ -29,7 +30,15 @@ export const FUNCTION_ANTECEDENTS: Record<string, string[]> = {
 // Which interventions fit which function (by INTERVENTION_CATALOG canonical name). Used to NARROW the
 // client's approved interventions to the ones appropriate for the chosen function; if the intersection is
 // empty, we fall back to the full approved set (still authorized) rather than expand it.
-export const FUNCTION_INTERVENTIONS: Record<string, string[]> = {
+// GENERAL ABA KNOWLEDGE — the best-practice intervention families for each behavioral function. This is
+// PATH GUIDANCE, NOT assessment-derived: no client's assessment documents a function→intervention mapping
+// (audit confirmed), so this map is the only source of function-fit. Values are canonical intervention ids
+// (see interventionCanonical.ts); a client's approved list is canonicalized and intersected with these.
+// Anywhere this relationship is displayed it MUST be labeled Path guidance, never presented as extracted
+// from the treatment plan. It is deliberately kept SMALL and defensible — do NOT widen it to force a fit
+// (e.g. automatic staying {DRI, DRO} for a client without NCR is correct; adding a semantic alias to pad it
+// is a Clinical Library curation decision, never a code guess here).
+export const GENERAL_ABA_FUNCTION_INTERVENTIONS: Record<string, string[]> = {
   escape: ['DRA', 'DRI', 'FCT', 'NCR', 'Demand Fading', 'Behavior Momentum', 'Premack', 'DRO'],
   attention: ['DRA', 'DRI', 'FCT', 'NCR', 'DRO', 'Planned Ignoring'],
   tangible: ['DRA', 'DRI', 'FCT', 'NCR', 'DRO', 'Premack'],
@@ -105,10 +114,17 @@ export interface PreselectInput {
   history: NoteContext[];          // readGenerationHistory(clientId, { window: 3 })
 }
 
+// How the intervention was selected. 'function-matched': the client's approved list contained an
+// intervention in the general function-fit map for this behavior's function. 'approved-global-fallback': no
+// approved intervention fit the function, so one was picked from the full approved list — NOT a
+// function-matched selection (internal/admin visibility only; never stated in the note prose).
+export type InterventionFit = 'function-matched' | 'approved-global-fallback';
+
 export interface BehaviorAssignment {
   function?: string;
   antecedentKey?: string;
   interventionName?: string;
+  interventionFit?: InterventionFit;
   activity?: string;
   topography?: string;
   tier?: OutcomeTier;
@@ -136,6 +152,10 @@ export interface PreselectResult {
   // is assignTiers(); this only records what it decided, so tier questions are answerable from data, not prose.
   behaviorTiers: Record<string, OutcomeTier>;
   skillTiers: Record<string, OutcomeTier>;
+  // AUDITABILITY: per-behavior intervention selection provenance, name→fit, mirrored to the top level like
+  // the tiers. 'approved-global-fallback' marks a behavior whose function had no approved intervention that
+  // fits the general map — so admins can see which selections are NOT function-matched.
+  interventionFit: Record<string, InterventionFit>;
 }
 
 // ── The selector ──────────────────────────────────────────────────────────────────────────────────────
@@ -164,12 +184,26 @@ export function preselect(input: PreselectInput): PreselectResult {
       integrityFlags.push(`"${b.name}" has no documented function in the assessment — verify the assessment.`);
     }
 
-    // 2. INTERVENTION — approved set, NARROWED to those that fit the chosen function (fallback: full approved
-    //    set). Either way the result is a member of approvedInterventions — never outside it.
-    const fit = a.function ? FUNCTION_INTERVENTIONS[a.function] : undefined;
-    const fitting = fit ? input.approvedInterventions.filter((i) => fit.includes(i)) : [];
-    const interventionSet = fitting.length ? fitting : input.approvedInterventions;
-    a.interventionName = lruPick(interventionSet, behaviorAxis(history, b.name, 'interventionName'));
+    // 2. INTERVENTION — the client's approved list ∩ the general function-fit map (canonicalized on both
+    //    sides so "Differential Reinforcement of Alternative Behavior (DRA)" matches the map's "DRA"). If
+    //    something fits → function-matched selection. If NOTHING fits → the note still needs an intervention,
+    //    so pick from the full approved list, but MARK it 'approved-global-fallback' — it is NOT presented as
+    //    function-matched (the old code silently used the full list and passed a coincidental pick off as a
+    //    function match; that is the bug being removed). The result is always a member of approvedInterventions.
+    const fitIds = a.function ? GENERAL_ABA_FUNCTION_INTERVENTIONS[a.function] : undefined;
+    const fitting = fitIds
+      ? input.approvedInterventions.filter((i) => fitIds.includes(canonicalIntervention(i)))
+      : [];
+    if (fitting.length) {
+      a.interventionName = lruPick(fitting, behaviorAxis(history, b.name, 'interventionName'));
+      a.interventionFit = 'function-matched';
+    } else {
+      a.interventionName = lruPick(input.approvedInterventions, behaviorAxis(history, b.name, 'interventionName'));
+      a.interventionFit = 'approved-global-fallback';
+      if (a.function) {
+        integrityFlags.push(`"${b.name}" (${a.function}): no approved intervention fits this function in Path's general map — selected "${a.interventionName ?? ''}" from the approved list as a non-function-matched fallback.`);
+      }
+    }
 
     // 3. ANTECEDENT — the chosen function's own pool (skipped when function is unknown).
     if (a.function && FUNCTION_ANTECEDENTS[a.function]?.length) {
@@ -211,8 +245,11 @@ export function preselect(input: PreselectInput): PreselectResult {
   for (const [name, a] of Object.entries(perBehavior)) if (a.tier) behaviorTiers[name] = a.tier;
   const skillTiers: Record<string, OutcomeTier> = {};
   for (const [name, a] of Object.entries(perSkill)) if (a.tier) skillTiers[name] = a.tier;
+  // Mirror the intervention selection provenance to a top-level name→fit map.
+  const interventionFit: Record<string, InterventionFit> = {};
+  for (const [name, a] of Object.entries(perBehavior)) if (a.interventionFit) interventionFit[name] = a.interventionFit;
 
-  return { perBehavior, perSkill, activities: [...activities], integrityFlags, behaviorTiers, skillTiers };
+  return { perBehavior, perSkill, activities: [...activities], integrityFlags, behaviorTiers, skillTiers, interventionFit };
 }
 
 // Render the assignments as the FIXED ASSIGNMENTS block handed to GPT. Every value here came from a locked
