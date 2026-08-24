@@ -263,3 +263,164 @@ export function readConfirmedDiagnosis(rows: Row[]): { source: string; codes: st
   }
   return null
 }
+
+// ── READER 5: replacement roster (the "Behaviors to Increase" program list — one program per row) ─────────
+// WHY geometry, not text: pdf2json flattens the whole page into space-joined text, so the roster reads as one
+// run-together string ("Share a toy End structured games Compliance…") that CANNOT be split into programs.
+// The POSITIONED rows preserve one program per line, so we read the column here instead.
+//
+// THE HARD PART (observed on a real "TREATMENT PACKET" layout): it is a TWO-COLUMN table whose left column
+// holds a vertically-centered SECTION LABEL ("Behaviors to Increase") and whose right column holds the items —
+// AND the reduction block sits directly above in the SAME right column, each block carrying its own inline
+// "MASTERED:" sublist. So neither "read rows below the heading" nor a label-midpoint split works (the label is
+// not centered; the reduction block's MASTERED leaks in and corrupts the active/mastered buckets).
+//
+// The robust boundary: the reduction block is exactly the maladaptive-behavior NAMES, which the caller already
+// knows (LLM/geometry behavior read). So we walk UP from the header to the last behavior-name row and start
+// the roster just below it; we walk DOWN to the next major section ("Interventions", …). Within that span the
+// inline NEW:/MASTERED:/DISCONTINUED: sublabels partition active vs mastered vs discontinued. Geometry + the
+// known behavior names only — no program name, no count, no coordinate. Fails safe: header not found, or an
+// implausible parse, → { found:false } and the caller keeps the LLM result.
+export interface ReplacementRoster { active: string[]; mastered: string[]; discontinued: string[]; found: boolean; rawItemCount: number }
+
+// The header is a SECTION LABEL that STARTS the row — never a prose sentence that merely contains
+// "…to increase…" mid-clause (e.g. "ABA treatment to increase motivation"). Anchored at the row start.
+// NOTE: deliberately NOT "replacement skills" — that phrase names the caregiver-training "Replacement
+// skills/Program implementation" goal blocks, a DIFFERENT section that must not win the roster header.
+const INCREASE_HEADER = /^\s*((behaviors?|skills?|goals?)\s+to\s+increase|replacement\s+(behaviors?|programs?)\b|behaviors?\s+to\s+acquire)/i
+// A row that STARTS the next major section — ends the roster (the boundary AFTER the list).
+const ROSTER_END = /^\s*(approved\s+)?(interventions?|behavioral\s+concern|behaviors?\s+targeted|target\s+behaviors?|reinforc|program\s+change|discharge|caregiver\s+(goals?|involvement)|replacement\s+skills\s*\/|diagnos|assessment\s+result|treatment\s+goal|maintenance\s+program)/i
+// Inline sublabel partitioning the block (NOT a boundary): switches the bucket, its trailing text is an item.
+const ROSTER_SUBLABEL = /^\s*(NEW|MASTERED|DISCONTINUED|MAINTENANCE|IN\s*PROGRESS|CONTINUED?|ACTIVE|ONGOING)\s*:/i
+const rosterBucket = (t: string): 'active' | 'mastered' | 'discontinued' =>
+  /^\s*MASTERED\s*:/i.test(t) ? 'mastered' : /^\s*DISCONTINUED\s*:/i.test(t) ? 'discontinued' : 'active'
+const rnorm = (s: string) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+const rnameMatch = (a: string, b: string) => { const x = rnorm(a), y = rnorm(b); return !!x && !!y && x.length >= 4 && y.length >= 4 && (x.includes(y) || y.includes(x)) }
+
+// Shared core: read a one-item-per-row COLUMN list under a section label, honoring the two-column centered-label
+// layout (label split across word-fragments; items in the right column) and inline NEW:/MASTERED:/DISCONTINUED:
+// sublabels. `excludeNames` bound the TOP (a row whose text matches a known name from the PRECEDING section —
+// e.g. a maladaptive behavior above "Behaviors to Increase" — ends the upward walk). Geometry only; fails safe.
+function columnRoster(rows: Row[], headerRe: RegExp, excludeNames: string[]): ReplacementRoster {
+  const empty: ReplacementRoster = { active: [], mastered: [], discontinued: [], found: false, rawItemCount: 0 }
+  const headerIdx = rows.findIndex((r) => headerRe.test(rowText(r)))
+  if (headerIdx < 0) return empty
+  const header = rows[headerIdx]
+  // The label may be split across word-fragments ("Behaviors" | "to" | "Increase"). Accumulate leading cells
+  // (x-order) until the join matches the phrase; the ITEM column starts at the FIRST cell after it (two-column
+  // layout). If the label consumes the whole row, items sit BELOW in the same column (simple layout).
+  const sorted = [...header.cells].sort((a, b) => a.x - b.x)
+  let acc = '', splitIdx = -1
+  for (let i = 0; i < sorted.length; i++) { acc = (acc ? acc + ' ' : '') + sorted[i].text; if (headerRe.test(acc)) { splitIdx = i; break } }
+  const itemX0 = (splitIdx >= 0 && splitIdx + 1 < sorted.length) ? sorted[splitIdx + 1].x - 0.5 : sorted[0].x - 0.5
+  const page = header.page
+  // The item text of a row = the cells in/right-of the item column, joined; empty if this row has no item cell.
+  const itemTextOf = (r: Row) => r.cells.filter((c) => c.x >= itemX0).map((c) => c.text).join(' ').replace(/\s+/g, ' ').trim()
+  // Candidate item rows: this page, from the header downward AND upward, that actually carry item-column text.
+  const pageRows = rows.filter((r) => r.page === page).sort((a, b) => a.y - b.y)
+  // `full` = the WHOLE row (incl. the left-column label) — a next-section label ("Interventions") can sit in
+  // the left column while its first item sits in the right column, so the boundary test must see the full row.
+  const itemRows = pageRows.map((r) => ({ y: r.y, text: itemTextOf(r), full: rowText(r) })).filter((r) => r.text)
+  const hy = header.y
+  // median spacing (robust gap threshold)
+  const gaps = itemRows.slice(1).map((r, i) => r.y - itemRows[i].y).filter((g) => g > 0).sort((a, b) => a - b)
+  const med = gaps.length ? gaps[Math.floor(gaps.length / 2)] : 1
+  const BIG_GAP = Math.max(2.4, med * 3)
+
+  const hi = itemRows.reduce((best, r, i) => (Math.abs(r.y - hy) < Math.abs(itemRows[best].y - hy) ? i : best), 0)
+  // TOP boundary: walk up to (and stop at) a preceding-section name, a section label, or a big gap.
+  let start = hi
+  for (let i = hi - 1; i >= 0; i--) {
+    const t = itemRows[i].text
+    if (ROSTER_END.test(itemRows[i].full) || excludeNames.some((n) => rnameMatch(t, n)) || ROSTER_SUBLABEL.test(t) || (itemRows[i + 1].y - itemRows[i].y) > BIG_GAP) break
+    start = i
+  }
+  // BOTTOM boundary: walk down to (and stop before) the next major section or a big gap.
+  let end = hi
+  for (let i = hi + 1; i < itemRows.length; i++) {
+    if (ROSTER_END.test(itemRows[i].full) || (itemRows[i].y - itemRows[i - 1].y) > BIG_GAP) break
+    end = i
+  }
+
+  const active: string[] = [], mastered: string[] = [], discontinued: string[] = []
+  let bucket: 'active' | 'mastered' | 'discontinued' = 'active'
+  let count = 0
+  for (let i = start; i <= end; i++) {
+    let t = itemRows[i].text
+    // Strip a merged header-phrase prefix (the centered label shares the header row with its first item).
+    if (i === hi) t = t.replace(headerRe, '').replace(/\s+/g, ' ').trim()
+    if (!t) continue
+    if (ROSTER_SUBLABEL.test(t)) { bucket = rosterBucket(t); t = t.replace(ROSTER_SUBLABEL, '').replace(/\s+/g, ' ').trim(); if (!t) continue }
+    count++
+    if (excludeNames.some((n) => rnameMatch(t, n))) continue // a preceding-section name that leaked in
+    const target = bucket === 'mastered' ? mastered : bucket === 'discontinued' ? discontinued : active
+    if (!target.some((x) => rnorm(x) === rnorm(t))) target.push(t)
+  }
+  return { active, mastered, discontinued, found: true, rawItemCount: count }
+}
+
+// The replacement-program roster. `excludeNames` = the maladaptive-behavior names (the reduction block sits
+// directly above in the same column) so the upward walk stops at the last behavior row.
+export function readReplacementRoster(rows: Row[], excludeNames: string[] = []): ReplacementRoster {
+  return columnRoster(rows, INCREASE_HEADER, excludeNames)
+}
+
+// The interventions roster — a DETERMINISTIC region count for the interventions completeness guard (same shape,
+// same blind spot as replacements). Plural "Interventions" only, so the many prose sentences that start with
+// singular "intervention …" ("intervention strategies within…") never win the header. `excludeNames` = the
+// behavior + replacement names that can appear above the interventions label. An UNDER-read here is SAFE: the
+// guard only uses the count to catch a gross under-extraction, so a conservative count never falsely preserves.
+const INTERVENTION_HEADER = /^\s*(approved\s+)?interventions\b/i
+export function readInterventionRoster(rows: Row[], excludeNames: string[] = []): ReplacementRoster {
+  return columnRoster(rows, INTERVENTION_HEADER, excludeNames)
+}
+
+// ── READER 6: stimulus-preference table (the People | Tangibles | Activities | Other reinforcer grid) ──────
+// WHY geometry: the prose "Reinforcement" paragraph the LLM reads is a BRIEF summary; the assessment's real
+// preference data lives in this 4-column table, whose columns COLLAPSE in the flattened text (People content
+// runs straight into Tangibles content — so a text read cannot separate the People column to exclude it, and
+// "mother"/"adult attention" would leak into the reinforcer catalog). The positioned rows keep the columns
+// apart by x, so we assign each content cell to its column by x-band and DROP the People column at the source.
+//
+// Returns the Tangibles / Activities / Other column TEXT (Other → social) — NEVER People — for the same
+// parseReinforcers splitting the prose path uses. Fails safe: no column-header row, columns too close to
+// separate (pdf2json collapsed them the way it collapsed the behavior table), or empty content → null, and the
+// caller keeps the prose-derived set rather than emitting garbage or a leaked name.
+export interface PreferenceTable { tangibles: string; activities: string; social: string }
+export function readPreferenceTable(rows: Row[]): PreferenceTable | null {
+  // The COLUMN-HEADER row carries distinct "Tangibles" AND "Activities" label cells — this distinguishes the
+  // RESULTS grid from a table-of-contents "Stimulus Preference Assessment" line that has no columns.
+  const headerIdx = rows.findIndex((r) => r.cells.some((c) => /^tangibles?$/i.test(c.text.trim())) && r.cells.some((c) => /^activit/i.test(c.text.trim())))
+  if (headerIdx < 0) return null
+  const hdr = rows[headerIdx]
+  const colX = (re: RegExp) => hdr.cells.find((c) => re.test(c.text.trim()))?.x ?? null
+  const pX = colX(/^people$/i), tX = colX(/^tangibles?$/i), aX = colX(/^activit/i), oX = colX(/^other$/i)
+  if (tX == null || aX == null) return null
+  // Columns must be reasonably separated; if the grid collapsed, the header x's cluster → cannot isolate People.
+  const xs = [pX, tX, aX, oX].filter((x): x is number => x != null).sort((a, b) => a - b)
+  for (let i = 1; i < xs.length; i++) if (xs[i] - xs[i - 1] < 3) return null
+  // Content is left-aligned within a column; split on the midpoints between adjacent header x's.
+  const mid = (a: number, b: number) => (a + b) / 2
+  const tStart = pX != null ? mid(pX, tX) : tX - 2   // everything left of this is the People column → excluded
+  const aStart = mid(tX, aX)
+  const oStart = oX != null ? mid(aX, oX) : Infinity
+  const page = hdr.page
+  const below = rows.filter((r) => r.page === page && r.y > hdr.y + ROW_TOL / 2).sort((a, b) => a.y - b.y)
+  const tang: Array<[number, number, string]> = [], acts: Array<[number, number, string]> = [], soc: Array<[number, number, string]> = []
+  let lastY = hdr.y
+  for (const r of below) {
+    if (r.y - lastY > 3) break // a large vertical gap → the table ended (footer/next section follows)
+    if (/^\s*(brandon|florida kids|phone\s*:|recommended interventions|documents reviewed)/i.test(rowText(r))) break
+    for (const c of r.cells) {
+      if (pX != null && c.x < tStart) continue       // People column — DROPPED at the source
+      else if (c.x < aStart) tang.push([r.y, c.x, c.text])
+      else if (c.x < oStart) acts.push([r.y, c.x, c.text])
+      else soc.push([r.y, c.x, c.text])
+    }
+    lastY = r.y
+  }
+  const join = (arr: Array<[number, number, string]>) => arr.sort((a, b) => a[0] - b[0] || a[1] - b[1]).map((x) => x[2]).join(' ').replace(/\s+/g, ' ').trim()
+  const tangibles = join(tang), activities = join(acts), social = join(soc)
+  if (!tangibles && !activities && !social) return null
+  return { tangibles, activities, social }
+}

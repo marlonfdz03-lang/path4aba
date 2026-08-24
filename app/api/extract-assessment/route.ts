@@ -9,7 +9,7 @@ import { diagnosisColumn } from "@/lib/diagnosis";
 import { parsePositioned, clusterRows } from "@/lib/pdfGeometry";
 import { assembleRefreshProfile } from "@/lib/assembleRefreshProfile";
 import { buildClinicalPacket } from "@/lib/clinicalPacket";
-import { assessReplacementCompleteness, assessInterventionCompleteness } from "@/lib/llmBehaviorCredibility";
+import { reconcileRosters } from "@/lib/rosterReconcile";
 
 export const maxDuration = 60;
 
@@ -127,24 +127,13 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // REPLACEMENT COMPLETENESS GUARD — the second barrier the skills side lacked. If the replacement domain
-      // wasn't located, or the new catalog is empty / a large unexplained drop, do NOT wholesale-overwrite the
-      // programs (Felix: 18→9 slipped through because skills had no guard). Preserve the previous, flagged.
-      const prevReplacements = (existingProfile.replacementBehaviors || []) as any[];
-      const replCheck = assessReplacementCompleteness((assessmentProfile.replacementBehaviors || []).length, prevReplacements.length, replacementDomainFound);
-      if (!replCheck.refresh && prevReplacements.length) {
-        assessmentProfile.replacementBehaviors = existingProfile.replacementBehaviors;
-        reviewFlags.push({ field: "replacementBehaviors", source: "guard-preserved", reason: replCheck.reason });
-      }
-
-      // INTERVENTIONS COMPLETENESS GUARD — note-critical (every ABC names one), wholesale-refreshed with only
-      // empty-validation, so a partial drop (e.g. 33→3) would overwrite silently. Same shape as replacements.
-      const prevInterventions = (existingProfile.interventions || []) as any[];
-      const intCheck = assessInterventionCompleteness((assessmentProfile.interventions || []).length, prevInterventions.length, interventionDomainFound);
-      if (!intCheck.refresh && prevInterventions.length) {
-        assessmentProfile.interventions = existingProfile.interventions;
-        reviewFlags.push({ field: "interventions", source: "guard-preserved", reason: intCheck.reason });
-      }
+      // DETERMINISTIC ROSTER READ + COMPLETENESS GUARDS (shared lib/rosterReconcile, identical in the admin
+      // reprocess path). Prefers a geometry READ of the replacement roster ("Behaviors to Increase") over the
+      // LLM's under-segmented list (Brandon: 11 programs → the LLM saw only 4), merges the roster's MASTERED
+      // programs into skillAcquisition, and — via a deterministic source region count — distinguishes a READ
+      // FAILURE (source lists many, extracted few → flag under-read, never silently preserve) from a REAL plan
+      // shrinkage (source genuinely lists few → refresh). Fails safe: roster not found → keep the LLM result.
+      reconcileRosters(assessmentProfile, existingProfile, geomRows, reviewFlags, replacementDomainFound, interventionDomainFound);
 
       // GUARD 2 — the refresh merge (pure, unit-tested): preserves non-assessment keys (observedCatalog,
       // blockedNarrativeTerms, continuityContext, …), replaces assessment-sourced keys wholesale, and

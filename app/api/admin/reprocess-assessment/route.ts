@@ -8,7 +8,7 @@ import { assembleRefreshProfile } from "@/lib/assembleRefreshProfile";
 import { parsePositioned, clusterRows } from "@/lib/pdfGeometry";
 import { diagnosisColumn } from "@/lib/diagnosis";
 import { buildClinicalPacket } from "@/lib/clinicalPacket";
-import { assessReplacementCompleteness, assessInterventionCompleteness } from "@/lib/llmBehaviorCredibility";
+import { reconcileRosters } from "@/lib/rosterReconcile";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -74,19 +74,10 @@ export async function POST(req: Request) {
       );
     }
 
-    // Replacement completeness guard (see extract-assessment): never wholesale-overwrite a starved/partial catalog.
-    const prevReplacements = (existingProfile.replacementBehaviors || []) as any[];
-    const replCheck = assessReplacementCompleteness((assessmentProfile.replacementBehaviors || []).length, prevReplacements.length, replacementDomainFound);
-    if (!replCheck.refresh && prevReplacements.length) {
-      assessmentProfile.replacementBehaviors = existingProfile.replacementBehaviors;
-      reviewFlags.push({ field: "replacementBehaviors", source: "guard-preserved", reason: replCheck.reason });
-    }
-    const prevInterventions = (existingProfile.interventions || []) as any[];
-    const intCheck = assessInterventionCompleteness((assessmentProfile.interventions || []).length, prevInterventions.length, interventionDomainFound);
-    if (!intCheck.refresh && prevInterventions.length) {
-      assessmentProfile.interventions = existingProfile.interventions;
-      reviewFlags.push({ field: "interventions", source: "guard-preserved", reason: intCheck.reason });
-    }
+    // DETERMINISTIC ROSTER READ + completeness guards (shared with extract-assessment). Prefers a geometry read
+    // of the replacement roster over the LLM's under-segmented list, merges mastered programs, and distinguishes
+    // a read-failure from a real plan shrinkage via the source region count. Mutates assessmentProfile + flags.
+    const rosterProvenance = reconcileRosters(assessmentProfile, existingProfile, geomRows, reviewFlags, replacementDomainFound, interventionDomainFound);
 
     const refreshed = buildRefreshedProfile(existingProfile, assessmentProfile);
 
@@ -127,7 +118,11 @@ export async function POST(req: Request) {
       previousBehaviorCount: (existingProfile.maladaptiveBehaviors || []).length,
       behaviorCount: behaviors.length,
       behaviors,
-      skillCount: ((refreshed as any).replacementBehaviors || []).length,
+      replacementCount: ((refreshed as any).replacementBehaviors || []).length,
+      masteredSkillCount: ((refreshed as any).skillAcquisition || []).length,
+      interventionCount: ((refreshed as any).interventions || []).length,
+      // Which domains came from a READ of the new document vs PRESERVATION of the old catalog (the whole point).
+      rosterProvenance,
       reviewFlags,
     });
   } catch (e: any) {

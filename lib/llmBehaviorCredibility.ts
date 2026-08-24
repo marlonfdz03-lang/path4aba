@@ -63,24 +63,43 @@ export function reconcileBehaviors(llmBehaviors: any[]): { active: any[]; droppe
 
 // REPLACEMENT COMPLETENESS GUARD — the second barrier the skills side was missing. A starved packet or a
 // partial extraction must never silently wholesale-overwrite the replacement-program catalog (Felix: 18→9).
-// Conservative: absent domain, empty result, or a large unexplained drop → preserve the previous programs.
-// A reassessment CAN legitimately remove programs, so we only flag a big drop with no corroboration.
-export interface ReplacementCompleteness { refresh: boolean; reason: string }
-export function assessReplacementCompleteness(newCount: number, prevCount: number, domainFound: boolean): ReplacementCompleteness {
-  if (!domainFound) return { refresh: false, reason: 'the replacement-program domain was not located in the assessment — programs preserved from the previous assessment, review' };
-  if (newCount === 0) return { refresh: false, reason: 'no replacement programs were extracted — programs preserved from the previous assessment, review' };
-  if (prevCount >= 5 && newCount < Math.ceil(prevCount * 0.6)) return { refresh: false, reason: `large unexplained drop in replacement programs (${prevCount} → ${newCount}) — programs preserved from the previous assessment, review the assessment` };
-  return { refresh: true, reason: '' };
+//
+// The blind spot Brandon exposed: the old guard fired on "newCount < 60% of prevCount" and PRESERVED — which
+// treats a READ FAILURE (the document lists 11, we extracted 4) identically to a REAL plan shrinkage (the
+// document genuinely lists 4). It can't tell them apart because it never looks at the SOURCE. Brandon's
+// preserve was correct only by continuity luck (old 11 == the document's 11 active).
+//
+// FIX: `regionItemCount` — a DETERMINISTIC count of the programs actually present in the located roster region
+// (lib/pdfGeometry readReplacementRoster). It is the source ground truth:
+//   • region lists ~11 but we extracted 4  → READ FAILURE  → do NOT silently preserve; caller flags "under-read"
+//   • region lists ~4 and we extracted ~4  → REAL SHRINKAGE → refresh to 4 (even though it dropped vs previous)
+// When no region count is available (-1, roster not located), fall back to the previous-count heuristic.
+export interface CompletenessResult { refresh: boolean; readFailure: boolean; reason: string }
+
+function assessCompleteness(kind: 'replacement programs' | 'interventions', newCount: number, prevCount: number, domainFound: boolean, regionItemCount: number): CompletenessResult {
+  if (!domainFound) return { refresh: false, readFailure: false, reason: `the ${kind} domain was not located in the assessment — preserved from the previous assessment, review` };
+  if (newCount === 0) return { refresh: false, readFailure: false, reason: `no ${kind} were extracted — preserved from the previous assessment, review` };
+  // Region-aware branch (the source ground truth): distinguish read-failure from real shrinkage.
+  if (regionItemCount >= 5 && newCount < Math.ceil(regionItemCount * 0.6))
+    return { refresh: false, readFailure: true, reason: `under-read: the assessment lists ~${regionItemCount} ${kind} but only ${newCount} were extracted — re-read needed, NOT silently preserved` };
+  if (regionItemCount >= 0 && newCount >= Math.ceil(regionItemCount * 0.6))
+    return { refresh: true, readFailure: false, reason: '' }; // we read essentially the whole region → trust it (change is real, not a miss)
+  // No region signal → previous-count heuristic (unchanged legacy behavior).
+  if (prevCount >= 5 && newCount < Math.ceil(prevCount * 0.6))
+    return { refresh: false, readFailure: false, reason: `large unexplained drop in ${kind} (${prevCount} → ${newCount}) — preserved from the previous assessment, review the assessment` };
+  return { refresh: true, readFailure: false, reason: '' };
 }
 
-// INTERVENTIONS COMPLETENESS GUARD — same shape as the replacement guard. Interventions are note-critical
-// (every ABC names one) and wholesale-refreshed with only empty-validation, so a partial drop (e.g. 33→3)
-// would overwrite silently. Absent domain / empty / large unexplained drop → preserve the previous list.
-export function assessInterventionCompleteness(newCount: number, prevCount: number, domainFound: boolean): ReplacementCompleteness {
-  if (!domainFound) return { refresh: false, reason: 'the interventions domain was not located in the assessment — interventions preserved from the previous assessment, review' };
-  if (newCount === 0) return { refresh: false, reason: 'no interventions were extracted — interventions preserved from the previous assessment, review' };
-  if (prevCount >= 5 && newCount < Math.ceil(prevCount * 0.6)) return { refresh: false, reason: `large unexplained drop in interventions (${prevCount} → ${newCount}) — interventions preserved from the previous assessment, review the assessment` };
-  return { refresh: true, reason: '' };
+export function assessReplacementCompleteness(newCount: number, prevCount: number, domainFound: boolean, regionItemCount = -1): CompletenessResult {
+  return assessCompleteness('replacement programs', newCount, prevCount, domainFound, regionItemCount);
+}
+
+// INTERVENTIONS COMPLETENESS GUARD — same shape, same blind spot. Interventions are note-critical (every ABC
+// names one) and wholesale-refreshed with only empty-validation, so a partial drop (e.g. 33→3) would overwrite
+// silently. `regionItemCount` here is an APPROXIMATE deterministic count (readInterventionRoster) — an
+// under-read of the region is safe (the guard only uses it to catch a gross under-extraction, never to preserve).
+export function assessInterventionCompleteness(newCount: number, prevCount: number, domainFound: boolean, regionItemCount = -1): CompletenessResult {
+  return assessCompleteness('interventions', newCount, prevCount, domainFound, regionItemCount);
 }
 
 export interface CredibilityResult { credible: boolean; reasons: string[]; behaviors: any[] }

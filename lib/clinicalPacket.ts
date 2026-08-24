@@ -53,9 +53,16 @@ interface SectionDef { key: string; label: string; tier: Tier; priority: number;
 const SECTIONS: SectionDef[] = [
   // ── REQUIRED — identity + status + functional evidence (guaranteed first) ──
   { key: 'behaviorSummary', label: 'Behavior summary (identity + status)', tier: 'required', priority: 1, cap: 12000,
-    anchors: [/maladaptive behaviors? summary/i, /behaviors? to reduce/i, /summary of behaviors/i, /problem behavior/i, /maladaptive behavior/i, /target behavior/i] },
+    // "Behavior(s) Targeted for Reduction" is a common heading style (this BCBA uses it) that matched NONE of the
+    // prior anchors — it landed in the packet only incidentally via a stray "problem behavior" mid-prose hit.
+    anchors: [/maladaptive behaviors? summary/i, /behaviors? to reduce/i, /behaviors? targeted for reduction/i, /targeted for reduction/i, /summary of behaviors/i, /problem behavior/i, /maladaptive behavior/i, /target behavior/i] },
   { key: 'replacementSummary', label: 'Replacement-program summary (identity + status)', tier: 'required', priority: 1, cap: 12000,
-    anchors: [/replacement behaviors? summary/i, /summary of replacement/i, /active replacement/i, /replacement programs?/i, /replacement behavior/i, /skill acquisition/i, /alternative behavior/i] },
+    // "Behaviors/Skills/Goals to Increase" is the roster heading Brandon's plan uses — it matched NONE of the
+    // prior anchors, so the authoritative 11-program roster reached the packet only incidentally (jammed against
+    // the reduction list). Front-loaded so this real roster heading wins over the weaker later matches. Note:
+    // "skill acquisition" / "replacement skills" also name the caregiver-training goal blocks, so the deterministic
+    // roster READ (lib/pdfGeometry readReplacementRoster) is the authority; this only widens what the LLM sees.
+    anchors: [/behaviors? to increase/i, /skills? to increase/i, /goals? to increase/i, /replacement behaviors? summary/i, /summary of replacement/i, /active replacement/i, /replacement programs?/i, /replacement behavior/i, /skill acquisition/i, /alternative behavior/i] },
   { key: 'functionalAssessment', label: 'FAST / MAS / functional assessment', tier: 'required', priority: 1, cap: 10000, fa: true,
     anchors: [/motivation assessment scale/i, /functional analysis screening/i, /functional (behavior )?assessment/i, /\bQABF\b/] },
   // Interventions are note-critical (every ABC names one) and their identity list is compact, so — like the
@@ -68,7 +75,10 @@ const SECTIONS: SectionDef[] = [
   { key: 'replacementDetail', label: 'Detailed replacement programs', tier: 'optional', priority: 3, cap: 24000,
     anchors: [/replacement program/i, /alternative behavior/i, /replacement behavior/i, /skill acquisition/i] },
   { key: 'reinforcers', label: 'Reinforcers', tier: 'optional', priority: 5, cap: 3000,
-    anchors: [/reinforcer/i, /preference assessment/i] },
+    // The structured preference GRID is read deterministically from geometry (lib/pdfGeometry readPreferenceTable),
+    // independent of the packet, so reinforcers stays OPTIONAL (promoting it would take reserved budget from the
+    // note-critical domains for no gain). These anchors just widen what the LLM sees for the prose summary.
+    anchors: [/reinforcer/i, /stimulus preference/i, /preference assessment/i, /reinforcer assessment/i] },
   { key: 'diagnosis', label: 'Diagnosis / background', tier: 'optional', priority: 6, cap: 3000,
     anchors: [/diagnos/i, /background/i, /recipient/i] },
   { key: 'changes', label: 'Changes this authorization', tier: 'optional', priority: 7, cap: 2000,
