@@ -16,8 +16,17 @@ export interface BlockedTerm { term: string; substitute: string | null }
 
 // Seed. Acceptable substitutes for a "sensory play activity": tactile / manipulative / texture-based
 // / hands-on. The automated map uses one canonical substitute; the note still reads naturally.
+//
+// "academic" is the SECOND confirmed ABA-Matrix rejection ("The text < academic > is not allowed …"):
+// the payer reads it as academic tutoring/education, which is not ABA and not billable under 97153 — the
+// same logic that blocks "sensory". It MUST carry a substitute (not just a flag) so the filtered note the
+// extension autofills never contains it. "structured" reads clinically across the leaked contexts
+// ("academic demand"→"structured demand", "academic task"→"structured task"). The PRIMARY fix is upstream
+// (masterPrompt no longer templates "academic settings"/"academic … demands"; curatedActivities renamed
+// "academic worksheet activity"→"worksheet activity") — this is the backstop for any stray LLM leak.
 export const BLOCKED_NARRATIVE_TERMS: BlockedTerm[] = [
   { term: 'sensory', substitute: 'tactile' },
+  { term: 'academic', substitute: 'structured' },
 ]
 
 export interface BlockedFilterResult {

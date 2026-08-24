@@ -351,7 +351,7 @@ SERVICE JUSTIFICATION:
 
 GENERALIZATION RATIONALE:
 "The client continues to require structured support to generalize acquired skills across environments and communication partners."
-"As the client develops and encounters new social, academic, and functional demands, ongoing ABA intervention remains necessary."
+"As the client develops and encounters new social, functional, and developmental demands, ongoing ABA intervention remains necessary."
 
 ONGOING NEED DESPITE PROGRESS:
 "Although [behavior/skill] demonstrated [improvement], continued intervention is necessary to support maintenance, generalization, and the emergence of new treatment targets."

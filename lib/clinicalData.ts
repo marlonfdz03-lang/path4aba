@@ -14,7 +14,7 @@ export const activities = [
   "NET activities",
   "social interaction tasks",
   "fine motor tasks",
-  "academic activities",
+  "structured table activities",
   "transition activities",
 ];
 

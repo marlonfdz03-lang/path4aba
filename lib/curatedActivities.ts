@@ -53,7 +53,7 @@ export const CURATED_ACTIVITIES: CuratedActivity[] = [
   { name: 'peer interaction activity', locations: ['school'] },
   { name: 'circle time', locations: ['school'] },
   { name: 'classroom routine', locations: ['school'] },
-  { name: 'academic worksheet activity', locations: ['school'] },
+  { name: 'worksheet activity', locations: ['school'] },
 ];
 
 export const CURATED_HOME_ACTIVITIES: string[] = CURATED_ACTIVITIES

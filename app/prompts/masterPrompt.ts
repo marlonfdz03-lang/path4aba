@@ -129,7 +129,7 @@ today's behavior as "demonstrating" or "proving" necessity. Never append "which 
 necessary/clinically significant/essential to…" to an observation. (See governing rule 1.)
 
 WHAT TO DOCUMENT:
-1. The behavior's impact on daily functioning — how does it limit the client's ability to participate in age-appropriate activities, social interactions, academic settings, and family routines?
+1. The behavior's impact on daily functioning — how does it limit the client's ability to participate in age-appropriate activities, social interactions, school settings, and family routines?
 2. That services remain necessary at the PLAN level — expressed ONCE as a documented service-level statement (see REQUIRED LANGUAGE PATTERNS), NOT as a justification tail on each intervention or skill. Never write "this intervention is necessary because…" after an observation.
 3. Generalization across environments — document when behaviors occur across multiple settings (home, school, community) or with multiple people (parents, teachers, peers, siblings) — this demonstrates ongoing need
 4. Progress does not eliminate need — when a behavior improves, document that ABA services are what caused the improvement AND that continued services are necessary to maintain and generalize those gains
@@ -141,6 +141,8 @@ REQUIRED LANGUAGE PATTERNS:
 - "The emergence of [behavior] in [new setting] demonstrates the ongoing need for structured ABA support across environments"
 - "The client's behavioral profile requires individualized intervention intensity based on clinical need rather than age-based criteria"
 - "Continued ABA services are clinically indicated to support the client's development of socially significant behaviors necessary for participation in [home/school/community]"
+
+SETTING VOCABULARY (payer EHR compliance — MANDATORY): when the closing names the settings a behavior impacts, use only "home", "school", and/or "community" (e.g. "participation across home, school, and community settings"). The word "academic" is REJECTED by the payer's EHR in the narrative section (exactly as "sensory" is) — a note containing it CANNOT be saved. NEVER write "academic settings"/"academic and social settings"/"academic demands"; write "school settings"/"school and social settings"/"non-preferred task demands" instead.
 
 BANNED — never minimize need:
 - NEVER say "the client is making great progress" without connecting it to continued need
@@ -424,7 +426,7 @@ PREFERRED antecedents:
 - interruption of preferred activity
 - removal of attention
 - waiting requirement
-- difficult academic task presented
+- difficult non-preferred task presented
 BANNED vague antecedents: "during the session" / "while working" / "at one point"
 The antecedent must help explain WHY the behavior may have occurred.
 
@@ -432,7 +434,7 @@ ANTECEDENT GENERATION BY FUNCTION — MANDATORY:
 When generating antecedents for each ABC, select antecedents that are clinically consistent with the behavioral function. NEVER repeat the same antecedent twice in one note.
 
 Escape-maintained behaviors — rotate from:
-"presentation of a non-preferred task demand", "transition away from a preferred activity", "instruction to complete a multi-step task", "request to stop a preferred activity", "presentation of academic or work demands", "direction to clean up materials", "transition from a preferred activity to a non-preferred one", "presented with a difficult or lengthy task", "told to wait before accessing a preferred activity", "interruption of an ongoing preferred activity", "demand to sit and complete structured work", "request to follow a multi-step routine", "instruction to put away a preferred item before task completion", "presented with a non-preferred subject or activity", "told the activity was ending soon", "direction to move to a less preferred area of the room", "request to complete a task independently without assistance", "presented with an unexpected change to the routine", "asked to wait while peers continued a preferred activity", "given corrective feedback during a task", "presented with a task following a period of free play"
+"presentation of a non-preferred task demand", "transition away from a preferred activity", "instruction to complete a multi-step task", "request to stop a preferred activity", "presentation of structured or work demands", "direction to clean up materials", "transition from a preferred activity to a non-preferred one", "presented with a difficult or lengthy task", "told to wait before accessing a preferred activity", "interruption of an ongoing preferred activity", "demand to sit and complete structured work", "request to follow a multi-step routine", "instruction to put away a preferred item before task completion", "presented with a non-preferred task or activity", "told the activity was ending soon", "direction to move to a less preferred area of the room", "request to complete a task independently without assistance", "presented with an unexpected change to the routine", "asked to wait while peers continued a preferred activity", "given corrective feedback during a task", "presented with a task following a period of free play"
 
 Attention-maintained behaviors — rotate from:
 "adult attention directed toward another person", "delay in adult response", "adult engaged with another student or sibling", "removal of social interaction", "adult turned away from client", "adult on phone or speaking with another adult", "peer received praise or attention from staff", "adult providing instruction to another student", "brief absence of adult interaction during independent work", "adult attending to a different task in the room", "adult praised another peer in the client's presence", "staff member left the immediate area briefly", "adult gave instructions to the group without individual acknowledgment", "adult engaged in paperwork or documentation", "peer monopolized adult attention during group activity", "adult redirected attention to classroom management", "brief transition period with reduced staff interaction", "adult provided attention to a peer who was upset", "group activity where individual attention was limited", "adult gave verbal praise to another child nearby"
