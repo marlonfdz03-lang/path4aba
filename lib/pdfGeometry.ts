@@ -359,10 +359,35 @@ function columnRoster(rows: Row[], headerRe: RegExp, excludeNames: string[]): Re
   return { active, mastered, discontinued, found: true, rawItemCount: count }
 }
 
+// PLAUSIBILITY GATE (Marlon's fail-safe): a real program list is short NOUN PHRASES; a mis-anchored header over
+// a PROSE block (Ximena: the header matched a "Replacement Behaviors" heading whose body is wrapped intervention
+// PROCEDURE sentences — long, lowercase continuations, sentence fragments, AND the client's NAME) must be
+// REJECTED, not stored as a confident-but-wrong roster. An item is "prose-like" if it is long, starts lowercase
+// (a wrapped continuation), or ends mid-clause (a comma/colon or a dangling conjunction/preposition). If more
+// than 30% of the active items are prose-like, the block is not a roster → caller keeps the LLM result.
+const PROSE_TAIL = /\b(if|and|or|but|instead|the|of|for|to|use|with|following|when|while|by|on|in|as|a|an|her|his)$/i
+function itemIsProseLike(t: string): boolean {
+  const s = t.trim()
+  if (!s) return true
+  if (s.split(/\s+/).length > 12) return true      // a program name is a short phrase, not a sentence
+  if (/^[a-z]/.test(s)) return true                // starts lowercase → a wrapped sentence continuation
+  if (/[,:]$/.test(s)) return true                 // ends mid-clause
+  if (PROSE_TAIL.test(s)) return true              // ends on a dangling conjunction/preposition/article
+  return false
+}
+function looksLikePrograms(active: string[]): boolean {
+  if (!active.length) return false
+  const prose = active.filter(itemIsProseLike).length
+  return prose <= active.length * 0.3
+}
+
 // The replacement-program roster. `excludeNames` = the maladaptive-behavior names (the reduction block sits
-// directly above in the same column) so the upward walk stops at the last behavior row.
+// directly above in the same column) so the upward walk stops at the last behavior row. Rejects (found:false) a
+// PROSE block that a heading falsely anchored — the caller then keeps the LLM/previous result (fail safe).
 export function readReplacementRoster(rows: Row[], excludeNames: string[] = []): ReplacementRoster {
-  return columnRoster(rows, INCREASE_HEADER, excludeNames)
+  const r = columnRoster(rows, INCREASE_HEADER, excludeNames)
+  if (r.found && !looksLikePrograms(r.active)) return { active: [], mastered: [], discontinued: [], found: false, rawItemCount: r.rawItemCount }
+  return r
 }
 
 // The interventions roster — a DETERMINISTIC region count for the interventions completeness guard (same shape,
