@@ -33,6 +33,7 @@ export interface PacketResult {
   missing: string[];                 // required/expected sections not located
   behaviorDomainFound: boolean;      // the essential behavior domain — gates preserve-vs-overwrite
   replacementDomainFound: boolean;   // the replacement-program domain — gates the replacement completeness guard
+  interventionDomainFound: boolean;  // the interventions domain — gates the interventions completeness guard
   hasFunctionalAssessment: boolean;  // a FAST/MAS/FA source — gates function provenance
   totalChars: number;                // packet size (must stay < 90000)
 }
@@ -57,13 +58,15 @@ const SECTIONS: SectionDef[] = [
     anchors: [/replacement behaviors? summary/i, /summary of replacement/i, /active replacement/i, /replacement programs?/i, /replacement behavior/i, /skill acquisition/i, /alternative behavior/i] },
   { key: 'functionalAssessment', label: 'FAST / MAS / functional assessment', tier: 'required', priority: 1, cap: 10000, fa: true,
     anchors: [/motivation assessment scale/i, /functional analysis screening/i, /functional (behavior )?assessment/i, /\bQABF\b/] },
+  // Interventions are note-critical (every ABC names one) and their identity list is compact, so — like the
+  // behavior/replacement summaries — guaranteeing it is cheap; REQUIRED so the packet can never starve it.
+  { key: 'interventions', label: 'Interventions', tier: 'required', priority: 1, cap: 6000,
+    anchors: [/approved interventions?/i, /interventions? (summary|used|list)/i, /treatment procedure/i, /teaching procedure/i, /\bintervention/i] },
   // ── OPTIONAL — detail / enrichment (fills only the remaining budget) ──
   { key: 'behaviorDetail', label: 'Detailed behavior programs', tier: 'optional', priority: 2, cap: 24000,
     anchors: [/operational definition/i, /reduction target/i, /behavior program/i] },
   { key: 'replacementDetail', label: 'Detailed replacement programs', tier: 'optional', priority: 3, cap: 24000,
     anchors: [/replacement program/i, /alternative behavior/i, /replacement behavior/i, /skill acquisition/i] },
-  { key: 'interventions', label: 'Interventions', tier: 'optional', priority: 4, cap: 4000,
-    anchors: [/treatment procedure/i, /teaching procedure/i, /\bintervention/i] },
   { key: 'reinforcers', label: 'Reinforcers', tier: 'optional', priority: 5, cap: 3000,
     anchors: [/reinforcer/i, /preference assessment/i] },
   { key: 'diagnosis', label: 'Diagnosis / background', tier: 'optional', priority: 6, cap: 3000,
@@ -211,9 +214,10 @@ export function buildClinicalPacket(fullText: string): PacketResult {
   const has = (...keys: string[]) => manifest.some((m) => keys.includes(m.key) && inPacket(m));
   const behaviorDomainFound = has('behaviorSummary', 'behaviorDetail');
   const replacementDomainFound = has('replacementSummary', 'replacementDetail');
+  const interventionDomainFound = has('interventions');
   const hasFunctionalAssessment = has('functionalAssessment');
-  const REQUIRED_LABELS: Record<string, string> = { behaviorSummary: 'Behavior summary', replacementSummary: 'Replacement-program summary', functionalAssessment: 'Functional assessment' };
+  const REQUIRED_LABELS: Record<string, string> = { behaviorSummary: 'Behavior summary', replacementSummary: 'Replacement-program summary', interventions: 'Interventions', functionalAssessment: 'Functional assessment' };
   const missing = Object.keys(REQUIRED_LABELS).filter((k) => !has(k)).map((k) => REQUIRED_LABELS[k]);
 
-  return { packet, manifest, missing, behaviorDomainFound, replacementDomainFound, hasFunctionalAssessment, totalChars: packet.length };
+  return { packet, manifest, missing, behaviorDomainFound, replacementDomainFound, interventionDomainFound, hasFunctionalAssessment, totalChars: packet.length };
 }

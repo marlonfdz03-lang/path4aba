@@ -37,6 +37,12 @@ export function flagCopy(flag: ReviewFlagLike): string {
   if (field === "functions")
     return "Behavior functions were inferred because no functional-assessment (FAST/MAS) section was found in the upload. Please verify each behavior's function with your BCBA.";
 
+  if (field === "replacementBehaviors")
+    return "The replacement-program list was kept from the previous assessment because this upload's programs couldn't be read completely. Please review the replacement programs against the source.";
+
+  if (field === "interventions")
+    return "The interventions list was kept from the previous assessment because this upload's interventions couldn't be read completely. Please review the interventions against the source.";
+
   if (field === "diagnosis")
     return "The diagnosis was read from the report text, not a structured table. Please verify the diagnosis is correct.";
 

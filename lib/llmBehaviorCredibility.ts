@@ -73,6 +73,16 @@ export function assessReplacementCompleteness(newCount: number, prevCount: numbe
   return { refresh: true, reason: '' };
 }
 
+// INTERVENTIONS COMPLETENESS GUARD — same shape as the replacement guard. Interventions are note-critical
+// (every ABC names one) and wholesale-refreshed with only empty-validation, so a partial drop (e.g. 33→3)
+// would overwrite silently. Absent domain / empty / large unexplained drop → preserve the previous list.
+export function assessInterventionCompleteness(newCount: number, prevCount: number, domainFound: boolean): ReplacementCompleteness {
+  if (!domainFound) return { refresh: false, reason: 'the interventions domain was not located in the assessment — interventions preserved from the previous assessment, review' };
+  if (newCount === 0) return { refresh: false, reason: 'no interventions were extracted — interventions preserved from the previous assessment, review' };
+  if (prevCount >= 5 && newCount < Math.ceil(prevCount * 0.6)) return { refresh: false, reason: `large unexplained drop in interventions (${prevCount} → ${newCount}) — interventions preserved from the previous assessment, review the assessment` };
+  return { refresh: true, reason: '' };
+}
+
 export interface CredibilityResult { credible: boolean; reasons: string[]; behaviors: any[] }
 
 // Assess whether the reconciled ACTIVE LLM behavior set is credible enough to OVERWRITE the existing profile.

@@ -9,7 +9,7 @@ import { diagnosisColumn } from "@/lib/diagnosis";
 import { parsePositioned, clusterRows } from "@/lib/pdfGeometry";
 import { assembleRefreshProfile } from "@/lib/assembleRefreshProfile";
 import { buildClinicalPacket } from "@/lib/clinicalPacket";
-import { assessReplacementCompleteness } from "@/lib/llmBehaviorCredibility";
+import { assessReplacementCompleteness, assessInterventionCompleteness } from "@/lib/llmBehaviorCredibility";
 
 export const maxDuration = 60;
 
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     // CLINICAL EXTRACTION PACKET — locate the clinically relevant regions across the WHOLE document (behaviors,
     // status blocks, FAST/MAS, replacement, reinforcers, …) instead of the first 90K chars, which never reached
     // the late FAST/MAS tables or late DISCONTINUED blocks in large assessments. Stays under 90K.
-    const { packet, hasFunctionalAssessment, behaviorDomainFound, replacementDomainFound } = buildClinicalPacket(text);
+    const { packet, hasFunctionalAssessment, behaviorDomainFound, replacementDomainFound, interventionDomainFound } = buildClinicalPacket(text);
     const extracted = await extractAssessment(packet);
 
     saveKnowledgeBase(extracted).catch(err =>
@@ -135,6 +135,15 @@ export async function POST(req: NextRequest) {
       if (!replCheck.refresh && prevReplacements.length) {
         assessmentProfile.replacementBehaviors = existingProfile.replacementBehaviors;
         reviewFlags.push({ field: "replacementBehaviors", source: "guard-preserved", reason: replCheck.reason });
+      }
+
+      // INTERVENTIONS COMPLETENESS GUARD — note-critical (every ABC names one), wholesale-refreshed with only
+      // empty-validation, so a partial drop (e.g. 33→3) would overwrite silently. Same shape as replacements.
+      const prevInterventions = (existingProfile.interventions || []) as any[];
+      const intCheck = assessInterventionCompleteness((assessmentProfile.interventions || []).length, prevInterventions.length, interventionDomainFound);
+      if (!intCheck.refresh && prevInterventions.length) {
+        assessmentProfile.interventions = existingProfile.interventions;
+        reviewFlags.push({ field: "interventions", source: "guard-preserved", reason: intCheck.reason });
       }
 
       // GUARD 2 — the refresh merge (pure, unit-tested): preserves non-assessment keys (observedCatalog,
