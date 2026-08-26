@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { filterBlockedNarrative } from '@/lib/blockedNarrativeTerms'
+import { buildBlockedFilterContext } from '@/lib/noteFilterContext'
+import { emitAdminAlert } from '@/lib/adminAlerts'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,11 +43,31 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'This note has already been saved.', duplicate: true }, { status: 409 })
   }
 
+  // SERVER-SIDE BACKSTOP (symmetry with extension/save-note). The web client already swaps in the filtered
+  // text before posting, so this is normally a no-op — but if that swap is ever bypassed or regresses, we
+  // still store a clean record. Same shared filter inputs; fail-soft, never blocks the save.
+  let cleanText = noteText
+  try {
+    const { learnedBlockedTerms, authorizedNames } = await buildBlockedFilterContext(clientId)
+    const filtered = filterBlockedNarrative(noteText, learnedBlockedTerms, authorizedNames)
+    if (filtered.text !== noteText) {
+      cleanText = filtered.text
+      await emitAdminAlert({
+        source: 'note',
+        type: 'note.save_filter_caught',
+        severity: 'warning',
+        actorUserId: userId,
+        clientId,
+        payload: { surface: 'web', substituted: filtered.substituted, flagged: filtered.flagged },
+      })
+    }
+  } catch { /* fail-soft: store what we have rather than blocking the save */ }
+
   await prisma.session_notes.create({
     data: {
       client_id: clientId,
       user_id: userId,
-      note_text: noteText,
+      note_text: cleanText,
       session_date: sessionDate || new Date().toISOString().split('T')[0],
       behaviors_addressed: behaviorsAddressed || [],
       skills_addressed: skillsAddressed || [],

@@ -7,7 +7,8 @@ import {
   isValidSkillForLocation,
   cleanBehaviorLabel,
 } from '@/lib/clinicalFilters';
-import { filterBlockedNarrative, type BlockedTerm } from '@/lib/blockedNarrativeTerms';
+import { filterBlockedNarrative } from '@/lib/blockedNarrativeTerms';
+import { buildBlockedFilterContext } from '@/lib/noteFilterContext';
 import { findInterventionViolations } from '@/lib/interventionPolicy';
 import { findTeachingMethodViolations, approvedTeachingMethods } from '@/lib/teachingMethods';
 import {
@@ -545,34 +546,10 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   // where we can't. Merge in any per-client terms the extension learned from host validation
   // messages. Runs BEFORE save so the stored/reused note is also clean. Re-runnable so the
   // intervention gate (Step 7c) can re-clean a regenerated note.
-  let learnedBlockedTerms: BlockedTerm[] = [];
-  let authorizedNames: string[] = [];
-  // SHARED blocked-terms table (global, protects every client). Fail-soft: if the table isn't present yet
-  // (migration scripts/blocked-narrative-terms-table.sql not run), fall back to the per-client list below.
-  try {
-    const rows = await prisma.$queryRawUnsafe<any[]>('SELECT term, substitute FROM blocked_narrative_terms');
-    if (Array.isArray(rows) && rows.length) learnedBlockedTerms = rows.map((r) => ({ term: String(r.term), substitute: r.substitute ?? null })).filter((t) => t.term);
-  } catch { /* table not present yet → per-client fallback */ }
-  try {
-    const c = await prisma.clients.findUnique({ where: { id: input.clientId }, select: { clinical_profile: true } });
-    const cp = (c?.clinical_profile as any) || {};
-    const bt = cp?.blockedNarrativeTerms;
-    if (!learnedBlockedTerms.length && Array.isArray(bt)) {
-      learnedBlockedTerms = bt
-        .map((t: any) => (typeof t === 'string' ? { term: t, substitute: null } : { term: t?.term, substitute: t?.substitute ?? null }))
-        .filter((t: BlockedTerm) => t.term);
-    }
-    // PLAN-CONTENT PROTECTION: authorized names a blocked term may legitimately sit inside (a "Calm-Down
-    // Routine" program, a "sensory bin" reinforcer). filterBlockedNarrative leaves these spans untouched.
-    const reinf = cp.reinforcers;
-    authorizedNames = [
-      ...((cp.interventions || []) as any[]).map((x) => x?.name || x),
-      ...((cp.replacementBehaviors || []) as any[]).map((x) => x?.name || x),
-      ...((cp.skillAcquisition || []) as any[]).map((x) => x?.name || x),
-      ...((cp.maladaptiveBehaviors || []) as any[]).flatMap((b) => [b?.name, ...((b?.topographies || []) as any[])]),
-      ...(Array.isArray(reinf) ? reinf : reinf && typeof reinf === 'object' ? Object.values(reinf).flat() : []),
-    ].map((n) => String(n || '')).filter((n) => n.trim().length >= 3);
-  } catch { /* learned terms + protection are best-effort; the seeded list still applies */ }
+  // learnedBlockedTerms (shared table, per-client fallback) + authorizedNames (plan content protected from
+  // substitution) come from the SHARED builder so the generation path and the save-time backstop
+  // (extension/save-note, session-notes) can never block a different set or protect different names.
+  const { learnedBlockedTerms, authorizedNames } = await buildBlockedFilterContext(input.clientId);
   let blockedFlagged: string[] = [];
   const applyBlockedFilter = (text: string): string => {
     const result = filterBlockedNarrative(text, learnedBlockedTerms, authorizedNames);

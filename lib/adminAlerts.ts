@@ -55,6 +55,14 @@ export type AlertType =
   // has less history to rotate over. Payload: { scanned, withSignal, window }. Severity 'info'
   // (diagnostic — a note that shipped fine, not an incident).
   | 'note.rotation_window_degraded'
+  // The save-time blocked-term backstop CAUGHT something: a note POSTED to a save route still contained a
+  // blocked term the client should have already filtered (the Chrome extension can leave RAW text in
+  // outputNote when the __META__ tail splits across network reads). We re-filtered it server-side before
+  // storing, so our record is clean. Payload: { surface: 'extension'|'web', substituted: string[],
+  // flagged: string[] } — TERM NAMES ONLY, never note text, never PHI. Severity 'warning' (a client-side
+  // filter gap, not an outage). This is how we confirm the extension leak is still live and, after the
+  // extension release, that it stopped firing.
+  | 'note.save_filter_caught'
 
 export interface AdminAlertInput {
   source: AlertSource

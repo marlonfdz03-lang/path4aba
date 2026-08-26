@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getExtensionAuth } from '@/lib/extensionAuth'
 import { prisma } from '@/lib/prisma'
+import { filterBlockedNarrative } from '@/lib/blockedNarrativeTerms'
+import { buildBlockedFilterContext } from '@/lib/noteFilterContext'
+import { emitAdminAlert } from '@/lib/adminAlerts'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,11 +54,34 @@ export async function POST(req: Request) {
     }
   }
 
+  // SERVER-SIDE BACKSTOP: the extension can leave RAW, unfiltered text in outputNote when the __META__ tail
+  // splits across network reads, so the note posted here may still contain a blocked term. Re-run the SAME
+  // filter (shared authorizedNames + learned terms — never a divergent second copy) so our stored record is
+  // clean regardless of the client. Fail-soft: never let the backstop block a save.
+  let cleanText = note_text
+  try {
+    const { learnedBlockedTerms, authorizedNames } = await buildBlockedFilterContext(client_id)
+    const filtered = filterBlockedNarrative(note_text, learnedBlockedTerms, authorizedNames)
+    if (filtered.text !== note_text) {
+      cleanText = filtered.text
+      // The client shipped a blocked term it should have filtered → record which terms fired (names only,
+      // never note text) so we can see the extension leak is still live and, later, that the release fixed it.
+      await emitAdminAlert({
+        source: 'extension',
+        type: 'note.save_filter_caught',
+        severity: 'warning',
+        actorUserId: userId,
+        clientId: client_id,
+        payload: { surface: 'extension', substituted: filtered.substituted, flagged: filtered.flagged },
+      })
+    }
+  } catch { /* fail-soft: store what we have rather than blocking the save */ }
+
   const inserted = await prisma.session_notes.create({
     data: {
       client_id,
       user_id: userId,
-      note_text,
+      note_text: cleanText,
       session_date: session_date || new Date().toISOString().split('T')[0],
       // Saved by the extension = the note pushed into the EHR for this session — the authoritative
       // "used" record, the strongest answer to "which note was used for this date".
