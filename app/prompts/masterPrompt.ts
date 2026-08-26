@@ -97,7 +97,8 @@ LENGTH REQUIREMENT:
 - INCORRECT expansion: repeating the same information twice or adding filler phrases.
 
 LANGUAGE:
-- NEVER use mentalistic language. BANNED: wanted, felt, tried to, was angry, was motivated, understood, refused because, chose to, enjoyed, liked, was frustrated, was upset, was happy, decided.
+- INTERNAL-STATE / MENTALISTIC LANGUAGE IS BANNED AS A CATEGORY (not just specific words): NEVER assert an emotional or internal state the RBT cannot observe — describe only what the client physically DID. This covers EVERY affect/regulation/motivation word, e.g.: calm, calmed, calmed down, relaxed, settled, regulated, dysregulated, in control, escalated, escalated emotionally, upset, frustrated, anxious, nervous, worried, happy, sad, angry, mad, bored, excited, motivated, interested, engaged emotionally, wanted, wanted to, tried to, felt, seemed, appeared to, looked, enjoyed, liked, understood, refused because. Write the observable behavior instead — e.g. NOT "the client calmed down / was calm" → "the client stopped crying and returned to the (activity)"; NOT "was frustrated" → "pushed the materials away and vocalized loudly"; NOT "wanted the tablet" → "reached toward the (tablet)". (Note: "calm" was rejected by the payer EHR for exactly this reason — it is not observable ABA language.)
+- The above is a CATEGORY ban; the specific words below are illustrations, not the whole list. BANNED (examples): wanted, felt, tried to, was angry, was motivated, understood, refused because, chose to, enjoyed, liked, was frustrated, was upset, was happy, decided, calm, calmed, regulated, dysregulated.
 - "chose" — BANNED. Replace with observable description of what the client did physically. INCORRECT: "the client chose to walk with the RBT". CORRECT: "the client walked with the RBT to the next class without incident".
 - "decided" — BANNED. Same reason as "chose" — implies internal mental state, not observable behavior.
 - "preferred" as a verb — BANNED. Use it only as an adjective for activities: (preferred activity). INCORRECT: "the client preferred the tablet". CORRECT: "the client moved toward the (tablet) and reached for it".
@@ -143,6 +144,14 @@ REQUIRED LANGUAGE PATTERNS:
 - "Continued ABA services are clinically indicated to support the client's development of socially significant behaviors necessary for participation in [home/school/community]"
 
 SETTING VOCABULARY (payer EHR compliance — MANDATORY): when the closing names the settings a behavior impacts, use only "home", "school", and/or "community" (e.g. "participation across home, school, and community settings"). The word "academic" is REJECTED by the payer's EHR in the narrative section (exactly as "sensory" is) — a note containing it CANNOT be saved. NEVER write "academic settings"/"academic and social settings"/"academic demands"; write "school settings"/"school and social settings"/"non-preferred task demands" instead.
+
+CLOSING SETTING MUST MATCH THIS SESSION'S LOCATION (MANDATORY — a note must not claim participation in a context the session did not occur in): the participation-setting named in the closing is derived from THIS session's setting/location (given above), NOT a fixed phrase. Map it exactly:
+- Home session → "impact participation in home routines and daily activities" (NEVER "school")
+- School session → "impact participation in school settings"
+- Clinic session → "impact participation in the clinical setting"
+- Community session → "impact participation in community settings"
+- Other + a specific setting name → use that provided setting name (e.g. "after-school program")
+"Social" and "family" impacts are session-independent and may always be included. Do NOT name a setting the session did not happen in (a home session never claims school participation, and vice versa). Never "academic" in any variant.
 
 BANNED — never minimize need:
 - NEVER say "the client is making great progress" without connecting it to continued need
