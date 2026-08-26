@@ -12,6 +12,7 @@
 // axis a legacy row cannot speak to.
 
 import { segmentNoteByBehavior, deriveBehaviorFunction, functionToCanonical } from './functionPatterns.ts';
+import { emitAdminAlert } from './adminAlerts.ts';
 
 // What the preselector chose for one behavior/skill. Every field is optional: present iff KNOWN.
 export interface AxisSelection {
@@ -135,10 +136,32 @@ export function mapRowsToHistory(rows: SessionNoteRow[]): NoteContext[] {
   return rows.map(buildNoteContext);
 }
 
-// Runtime entry point: the last `window` SAVED notes for a client, newest first. A row exists in
-// session_notes ONLY when the RBT saved (persistence is explicit-save-only), so this window advances on
-// save and never on a bare regeneration. `prisma` is injected so this stays free of a hard prisma import
-// for tests; the callers pass the app's client.
+// A note CARRIES ROTATION SIGNAL when buildNoteContext can produce at least one usable axis from it:
+// an authoritative generation_context, OR (derived) a per-behavior function, note-level interventions, or
+// skills. A row with empty behaviors_addressed still counts if it has interventions_used or skills_addressed
+// — those feed the intervention/skill axes. The extension save path stores note_text only, so its rows carry
+// NO signal and must be skipped, not counted toward the window.
+export function carriesRotationSignal(ctx: NoteContext): boolean {
+  if (ctx.source === 'generation_context') return true;
+  return (
+    Object.keys(ctx.perBehavior).length > 0 ||
+    (ctx.interventions?.length ?? 0) > 0 ||
+    (ctx.skills?.length ?? 0) > 0
+  );
+}
+
+// CLINICAL RECENCY BOUND — not a performance knob. Rotation is only meaningful against RECENT selections;
+// rotating a client's axes against choices from more than ~20 sessions ago has no clinical value. So we look
+// back at most this many notes to find `window` signal-bearing ones. A client whose last 20 notes all came
+// through the extension (no stored signal) correctly yields a thin/empty window — there is genuinely nothing
+// recent to rotate over — and that degradation is recorded (see below), never hidden.
+const ROTATION_LOOKBACK = 20;
+
+// Runtime entry point: the newest `window` SAVED notes that actually CARRY rotation signal, looking back over
+// the last ROTATION_LOOKBACK notes so a run of signal-less extension rows doesn't starve rotation. A row
+// exists in session_notes ONLY when the RBT saved (persistence is explicit-save-only), so this advances on
+// save and never on a bare regeneration. `prisma` is injected so the pure mapping stays test-friendly; callers
+// pass the app's client.
 // `prisma` is typed loosely at this DB boundary (the real PrismaClient's generic findMany does not match a
 // hand-written signature, and tests inject a mock). The select below fixes the shape we read.
 export async function readGenerationHistory(
@@ -150,7 +173,7 @@ export async function readGenerationHistory(
   const rows: SessionNoteRow[] = await prisma.session_notes.findMany({
     where: { client_id: clientId },
     orderBy: { created_at: 'desc' },
-    take: window,
+    take: ROTATION_LOOKBACK,
     select: {
       note_text: true,
       behaviors_addressed: true,
@@ -161,5 +184,22 @@ export async function readGenerationHistory(
       created_at: true,
     },
   });
-  return mapRowsToHistory(rows);
+  const signalRows = mapRowsToHistory(rows).filter(carriesRotationSignal);
+  const historyWindow = signalRows.slice(0, window);
+
+  // OBSERVABILITY (never blocks, never throws — emitAdminAlert is fail-soft by contract): if notes existed but
+  // some carried no signal AND we still couldn't fill the window, the rotation is silently degraded. Record it
+  // so the admin panel can see WHICH clients are affected. We only alert when rows were actually SKIPPED for
+  // lack of signal (scanned > withSignal) — a genuinely new client with few notes is not a degradation.
+  if (historyWindow.length < window && rows.length > signalRows.length) {
+    await emitAdminAlert({
+      source: 'note',
+      type: 'note.rotation_window_degraded',
+      severity: 'info',
+      clientId,
+      payload: { scanned: rows.length, withSignal: signalRows.length, window },
+    });
+  }
+
+  return historyWindow;
 }

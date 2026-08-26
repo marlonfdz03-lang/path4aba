@@ -88,11 +88,15 @@ export async function POST(req: NextRequest) {
     const userId: string = authedUser.id;
 
     const encoder = new TextEncoder();
-    // Whether anything reached the client before a failure. A note that died before its first token
-    // and one that died mid-paragraph are different incidents (the second usually means the model or
-    // a gate failed partway, the first that setup did), and the failure alert below cannot tell them
-    // apart after the fact — so it is recorded as it happens.
+    // Whether real note prose reached the client before a failure. A note that died before its first
+    // token and one that died mid-paragraph are different incidents (the second usually means the
+    // model or a gate failed partway, the first that setup did), and the failure alert below cannot
+    // tell them apart after the fact — so it is recorded as it happens.
     let emittedContent = false;
+    // Whether the combined compliance gate fired its one regeneration. generateSmartNote signals it
+    // through the SAME onChunk callback as prose, so the two must be counted separately: a note that
+    // regenerated and then died before writing any prose had emitted nothing the RBT could see.
+    let regenFired = false;
     const readable = new ReadableStream({
       async start(controller) {
         try {
@@ -101,7 +105,14 @@ export async function POST(req: NextRequest) {
           // so we ALSO send the FILTERED final text in __META__ — clients patch the displayed note
           // at completion, so nothing unfiltered reaches the fill even though the live stream is raw.
           const result = await generateSmartNote(input, userId, (text) => {
-            emittedContent = true;
+            // __REGEN__ is a control marker, not note text. Stripping it (with its framing newlines)
+            // leaves exactly the prose this chunk carried: if anything is left the RBT saw output, and
+            // if the strip changed the chunk at all the regeneration fired. generateSmartNote sends the
+            // marker as its own chunk today; handling a mixed chunk keeps that from becoming a
+            // correctness dependency.
+            const prose = text.replace(/\n?__REGEN__\n?/g, '');
+            if (prose !== text) regenFired = true;
+            if (prose.length > 0) emittedContent = true;
             controller.enqueue(encoder.encode(text));
           });
           controller.enqueue(encoder.encode(
@@ -118,6 +129,7 @@ export async function POST(req: NextRequest) {
             clientId: input.clientId,
             userId,
             emittedContent,
+            regenFired,
             error: e?.message || String(e),
           }, e);
           // Started BEFORE the enqueue so a client that has already disconnected (which makes
@@ -137,6 +149,8 @@ export async function POST(req: NextRequest) {
               stack: e?.stack || null,
               // True = the RBT watched a partial note appear and then fail.
               emittedContent,
+              // True = the gate had already spent its one regeneration before the failure.
+              regenFired,
             },
           });
           // BLOCKING: the note must not be used (a compliance hard-stop, or generation failed

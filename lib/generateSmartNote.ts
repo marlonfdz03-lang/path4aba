@@ -20,13 +20,14 @@ import { stripInvalidNextSession } from '@/lib/nextSessionDate';
 import { findRedFlagFlags } from '@/lib/redFlagPhrases';
 import { decideUniqueness } from '@/lib/noteSimilarity';
 import {
-  runCombinedComplianceGate, type ComplianceState,
+  runCombinedComplianceGate, summarizeSurvivingViolations, type ComplianceState,
 } from '@/lib/complianceGate';
 import { buildInterventionDetail } from '@/lib/interventionDetail';
 import { preselect, buildFixedAssignmentsBlock, type PreselectResult } from '@/lib/preselect';
 import { readGenerationHistory } from '@/lib/rotationHistory';
-import { assignTiers } from '@/lib/complianceTiers';
+import { assignTiers, tierCounts } from '@/lib/complianceTiers';
 import { collectGateFindings, recordGateFindings } from '@/lib/gateFindings';
+import { emitAdminAlert } from '@/lib/adminAlerts';
 
 const openai = new OpenAI({
   apiKey: process.env.AZURE_OPENAI_API_KEY || 'azure-openai',
@@ -279,10 +280,18 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
       resolvedProfile.approvedInterventions
     );
   }
+  // How much the location filters removed. Both drops are SILENT to the RBT — an activity or skill
+  // that does not fit the session's location simply disappears from the note — so the counts are
+  // captured here and reported on the outcome record. A client whose skills are consistently dropped
+  // is a setting/profile mismatch, invisible until now.
+  let activitiesDropped = 0;
+  let skillsDropped = 0;
   if (input.activitiesUsed?.length) {
+    const beforeActivities = input.activitiesUsed.length;
     input.activitiesUsed = input.activitiesUsed.filter(a =>
       isValidActivity(a.name, input.sessionInfo.location)
     );
+    activitiesDropped = beforeActivities - input.activitiesUsed.length;
   }
   if (input.behaviorsObserved?.length) {
     input.behaviorsObserved = input.behaviorsObserved.map(b => ({
@@ -291,10 +300,12 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     }));
   }
   if (resolvedProfile.activePrograms?.replacementSkills?.length) {
+    const beforeSkills = resolvedProfile.activePrograms.replacementSkills.length;
     resolvedProfile.activePrograms.replacementSkills =
       resolvedProfile.activePrograms.replacementSkills.filter((s: string) =>
         isValidSkillForLocation(s, input.sessionInfo.location)
       );
+    skillsDropped = beforeSkills - resolvedProfile.activePrograms.replacementSkills.length;
   }
 
   // Steps 2, 3, 5: Run all DB queries in parallel
@@ -412,12 +423,16 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   const activityNames = (input.activitiesUsed ?? []).map((a) => a.name).filter(Boolean);
   let generationContext: PreselectResult | null = null;
   let fixedAssignmentsBlock = '';
+  // Compliance controller: deterministic outcome tier per ABC and per skill from the RBT's level. Below
+  // typical / poor never make every item fail; typical never all-perfect — guaranteed by assignTiers.
+  //
+  // Computed OUTSIDE the try below (it used to sit inside). assignTiers is pure arithmetic over a length
+  // — no I/O, nothing that can throw — so this cannot change which path runs, and it means the tier
+  // distribution is still reportable on the outcome record when the preselect I/O fails.
+  const behaviorTiers = assignTiers(input.complianceLevel, input.behaviorsObserved.length);
+  const skillTiers = assignTiers(input.complianceLevel, input.replacementSkillsAddressed.length);
   try {
     const history = await readGenerationHistory(prisma, input.clientId, { window: 3 });
-    // Compliance controller: deterministic outcome tier per ABC and per skill from the RBT's level. Below
-    // typical / poor never make every item fail; typical never all-perfect — guaranteed by assignTiers.
-    const behaviorTiers = assignTiers(input.complianceLevel, input.behaviorsObserved.length);
-    const skillTiers = assignTiers(input.complianceLevel, input.replacementSkillsAddressed.length);
     generationContext = preselect({
       behaviors: input.behaviorsObserved.map((b) => ({
         name: b.name,
@@ -436,11 +451,30 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
       history,
     });
     fixedAssignmentsBlock = buildFixedAssignmentsBlock(generationContext);
-  } catch {
+  } catch (e: any) {
     // Preselection is best-effort: if history read or selection fails, fall back to the pre-preselection
     // path (GPT chooses, the gates still enforce). A rotation hiccup must never cost a note.
+    // FALLBACK BEHAVIOR IS UNCHANGED — the two assignments below are exactly what this catch always did.
     generationContext = null;
     fixedAssignmentsBlock = '';
+    // The error used to be discarded by a bare `catch {}`, which is why notes exist with a NULL
+    // generation_context and no record of why. Observability only: the alert never alters the fallback.
+    await emitAdminAlert({
+      source: 'note',
+      type: 'note.preselect_failed',
+      severity: 'warning',
+      actorUserId: rbtId,
+      clientId: input.clientId,
+      payload: {
+        message: e?.message || String(e),
+        name: e?.name || null,
+        stack: e?.stack || null,
+        // The two locked sets preselection needs. Empty ones are the likeliest cause of a selection
+        // failure (as opposed to the history read failing), so they separate a config gap from a DB blip.
+        approvedInterventionsEmpty: !(resolvedProfile.approvedInterventions ?? []).length,
+        approvedMethodSetEmpty: !approvedMethodSet.length,
+      },
+    });
   }
   // The ABC count IS the number of behaviors the RBT documented — never a fixed target. A fixed
   // "exactly 5" forced the model to invent ABCs for behaviors the RBT never marked, sourcing them
@@ -718,6 +752,51 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   // session_notes only when the RBT saves it (/api/session-notes on the web + note page, or
   // /api/extension/save-note from the extension), each of which already guards against exact duplicates.
   // A regeneration therefore never adds a row and never silently replaces a note the RBT already saved.
+
+  // Step 8b: THE OUTCOME RECORD. Exactly ONE row per note that reached the RBT, carrying the whole
+  // result in its payload — deliberately not one event per signal. This fires on every single note, so
+  // volume is the design constraint: N rows per note would make the feed unreadable and the table grow
+  // N times faster for no extra information.
+  //
+  // This is what makes pass rates and regeneration volume computable. gate_findings answers "which gate
+  // fired" and is defect-only — it records NOTHING for a clean note — so the denominator of any rate
+  // (how many notes were generated at all) did not exist anywhere until this event. The two coexist:
+  // gate_findings keeps the per-finding clinical detail, this keeps the per-note outcome.
+  //
+  // Severity is ALWAYS 'info', including when gateClean is false: a note that shipped after its one
+  // regeneration is a normal outcome, not an incident. The payload carries the detail; severity carries
+  // the urgency, and inflating it here would drown the criticals that mean a user lost their note.
+  const { clean: gateClean, violations: survivingViolations } = summarizeSurvivingViolations(gate.state);
+  await emitAdminAlert({
+    source: 'note',
+    type: 'note.generated',
+    severity: 'info',
+    actorUserId: rbtId,
+    clientId: input.clientId,
+    payload: {
+      complianceLevel: input.complianceLevel ?? null,
+      // Counts per tier, not the full arrays — the distribution is what a rate is computed from, and
+      // the per-item ordering is already reproducible from complianceLevel + the item counts.
+      behaviorTiers: tierCounts(behaviorTiers),
+      skillTiers: tierCounts(skillTiers),
+      behaviorCount: input.behaviorsObserved.length,
+      skillCount: input.replacementSkillsAddressed.length,
+      regenCount: gate.regenCount,
+      gateClean,
+      // Present ONLY when something survived, so a clean note's payload stays small and "has the key"
+      // is itself the signal. See summarizeSurvivingViolations for why unsegmentable is not clean.
+      ...(gateClean ? {} : { survivingViolations }),
+      similarityWarning,
+      coherenceFlagCount: coherenceFlags.length,
+      redFlagCount: redFlags.length,
+      // Silent location-filter drops, captured at the top of this function.
+      activitiesDropped,
+      skillsDropped,
+      // false = this note will save with a NULL generation_context (preselection fell back); the
+      // matching 'note.preselect_failed' alert carries the reason.
+      hasGenerationContext: generationContext !== null,
+    },
+  });
 
   return {
     note,

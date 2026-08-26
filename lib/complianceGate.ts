@@ -45,6 +45,50 @@ export function interventionViolationNames(v: InterventionViolations): string[] 
   return [...new Set([...v.prohibited, ...v.unapproved, ...v.skillAsReduction])];
 }
 
+// What survived the combined gate, summarized for the note-outcome record (admin_alerts
+// 'note.generated'). Pure, and it lives here rather than at the emit site because `clean` IS the
+// pass-rate metric — if its definition drifts, every number computed from the feed drifts silently
+// with it. Pinned by tests in complianceGate.test.mjs.
+//
+// UNSEGMENTABLE COUNTS AS NOT CLEAN, deliberately. An unsegmentable note is not known-defective — it
+// is UNVERIFIABLE, because coverage could not be checked at all. Folding it into `clean` would
+// overstate the pass rate by counting unchecked notes as passed, so the metric stays conservative and
+// `unsegmentable` is reported as its own key, letting "actually defective" be separated from "could
+// not verify" downstream.
+export interface SurvivingViolations {
+  prohibited: string[]
+  unapproved: string[]
+  skillAsReduction: string[]
+  // Behavior names only — the full triples live in gate_findings; this is a summary, not a duplicate.
+  approvedFunction: string[]
+  teachingMethod: string[]
+  coverageMissing: string[]
+  unsegmentable: boolean
+}
+
+export function summarizeSurvivingViolations(
+  state: ComplianceState,
+): { clean: boolean; violations: SurvivingViolations } {
+  const violations: SurvivingViolations = {
+    prohibited: state.intervention.prohibited,
+    unapproved: state.intervention.unapproved,
+    skillAsReduction: state.intervention.skillAsReduction,
+    approvedFunction: state.functionViolations.map((v) => v.name),
+    teachingMethod: state.methodViolations,
+    coverageMissing: state.coverage.segmentable ? state.coverage.missing.map((m) => m.name) : [],
+    unsegmentable: !state.coverage.segmentable,
+  }
+  const clean =
+    !violations.prohibited.length &&
+    !violations.unapproved.length &&
+    !violations.skillAsReduction.length &&
+    !violations.approvedFunction.length &&
+    !violations.teachingMethod.length &&
+    !violations.coverageMissing.length &&
+    !violations.unsegmentable
+  return { clean, violations }
+}
+
 // Build ONE combined regeneration instruction from ONLY the checks that failed, or null when the note is
 // clean. Order: function coverage + approved function first (both about the function — name it, and from the
 // approved set — so they reinforce rather than conflict), then interventions, then teaching methods. Each

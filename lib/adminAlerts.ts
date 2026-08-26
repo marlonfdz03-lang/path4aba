@@ -34,10 +34,27 @@ export type AlertSeverity = 'critical' | 'warning' | 'info'
 
 // The event vocabulary. Dotted keys, `<area>.<event>`, defined HERE rather than as free strings at
 // call sites so the set stays enumerable — the admin panel groups on it, and a typo at a call site
-// would silently create a category nothing ever reads. Later commits extend this union; today the
-// note-generation hard-failure path is the only producer.
+// would silently create a category nothing ever reads. Later commits extend this union.
 export type AlertType =
+  // A note that never reached the RBT. Severity 'critical'.
   | 'note.generation_failed'
+  // Every note that DID reach the RBT — exactly one row per note, carrying the whole outcome
+  // (tiers, gate result, regeneration, flag counts) in its payload. This is what makes pass rates
+  // and regeneration volume computable: gate_findings is defect-only and records nothing for a
+  // clean note, so without this event a successful generation leaves no trace at all.
+  // Severity 'info' ALWAYS — including when the gate found violations. A note that shipped is a
+  // normal outcome; the payload carries the detail, severity carries the urgency.
+  | 'note.generated'
+  // Preselection fell back to letting the model choose. The note still ships and the gates still
+  // enforce, but its generation_context is NULL — so this is the record of WHY a row has no
+  // rotation history. Severity 'warning'.
+  | 'note.preselect_failed'
+  // The rotation LRU window came back thinner than requested because recent notes carried NO rotation
+  // signal (the extension save path stores note_text only — null generation_context, empty
+  // behaviors/interventions/skills — so those rows are skipped). The note still ships; rotation just
+  // has less history to rotate over. Payload: { scanned, withSignal, window }. Severity 'info'
+  // (diagnostic — a note that shipped fine, not an incident).
+  | 'note.rotation_window_degraded'
 
 export interface AdminAlertInput {
   source: AlertSource
