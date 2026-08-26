@@ -54,6 +54,17 @@ export const RED_FLAG_PATTERNS: RedFlagPattern[] = [
   // ── 2. MENTALISTIC (internal state attributed instead of observable behavior) ─
   // "was/were/seemed/appeared/felt/got/became/looked <state>".
   { re: /\b(?:was|were|seemed|appeared|felt|got|became|looked|acted) (?:frustrated|upset|angry|mad|sad|happy|bored|anxious|nervous|excited|annoyed|distressed|overwhelmed|scared|afraid)\b/i, category: 'mentalistic', reason: 'mentalistic — describe the observable topography, not an inferred state' },
+  // CALM / REGULATION family — the same class, previously missing ("calm" reached the EHR and was rejected).
+  // A per-verb guard ("was/remained/stayed calm") so an authorized program NAME ("Calm-Down Routine") — which
+  // has no preceding state verb — is not flagged.
+  { re: /\b(?:was|were|seemed|appeared|felt|got|became|looked|acted|remained|stayed|kept|being|is|are) (?:calm|relaxed|settled|regulated|dysregulated|in control|out of control|content|at ease|composed|soothed|uncomfortable)\b/i, category: 'mentalistic', reason: 'mentalistic internal state — describe the observable behavior (e.g. stopped crying and resumed the activity)' },
+  // "calmed (down)", "settled down/himself" (NOT bare "settled", which can be observable — "settled into her
+  // seat"), "escalated emotionally", "self-regulated", "de-escalated".
+  { re: /\bcalmed(?:\s+down)?\b|\bsettled\s+(?:down|himself|herself|themselves)\b|\bde[- ]escalated\b|\bsoothed\b/i, category: 'mentalistic', reason: 'mentalistic — state what the client observably did (e.g. stopped crying, resumed the task)' },
+  { re: /\b(?:escalated emotionally|self[- ]regulated|emotional(?:ly)? (?:regulation|dysregulation))\b/i, category: 'mentalistic', reason: 'mentalistic — describe the observable behavior, not an internal-state summary' },
+  // INTENT / DESIRE / INTERNAL MOTIVATION — attributes a want/interest/decision instead of an observable act.
+  // ("preferred item" is a PLAN term and is NOT matched — only "preferred to <verb>" as an internal preference.)
+  { re: /\b(?:the client|he|she|they) (?:attempted to|was interested in|were interested in|was motivated by|were motivated by|chose to|decided to|appeared to|seemed to|wanted to|wanted|tried to|preferred to)\b/i, category: 'mentalistic', reason: 'mentalistic intent — describe the observable action (e.g. "reached for the (tablet)"), not the inferred desire' },
   // "didn't want to …", "did not want to …". Apostrophe class covers straight ' and curly ’.
   { re: /\b(?:did ?n['’]?t|does ?n['’]?t|do(?:es)? not|did not|would ?n['’]?t|will not) want to\b/i, category: 'mentalistic', reason: 'mentalistic — describe what the client did, not what they wanted' },
   // Causal attribution to an internal state: "because he didn't want to / was / felt / wanted".

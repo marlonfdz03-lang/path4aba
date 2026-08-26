@@ -14,7 +14,7 @@
 // → the guard falls back to the previous-count heuristic (legacy behavior). Pure aside from the geometry read.
 
 import type { Row } from './pdfGeometry.ts'
-import { readReplacementRoster, readInterventionRoster, readPreferenceTable, readReplacementDataTable, readReduceTargets, looksLikePrograms } from './pdfGeometry.ts'
+import { readReplacementRoster, readInterventionRoster, readPreferenceTable, readReplacementDataTable, readReduceTargets, readInterventionProcedures, looksLikePrograms } from './pdfGeometry.ts'
 import { assessReplacementCompleteness, assessInterventionCompleteness, reconcileMastery } from './llmBehaviorCredibility.ts'
 import { parseReinforcers } from './reinforcers.ts'
 import { looksEdible } from './edibleReinforcer.ts'
@@ -24,7 +24,7 @@ const norm = (s: unknown) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g
 const nmeq = (a: unknown, b: unknown) => { const x = norm(a), y = norm(b); return !!x && !!y && x.length >= 4 && y.length >= 4 && (x.includes(y) || y.includes(x)) }
 
 export type ReplacementSource = 'roster-read' | 'llm' | 'preserved' | 'under-read'
-export type InterventionSource = 'llm' | 'preserved' | 'under-read'
+export type InterventionSource = 'llm' | 'preserved' | 'under-read' | 'procedure-read'
 export interface RosterProvenance {
   masteryDemoted: string[] // names moved out of mastered because they are active/target (the mastery-authority rule)
   replacement: { source: ReplacementSource; newCount: number; region: number; rosterActive: number; rosterMastered: number; refresh: boolean; readFailure: boolean }
@@ -43,6 +43,7 @@ export function reconcileRosters(
   reviewFlags: FlagLike[],
   replacementDomainFound: boolean,
   interventionDomainFound: boolean,
+  fullText = '',
 ): RosterProvenance {
   const behaviorNames = [
     ...((assessmentProfile.maladaptiveBehaviors || []) as any[]).map((b) => String(b?.name || '')),
@@ -98,14 +99,24 @@ export function reconcileRosters(
     }
   }
 
-  // ── INTERVENTIONS ── (region count only; the two-column split garbles item NAMES, but the LLM reads them
-  // cleanly. We use the deterministic count purely as the guard's read-failure signal.)
+  // ── INTERVENTIONS ──
+  let intSource: InterventionSource = 'llm'
+  // PROCEDURE-PROSE READ (Ximena): her interventions are labeled procedure blocks + a bulleted legend, not a
+  // clean list, so the LLM under-reads them (9 of 14). readInterventionProcedures matches a CANONICAL vocabulary
+  // ONLY where DECLARED (labeled "<Name>:" header, treatment-approach declaration, or a "- <Name>" bullet) — an
+  // incidental lowercase mention inside another program's description never counts. Prefer it when it reads more
+  // than the LLM and is plausible; fail safe → keep the LLM result.
+  const procIvs = readInterventionProcedures(fullText || '')
+  if (procIvs.length >= 3 && looksLikePrograms(procIvs) && procIvs.length > (assessmentProfile.interventions || []).length) {
+    assessmentProfile.interventions = procIvs.map((name) => ({ name, status: 'active' }))
+    intSource = 'procedure-read'
+  }
+  // Deterministic region count for the guard's read-failure signal (garbled names, but the count is the signal).
   const intRoster = readInterventionRoster(rows, [...behaviorNames, ...roster.active, ...roster.mastered])
   const intRegion = intRoster.found && intRoster.rawItemCount > 0 ? intRoster.rawItemCount : -1
   const newIntCount = (assessmentProfile.interventions || []).length
   const prevInt = (existingProfile.interventions || []) as any[]
   const intCheck = assessInterventionCompleteness(newIntCount, prevInt.length, interventionDomainFound, intRegion)
-  let intSource: InterventionSource = 'llm'
   if (!intCheck.refresh) {
     if (intCheck.readFailure) {
       reviewFlags.push({ field: 'interventions', source: 'llm-fallback', reason: intCheck.reason })

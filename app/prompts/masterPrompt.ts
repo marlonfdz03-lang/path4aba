@@ -97,8 +97,19 @@ LENGTH REQUIREMENT:
 - INCORRECT expansion: repeating the same information twice or adding filler phrases.
 
 LANGUAGE:
-- INTERNAL-STATE / MENTALISTIC LANGUAGE IS BANNED AS A CATEGORY (not just specific words): NEVER assert an emotional or internal state the RBT cannot observe — describe only what the client physically DID. This covers EVERY affect/regulation/motivation word, e.g.: calm, calmed, calmed down, relaxed, settled, regulated, dysregulated, in control, escalated, escalated emotionally, upset, frustrated, anxious, nervous, worried, happy, sad, angry, mad, bored, excited, motivated, interested, engaged emotionally, wanted, wanted to, tried to, felt, seemed, appeared to, looked, enjoyed, liked, understood, refused because. Write the observable behavior instead — e.g. NOT "the client calmed down / was calm" → "the client stopped crying and returned to the (activity)"; NOT "was frustrated" → "pushed the materials away and vocalized loudly"; NOT "wanted the tablet" → "reached toward the (tablet)". (Note: "calm" was rejected by the payer EHR for exactly this reason — it is not observable ABA language.)
-- The above is a CATEGORY ban; the specific words below are illustrations, not the whole list. BANNED (examples): wanted, felt, tried to, was angry, was motivated, understood, refused because, chose to, enjoyed, liked, was frustrated, was upset, was happy, decided, calm, calmed, regulated, dysregulated.
+- INTERNAL-STATE / MENTALISTIC LANGUAGE IS BANNED AS A CATEGORY — no exceptions. A Path4ABA note describes OBSERVABLE BEHAVIOR only: what the client physically did, said, reached for, or moved toward. NEVER assert an emotion, feeling, regulation state, desire, interest, or motive the RBT cannot observe. The rule is the CATEGORY; the words below are the enforcement surface, not the whole of it:
+  • CALM / REGULATION: calm, calmed, calming, relaxed, settled, regulated, dysregulated, in control, escalated, de-escalated, composed, soothed
+  • EMOTIONAL STATES: frustrated, upset, angry, mad, sad, happy, anxious, nervous, excited, bored, overwhelmed, distressed, scared, afraid, annoyed, content, uncomfortable
+  • INTENT / DESIRE / MOTIVATION: wanted, wanted to, tried to, attempted to, enjoyed, liked, disliked, felt, seemed, appeared to, was interested in, was motivated by, chose to, refused because, decided to
+  Write the OBSERVABLE instead — the session data tells you what actually happened:
+    NOT "the client calmed (down) / was calm" → "the client stopped crying and returned to the (activity)"
+    NOT "was frustrated" → "pushed the materials away and vocalized loudly"
+    NOT "was anxious" → "covered the ears and moved away from the (materials)"
+    NOT "wanted / was interested in the tablet" → "reached toward the (tablet)"
+    NOT "tried to leave" → "stood and walked toward the door"
+    NOT "enjoyed / liked the puzzle" → "smiled and continued placing the pieces"
+    NOT "chose / decided to sit" → "sat in the chair"
+  EXCEPTION — an AUTHORIZED name from the treatment plan is verbatim content and stays untouched (a "Calm-Down Routine" program name, or a topography the BCBA wrote): use it exactly as written; the ban is on YOUR OWN prose, never the plan's words. (Confirmed EHR-rejected for this same reason: sensory, academic, calm.)
 - "chose" — BANNED. Replace with observable description of what the client did physically. INCORRECT: "the client chose to walk with the RBT". CORRECT: "the client walked with the RBT to the next class without incident".
 - "decided" — BANNED. Same reason as "chose" — implies internal mental state, not observable behavior.
 - "preferred" as a verb — BANNED. Use it only as an adjective for activities: (preferred activity). INCORRECT: "the client preferred the tablet". CORRECT: "the client moved toward the (tablet) and reached for it".

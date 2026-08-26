@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
       // programs into skillAcquisition, and — via a deterministic source region count — distinguishes a READ
       // FAILURE (source lists many, extracted few → flag under-read, never silently preserve) from a REAL plan
       // shrinkage (source genuinely lists few → refresh). Fails safe: roster not found → keep the LLM result.
-      reconcileRosters(assessmentProfile, existingProfile, geomRows, reviewFlags, replacementDomainFound, interventionDomainFound);
+      reconcileRosters(assessmentProfile, existingProfile, geomRows, reviewFlags, replacementDomainFound, interventionDomainFound, text);
 
       // GUARD 2 — the refresh merge (pure, unit-tested): preserves non-assessment keys (observedCatalog,
       // blockedNarrativeTerms, continuityContext, …), replaces assessment-sourced keys wholesale, and

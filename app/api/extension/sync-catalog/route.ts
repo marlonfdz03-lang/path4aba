@@ -137,6 +137,18 @@ export async function POST(req: Request) {
       if (!byTerm.has(term)) byTerm.set(term, { term, substitute: null })
     }
     nextProfile.blockedNarrativeTerms = [...byTerm.values()]
+
+    // SHARED SET (global): also record each capture in blocked_narrative_terms so it protects EVERY client,
+    // not just this one. Fail-soft: if the table isn't present yet (migration not run), the per-client write
+    // above still applies. ON CONFLICT DO NOTHING — never clobber a seeded substitute.
+    for (const term of cleanBlocked) {
+      try {
+        await (prisma as any).$executeRawUnsafe(
+          'INSERT INTO blocked_narrative_terms (term, substitute, source) VALUES ($1, NULL, $2) ON CONFLICT (term) DO NOTHING',
+          term, 'learned',
+        )
+      } catch { /* table not present yet — per-client write above is the fallback */ }
+    }
   }
 
   await prisma.clients.update({

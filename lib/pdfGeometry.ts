@@ -453,6 +453,14 @@ export function readObjectivesStatus(rows: Row[]): ObjectiveTarget[] {
 
 // Operational-definition blocks: "<Name> … Baselines: N/week … Description: <definition>". Her definitions
 // live under "Description:", not "Operational Definition"/"Topography", so those anchors miss.
+// De-glyph pdf2json splits that drop a space INTO a word ("using h er fingers" → "her", "wh en skin" → "when",
+// "n on-preferred" → "non"): rejoin a 1-2 letter run into the following lowercase run UNLESS it is a real short
+// English word (kept as-is). Conservative — only lowercase fragments; leaves ordinary short words intact.
+// SINGLE-letter only (never 2-letter, which would chain "h er own" → "herown"): rejoin a lone consonant-ish
+// letter into the following lowercase run. "a"/"i" are real words and are left alone.
+function deglyph(s: string): string {
+  return s.replace(/\b([b-hj-z]) (?=[a-z]{2,}\b)/g, (_m, w) => w)
+}
 export interface DescriptionBlock { name: string; definition: string; baseline: string }
 export function readDescriptionBlocks(rows: Row[]): DescriptionBlock[] {
   const out: DescriptionBlock[] = []
@@ -468,15 +476,22 @@ export function readDescriptionBlocks(rows: Row[]): DescriptionBlock[] {
     // Baseline "N/week" from the rows just above Description:
     let baseline = ''
     for (let j = i - 1; j >= Math.max(0, i - 4); j--) { const m = /(\d+(?:\.\d+)?)\s*\/\s*week/i.exec(rowText(rows[j])); if (m) { baseline = m[1] + '/week'; break } }
-    // Definition = rows after Description: until the next block/section/footer.
+    // Definition = rows after Description: until the next block/section/footer. Continue ACROSS a page footer
+    // when the next row continues the sentence (a lowercase start), so a definition split across a page break
+    // is not truncated mid-sentence ("…scored as occurring when skin" → the tail on the next page).
     let def = ''
     for (let k = i + 1; k < rows.length; k++) {
       const t = rowText(rows[k]).trim()
-      if (/^\s*Objectives\s*:|Description\s*:|^Catharsis Consultants|^Florida Kids|^Monthly Data/i.test(t)) break
+      if (/^\s*Objectives\s*:|Description\s*:|^Monthly Data/i.test(t)) break
+      if (/^Catharsis Consultants|^Florida Kids|^\d+\s*$/i.test(t)) { // page footer — skip it, keep reading if the block continues
+        const next = (rows[k + 1] && rowText(rows[k + 1]).trim()) || ''
+        if (/^[a-z]/.test(next) && def) continue
+        break
+      }
       def += (def ? ' ' : '') + t
-      if (def.length > 800) break
+      if (def.length > 1600) break
     }
-    if (name) out.push({ name, definition: def.replace(/\s+/g, ' ').trim(), baseline })
+    if (name) out.push({ name, definition: deglyph(def.replace(/\s+/g, ' ').trim()), baseline })
   }
   return out
 }
@@ -528,6 +543,60 @@ export function readReplacementDataTable(rows: Row[], excludeNames: string[] = [
     if (behaviorShare < 0.5 && names.length > best.length) best = names // a replacement table, keep the richest
   }
   return best
+}
+
+// ── READER 8: interventions in procedure prose (Ximena) ───────────────────────────────────────────────────
+// Her interventions aren't a clean list — they are labeled PROCEDURE BLOCKS ("Differential reinforcement of
+// alternative behaviors (DRA): If Ximena…", "DRO: …", "Extinction: …") plus a treatment-approach summary
+// sentence ("implementing a simple daily token economy, chaining procedures and differential reinforcement of
+// target behaviors…"). We match a CANONICAL intervention vocabulary and count one ONLY where it is DECLARED —
+// a labeled header ("<Name>:") or inside a treatment-approach declaration — never an incidental lowercase
+// mention inside another program's description ("use the corresponding extinction procedure"). Canonical
+// dedupe (DRA == "Differential Reinforcement of Alternative Behavior"). Text-based; deterministic.
+interface InterventionCanon { name: string; re: RegExp }
+const INTERVENTION_CANON: InterventionCanon[] = [
+  { name: 'Differential Reinforcement of Alternative Behavior (DRA)', re: /\bDRA\b|differential reinforcement of alternative/i },
+  { name: 'Differential Reinforcement of Incompatible Behavior (DRI)', re: /\bDRI\b|differential reinforcement of incompatible/i },
+  { name: 'Differential Reinforcement of Other Behavior (DRO)', re: /\bDRO\b|differential reinforcement of other/i },
+  { name: 'Differential Reinforcement of Target Behaviors', re: /differential reinforcement of target behavior/i },
+  { name: 'Non-Contingent Reinforcement (NCR)', re: /\bNCR\b|non[- ]?contingent reinforcement/i },
+  { name: 'Premack Principle', re: /premack/i },
+  { name: 'Escape Extinction', re: /escape extinction/i },
+  { name: 'Extinction', re: /\bextinction\b/i },
+  { name: 'Redirection', re: /\bredirection\b/i },
+  { name: 'Errorless Teaching', re: /errorless teaching/i },
+  { name: 'Prompting and Prompt Fading', re: /prompt(?:s)? and prompt fading|\bprompt fading\b/i },
+  { name: 'Shaping', re: /\bshaping\b/i },
+  { name: 'Token Economy', re: /token economy/i },
+  { name: 'Chaining Procedures', re: /\bchaining\b/i },
+  { name: 'Response Blocking', re: /response block/i },
+  { name: 'Behavior Momentum', re: /behavior(?:al)? momentum/i },
+  { name: 'Functional Communication Training (FCT)', re: /\bFCT\b|functional communication training/i },
+  { name: 'Antecedent Manipulation', re: /antecedent (?:manipulation|based intervention|strategies)/i },
+]
+// A declaration = a labeled procedure header ("<canonical> :") OR a mention inside a treatment-approach
+// sentence (implementing / utilize / include / approved / recommended / procedures … <canonical>).
+export function readInterventionProcedures(fullText: string): string[] {
+  const text = String(fullText || '')
+  const out: string[] = []
+  for (const { name, re } of INTERVENTION_CANON) {
+    // (a) labeled procedure header: the canonical name (or acronym) immediately followed by ':'
+    const headerRe = new RegExp('(?:' + re.source + ')[^:.\\n]{0,40}:', re.flags.includes('i') ? 'gi' : 'g')
+    let declared = headerRe.test(text)
+    // (b) declaration sentence: canonical within ~90 chars of a plan-declaration verb.
+    if (!declared) {
+      const src = re.source
+      const near = new RegExp('(?:implement(?:ing|ed)?|utiliz|includ|approved|recommend|use of|using|treatment (?:plan|approach)|procedures?)[\\s\\S]{0,90}(?:' + src + ')|(?:' + src + ')[\\s\\S]{0,60}procedures?', 'i')
+      declared = near.test(text)
+    }
+    // (c) bulleted list item ("- Response block", "• Shaping") — a declared intervention in a list/legend.
+    // Require a space after the bullet so a hyphenated word ("non-contingent") is not mistaken for a bullet.
+    if (!declared) declared = new RegExp('[-•·]\\s+(?:' + re.source + ')', re.flags.includes('i') ? 'i' : '').test(text)
+    if (declared) out.push(name)
+  }
+  // Escape Extinction subsumes a bare "Extinction" header only when NO standalone extinction exists — but here
+  // both are distinct declared procedures, so keep both. Dedupe by canonical name (already unique).
+  return out
 }
 
 // ── READER 6: stimulus-preference table (the People | Tangibles | Activities | Other reinforcer grid) ──────

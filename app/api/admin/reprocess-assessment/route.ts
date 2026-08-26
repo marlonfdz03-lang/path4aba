@@ -77,7 +77,7 @@ export async function POST(req: Request) {
     // DETERMINISTIC ROSTER READ + completeness guards (shared with extract-assessment). Prefers a geometry read
     // of the replacement roster over the LLM's under-segmented list, merges mastered programs, and distinguishes
     // a read-failure from a real plan shrinkage via the source region count. Mutates assessmentProfile + flags.
-    const rosterProvenance = reconcileRosters(assessmentProfile, existingProfile, geomRows, reviewFlags, replacementDomainFound, interventionDomainFound);
+    const rosterProvenance = reconcileRosters(assessmentProfile, existingProfile, geomRows, reviewFlags, replacementDomainFound, interventionDomainFound, text);
 
     const refreshed = buildRefreshedProfile(existingProfile, assessmentProfile);
 
