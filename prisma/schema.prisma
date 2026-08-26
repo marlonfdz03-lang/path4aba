@@ -507,3 +507,29 @@ model clinical_library_discards {
   @@index([reason])
   @@index([created_at])
 }
+
+// Admin alerts — the operational event feed behind the admin "auditors" panel. Distinct from
+// gate_findings: that table records which CLINICAL gate fired on a note that shipped (defect-only,
+// silent on a clean note); this one records what HAPPENED in the system, succeeded or failed. First
+// producer is the note-generation hard-failure path, which previously left no trace at all. See
+// migration 20260826000000_admin_alerts. Written only through emitAdminAlert (lib/adminAlerts.ts),
+// which is fail-soft — an unapplied migration degrades to a log line, never an outage.
+//
+// client_id / actor_user_id are plain TEXT with NO relation, deliberately: an alert is evidence of
+// something that already went wrong, so it must outlive the row it refers to (no CASCADE) and the
+// emitter must never fail on a malformed id. payload holds diagnostics only — never note text.
+model admin_alerts {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+  source        String
+  type          String
+  severity      String
+  actor_user_id String?
+  client_id     String?
+  payload       Json      @default("{}") @db.JsonB
+  read_at       DateTime? @db.Timestamptz(6)
+
+  @@index([created_at(sort: Desc)])
+  @@index([severity, read_at])
+  @@index([type, created_at(sort: Desc)])
+}

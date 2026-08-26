@@ -3,6 +3,7 @@ import { getExtensionAuth } from "@/lib/extensionAuth";
 import { generateSmartNote, SessionInput } from "@/lib/generateSmartNote";
 import { prisma } from "@/lib/prisma";
 import { buildServerSessionInput, isSlimNoteRequest } from "@/lib/buildServerSessionInput";
+import { emitAdminAlert } from "@/lib/adminAlerts";
 
 export const runtime = "nodejs";
 
@@ -87,6 +88,11 @@ export async function POST(req: NextRequest) {
     const userId: string = authedUser.id;
 
     const encoder = new TextEncoder();
+    // Whether anything reached the client before a failure. A note that died before its first token
+    // and one that died mid-paragraph are different incidents (the second usually means the model or
+    // a gate failed partway, the first that setup did), and the failure alert below cannot tell them
+    // apart after the fact — so it is recorded as it happens.
+    let emittedContent = false;
     const readable = new ReadableStream({
       async start(controller) {
         try {
@@ -95,6 +101,7 @@ export async function POST(req: NextRequest) {
           // so we ALSO send the FILTERED final text in __META__ — clients patch the displayed note
           // at completion, so nothing unfiltered reaches the fill even though the live stream is raw.
           const result = await generateSmartNote(input, userId, (text) => {
+            emittedContent = true;
             controller.enqueue(encoder.encode(text));
           });
           controller.enqueue(encoder.encode(
@@ -103,6 +110,35 @@ export async function POST(req: NextRequest) {
             `\n__META__${JSON.stringify({ similarityWarning: result.similarityWarning || false, blockedFlagged: result.blockedFlagged || [], coherenceFlags: result.coherenceFlags || [], redFlags: result.redFlags || [], generationContext: result.generationContext || null, activitiesUsed: result.generationContext?.activities || [], filteredText: result.note })}`
           ));
         } catch (e: any) {
+          // This path previously produced NO server-side record of any kind — the error was
+          // serialized to the client and discarded. It is the only path an RBT can hit that costs
+          // them their note, so it now logs and raises an admin alert. Both are ADDITIVE: the
+          // __META__ frame below is byte-for-byte what it was, and the client behavior is unchanged.
+          console.error('[generate-note] generation failed', {
+            clientId: input.clientId,
+            userId,
+            emittedContent,
+            error: e?.message || String(e),
+          }, e);
+          // Started BEFORE the enqueue so a client that has already disconnected (which makes
+          // enqueue throw) still produces the alert, and awaited AFTER it so the client sees the
+          // error at exactly the same moment it always did. emitAdminAlert never throws, so it can
+          // neither break this catch nor the close() in `finally`; awaiting it means the write is
+          // not cut short when the serverless function freezes.
+          const alerted = emitAdminAlert({
+            source: 'note',
+            type: 'note.generation_failed',
+            severity: 'critical',
+            actorUserId: userId,
+            clientId: input.clientId,
+            payload: {
+              message: e?.message || String(e),
+              name: e?.name || null,
+              stack: e?.stack || null,
+              // True = the RBT watched a partial note appear and then fail.
+              emittedContent,
+            },
+          });
           // BLOCKING: the note must not be used (a compliance hard-stop, or generation failed
           // outright). Clients hide the note, skip the session-summary tables, and disable saving.
           // An advisory message would carry `blocking: false` and leave both in place — the point of
@@ -110,6 +146,7 @@ export async function POST(req: NextRequest) {
           controller.enqueue(encoder.encode(
             `\n__META__${JSON.stringify({ error: e.message || 'Generation failed', blocking: true })}`
           ));
+          await alerted;
         } finally {
           controller.close();
         }
