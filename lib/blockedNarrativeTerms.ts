@@ -34,6 +34,11 @@ export const BLOCKED_NARRATIVE_TERMS: BlockedTerm[] = [
   { term: 'calm', substitute: 'quiet' },
   { term: 'calmed', substitute: 'quieted' },
   { term: 'calming', substitute: 'quieting' },
+  // \b{term}\b is exact-word, so each inflection needs its own entry: "calm" does not cover "calmly"/
+  // "calmness" (both reached live notes). The adverb keeps a neutral swap ("sat calmly" -> "sat quietly");
+  // the noun names an unobservable state with no clean neutral swap, so it is flag-only like the group below.
+  { term: 'calmly', substitute: 'quietly' },
+  { term: 'calmness', substitute: null },
   { term: 'relaxed', substitute: 'quiet' },
   { term: 'regulated', substitute: 'quiet' },
   { term: 'composed', substitute: 'quiet' },
@@ -46,6 +51,8 @@ export const BLOCKED_NARRATIVE_TERMS: BlockedTerm[] = [
   { term: 'escalated', substitute: null },
   { term: 'de-escalated', substitute: null },
   { term: 'frustrated', substitute: null },
+  // The noun of the same mentalistic construct — an unobservable internal state, so flag-only like 'frustrated'.
+  { term: 'frustration', substitute: null },
   { term: 'upset', substitute: null },
   { term: 'overwhelmed', substitute: null },
   { term: 'distressed', substitute: null },
