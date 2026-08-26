@@ -14,8 +14,8 @@
 // → the guard falls back to the previous-count heuristic (legacy behavior). Pure aside from the geometry read.
 
 import type { Row } from './pdfGeometry.ts'
-import { readReplacementRoster, readInterventionRoster, readPreferenceTable } from './pdfGeometry.ts'
-import { assessReplacementCompleteness, assessInterventionCompleteness } from './llmBehaviorCredibility.ts'
+import { readReplacementRoster, readInterventionRoster, readPreferenceTable, readReplacementDataTable, readReduceTargets, looksLikePrograms } from './pdfGeometry.ts'
+import { assessReplacementCompleteness, assessInterventionCompleteness, reconcileMastery } from './llmBehaviorCredibility.ts'
 import { parseReinforcers } from './reinforcers.ts'
 import { looksEdible } from './edibleReinforcer.ts'
 import { looksLikePersonReinforcer } from './clinicalLibrary.ts'
@@ -26,6 +26,7 @@ const nmeq = (a: unknown, b: unknown) => { const x = norm(a), y = norm(b); retur
 export type ReplacementSource = 'roster-read' | 'llm' | 'preserved' | 'under-read'
 export type InterventionSource = 'llm' | 'preserved' | 'under-read'
 export interface RosterProvenance {
+  masteryDemoted: string[] // names moved out of mastered because they are active/target (the mastery-authority rule)
   replacement: { source: ReplacementSource; newCount: number; region: number; rosterActive: number; rosterMastered: number; refresh: boolean; readFailure: boolean }
   interventions: { source: InterventionSource; newCount: number; region: number; refresh: boolean; readFailure: boolean }
   reinforcers: { source: 'prose+table' | 'prose'; tableFound: boolean; before: number; proseCount: number; tableItems: number; after: number; underReadFlag: boolean }
@@ -50,7 +51,17 @@ export function reconcileRosters(
 
   // ── REPLACEMENTS ──
   const llmRepl = (assessmentProfile.replacementBehaviors || []) as any[]
-  const roster = readReplacementRoster(rows, behaviorNames)
+  let roster = readReplacementRoster(rows, behaviorNames)
+  // OBJECTIVES-TABLE FORMAT (Ximena): the real roster is the progress DATA TABLE (Name | monthly % columns),
+  // NOT the "Replacement Behaviors" heading (which covers DRA/DRI/DRO procedure prose — correctly rejected by
+  // the plausibility gate). If the prose-heading roster wasn't usable, read the data table (must ALSO pass the
+  // plausibility gate). Fail safe: neither usable → keep the LLM result.
+  if (!roster.found || roster.active.length < llmRepl.length) {
+    const dt = readReplacementDataTable(rows, behaviorNames)
+    if (dt.length >= 3 && looksLikePrograms(dt) && dt.length > roster.active.length) {
+      roster = { active: dt, mastered: [], discontinued: [], found: true, rawItemCount: dt.length }
+    }
+  }
   let source: ReplacementSource = 'llm'
   if (roster.found && roster.active.length > 0 && roster.active.length >= llmRepl.length) {
     source = 'roster-read'
@@ -134,7 +145,24 @@ export function reconcileRosters(
     reinfUnderRead = true
   }
 
+  // MASTERY AUTHORITY (Part A — protects every client): any name in BOTH the active/target set and the mastered
+  // set is ACTIVE → drop it from masteredBehaviors / skillAcquisition, and strip "(STO#…)" progress annotations.
+  // The active/target set = active behaviors + active replacement programs + the reduce-target capsule.
+  const activeTargetNames = [
+    ...((assessmentProfile.maladaptiveBehaviors || []) as any[]).map((b) => String(b?.name || '')),
+    ...((assessmentProfile.replacementBehaviors || []) as any[]).map((b) => String(b?.name || '')),
+    ...readReduceTargets(rows),
+  ].filter(Boolean)
+  const masteredBefore = ((assessmentProfile.masteredBehaviors || []) as any[]).map((x) => (typeof x === 'string' ? x : x?.name)).filter(Boolean)
+  const mb = reconcileMastery(activeTargetNames, masteredBefore)
+  assessmentProfile.masteredBehaviors = mb.mastered
+  const skillNames = ((assessmentProfile.skillAcquisition || []) as any[]).map((s) => s?.name).filter(Boolean)
+  const sk = reconcileMastery(activeTargetNames, skillNames)
+  const keepSkill = new Set(sk.mastered.map((n) => n.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()))
+  assessmentProfile.skillAcquisition = ((assessmentProfile.skillAcquisition || []) as any[]).filter((s) => keepSkill.has(String(s?.name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()))
+
   return {
+    masteryDemoted: [...mb.demoted, ...sk.demoted],
     replacement: { source, newCount: (assessmentProfile.replacementBehaviors || []).length, region, rosterActive: roster.active.length, rosterMastered: roster.mastered.length, refresh: replCheck.refresh, readFailure: replCheck.readFailure },
     interventions: { source: intSource, newCount: (assessmentProfile.interventions || []).length, region: intRegion, refresh: intCheck.refresh, readFailure: intCheck.readFailure },
     reinforcers: { source: table ? 'prose+table' : 'prose', tableFound: !!table, before: prevReinf.length, proseCount: proseReinf.length, tableItems: tableItems.length, after: finalReinf.length, underReadFlag: reinfUnderRead },

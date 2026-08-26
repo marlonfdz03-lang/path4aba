@@ -15,6 +15,7 @@ import { subtractMasteredFromActive } from './skillReconcile.ts'
 import { matchByName, matchByDefinition } from './behaviorReconcile.ts'
 import { tokenSubsetMatch } from './skillReconcile.ts'
 import { reconcileBehaviors, assessLlmBehaviorCredibility } from './llmBehaviorCredibility.ts'
+import { readObjectivesFormat, objMatch } from './objectivesFormat.ts'
 
 export interface ReviewFlag { field: string; reason: string; source: 'llm-fallback' | 'guard-preserved' | 'behavior-review' | 'target-undefined' }
 
@@ -125,31 +126,51 @@ export function assembleRefreshProfile(
     // credibility check. Credible → use the NEW behaviors (llm-fallback, requires review). Not credible →
     // preserve previous (guard-preserved), as before. The guard still protects against a bad read.
     const existingBeh: any[] = existingProfile?.maladaptiveBehaviors || []
-    const { active: reconciled } = reconcileBehaviors(llmBehaviors)
-    const cred = assessLlmBehaviorCredibility(reconciled, existingBeh.length)
-    const shapeLlm = () => reconciled.map((b) => ({
-      name: String(b.name).trim(),
-      status: 'active',
-      functions: Array.isArray(b.functions) ? b.functions : [],
-      topographies: b.topographies || (b.topography ? [b.topography] : []),
-    }))
-    if (cred.credible) {
-      // USE the new AI-extracted set — but it is NOT structurally verified, so require prominent review.
+    // OBJECTIVES-TABLE FORMAT (Ximena) — try a DETERMINISTIC geometry read first: the reduce-target capsule +
+    // per-target STO status (active unless all STOs mastered) + Description-block definitions. This removes the
+    // SIB non-determinism (the LLM was reading SIB from its Objectives table, where STO rows say "Mastered",
+    // instead of from its Description block). Functions aren't in her document (no FAST/MAS) — borrow them from
+    // the LLM read by name where present, else leave empty (inferred). Only when it reads credibly.
+    const objFmt = readObjectivesFormat(rows)
+    if (objFmt.found) {
+      // Deterministic structured read — NO llm-fallback flag (not an AI guess). functionsEvidence stays
+      // 'inferred' downstream (no functional assessment in the document).
       appliedAssessmentSet = true
-      profile.maladaptiveBehaviors = shapeLlm()
-      profile.masteredBehaviors = llmProfile.masteredBehaviors || []
-      reviewFlags.push({ field: 'behaviors', reason: `the assessment layout could not be verified automatically — the behavior list was EXTRACTED BY AI FALLBACK. Review the behavior list before using it for clinical documentation.`, source: 'llm-fallback' })
-    } else if (existingBeh.length) {
-      // Not credible AND we have a prior profile → preserve it (the original guard behavior).
-      profile.maladaptiveBehaviors = existingProfile.maladaptiveBehaviors
-      profile.masteredBehaviors = existingProfile.masteredBehaviors || []
-      reviewFlags.push({ field: 'behaviors', reason: `read confidence ${conf.level} and the AI read was not credible (${cred.reasons.join('; ')}) — behaviors remain from the PREVIOUS assessment, not overwritten. Re-upload a structured assessment or enter behaviors manually.`, source: 'guard-preserved' })
+      profile.maladaptiveBehaviors = objFmt.behaviors.map((b) => {
+        // Functions aren't in her document (no FAST/MAS) — borrow the LLM's INFERRED functions for the same
+        // behavior, matched acronym-aware ("SIB" ↔ the LLM's "Self-Injurious Behavior"). Empty → inferred later.
+        const m = (llmBehaviors as any[]).find((x) => objMatch(b.name, String(x?.name || '')))
+        const fns = (m?.functions && Array.isArray(m.functions)) ? m.functions : (m?.function ? [m.function] : [])
+        return { name: b.name, status: 'active', functions: fns, topographies: b.topography ? [b.topography] : [] }
+      })
+      profile.masteredBehaviors = objFmt.masteredNames // targets whose STOs are ALL mastered (target-level completion); Ximena: none
     } else {
-      // Create path (no prior profile) and not credible: a flagged AI read still beats an empty profile.
-      appliedAssessmentSet = true
-      profile.maladaptiveBehaviors = shapeLlm()
-      profile.masteredBehaviors = llmProfile.masteredBehaviors || []
-      reviewFlags.push({ field: 'behaviors', reason: `the assessment layout could not be verified automatically — the behavior list was extracted by AI fallback. Review before clinical use.`, source: 'llm-fallback' })
+      const { active: reconciled } = reconcileBehaviors(llmBehaviors)
+      const cred = assessLlmBehaviorCredibility(reconciled, existingBeh.length)
+      const shapeLlm = () => reconciled.map((b) => ({
+        name: String(b.name).trim(),
+        status: 'active',
+        functions: Array.isArray(b.functions) ? b.functions : [],
+        topographies: b.topographies || (b.topography ? [b.topography] : []),
+      }))
+      if (cred.credible) {
+        // USE the new AI-extracted set — but it is NOT structurally verified, so require prominent review.
+        appliedAssessmentSet = true
+        profile.maladaptiveBehaviors = shapeLlm()
+        profile.masteredBehaviors = llmProfile.masteredBehaviors || []
+        reviewFlags.push({ field: 'behaviors', reason: `the assessment layout could not be verified automatically — the behavior list was EXTRACTED BY AI FALLBACK. Review the behavior list before using it for clinical documentation.`, source: 'llm-fallback' })
+      } else if (existingBeh.length) {
+        // Not credible AND we have a prior profile → preserve it (the original guard behavior).
+        profile.maladaptiveBehaviors = existingProfile.maladaptiveBehaviors
+        profile.masteredBehaviors = existingProfile.masteredBehaviors || []
+        reviewFlags.push({ field: 'behaviors', reason: `read confidence ${conf.level} and the AI read was not credible (${cred.reasons.join('; ')}) — behaviors remain from the PREVIOUS assessment, not overwritten. Re-upload a structured assessment or enter behaviors manually.`, source: 'guard-preserved' })
+      } else {
+        // Create path (no prior profile) and not credible: a flagged AI read still beats an empty profile.
+        appliedAssessmentSet = true
+        profile.maladaptiveBehaviors = shapeLlm()
+        profile.masteredBehaviors = llmProfile.masteredBehaviors || []
+        reviewFlags.push({ field: 'behaviors', reason: `the assessment layout could not be verified automatically — the behavior list was extracted by AI fallback. Review before clinical use.`, source: 'llm-fallback' })
+      }
     }
   }
 

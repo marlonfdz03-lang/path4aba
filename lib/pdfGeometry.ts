@@ -375,7 +375,7 @@ function itemIsProseLike(t: string): boolean {
   if (PROSE_TAIL.test(s)) return true              // ends on a dangling conjunction/preposition/article
   return false
 }
-function looksLikePrograms(active: string[]): boolean {
+export function looksLikePrograms(active: string[]): boolean {
   if (!active.length) return false
   const prose = active.filter(itemIsProseLike).length
   return prose <= active.length * 0.3
@@ -398,6 +398,136 @@ export function readReplacementRoster(rows: Row[], excludeNames: string[] = []):
 const INTERVENTION_HEADER = /^\s*(approved\s+)?interventions\b/i
 export function readInterventionRoster(rows: Row[], excludeNames: string[] = []): ReplacementRoster {
   return columnRoster(rows, INTERVENTION_HEADER, excludeNames)
+}
+
+// ── OBJECTIVES-TABLE FORMAT (READER 7) — the third assessment format (Ximena) ─────────────────────────────
+// Each behavior/program is a "<Name> · Start Date · Baselines: N/week · Description: <operational definition>"
+// block PLUS an "Objectives:" STO table (Name | Start | End | Status) whose Status column carries
+// Mastered / In progress / Not started. CLINICAL RULE: a per-STO "Mastered" is a MILESTONE — the target is
+// active while ANY STO is In progress / Not started (or it has a live baseline). Deterministic, no LLM.
+
+// The prose target-list capsule: "Maladaptive behaviors to reduce are: X, Y, … and Z." (may wrap across rows).
+const REDUCE_HEADER = /maladaptive behaviors?\s+to\s+reduce\s+are\s*:/i
+export function readReduceTargets(rows: Row[]): string[] {
+  const hi = rows.findIndex((r) => REDUCE_HEADER.test(rowText(r)))
+  if (hi < 0) return []
+  let buf = rowText(rows[hi]).replace(new RegExp('^[\\s\\S]*?' + REDUCE_HEADER.source, 'i'), '')
+  for (let i = hi + 1; i < Math.min(rows.length, hi + 4) && !buf.includes('.'); i++) buf += ' ' + rowText(rows[i])
+  buf = buf.split('.')[0]
+  return buf.split(/,|\band\b/i).map((s) => s.replace(/\s+/g, ' ').trim()).filter((s) => s.length >= 2 && s.length <= 60)
+}
+
+// A behavior/program with its deterministic status from the STO table. status='active' when any STO is pending
+// (In progress / Not started) OR none are mastered; 'mastered' only when ALL STOs are mastered.
+export interface ObjectiveTarget { name: string; status: 'active' | 'mastered'; masteredStos: number; pendingStos: number }
+export function readObjectivesStatus(rows: Row[]): ObjectiveTarget[] {
+  const out: ObjectiveTarget[] = []
+  for (let i = 0; i < rows.length; i++) {
+    if (!/^\s*Objectives\s*:/i.test(rowText(rows[i]).trim())) continue
+    // column-header row (…| Status) within the next 2 rows → the Status column x
+    let statusX: number | null = null, hdrIdx = -1
+    for (let j = i + 1; j < Math.min(rows.length, i + 3); j++) {
+      const sc = rows[j].cells.find((c) => /^status$/i.test(c.text.trim()))
+      if (sc) { statusX = sc.x; hdrIdx = j; break }
+    }
+    if (statusX == null) continue
+    let mastered = 0, pending = 0, name = ''
+    for (let k = hdrIdx + 1; k < rows.length; k++) {
+      const t = rowText(rows[k])
+      if (/^\s*Objectives\s*:/i.test(t) || /Description\s*:/i.test(t) || /^Catharsis Consultants|^Florida Kids/i.test(t.trim())) break
+      const hasSto = /\b(STO|LTO)\s*#?\d?/i.test(t)
+      // Status cell(s): text at/right of the Status column. "In progress" / "Not started" often wrap, so a
+      // bare "In" (with "progress" on the next line) still counts as pending.
+      const st = rows[k].cells.filter((c) => c.x >= statusX - 2).map((c) => c.text).join(' ').toLowerCase().trim()
+      if (hasSto) {
+        if (/master/.test(st)) mastered++
+        else if (/progress|not\s*start|^in\b|^not\b/.test(st)) pending++
+        if (!name) { const m = /(?:decrease|increase|implement|improve|reduce)\s+(?:the\s+)?(.+?)\s+(?:to|by|for|when|and|through)\b/i.exec(t) || /\(([^)]{3,50})\)/.exec(t); if (m) name = (m[1] || '').trim() }
+      } else if (k > hdrIdx + 1 && !/^(LTO|Client|\d|[a-z])/i.test(t.trim())) break // left the table
+    }
+    name = name.replace(/\s+/g, ' ').trim()
+    if (name) out.push({ name, status: pending > 0 || mastered === 0 ? 'active' : 'mastered', masteredStos: mastered, pendingStos: pending })
+  }
+  return out
+}
+
+// Operational-definition blocks: "<Name> … Baselines: N/week … Description: <definition>". Her definitions
+// live under "Description:", not "Operational Definition"/"Topography", so those anchors miss.
+export interface DescriptionBlock { name: string; definition: string; baseline: string }
+export function readDescriptionBlocks(rows: Row[]): DescriptionBlock[] {
+  const out: DescriptionBlock[] = []
+  for (let i = 0; i < rows.length; i++) {
+    if (!/^\s*Description\s*:/i.test(rowText(rows[i]).trim())) continue
+    // Name = nearest preceding block-header row that isn't a field label / values / page footer.
+    let name = ''
+    for (let j = i - 1; j >= Math.max(0, i - 6); j--) {
+      const t = rowText(rows[j]).trim()
+      if (!t || /start date|baselines?\s*:|collection method|frequency|percentage|^\d|\/\s*week|catharsis consultants|florida kids|monthly data/i.test(t)) continue
+      if (t.length <= 60) { name = t; break }
+    }
+    // Baseline "N/week" from the rows just above Description:
+    let baseline = ''
+    for (let j = i - 1; j >= Math.max(0, i - 4); j--) { const m = /(\d+(?:\.\d+)?)\s*\/\s*week/i.exec(rowText(rows[j])); if (m) { baseline = m[1] + '/week'; break } }
+    // Definition = rows after Description: until the next block/section/footer.
+    let def = ''
+    for (let k = i + 1; k < rows.length; k++) {
+      const t = rowText(rows[k]).trim()
+      if (/^\s*Objectives\s*:|Description\s*:|^Catharsis Consultants|^Florida Kids|^Monthly Data/i.test(t)) break
+      def += (def ? ' ' : '') + t
+      if (def.length > 800) break
+    }
+    if (name) out.push({ name, definition: def.replace(/\s+/g, ' ').trim(), baseline })
+  }
+  return out
+}
+
+// Replacement-program roster from the progress DATA TABLE (Name | Baseline | monthly % columns). Her real
+// roster lives here — NOT under the "Replacement Behaviors" heading, which covers DRA/DRI/DRO procedure prose.
+// Left-column names (x below the first numeric column); a row with no numeric cells is a wrapped continuation
+// of the previous name. Fails safe: no header row → [].
+const MONTHS = /^(january|february|march|april|may|june|july|august|september|october|november|december)$/i
+const rnm = (s: string) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+function readOneDataTable(rows: Row[], hi: number): string[] {
+  const hdr = rows[hi]
+  const baseCell = hdr.cells.find((c) => /^baselines?$/i.test(c.text.trim())) || [...hdr.cells].sort((a, b) => a.x - b.x).find((c) => c.x > 8)
+  const numX = baseCell ? baseCell.x - 1 : 16
+  const nameX0 = Math.min(...hdr.cells.map((c) => c.x))
+  const names: string[] = []
+  let cur = ''
+  const clean = (s: string) => s.replace(/\s*-\s*/g, '-').replace(/\/\s+/g, '/').replace(/\s+/g, ' ').trim()
+  for (let k = hi + 1; k < rows.length; k++) {
+    const r = rows[k]
+    if (r.page > hdr.page + 2) break
+    const t = rowText(r).trim()
+    // Boundary: footer, a new block/section, or a new "<Name> Start Date:" behavior block (table ended).
+    if (/^Catharsis Consultants|^Florida Kids|Objectives\s*:|Description\s*:|Start Date\s*:|Baselines?\s*:/i.test(t)) break
+    const nameText = r.cells.filter((c) => c.x < numX && c.x >= nameX0 - 1).map((c) => c.text).join(' ').replace(/\s+/g, ' ').trim()
+    const hasNum = r.cells.some((c) => c.x >= numX && /[\d%]|^-$/.test(c.text.trim()))
+    if (!nameText && !hasNum) { if (k > hi + 3) break; else continue }
+    // A non-numeric row whose NEXT row starts a "Start Date:" block is the first Description block AFTER the
+    // table (a new section), not a wrapped continuation — stop here.
+    if (!hasNum && k + 1 < rows.length && /Start Date\s*:/i.test(rowText(rows[k + 1]))) break
+    if (hasNum) { if (cur) names.push(clean(cur)); cur = nameText }
+    else cur = (cur ? cur + ' ' : '') + nameText
+  }
+  if (cur) names.push(clean(cur))
+  return names.filter((n) => n.length >= 3)
+}
+// The REPLACEMENT progress data table. There are several "Name | Baseline | months" tables (behaviors have one
+// too), so we read each and return the one whose rows are mostly NOT the maladaptive behaviors (`excludeNames`).
+export function readReplacementDataTable(rows: Row[], excludeNames: string[] = []): string[] {
+  const ex = excludeNames.map(rnm).filter(Boolean)
+  const isBehavior = (n: string) => ex.some((e) => { const x = rnm(n); return x && (x.includes(e) || e.includes(x)) })
+  let best: string[] = []
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]
+    if (!(r.cells.some((c) => /^name$/i.test(c.text.trim())) && r.cells.some((c) => /^baselines?$/i.test(c.text.trim()) || MONTHS.test(c.text.trim())))) continue
+    const names = readOneDataTable(rows, i)
+    if (names.length < 3) continue
+    const behaviorShare = names.filter(isBehavior).length / names.length
+    if (behaviorShare < 0.5 && names.length > best.length) best = names // a replacement table, keep the richest
+  }
+  return best
 }
 
 // ── READER 6: stimulus-preference table (the People | Tangibles | Activities | Other reinforcer grid) ──────

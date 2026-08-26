@@ -61,6 +61,50 @@ export function reconcileBehaviors(llmBehaviors: any[]): { active: any[]; droppe
   return { active, droppedDiscontinued };
 }
 
+// MASTERY AUTHORITY RULE (mirrors the discontinued-authority rule). CLINICAL PRINCIPLE: an OBJECTIVE's mastery
+// is never the TARGET's mastery. "STO#1 … Status: Mastered" is a milestone met; the behavior/program is mastered
+// only when the TARGET ITSELF is declared complete (an explicit behavior-level MASTERED declaration, or ALL its
+// STOs mastered with none pending). WHY it matters: mastered items are filtered OUT of the note-form selection
+// lists, so a falsely-mastered ACTIVE behavior would DISAPPEAR from the RBT's form and could not be documented.
+//
+// Deterministic protection, independent of the LLM: any name that appears in BOTH the active/target set and the
+// mastered set is ACTIVE → drop it from mastered. (Ximena: the LLM put "Self-Injurious Behavior (STO#1,2,3)" in
+// mastered while SIB is a live target with STO#4 in progress and a 92/week baseline.) Also strips "(STO#…)"
+// progress annotations that the LLM folds into a name.
+export function stripStoAnnotation(name: unknown): string {
+  return String(name ?? '').replace(/\s*\((?:\s*STO\s*#?\d+[,\s]*)+\)\s*$/i, '').replace(/\s*\bSTO\s*#?\d+\b/gi, '').replace(/\s+/g, ' ').trim();
+}
+const tokens = (s: string) => new Set(normName(s).split(' ').filter((t) => t.length >= 3));
+function masteryNameMatch(a: string, b: string): boolean {
+  const x = normName(a), y = normName(b);
+  if (!x || !y) return false;
+  if (x.includes(y) || y.includes(x)) return true;
+  // token-subset: the shorter name's meaningful tokens are (mostly) inside the longer (handles "Self Injury
+  // Behavior" vs "Self-Injurious Behavior", "Off Task Behavior" vs "Off-Task"). Requires >=2 shared tokens.
+  const tx = tokens(a), ty = tokens(b);
+  if (!tx.size || !ty.size) return false;
+  const shared = [...tx].filter((t) => ty.has(t)).length;
+  const smaller = Math.min(tx.size, ty.size);
+  return shared >= 2 && shared >= smaller; // every token of the shorter name appears in the longer
+}
+// Returns the reconciled mastered list (cleaned names, active duplicates removed) + which names were demoted.
+export function reconcileMastery(activeNames: string[], masteredNames: string[]): { mastered: string[]; demoted: string[] } {
+  const active = (activeNames || []).map(String).filter(Boolean);
+  const mastered: string[] = [];
+  const demoted: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of (masteredNames || [])) {
+    const clean = stripStoAnnotation(raw);
+    if (!clean) continue;
+    if (active.some((a) => masteryNameMatch(clean, a))) { demoted.push(clean); continue; } // in the active/target set → ACTIVE
+    const k = normName(clean);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    mastered.push(clean);
+  }
+  return { mastered, demoted };
+}
+
 // REPLACEMENT COMPLETENESS GUARD — the second barrier the skills side was missing. A starved packet or a
 // partial extraction must never silently wholesale-overwrite the replacement-program catalog (Felix: 18→9).
 //

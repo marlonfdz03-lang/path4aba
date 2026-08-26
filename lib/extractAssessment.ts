@@ -248,6 +248,17 @@ happens to name it. A document that says "Climbing … Status: Discontinued" in 
 writes "the 13 active behaviors include … Climbing …" in a summary paragraph has DISCONTINUED Climbing — the
 summary prose does not reactivate it.
 
+OBJECTIVE (STO) MASTERY IS NOT TARGET MASTERY — an objective's mastery is never the behavior's mastery:
+Some assessments give each behavior/program an "Objectives" table of short-term objectives (STO#1, STO#2, …)
+with a per-row Status column (Mastered / In progress / Not started). A row like "STO#1 … Status: Mastered"
+is a MILESTONE MET, NOT a mastered behavior. The behavior/program is "mastered" ONLY when the TARGET ITSELF
+is declared complete — an explicit target-level "(MASTERED)" declaration, OR ALL of its STOs are "Mastered"
+with NONE "In progress"/"Not started". If ANY STO is in progress or not started, or the target has a live
+baseline (e.g. "Baselines: 92/week"), the behavior is "active" — even if several of its STOs say Mastered.
+NEVER fold an objective marker into a name (never emit "Self-Injurious Behavior (STO#1, STO#2, STO#3)");
+emit the clean behavior name with status "active". (Example: a behavior with STO#1–3 "Mastered" and STO#4
+"In progress" and a live weekly baseline is ACTIVE, not mastered.)
+
 STO / OBJECTIVE STATUS — NEVER PROMOTE IT (this is the most common mistake — do not make it):
 Short-term objectives (STOs) and the individual objectives WITHIN a behavior or program each carry their
 own status ("Mastered on 11/15/2025", "In Progress", "Initiated on", "Ongoing"). That is STO-level
