@@ -1037,6 +1037,35 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
 // Buffers the full note before displaying (so the RBT never watches a wipe/restart). Uniqueness NEVER
 // regenerates (it is a cosmetic warning, warn-only server-side); the only server-driven restart is the
 // class-B compliance coverage retry, shown calmly as "Finalizing your note…". There is no client-side retry loop.
+
+// __PARITY_START__  Ported from lib/noteStream.ts:splitNoteStream — keep behavior byte-for-byte identical.
+// The extension has no module system/build step, so this is a hand copy; lib/noteStreamParity.test.mjs
+// extracts THIS text and runs it against the same 8 vectors under `npm test`, so drift fails CI. Pure: no
+// DOM, no globals beyond String. The stream is <pass-1>[ __REGEN__[:src]\n <pass-2> ]* __META__{json};
+// callers feed the FULL accumulated `raw` so a marker or the JSON that spans reads is handled correctly.
+function splitNoteStream(raw) {
+  const s = String(raw ?? '');
+  const META = '__META__';
+  const REGEN = '__REGEN__';
+  const mi = s.indexOf(META);
+  const body = mi === -1 ? s : s.slice(0, mi);
+  const metaRaw = mi === -1 ? null : s.slice(mi + META.length);
+  let note = body;
+  let sawRegen = false;
+  const ri = body.lastIndexOf(REGEN);
+  if (ri !== -1) {
+    sawRegen = true;
+    let after = body.slice(ri + REGEN.length);
+    if (after.startsWith(':')) {
+      const nl = after.indexOf('\n');
+      after = nl === -1 ? '' : after.slice(nl + 1);
+    }
+    note = after;
+  }
+  return { note, metaRaw, sawRegen };
+}
+// __PARITY_END__
+
 async function streamGenerate(endpoint, body, method = 'POST') {
   const outputSection = document.getElementById('outputSection');
   const outputNote = document.getElementById('outputNote');
@@ -1066,49 +1095,56 @@ async function streamGenerate(endpoint, body, method = 'POST') {
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let fullText = '';
+      let raw = '';               // FULL accumulation — markers and the meta JSON are located over this, never one chunk
+      let regenSignaled = false;
+      let metaParsed = false;
 
-      outer: while (true) {
+      while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
+        raw += decoder.decode(value, { stream: true });
+        const { metaRaw, sawRegen } = splitNoteStream(raw);
 
-        if (chunk.includes('__META__')) {
-          const parts = chunk.split('__META__');
-          if (parts[0]) fullText += parts[0];
+        // Coverage retry — same calm status as before, fired once. No wipe, no live paint (UX unchanged).
+        if (sawRegen && !regenSignaled) {
+          regenSignaled = true;
+          streamStatus.textContent = 'Finalizing your note…';
+        }
+
+        // __META__ seen: its JSON can span several reads, so parse the ACCUMULATED tail and keep reading on
+        // failure. The old per-chunk parse broke HERE — a split tail threw, was swallowed, and the RAW note
+        // shipped to copy/fill. Only a parseable tail ends the loop.
+        if (metaRaw !== null) {
           try {
-            const meta = JSON.parse(parts[1]);
+            const meta = JSON.parse(metaRaw);
             // Only a BLOCKING stop discards the note. An advisory is shown and the note is kept.
-            if (meta.error) { showError(meta.error); if (meta.blocking !== false) return; }
+            if (meta.error) { showError(meta.error); if (meta.blocking !== false) { streamStatus.style.display = 'none'; return; } }
             if (Array.isArray(meta.blockedFlagged)) blockedFlagged = meta.blockedFlagged;
             if (typeof meta.filteredText === 'string') filteredText = meta.filteredText;
-          } catch {}
-          break outer;
+            metaParsed = true;
+            break;
+          } catch { /* partial meta JSON — keep reading until it completes */ }
         }
-
-        if (chunk.includes('__REGEN__')) {
-          // Coverage retry. Already buffered (outputNote is untouched until the end), so this buffer reset is
-          // invisible — no wipe. Calm, positive copy; never "Regenerating".
-          fullText = '';
-          streamStatus.textContent = 'Finalizing your note…';
-          continue;
-        }
-
-        fullText += chunk;
       }
 
-      finalText = fullText;
-    }
+      // Paint ONCE at the end — UX unchanged (no live streaming in this commit). filteredText is the
+      // authoritative host-EHR-filtered note; it is applied IFF the meta tail parsed and carried it.
+      const { note: bestNote } = splitNoteStream(raw);
+      const verified = filteredText != null;
+      finalText = verified ? filteredText : bestNote;
+      outputNote.value = finalText;
+      streamStatus.style.display = 'none';
 
-    // The live stream is raw (for progressive display); patch to the host-EHR-filtered text so the
-    // note the RBT copies/fills never contains a blocked term. This is the hard guarantee.
-    if (filteredText != null) finalText = filteredText;
-    outputNote.value = finalText;
-    streamStatus.style.display = 'none';
-    // Blocked narrative terms with no substitute were left in place — flag them so the RBT edits
-    // before filling ABA Matrix (which would reject them on submit). Substituted terms are silent.
-    if (blockedFlagged.length) {
-      showError('Heads up: ABA Matrix may reject these terms in the narrative — edit before filling: ' + blockedFlagged.join(', '));
+      if (!verified) {
+        // FAIL LOUD, NEVER SILENT: unverified text reaching the EHR unnoticed is the exact bug this commit
+        // closes. Paint it so the RBT is not stuck, but warn visibly and log — never present it as clean.
+        console.error('[Path4ABA] note stream ended without applying filteredText (metaParsed=' + metaParsed + ') — painted UNVERIFIED text; warned RBT to regenerate.');
+        showError('⚠️ This note could not be verified for blocked terms — please Regenerate before copying or filling the EHR. Do not send it as is.');
+      } else if (blockedFlagged.length) {
+        // Blocked narrative terms with no substitute were left in place — flag them so the RBT edits before
+        // filling ABA Matrix (which would reject them on submit). Substituted terms are silent.
+        showError('Heads up: ABA Matrix may reject these terms in the narrative — edit before filling: ' + blockedFlagged.join(', '));
+      }
     }
   } catch {
     streamStatus.style.display = 'none';
