@@ -3121,7 +3121,11 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
   const log = [];
 
   for (const [name, nameTasks] of tasksByName) {
+    // filledDays = days where a cell was ACTUALLY clicked. skippedDays = days that
+    // legitimately had nothing to record (zero frequency, or an untouchable column).
+    // Kept apart so the per-behavior summary can tell "nothing to do" from "failed".
     const filledDays = [];
+    const skippedDays = [];
 
     for (const task of nameTasks) {
       try {
@@ -3224,6 +3228,7 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
           // this is skipped there.)
           let activatedEmpty = false;
           if (plusCells.length === 0 && minusCells.length === 0 && task.value === 100) {
+            skippedDays.push(task.dayNumber);
             log.push(`⚪ "${name}" day ${task.dayNumber} — skipped (empty column, fill-to-100 mode)`);
             if (wasHidden) behaviorContainer.classList.add('d-none');
             continue;
@@ -3268,8 +3273,20 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
           // diff === 0: do nothing — already at target
 
           if (wasHidden) behaviorContainer.classList.add('d-none');
+
+          // Report what was CLICKED, not what was intended. shuffleArray(...).slice(0, diff)
+          // silently yields fewer cells when there aren't enough －/＋ to flip, so the column
+          // can end short of target — the old line printed |diff| and targetCorrect either way.
+          // diff === 0 is a real success (already at target); zero clicks with a non-zero diff
+          // is not, and must not count as a filled day.
+          const reached = currentCorrect + (diff > 0 ? clickCount : -clickCount);
+          if (clickCount === 0 && diff !== 0) {
+            log.push(`❌ "${name}" day ${task.dayNumber} — needed ${Math.abs(diff)} cell(s) to reach ${targetCorrect} of ${totalTrials}, but no flippable cell was available; nothing clicked`);
+            await delay(300);
+            continue;
+          }
           filledDays.push(task.dayNumber);
-          log.push(`✓ "${name}" day ${task.dayNumber} — ${Math.abs(diff)} cells changed (${currentCorrect}→${targetCorrect} of ${totalTrials} correct, ${emptyCells.length} empty cells untouched${activatedEmpty ? ', activated empty column' : ''})`);
+          log.push(`✓ "${name}" day ${task.dayNumber} — ${clickCount} cell(s) changed (${currentCorrect}→${reached} of ${totalTrials} correct${reached !== targetCorrect ? `, TARGET ${targetCorrect} NOT REACHED` : (diff === 0 ? ', already at target' : '')}, ${emptyCells.length} empty cells untouched${activatedEmpty ? ', activated empty column' : ''})`);
           await delay(300);
           continue;
         }
@@ -3305,26 +3322,51 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
         const freq = task.type === 'replacement'
           ? Math.round(task.value / 100 * freqRows.length)
           : Math.round(task.value);
-        let clickCount = 0;
 
         if (task.type !== 'replacement') {
           // Maladaptive: OP frequency rows are cumulative — one click on the row
           // for frequency N automatically marks all rows 1..N. One click per day.
-          const targetRow = freqRows[freq - 1];
-          if (targetRow) {
-            const cells = Array.from(targetRow.querySelectorAll('td'));
-            const cell = cells[colIdx];
-            if (cell) {
-              cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              await delay(200);
-              cell.click();
-              clickCount++;
-              await delay(200);
-              log.push(`✓ "${name}" day ${task.dayNumber} — clicked row ${freq} (freq: ${freq})`);
-            }
+          //
+          // Every way of NOT clicking is now explicit. Previously all three fell through
+          // to an unconditional filledDays.push, so a day where nothing happened still
+          // produced the ✓ summary line — which is what auto-fires saveWeekData.
+
+          // Zero occurrences: legitimate (distributeMaladaptiveAcrossDays emits zeros
+          // whenever the weekly total is below the number of worked days). Not an error.
+          // <= 0 rather than === 0 so a negative can't fall through to freqRows[-2].
+          if (freq <= 0) {
+            if (wasHidden) behaviorContainer.classList.add('d-none');
+            skippedDays.push(task.dayNumber);
+            log.push(`⚪ "${name}" day ${task.dayNumber} — skipped (0 occurrences, nothing to record)`);
+            await delay(300);
+            continue;
           }
+
+          // Requested frequency the sheet cannot represent. NOT clamped — a value the
+          // datasheet has no row for is a real data problem the RBT has to see.
+          if (freq > freqRows.length) {
+            if (wasHidden) behaviorContainer.classList.add('d-none');
+            log.push(`❌ "${name}" day ${task.dayNumber} — frequency ${freq} exceeds the ${freqRows.length} frequency row(s) on this sheet; nothing clicked`);
+            await delay(300);
+            continue;
+          }
+
+          const targetRow = freqRows[freq - 1];
+          const cell = targetRow ? Array.from(targetRow.querySelectorAll('td'))[colIdx] : null;
+          if (!cell) {
+            if (wasHidden) behaviorContainer.classList.add('d-none');
+            log.push(`❌ "${name}" day ${task.dayNumber} — row ${freq} has no cell at column ${colIdx}; nothing clicked`);
+            await delay(300);
+            continue;
+          }
+
+          cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          await delay(200);
+          cell.click();
+          await delay(200);
           if (wasHidden) behaviorContainer.classList.add('d-none');
           filledDays.push(task.dayNumber);
+          log.push(`✓ "${name}" day ${task.dayNumber} — clicked row ${freq} (freq: ${freq})`);
           await delay(300);
           continue;
         }
@@ -3335,9 +3377,19 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
       await delay(300);
     }
 
+    // The summary is what the caller counts (log lines starting with ✓) to decide whether
+    // the fill succeeded and whether to auto-save. It must therefore describe clicks that
+    // actually happened, never days that were merely attempted.
     if (filledDays.length) {
       const daysStr = filledDays.length === 1 ? `day ${filledDays[0]}` : `days ${filledDays.join(', ')}`;
-      log.push(`✓ "${name}" filled (${daysStr})`);
+      const skipNote = skippedDays.length ? ` · ${skippedDays.length} day(s) skipped, nothing to record` : '';
+      log.push(`✓ "${name}" filled (${daysStr})${skipNote}`);
+    } else if (skippedDays.length === nameTasks.length) {
+      // Every day legitimately had nothing to record (e.g. a zero-frequency week). Neither
+      // a fill nor a failure — ⚪ so it counts toward neither ok nor errs in the caller.
+      log.push(`⚪ "${name}" — nothing to record on any of the ${nameTasks.length} day(s)`);
+    } else {
+      log.push(`❌ "${name}" — no days filled (0 of ${nameTasks.length} attempted)`);
     }
   }
 
