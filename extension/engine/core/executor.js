@@ -212,7 +212,7 @@ window.FormEngineExecutor = {
           console.warn('[Path4ABA Audit] SKIPPED — the form had radio selections before the fill (possible user-entered data). Not probing.');
         } else if (adapter && typeof adapter.detectConditionalPairs === 'function') {
           const pairs = await adapter.detectConditionalPairs();
-          console.log('[Path4ABA Audit] conditional pairs (radios restored to pre-audit state):', pairs);
+          if (this.DEBUG) console.log('[Path4ABA Audit] conditional pairs (radios restored to pre-audit state):', pairs);
         }
       } catch (err) {
         console.warn('[Path4ABA Audit] failed:', err.message);

@@ -44,25 +44,6 @@ let complianceLevel = 'typical';
 // overwrites one. Mirrors the website and app forms.
 let complianceTouched = false;
 
-// ── Storage change tracer ──────────────────
-// Fires for any change to chrome.storage.local from ANY source (popup, background, etc.)
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== 'local' || !('extensionToken' in changes)) return;
-  const { oldValue, newValue } = changes.extensionToken;
-  if (!newValue) {
-    console.warn(
-      '[Path4ABA] STORAGE: extensionToken REMOVED from storage.',
-      'old:', oldValue ? oldValue.slice(0, 12) + '…' : 'null',
-      '| stack:', new Error('storage-removal-trace').stack,
-    );
-  } else {
-    console.log(
-      '[Path4ABA] STORAGE: extensionToken SET in storage.',
-      'new:', newValue.slice(0, 12) + '…',
-    );
-  }
-});
-
 // ── API helper ─────────────────────────────
 const INIT_TIMEOUT_MS = 20000;
 
@@ -435,8 +416,6 @@ async function loadClientProfile(clientId) {
   const t0 = performance.now();
   try {
     const res = await apiWithTimeout(`/api/bcba/client/${clientId}`, INIT_TIMEOUT_MS);
-    const elapsed = Math.round(performance.now() - t0);
-    console.log(`[Path4ABA] loadClientProfile: ${elapsed}ms`);
     if (!res.ok) {
       // RBTs don't have access to bcba/client endpoint — use profile from client list
       const fallback = clients.find(c => c.id === clientId);
@@ -1280,7 +1259,6 @@ document.getElementById('openAppBtn')?.addEventListener('click', () => {
 });
 
 document.getElementById('logoutBtn').addEventListener('click', async () => {
-  console.log('[Path4ABA] logout: explicit user action — removing token from storage + memory');
   extensionToken = null;
   _reconnecting = false;
   _reconnectAttempts = 0;
@@ -2288,7 +2266,6 @@ document.getElementById('aiFillBetaBtn')?.addEventListener('click', () => {
 
   const statusDiv = document.getElementById('aiFillStatus');
   if (statusDiv) { statusDiv.style.display = 'block'; statusDiv.textContent = 'Starting AI Fill…'; }
-  console.log('[Path4ABA] AI Fill (Beta) → runFormAgent:', noteData);
 
   // Disable while the fill runs (prevents the double-click double-fill). Re-enabled by the terminal 'done'
   // message (listener above), the error branch below, or the 60s timeout fallback.
@@ -2305,7 +2282,6 @@ document.getElementById('aiFillBetaBtn')?.addEventListener('click', () => {
       if (statusDiv) statusDiv.textContent = 'Error: ' + chrome.runtime.lastError.message;
       reEnableAiFill();
     } else {
-      console.log('[Path4ABA] runFormAgent response:', response);
       if (response && response.ok === false) {
         if (statusDiv) statusDiv.textContent = 'Error: ' + (response.error || 'agent did not start (reload the ABA Matrix page)');
         reEnableAiFill();
@@ -2328,16 +2304,12 @@ document.getElementById('aiFillBetaBtn')?.addEventListener('click', () => {
     'padding:3px 7px;border:1px dashed #94a3b8;border-radius:5px;background:#f8fafc;' +
     'color:#475569;cursor:pointer;opacity:0.85;';
   btn.addEventListener('click', () => {
-    console.log('[Path4ABA Debug] Button clicked');
     chrome.tabs.query({ active: true }, (tabs) => {
       const tab = (tabs || []).find(t => t.url && t.url.includes('app.abamatrix.com')) || (tabs || [])[0];
       if (!tab) { console.warn('[Path4ABA] Debug Form: no active tab found'); return; }
-      console.log('[Path4ABA Debug] Sending injectFormEngine to tabId:', tab.id);
-      chrome.runtime.sendMessage({ action: 'injectFormEngine', tabId: tab.id }, (response) => {
+      chrome.runtime.sendMessage({ action: 'injectFormEngine', tabId: tab.id }, () => {
         if (chrome.runtime.lastError) {
           console.error('[Path4ABA] Debug Form error:', chrome.runtime.lastError.message);
-        } else {
-          console.log('[Path4ABA] Debug Form response:', response, '— open the ABA Matrix tab console to see the NormalizedForm.');
         }
       });
     });
@@ -3016,13 +2988,11 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
   function findDayColumn(table, dayNumber) {
     const day = parseInt(dayNumber, 10);
     const rows = Array.from(table.querySelectorAll('tr'));
-    let daysRowFound = false;
     let targetCol = -1;
 
     for (const row of rows) {
       const cells = Array.from(row.querySelectorAll('th, td'));
       if (!cells.length || cells[0].textContent.trim() !== 'Days') continue;
-      daysRowFound = true;
       // col 1 is always the previous-month overflow — skip it, search the rest
       cells.forEach((cell, colIdx) => {
         if (colIdx === 1) return;
@@ -3033,7 +3003,6 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
       break; // Days row is unique per table — stop after finding it
     }
 
-    console.log(`findDayColumn: table has ${rows.length} rows, Days row found: ${daysRowFound}, day ${day} at col ${targetCol}`);
     return targetCol;
   }
 

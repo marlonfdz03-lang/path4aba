@@ -33,8 +33,7 @@
         "engine/core/normalizer.js",
         "engine/adapters/ABAMatrixAdapter.js",
         "engine/core/mat-helpers.js",
-        "engine/core/executor.js",
-        "engine/debug.js"
+        "engine/core/executor.js"
       ],
       "run_at": "document_idle",
       "world": "MAIN"

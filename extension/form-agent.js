@@ -19,10 +19,9 @@
   // Always overwrite on (re)injection — no idempotency guard (matches the engine modules).
   window.__FormEngine_v = (window.__FormEngine_v || 0) + 1;
 
-  // Progress helper — surfaces to the popup's status div (and the console). The background has
-  // an agentStatus listener, so there's always a receiver (no "no receiver" rejection).
+  // Progress helper — surfaces to the popup's status div. The background has an agentStatus
+  // listener, so there's always a receiver (no "no receiver" rejection).
   function sendStatus(text, level) {
-    console.log('[Path4ABA]', text);
     try { chrome.runtime.sendMessage({ action: 'agentStatus', text: text, level: level || 'info' }); } catch (e) { /* noop */ }
   }
 
@@ -133,7 +132,6 @@
     // ── Phase 2: ClinicalExtractor — ONE AI call, before any scanning ──
     sendStatus('🧠 Extracting clinical facts from the note…');
     const clinicalFacts = await extractClinicalFacts(noteData);
-    console.log('[Path4ABA] ClinicalFacts:', clinicalFacts);
     window.__p4ClinicalFacts = clinicalFacts; // stored for Phase 3 (Planner)
     if (!clinicalFacts) {
       sendStatus('⚠️ Fact extraction failed — see console.');
@@ -155,7 +153,6 @@
     sendStatus('🔍 Scanning the form…');
     const normalizedForm = await getFormSchema();
     window.__p4NormalizedForm = normalizedForm;
-    console.log('[Path4ABA] NormalizedForm:', normalizedForm);
     if (!normalizedForm) {
       sendStatus('⚠️ Form scan failed — see console.');
       return { clinicalFacts: clinicalFacts, normalizedForm: null, plan: null };
@@ -167,7 +164,6 @@
     sendStatus('🗺️ Planning fill actions…');
     const plan = await getPlanFill(clinicalFacts, normalizedForm);
     window.__p4FillPlan = plan; // stored for Phase 4 (Executor)
-    console.log('[Path4ABA] FillPlan:', plan);
     sendStatus('Plan created: ' + (plan ? plan.length : 0) + ' actions', 'info');
 
     // ── Phase 4: Executor — fill the form from the plan (runs in the MAIN world) ──
@@ -177,7 +173,6 @@
     }
     sendStatus('✍️ Filling ' + plan.length + ' fields…');
     const results = await executeFillPlan(plan);
-    console.log('[Path4ABA] Executor results:', results);
     if (results) {
       // Buckets sum to the plan: written + repaired + skipped + failed.
       const c = results.counts || {
@@ -280,16 +275,7 @@
       const auditPlan = window.__p4FillPlan || [];
       if (norm && norm.fieldIndex) {
         const plannedIds = new Set(auditPlan.map(function (a) { return a.fieldId; }));
-        console.table(
-          Object.keys(norm.fieldIndex).map(function (id) {
-            const action = auditPlan.find(function (a) { return a.fieldId === id; });
-            return {
-              field: id,
-              planned: plannedIds.has(id) ? '✅' : '❌',
-              value: action && action.value != null ? String(action.value).slice(0, 30) : '—'
-            };
-          })
-        );
+        void plannedIds;
       }
     } catch (e) {
       console.warn('[Path4ABA] audit table failed:', e);

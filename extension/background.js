@@ -1,17 +1,10 @@
 // Path4ABA Extension — background.js (service worker)
 // All API calls are proxied through here so fetch() works from detached popup windows.
 
-console.log('[Path4ABA] background.js loaded');
-
-chrome.runtime.onInstalled.addListener(() => {
-  console.log('[Path4ABA] Extension installed.');
-});
-
 // Registering onConnect at the top level ensures the service worker is woken
-// and kept alive when detached popup windows open a port connection.
-chrome.runtime.onConnect.addListener((port) => {
-  console.log('[Path4ABA] onConnect:', port.name);
-});
+// and kept alive when detached popup windows open a port connection. The empty
+// handler is the point — the registration itself is the keep-alive.
+chrome.runtime.onConnect.addListener(() => {});
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'ping') {
@@ -20,7 +13,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === 'FETCH') {
-    console.log('[Path4ABA] FETCH received:', message.payload?.method, message.payload?.url);
     const { url, method, headers, body, credentials } = message.payload;
 
     // Ensure body is a string — callers in popup.js already JSON.stringify, but
@@ -37,10 +29,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       fetchHeaders['Content-Type'] = 'application/json';
     }
 
-    console.log('[Path4ABA] FETCH starting:', method, url,
-      '| body type:', typeof fetchBody,
-      '| body preview:', fetchBody ? String(fetchBody).slice(0, 200) : '(none)');
-
     // Ping chrome.storage.local every 5 s so the service worker is not garbage-
     // collected while awaiting a slow network response from path4aba.app.
     const keepAlive = setInterval(() => chrome.storage.local.get('__keepalive__'), 5000);
@@ -52,9 +40,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       credentials: credentials || 'omit',
     })
       .then(async (res) => {
-        console.log('[Path4ABA] FETCH complete:', res.ok, res.status);
         const data = await res.text();
-        console.log('[Path4ABA] sendResponse called, data.length:', data.length);
         sendResponse({ ok: res.ok, status: res.status, data });
       })
       .catch((err) => {
@@ -145,7 +131,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // modules' idempotency guards make the double-injection a harmless no-op. The
   // NormalizedForm is logged in the TARGET TAB's console, not here.
   if (message.action === 'injectFormEngine') {
-    console.log('[Path4ABA Debug] injectFormEngine received, tabId:', message.tabId);
     try {
       const engineFiles = [
         'engine/adapters/ABAMatrixAdapter.js',
@@ -168,7 +153,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               sendResponse({ ok: false, error: chrome.runtime.lastError.message });
               return;
             }
-            console.log('[Path4ABA Debug] Scripts injected');
             // Second call MUST also target MAIN world, or it won't see window.debugFormEngine.
             chrome.scripting.executeScript(
               {
@@ -182,7 +166,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                   sendResponse({ ok: false, error: chrome.runtime.lastError.message });
                   return;
                 }
-                console.log('[Path4ABA Debug] debugFormEngine called');
                 sendResponse({ ok: true, ran: results && results[0] ? results[0].result : null });
               }
             );
@@ -196,7 +179,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Fallback: locate the ABA Matrix tab when no tabId was passed.
         chrome.tabs.query({ active: true }, (tabs) => {
           const tab = (tabs || []).find(t => t.url && t.url.includes('app.abamatrix.com')) || (tabs || [])[0];
-          console.log('[Path4ABA Debug] Fallback resolved tabId:', tab && tab.id);
           runDebug(tab && tab.id);
         });
       }
@@ -392,10 +374,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   // Progress from the Form Agent. The open popup receives this runtime message directly
-  // (content-script messages reach open extension views), so we only log it here — a
-  // re-broadcast would duplicate the status line in the popup.
+  // (content-script messages reach open extension views), so nothing is done here — a
+  // re-broadcast would duplicate the status line in the popup. The listener is registered
+  // only so the content script always has a receiver (no "no receiver" rejection).
   if (message.action === 'agentStatus') {
-    console.log('[Path4ABA] agentStatus:', message.text);
     return false;
   }
 });
