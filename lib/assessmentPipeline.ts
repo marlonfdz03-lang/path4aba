@@ -4,6 +4,7 @@
 // Do not add route-specific logic here.
 
 import PDFParser from 'pdf2json'
+import { normalizeLigatures } from '@/lib/pdfGeometry'
 import { ExtractedAssessment } from '@/lib/extractAssessment'
 import { prisma } from '@/lib/prisma'
 import { parseReinforcers } from '@/lib/reinforcers'
@@ -39,7 +40,14 @@ export function parsePdf(buffer: Buffer): Promise<string> {
               .join(' ')
           )
           .join('\n')
-        resolve(text)
+        // Normalize typographic ligatures (ﬁ→fi, ﬀ→ff, …) on the FINAL flattened string so EVERY consumer
+        // of parsePdf — the LLM packet, the clinical-packet section anchors, and the by-name topography
+        // match in assembleRefreshProfile — sees matchable ASCII. Deterministic, position-independent
+        // (each glyph maps to fixed ASCII regardless of context) and lossless: a no-op on documents with no
+        // ligatures, and it repairs 183 occurrences on one live reassessment (Hendrex), 668 on another
+        // (Felix). Split repair ("T opography") is deliberately NOT done here — it needs fragment position,
+        // not a lexical rule (a blanket /[A-Z] [a-z]/ join corrupts clean documents). See parsePositioned.
+        resolve(normalizeLigatures(text))
       } catch (error) {
         reject(error)
       }
