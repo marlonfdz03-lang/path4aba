@@ -1657,6 +1657,44 @@ async function fetchOpDataMapForTab(tab) {
   return { ok: true, opDataMap: {} };
 }
 
+// ── Auto-save gate ───────────────────────────────────────────────────────────
+// An auto-save writes userConfirmed / autofillCompleted = true — a claim that the OP
+// sheet now matches what Path4ABA is about to store. That claim may only be made when
+// NOTHING in the run is in a non-verified state, so the gate is "zero ❌", not "at least
+// one ✓". Previously one success alongside twenty-four failures still saved as confirmed.
+//
+// ⚪ does NOT block. It marks a day with nothing to record (a zero-frequency day), and a
+// blank OP frequency cell and a stored 0 say the same thing — an all-zero week is a
+// correct outcome, not a failure.
+//
+// log.length > 0 matters: if the injection returns nothing (tab closed mid-run, script
+// rejected), the log is empty and "zero errors" would otherwise read as success.
+function autofillVerified(log, errs) {
+  return log.length > 0 && errs.length === 0;
+}
+
+// What the RBT sees when the gate blocks. Names the failure and the next step, rather
+// than leaving them with a red box and no action. Mirrors the two-phase confirm in the
+// corrections flow (data-tab-logic.js): nothing is committed until a human has looked
+// at OP. The manual "Save to Path4ABA" button is deliberately still live — it is the
+// escape hatch, used AFTER verifying, not a bypass.
+function autofillBlockedMessage(log, errs) {
+  if (!log.length) {
+    return 'Not saved — Office Puzzle returned no result, so nothing could be verified. '
+         + 'Check that the datasheet tab is still open, then run the autofill again.';
+  }
+  // A failing day produces TWO ❌ lines — the day itself and the per-behavior summary —
+  // so counting `errs` would double-report it. Per-day lines are the ones naming a day;
+  // fall back to the raw list if the log shape ever changes.
+  const dayErrs = errs.filter(l => /\bday \d+\b/.test(l));
+  const failed  = dayErrs.length ? dayErrs : errs;
+  const first   = (failed[0] || '').replace(/^❌\s*/, '').trim();
+  const more    = failed.length > 1 ? ` (+${failed.length - 1} more)` : '';
+  return `Not saved — ${failed.length} step${failed.length === 1 ? '' : 's'} failed. `
+       + `First: ${first}${more}. `
+       + 'Fix these in Office Puzzle. Once the sheet looks right, tap "Save to Path4ABA" below to record it.';
+}
+
 async function runSingleAutofill(type) {
   const day      = parseInt(document.getElementById('singleDay').value);
   const statusId = type === 'maladaptive' ? 'singleMaladStatus' : 'singleReplStatus';
@@ -1696,10 +1734,12 @@ async function runSingleAutofill(type) {
     if (!opData.ok) { setStatus(statusId, opData.error, true); return; }
     const result = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: officePuzzleDatasheetAutofiller, args: [tasks, opData.opDataMap], world: 'MAIN' });
     const log  = result?.[0]?.result || [];
-    const ok   = log.filter(l => l.startsWith('✓'));
     const errs = log.filter(l => l.startsWith('❌'));
-    setStatus(statusId, (log[0] || 'No result.').replace(/^[✓❌]\s*/, ''), errs.length > 0 && ok.length === 0);
-    if (ok.length > 0 && document.getElementById('singleConfirmCheck')?.checked) await saveSingleData(false);
+    const verified = autofillVerified(log, errs);
+    setStatus(statusId,
+      verified ? (log[0] || 'No result.').replace(/^[✓⚪]\s*/, '') : autofillBlockedMessage(log, errs),
+      !verified);
+    if (verified && document.getElementById('singleConfirmCheck')?.checked) await saveSingleData(false);
   } catch (err) { setStatus(statusId, 'Error: ' + err.message, true); }
   finally { btn.disabled = false; btn.textContent = type === 'maladaptive' ? 'Autofill Maladaptives' : 'Autofill Replacements'; }
 }
@@ -2000,10 +2040,12 @@ async function runWeekAutofill(type) {
     const opDataMap = opData.opDataMap || {};
     const result = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: officePuzzleDatasheetAutofiller, args: [tasks, opDataMap], world: 'MAIN' });
     const log  = result?.[0]?.result || [];
-    const ok   = log.filter(l => l.startsWith('✓'));
     const errs = log.filter(l => l.startsWith('❌'));
-    setStatus(statusId, (log[0] || 'No result.').replace(/^[✓❌]\s*/, ''), errs.length > 0 && ok.length === 0);
-    if (ok.length > 0 && document.getElementById('weekConfirmCheck')?.checked) await saveWeekData(false);
+    const verified = autofillVerified(log, errs);
+    setStatus(statusId,
+      verified ? (log[0] || 'No result.').replace(/^[✓⚪]\s*/, '') : autofillBlockedMessage(log, errs),
+      !verified);
+    if (verified && document.getElementById('weekConfirmCheck')?.checked) await saveWeekData(false);
   } catch (err) { setStatus(statusId, 'Error: ' + err.message, true); }
   finally { btn.disabled = false; btn.textContent = type === 'maladaptive' ? 'Autofill Maladaptives' : 'Autofill Replacements'; }
 }
