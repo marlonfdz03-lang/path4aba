@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
-import { buildProjection } from "@/lib/projection";
+import { buildProjection, hashStr, mulberry32 } from "@/lib/projection";
 import {
   Area,
   AreaChart,
@@ -979,7 +979,7 @@ function ProgramRow({
   nameIndex: number;
   clientId: string;
   onDataConfirmed: () => void;
-  adjustValue?: (v: number) => number;
+  adjustValue?: (v: number, type: "maladaptive" | "replacement", seedKey: string) => number;
   rangeStart: string | null;
   showProjections: boolean;
   expanded: boolean;
@@ -1024,8 +1024,13 @@ function ProgramRow({
       { baseline: histData[histData.length - 1].avg, goal, totalWeeks: null },
       nameIndex,
     );
-    return adjustValue ? raw.map((v: number) => adjustValue(v)) : raw;
-  }, [histData, goal, nameIndex, adjustValue]);
+    // Week offset is part of the seed, so each projected week keeps its own stable offset
+    // instead of every week redrawing from one shared random stream.
+    return adjustValue
+      ? raw.map((v: number, i: number) =>
+          adjustValue(v, isRising ? "replacement" : "maladaptive", `${clientId}|${name}|${i}`))
+      : raw;
+  }, [histData, goal, nameIndex, adjustValue, isRising, clientId, name]);
 
   const yMax = useMemo(() => {
     if (isRising) return 100;
@@ -1239,24 +1244,35 @@ function buildAnomalyMap(histData: WeekPoint[]) {
 
 // ── Main DataTab ────────────────────────────────────────────────────────────
 
-export function DataTab({ client, complianceLevel = "typical", missedHours = 0 }: { client: any; complianceLevel?: "typical" | "below_typical" | "poor"; missedHours?: number }) {
-  function applyQualityAdjustment(value: number, type: "maladaptive" | "replacement"): number {
-    const isMissed = missedHours > 0;
-    const hasEnvChange = complianceLevel === "poor";
-    if (type === "maladaptive") {
-      if (isMissed) return value + Math.floor(Math.random() * 2) + 6;
-      if (hasEnvChange) return value + Math.floor(Math.random() * 2) + 5;
-      if (complianceLevel === "below_typical") return value + Math.floor(Math.random() * 2) + 4;
-      const v = Math.floor(Math.random() * 4) + 1;
-      return Math.max(0, value + (Math.random() > 0.5 ? v : -v));
-    } else {
-      if (isMissed) return Math.max(0, Math.min(100, value - (Math.floor(Math.random() * 2) + 6)));
-      if (hasEnvChange) return Math.max(0, Math.min(100, value - (Math.floor(Math.random() * 2) + 5)));
-      if (complianceLevel === "below_typical") return Math.max(0, Math.min(100, value - (Math.floor(Math.random() * 2) + 4)));
-      const v = Math.floor(Math.random() * 4) + 1;
-      return Math.max(0, Math.min(100, value + (Math.random() > 0.5 ? v : -v)));
-    }
+// Module scope and seeded. It used to sit inside DataTab and draw from Math.random(), so
+// every projected week was re-randomised on each render and the curve visibly jittered.
+// seedKey is client + program + week offset: the same projection always adjusts the same way.
+function applyQualityAdjustment(
+  value: number,
+  type: "maladaptive" | "replacement",
+  seedKey: string,
+  complianceLevel: "typical" | "below_typical" | "poor",
+  missedHours: number,
+): number {
+  const rng = mulberry32(hashStr(seedKey));
+  const isMissed = missedHours > 0;
+  const hasEnvChange = complianceLevel === "poor";
+  if (type === "maladaptive") {
+    if (isMissed) return value + Math.floor(rng() * 2) + 6;
+    if (hasEnvChange) return value + Math.floor(rng() * 2) + 5;
+    if (complianceLevel === "below_typical") return value + Math.floor(rng() * 2) + 4;
+    const v = Math.floor(rng() * 4) + 1;
+    return Math.max(0, value + (rng() > 0.5 ? v : -v));
+  } else {
+    if (isMissed) return Math.max(0, Math.min(100, value - (Math.floor(rng() * 2) + 6)));
+    if (hasEnvChange) return Math.max(0, Math.min(100, value - (Math.floor(rng() * 2) + 5)));
+    if (complianceLevel === "below_typical") return Math.max(0, Math.min(100, value - (Math.floor(rng() * 2) + 4)));
+    const v = Math.floor(rng() * 4) + 1;
+    return Math.max(0, Math.min(100, value + (rng() > 0.5 ? v : -v)));
   }
+}
+
+export function DataTab({ client, complianceLevel = "typical", missedHours = 0 }: { client: any; complianceLevel?: "typical" | "below_typical" | "poor"; missedHours?: number }) {
   const { data: session } = useSession();
   const [replacementData, setReplacementData] = useState<any[]>([]);
   const [maladaptiveData, setMaladaptiveData] = useState<any[]>([]);
@@ -1368,6 +1384,14 @@ export function DataTab({ client, complianceLevel = "typical", missedHours = 0 }
     }
     return result;
   }, [repBySkill, client.clinicalProfile]);
+
+  // Stable identity: a fresh arrow per render invalidated ProgramRow's projValues memo,
+  // which is what made every projected value redraw on each render.
+  const adjustValue = useCallback(
+    (value: number, type: "maladaptive" | "replacement", seedKey: string) =>
+      applyQualityAdjustment(value, type, seedKey, complianceLevel, missedHours),
+    [complianceLevel, missedHours],
+  );
 
   const rangeStart = useMemo(
     () => rangeStartDate(RANGES.find((r) => r.key === range)?.weeks ?? null),
@@ -1546,7 +1570,7 @@ export function DataTab({ client, complianceLevel = "typical", missedHours = 0 }
               nameIndex={r.nameIndex}
               clientId={client.id}
               onDataConfirmed={loadData}
-              adjustValue={(v) => applyQualityAdjustment(v, r.isRising ? "replacement" : "maladaptive")}
+              adjustValue={adjustValue}
               rangeStart={rangeStart}
               showProjections={showProjections}
               expanded={expandedKey === r.key}

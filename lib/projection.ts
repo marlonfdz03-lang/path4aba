@@ -1,10 +1,12 @@
 export const TOTAL_WEEKS = 26;
 
-function hashStr(s: string): number {
+// Exported so callers that need a deterministic stream keyed off a string (the Data tab's
+// quality adjustment) reuse this one instead of adding a third copy of the same RNG.
+export function hashStr(s: string): number {
   return s.split('').reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 0);
 }
 
-function mulberry32(seed: number) {
+export function mulberry32(seed: number) {
   return function () {
     seed |= 0;
     seed = (seed + 0x6d2b79f5) | 0;

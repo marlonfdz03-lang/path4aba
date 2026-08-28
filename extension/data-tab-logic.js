@@ -76,22 +76,82 @@ function simpleHash(str) {
   return Math.abs(h);
 }
 
+// Deterministic seed for one behavior's week. The SAME client + behavior + week must
+// produce the SAME distribution everywhere, because the array pushed to Office Puzzle
+// and the array saved to Path4ABA are produced by two separate calls (applyWeekToOP and
+// the corrections "Mark as Done" handler). They used to be two independent random draws,
+// so OP and the database disagreed about a week the RBT had just confirmed.
+function maladaptiveSeed(clientId, behaviorName, weekStart) {
+  return simpleHash(`${clientId || ''}|${behaviorName || ''}|${weekStart || ''}`);
+}
+
+// Largest allowed change between two consecutive days. Mirrors the maxDev idiom below:
+// a share of the MEAN, floored at 1, capped in absolute units when the mean is small.
+// Measured against the mean rather than against the previous day on purpose — a
+// relative-to-previous rule is undefined when the previous day is 0, which happens on
+// every week where the weekly total is below the number of worked days.
+function maxDailyStep(avg) {
+  let step = Math.max(1, Math.round(avg * 0.35));
+  if (avg < 8) step = Math.min(4, step);
+  return step;
+}
+
+// Flatten day-to-day spikes WITHOUT touching the sum. Each transfer moves units from the
+// higher day of a violating pair to the lower one, so the total is invariant by
+// construction; `floor` keeps a day from being pushed below its minimum (1 when the total
+// allows every day a count, otherwise 0). One transfer fixes an isolated pair exactly;
+// chains need a few passes, hence the loop. The donor is always the higher day of the
+// pair, so it is always strictly above the floor and a transfer can never be blocked.
+function smoothDaily(vals, step, floor) {
+  const out = vals.slice();
+  const maxPasses = out.length * 4 + 4;
+  for (let pass = 0; pass < maxPasses; pass++) {
+    let changed = false;
+    for (let i = 1; i < out.length; i++) {
+      const diff = out[i] - out[i - 1];
+      if (Math.abs(diff) <= step) continue;
+      const move = Math.ceil((Math.abs(diff) - step) / 2);
+      const hi = diff > 0 ? i : i - 1;
+      const lo = diff > 0 ? i - 1 : i;
+      const take = Math.min(move, out[hi] - floor);
+      if (take <= 0) continue;
+      out[hi] -= take;
+      out[lo] += take;
+      changed = true;
+    }
+    if (!changed) break;
+  }
+  return out;
+}
+
 // ── Distribute maladaptive total across days with natural variation ────────────
-function distributeMaladaptiveAcrossDays(total, numDays) {
+// Deterministic: same (total, numDays, seed) always yields the same array. Callers pass
+// maladaptiveSeed(clientId, behaviorName, weekStart), so a week's distribution is stable
+// across the OP write and the database write.
+function distributeMaladaptiveAcrossDays(total, numDays, seed = 0) {
   if (numDays <= 0) return [];
-  if (numDays === 1) return [total];
+
+  // Rounded HERE rather than at the call site: two of the three callers pass a Float
+  // straight out of the database (corrections carry currentValue as a Float?), and a
+  // fractional total broke the exact-sum invariant — 2.5 over 5 days summed to 3, and
+  // 12.5 over 5 days put a fractional 3.5 into an integer frequency cell.
+  total = Math.round(Number(total) || 0);
+
+  if (numDays === 1) return [Math.max(0, total)];
   if (total <= 0) return Array(numDays).fill(0); // rule 1: zeros only when total is 0
 
+  const rng = mulberry32(seed);
   const shuffle = (arr) => {
     for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(rng() * (i + 1));
       [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     return arr;
   };
 
-  // Not enough to give every day ≥1 — spread single counts across `total` random
-  // days (zeros are mathematically unavoidable here).
+  // Not enough to give every day ≥1 — spread single counts across `total` days (zeros
+  // are mathematically unavoidable here). Every step is 0 or 1, so this branch already
+  // satisfies the smoothing constraint and needs no smoothing pass.
   if (total < numDays) {
     const vals = Array(numDays).fill(0);
     for (let i = 0; i < total; i++) vals[i] = 1;
@@ -108,7 +168,7 @@ function distributeMaladaptiveAcrossDays(total, numDays) {
   let remaining = total;
   for (let i = 0; i < numDays - 1; i++) {
     const daysAfter = numDays - 1 - i; // days still to fill after this one (incl. remainder day)
-    const dev = Math.floor(Math.random() * (2 * maxDev + 1)) - maxDev;
+    const dev = Math.floor(rng() * (2 * maxDev + 1)) - maxDev;
     let v = base + dev;
     if (v < 1) v = 1;                      // rule 1: never 0
     if (v > total) v = total;              // rule 2: never exceed total
@@ -120,7 +180,12 @@ function distributeMaladaptiveAcrossDays(total, numDays) {
   }
   vals.push(remaining); // rule 5: last day is the exact remainder (≥1, ≤total, sum is exact)
 
-  return shuffle(vals); // rule 6: randomize which day holds the remainder
+  // rule 6: randomise which day holds the remainder, THEN smooth. Smoothing has to come
+  // last — a shuffle applied afterwards would undo it. The remainder therefore still sits
+  // on the day the shuffle picked; only its magnitude is flattened, like every other day.
+  // Each day was drawn independently from the mean before this, which is what let
+  // consecutive days jump (measured: 34, 26, 5, 30, 25 for 120 over 5 days).
+  return smoothDaily(shuffle(vals), maxDailyStep(avg), 1);
 }
 
 // ── Legacy save helper (kept for compatibility) ───────────────────────────────
@@ -483,7 +548,11 @@ function buildWeekCard(weekStart, items) {
               }).catch(() => {});
             });
           } else {
-            const dailyVals = distributeMaladaptiveAcrossDays(c.currentValue ?? 0, workedDays.length);
+            // Same seed expression as applyWeekToOP, so the array saved here is the array
+            // that was written to OP moments earlier.
+            const dailyVals = distributeMaladaptiveAcrossDays(
+              c.currentValue ?? 0, workedDays.length,
+              maladaptiveSeed(selectedClientId, c.name, corrWeekStart));
             workedDays.forEach((dateStr, idx) => {
               api('/api/maladaptive-data', {
                 method: 'POST',
@@ -960,7 +1029,11 @@ async function applyWeekToOP(corrections, workedDayDates) {
   const tasks = [];
   corrections.forEach(c => {
     if (c.type === 'maladaptive') {
-      const dailyVals = distributeMaladaptiveAcrossDays(c.currentValue ?? 0, workedDayDates.length);
+      // Seed material must match the "Mark as Done" save above exactly — see maladaptiveSeed.
+      const corrWeekStart = c.weekStart || getMondayOfDate(workedDayDates[0]) || workedDayDates[0];
+      const dailyVals = distributeMaladaptiveAcrossDays(
+        c.currentValue ?? 0, workedDayDates.length,
+        maladaptiveSeed(selectedClientId, c.name, corrWeekStart));
       workedDayDates.forEach((dateStr, idx) => {
         tasks.push({
           name: c.name,

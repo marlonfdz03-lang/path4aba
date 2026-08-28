@@ -1700,14 +1700,16 @@ async function runSingleAutofill(type) {
   const statusId = type === 'maladaptive' ? 'singleMaladStatus' : 'singleReplStatus';
   const btnId    = type === 'maladaptive' ? 'autofillSingleMaladBtn' : 'autofillSingleReplBtn';
   if (!day || !projectedItems.length) { setStatus(statusId, 'No data loaded.', true); return; }
-  const adjustedItems = applySessionQualityAdjustment(projectedItems);
-  const items = adjustedItems.filter(i => i.type === type);
-  if (!items.length) { setStatus(statusId, `No ${type} data.`, true); return; }
 
-  // Deterministic seed per skill+date for the single session date.
+  // Deterministic seed per skill+date for the single session date. Computed before the
+  // quality adjustment because it is also that adjustment's period key.
   const month   = parseInt(document.getElementById('singleMonth').value);
   const year    = new Date().getFullYear();
   const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+
+  const adjustedItems = applySessionQualityAdjustment(projectedItems, dateStr);
+  const items = adjustedItems.filter(i => i.type === type);
+  if (!items.length) { setStatus(statusId, `No ${type} data.`, true); return; }
 
   const tasks = items.map(item => {
     if (type === 'maladaptive') {
@@ -1937,26 +1939,32 @@ document.getElementById('weekStartDate').addEventListener('change', (e) => {
   }
 });
 
-function applySessionQualityAdjustment(items) {
+// `periodKey` is the session date (single-day mode) or the week start (week mode). It is
+// part of the seed, so the SAME client + target + period always yields the SAME adjustment.
+// This used to draw from Math.random() and was called independently by the autofill and by
+// the save — two draws, two different numbers, so Office Puzzle and Path4ABA recorded
+// different values for one session.
+function applySessionQualityAdjustment(items, periodKey) {
   if (complianceLevel === 'typical' && !environmentalChange) return items;
   return items.map(item => {
+    const rng = mulberry32(maladaptiveSeed(selectedClientId, item.name, periodKey));
     let adjusted = { ...item };
     if (item.type === 'maladaptive') {
       let increase = 0;
       if (environmentalChange && complianceLevel === 'poor') {
         // Poor compliance + environmental change: move 5-6
-        increase = Math.floor(Math.random() * 2) + 5;
+        increase = Math.floor(rng() * 2) + 5;
       } else if (complianceLevel === 'poor') {
         // Poor compliance: move 5-6
-        increase = Math.floor(Math.random() * 2) + 5;
+        increase = Math.floor(rng() * 2) + 5;
       } else if (complianceLevel === 'below_typical') {
         // Below typical: move 4-5
-        increase = Math.floor(Math.random() * 2) + 4;
+        increase = Math.floor(rng() * 2) + 4;
       } else if (complianceLevel === 'typical') {
         // Typical session: normal variance 1-4
-        increase = Math.floor(Math.random() * 4) + 1;
+        increase = Math.floor(rng() * 4) + 1;
         // Can go up or down in typical sessions
-        increase = Math.random() > 0.5 ? increase : -increase;
+        increase = rng() > 0.5 ? increase : -increase;
       }
       adjusted.projectedValue = Math.max(0, item.projectedValue + increase);
       adjusted.dailyValue = adjusted.dailyValue
@@ -1966,18 +1974,18 @@ function applySessionQualityAdjustment(items) {
       let change = 0;
       if (environmentalChange && complianceLevel === 'poor') {
         // Poor compliance + environmental change: drop 5-6%
-        change = -(Math.floor(Math.random() * 2) + 5);
+        change = -(Math.floor(rng() * 2) + 5);
       } else if (complianceLevel === 'poor') {
         // Poor compliance: drop 5-6%
-        change = -(Math.floor(Math.random() * 2) + 5);
+        change = -(Math.floor(rng() * 2) + 5);
       } else if (complianceLevel === 'below_typical') {
         // Below typical: drop 4-5%
-        change = -(Math.floor(Math.random() * 2) + 4);
+        change = -(Math.floor(rng() * 2) + 4);
       } else if (complianceLevel === 'typical') {
         // Typical session: normal variance 1-4%
-        change = Math.floor(Math.random() * 4) + 1;
+        change = Math.floor(rng() * 4) + 1;
         // Can go up or down in typical sessions
-        change = Math.random() > 0.5 ? change : -change;
+        change = rng() > 0.5 ? change : -change;
       }
       adjusted.projectedValue = Math.min(100, Math.max(0, item.projectedValue + change));
     }
@@ -1990,7 +1998,9 @@ async function runWeekAutofill(type) {
   const btnId    = type === 'maladaptive' ? 'autofillWeekMaladBtn' : 'autofillWeekReplBtn';
   if (!projectedItems.length) { setStatus(statusId, 'No data loaded.', true); return; }
   if (!workedDayDates.length) { setStatus(statusId, 'No worked days selected.', true); return; }
-  const adjustedItems = applySessionQualityAdjustment(projectedItems);
+  // Same period key saveWeekData uses, so the values filled into OP are the values saved.
+  const weekStartKey = document.getElementById('weekStartDate')?.value || '';
+  const adjustedItems = applySessionQualityAdjustment(projectedItems, weekStartKey);
   const items = adjustedItems.filter(i => i.type === type);
   if (!items.length) { setStatus(statusId, `No ${type} data found.`, true); return; }
 
@@ -2015,7 +2025,8 @@ async function runWeekAutofill(type) {
     items.forEach(item => {
       const dailyVals = distributeMaladaptiveAcrossDays(
         Math.round(item.projectedValue),
-        workedDayDates.length
+        workedDayDates.length,
+        maladaptiveSeed(selectedClientId, item.name, weekStartKey)
       );
       workedDayDates.forEach((dateStr, idx) => {
         const dayNum = new Date(dateStr + 'T00:00:00').getDate();
@@ -2059,7 +2070,7 @@ async function saveWeekData(userInitiated) {
   const weekEnd     = calcWeekEndDate(weekStart);
   const workedCount = workedDayDates.length;
   const replRecs = []; const maladRecs = [];
-  const qualityAdjusted = applySessionQualityAdjustment(projectedItems);
+  const qualityAdjusted = applySessionQualityAdjustment(projectedItems, weekStart);
 
   workedDayDates.forEach(sessionDate => {
     qualityAdjusted.filter(i => i.type === 'replacement').forEach(item => {
