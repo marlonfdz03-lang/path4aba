@@ -49,3 +49,4 @@ clinical_profile_backup_*.json
 # Assessment test harness inputs — real assessment PDFs + the filled ground-truth
 # template. Both contain client PHI (names/DOB/diagnoses). NEVER commit.
 assessments-local/
+backup_*.sql
