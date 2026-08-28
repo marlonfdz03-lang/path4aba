@@ -205,9 +205,11 @@ async function saveReplacementData(autofillCompleted) {
     weekEnd,
     dailyPercentage: item.projectedValue,
     trials: trialsPerSession,
-    userConfirmed: true,
+    // Projected values. Nothing here is a human attestation, so this path no longer claims one.
+    userConfirmed: false,
     autofillCompleted,
     platformSource: 'extension',
+    valueOrigin: 'estimated',
   }));
   const maladRecs = items.filter(i => i.type === 'maladaptive').map(item => ({
     clientId: selectedClientId,
@@ -215,7 +217,10 @@ async function saveReplacementData(autofillCompleted) {
     weekStart,
     weekEnd,
     frequency: item.dailyValue ?? Math.round((item.projectedValue || 0) / 5),
-    userConfirmed: true,
+    userConfirmed: false,
+    autofillCompleted,
+    platformSource: 'extension',
+    valueOrigin: 'estimated',
   }));
 
   try {
@@ -541,9 +546,13 @@ function buildWeekCard(weekStart, items) {
                   sessionDate: dateStr,
                   observedPercentage: c.currentValue,
                   totalTrials: c.totalTrials ?? trialsPerSession ?? 10,
+                  // The RBT justified the anomaly, watched it applied to OP, and pressed
+                  // "Looks correct in OP". That is a real human confirmation of a value they
+                  // changed — the one place where both flags are genuinely earned.
                   userConfirmed: true,
                   autofillCompleted: true,
                   platformSource: 'extension',
+                  valueOrigin: 'rbt_edited',
                 }]),
               }).catch(() => {});
             });
@@ -562,9 +571,11 @@ function buildWeekCard(weekStart, items) {
                   weekStart: corrWeekStart,
                   sessionDate: dateStr,
                   frequency: dailyVals[idx] ?? 0,
+                  dailyValues: dailyVals,
                   userConfirmed: true,
                   autofillCompleted: true,
                   platformSource: 'extension',
+                  valueOrigin: 'rbt_edited',
                 }]),
               }).catch(() => {});
             });

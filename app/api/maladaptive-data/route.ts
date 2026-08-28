@@ -83,6 +83,11 @@ export async function PATCH(req: Request) {
     if (body.anomalyReviewed != null)      data.anomaly_reviewed      = body.anomalyReviewed
     if (body.anomalyJustification != null) data.anomaly_justification = body.anomalyJustification
     if (body.originalValue != null)        data.original_value        = body.originalValue
+    // autofill_completed was settable through neither POST nor PATCH here, so only the
+    // corrections flow could ever write it — replacement-data has accepted it since it was
+    // added. valueOrigin travels with it: an RBT fixing a value makes that value theirs.
+    if (body.autofillCompleted != null)    data.autofill_completed    = body.autofillCompleted
+    if (body.valueOrigin != null)          data.value_origin          = body.valueOrigin
 
     const updated = await prisma.maladaptive_data.update({ where: { id }, data })
     return NextResponse.json({ ok: true, data: updated })
@@ -145,6 +150,8 @@ export async function POST(req: Request) {
               confirmed_at:    r.userConfirmed  ? now : null,
               projected_value: r.projectedValue ?? null,
               goal_met:        r.goalMet        ?? null,
+              value_origin:    r.valueOrigin    ?? null,
+              autofill_completed: r.autofillCompleted ?? false,
               updated_at:      now,
             },
           })
@@ -166,6 +173,10 @@ export async function POST(req: Request) {
             confirmed_at:    r.userConfirmed  ? now : null,
             projected_value: r.projectedValue ?? null,
             goal_met:        r.goalMet        ?? null,
+            // Provenance of the number. NULL is reserved for legacy rows written before the
+            // column existed — every new row states where its value came from.
+            value_origin:    r.valueOrigin    ?? null,
+            autofill_completed: r.autofillCompleted ?? false,
           },
         })
       })

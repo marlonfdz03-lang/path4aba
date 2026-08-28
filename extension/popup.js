@@ -1652,6 +1652,118 @@ document.getElementById('showSingleReplBtn')?.addEventListener('click', (e) => {
 // ── Fetch + build the OP item-data map popup-side (CORS-safe via background.js) ──
 // Same preliminary pattern as runTasksOnOP: extract buId + month from the OP tab,
 // fetch the sheets through background.js, then parse with buildOpDataMap().
+// ── What the last autofill actually put into Office Puzzle ───────────────────
+// Captured at the moment the tasks are built, and read by the save path instead of being
+// recomputed. This is not an optimisation: generateDailyPercentages still draws from
+// Math.random(), so a second call produces a DIFFERENT week than the one now sitting on the
+// datasheet. Persisting a regenerated week would recreate exactly the OP-vs-database
+// divergence this is meant to close. Cleared when the client or period changes.
+//
+// Shape: { clientId, periodKey, malad: { name -> {sessionDate, value}[] },
+//                               repl:  { name -> {sessionDate, pct, trials, sequence}[] } }
+let lastFill = null;
+
+function resetLastFill(clientId, periodKey) {
+  if (!lastFill || lastFill.clientId !== clientId || lastFill.periodKey !== periodKey) {
+    lastFill = { clientId: clientId, periodKey: periodKey, malad: {}, repl: {} };
+  }
+  return lastFill;
+}
+
+// The whole captured map for a period, or null when this save does not correspond to an
+// autofill the popup performed (a bare Save press, or a different client/week). The builders
+// then fall back to the projected value — still an estimate, still marked as one.
+function fillsForPeriod(kind, clientId, periodKey) {
+  if (!lastFill || lastFill.clientId !== clientId || lastFill.periodKey !== periodKey) return null;
+  return lastFill[kind];
+}
+
+// ── Pure record builders ─────────────────────────────────────────────────────
+// No DOM, no globals — everything they need is passed in, so lib/saveRecords.test.mjs can
+// extract and exercise them. They decide WHAT IS PERSISTED; nothing here computes a value.
+
+// value_origin is the provenance of the NUMBER; user_confirmed is whether a human attested
+// it. They are orthogonal, which is why both columns exist: an RBT ticking "I confirm this
+// data reflects actual session observation" over an autofilled week makes user_confirmed
+// true while the value stays 'estimated'. Autofill's own auto-save attests nothing.
+const ORIGIN_ESTIMATED = 'estimated';
+const ORIGIN_RBT_EDITED = 'rbt_edited';
+const ORIGIN_OBSERVED = 'observed';
+
+function countCorrect(sequence) {
+  return (sequence || []).filter(function (c) { return c === '+' || c === '＋'; }).length;
+}
+
+// One row per behavior per week. daily_values carries the per-day array EXACTLY as filled, so
+// the readers that already prefer it (projected-values, DataTab) sum the real week instead of
+// re-deriving it from a flat average.
+function buildMaladaptiveRecords(input) {
+  const out = [];
+  const days = input.days || [];
+  (input.items || []).forEach(function (item) {
+    const filled = input.fills ? input.fills[item.name] : null;
+    const dailyValues = filled
+      ? days.map(function (d) {
+          const hit = filled.find(function (f) { return f.sessionDate === d; });
+          return hit ? hit.value : 0;
+        })
+      : null;
+    const weeklyTotal = dailyValues
+      ? dailyValues.reduce(function (a, b) { return a + b; }, 0)
+      : Math.round(item.projectedValue || 0);
+    days.forEach(function (sessionDate, idx) {
+      out.push({
+        clientId: input.clientId,
+        behaviorName: item.name,
+        weekStart: input.weekStart,
+        weekEnd: input.weekEnd,
+        sessionDate: sessionDate,
+        frequency: dailyValues ? dailyValues[idx] : Math.round(weeklyTotal / (days.length || 1)),
+        dailyValues: dailyValues,
+        userConfirmed: !!input.userConfirmed,
+        autofillCompleted: !!input.autofillCompleted,
+        valueOrigin: input.valueOrigin,
+      });
+    });
+  });
+  return out;
+}
+
+// One row per skill per day. The +/- pattern that was clicked into OP is persisted, and the
+// correct/incorrect counts are derived FROM that pattern — so total_trials, the counts and
+// observed_percentage finally describe the same session instead of three unrelated numbers.
+function buildReplacementRecords(input) {
+  const out = [];
+  const days = input.days || [];
+  (input.items || []).forEach(function (item) {
+    const filled = input.fills ? input.fills[item.name] : null;
+    days.forEach(function (sessionDate) {
+      const hit = filled ? filled.find(function (f) { return f.sessionDate === sessionDate; }) : null;
+      const sequence = hit ? hit.sequence : null;
+      const trials = (hit && hit.trials) || input.trials || 10;
+      const pct = hit ? hit.pct : item.projectedValue;
+      const correct = sequence ? countCorrect(sequence) : Math.round((pct || 0) / 100 * trials);
+      out.push({
+        clientId: input.clientId,
+        replacementSkill: item.name,
+        weekStart: input.weekStart,
+        weekEnd: input.weekEnd,
+        sessionDate: sessionDate,
+        observedPercentage: pct,
+        totalTrials: trials,
+        correctCount: correct,
+        incorrectCount: Math.max(0, trials - correct),
+        alternatedSequence: sequence ? sequence.join('') : null,
+        userConfirmed: !!input.userConfirmed,
+        autofillCompleted: !!input.autofillCompleted,
+        platformSource: 'extension',
+        valueOrigin: input.valueOrigin,
+      });
+    });
+  });
+  return out;
+}
+
 // The injected autofiller has no closure over the popup's scripts, so the shared name
 // matcher has to be put into the OP page itself before the function is injected.
 async function injectNameMatch(tabId) {
@@ -1717,17 +1829,19 @@ async function runSingleAutofill(type) {
   const items = adjustedItems.filter(i => i.type === type);
   if (!items.length) { setStatus(statusId, `No ${type} data.`, true); return; }
 
+  const fill = resetLastFill(selectedClientId, dateStr);
   const tasks = items.map(item => {
     if (type === 'maladaptive') {
-      return {
-        name: item.name, dayNumber: day, type,
-        value: item.dailyValue ?? Math.round((item.projectedValue || 0) / 5),
-      };
+      const value = item.dailyValue ?? Math.round((item.projectedValue || 0) / 5);
+      // Record what OP is about to receive, so the save persists this exact number.
+      fill.malad[item.name] = [{ sessionDate: dateStr, value }];
+      return { name: item.name, dayNumber: day, type, value };
     }
     // Replacement: use projectedValue directly, one varied sequence per skill.
     const pct      = item.projectedValue;
     const correct  = Math.min(trialsPerSession, Math.max(0, Math.round((pct || 0) / 100 * trialsPerSession)));
     const sequence = generateVariedSequence(correct, trialsPerSession - correct, simpleHash(item.name + dateStr));
+    fill.repl[item.name] = [{ sessionDate: dateStr, pct, trials: trialsPerSession, sequence }];
     return { name: item.name, dayNumber: day, type, value: pct, trials: trialsPerSession, sequence };
   });
 
@@ -1766,14 +1880,30 @@ async function saveSingleData(userInitiated) {
   const weekStart = getMondayOfDate(dateStr);
   const weekEnd   = calcWeekEndDate(weekStart);
 
-  const replRecs  = projectedItems.filter(i => i.type === 'replacement').map(item => ({
-    clientId: selectedClientId, replacementSkill: item.name, weekStart, weekEnd, sessionDate: dateStr,
-    dailyPercentage: item.projectedValue, trials: trialsPerSession, userConfirmed: true, autofillCompleted: true, platformSource: 'extension',
-  }));
-  const maladRecs = projectedItems.filter(i => i.type === 'maladaptive').map(item => ({
-    clientId: selectedClientId, behaviorName: item.name, weekStart, weekEnd, sessionDate: dateStr,
-    frequency: item.dailyValue ?? Math.round((item.projectedValue || 0) / 5), userConfirmed: true,
-  }));
+  // The DB must receive what OP received. runSingleAutofill adjusts before filling and this
+  // path did not adjust at all, so single-day OP carried adjusted values while the database
+  // carried unadjusted ones. Fixed on THIS side: removing the adjustment from the autofill
+  // would change what lands on the datasheet, which is not what this commit is for. The
+  // adjustment is seeded on (clientId, name, dateStr), so this reproduces the autofill's
+  // numbers exactly rather than re-rolling them.
+  const adjusted = applySessionQualityAdjustment(projectedItems, dateStr);
+
+  // userInitiated = the RBT ticked "I confirm this data reflects actual session observation"
+  // and pressed Save. That is the explicit human confirmation; autofill's own auto-save is not.
+  const confirmed = !!userInitiated;
+
+  const replRecs = buildReplacementRecords({
+    clientId: selectedClientId, items: adjusted.filter(i => i.type === 'replacement'),
+    days: [dateStr], weekStart, weekEnd, trials: trialsPerSession,
+    fills: fillsForPeriod('repl', selectedClientId, dateStr),
+    userConfirmed: confirmed, autofillCompleted: true, valueOrigin: ORIGIN_ESTIMATED,
+  });
+  const maladRecs = buildMaladaptiveRecords({
+    clientId: selectedClientId, items: adjusted.filter(i => i.type === 'maladaptive'),
+    days: [dateStr], weekStart, weekEnd,
+    fills: fillsForPeriod('malad', selectedClientId, dateStr),
+    userConfirmed: confirmed, autofillCompleted: true, valueOrigin: ORIGIN_ESTIMATED,
+  });
 
   try {
     const saves = [];
@@ -2012,17 +2142,22 @@ async function runWeekAutofill(type) {
   if (!items.length) { setStatus(statusId, `No ${type} data found.`, true); return; }
 
   const workedCount = workedDayDates.length;
+  const fill = resetLastFill(selectedClientId, weekStartKey);
   const tasks = [];
   if (type === 'replacement') {
     // Spread each skill's weekly average across worked days with natural variation,
     // and generate a deterministic varied sequence per skill+date.
     items.forEach(item => {
       const dailyPcts = generateDailyPercentages(item.projectedValue, workedCount);
+      fill.repl[item.name] = [];
       workedDayDates.forEach((dateStr, idx) => {
         const dayNum   = new Date(dateStr + 'T00:00:00').getDate();
         const dailyPct = dailyPcts[idx];
         const correct  = Math.min(trialsPerSession, Math.max(0, Math.round((dailyPct || 0) / 100 * trialsPerSession)));
         const sequence = generateVariedSequence(correct, trialsPerSession - correct, simpleHash(item.name + dateStr));
+        // generateDailyPercentages is NOT seeded — this per-day percentage cannot be
+        // reproduced later, so it is recorded here or it is lost.
+        fill.repl[item.name].push({ sessionDate: dateStr, pct: dailyPct, trials: trialsPerSession, sequence });
         tasks.push({ name: item.name, dayNumber: dayNum, type: 'replacement', value: dailyPct, trials: trialsPerSession, sequence });
       });
     });
@@ -2035,8 +2170,10 @@ async function runWeekAutofill(type) {
         workedDayDates.length,
         maladaptiveSeed(selectedClientId, item.name, weekStartKey)
       );
+      fill.malad[item.name] = [];
       workedDayDates.forEach((dateStr, idx) => {
         const dayNum = new Date(dateStr + 'T00:00:00').getDate();
+        fill.malad[item.name].push({ sessionDate: dateStr, value: dailyVals[idx] });
         tasks.push({ name: item.name, dayNumber: dayNum, type,
           value: dailyVals[idx] });
       });
@@ -2077,18 +2214,27 @@ async function saveWeekData(userInitiated) {
   const weekStart   = document.getElementById('weekStartDate').value;
   const weekEnd     = calcWeekEndDate(weekStart);
   const workedCount = workedDayDates.length;
-  const replRecs = []; const maladRecs = [];
   const qualityAdjusted = applySessionQualityAdjustment(projectedItems, weekStart);
 
-  workedDayDates.forEach(sessionDate => {
-    qualityAdjusted.filter(i => i.type === 'replacement').forEach(item => {
-      replRecs.push({ clientId: selectedClientId, replacementSkill: item.name, weekStart, weekEnd, sessionDate,
-        dailyPercentage: item.projectedValue, trials: trialsPerSession, userConfirmed: true, autofillCompleted: true, platformSource: 'extension' });
-    });
-    qualityAdjusted.filter(i => i.type === 'maladaptive').forEach(item => {
-      maladRecs.push({ clientId: selectedClientId, behaviorName: item.name, weekStart, weekEnd, sessionDate,
-        frequency: Math.round(item.projectedValue / workedCount), userConfirmed: true });
-    });
+  // userInitiated = the RBT ticked the confirmation box and pressed Save. The auto-save that
+  // follows a successful autofill attests nothing and must not claim otherwise.
+  const confirmed = !!userInitiated;
+
+  // Each row now carries the day it describes: the per-day frequency and, on the week's rows,
+  // the daily_values array exactly as filled. The old shape saved
+  // Math.round(projectedValue / workedCount) — one flat average repeated across every day,
+  // while OP received a varied distribution.
+  const replRecs = buildReplacementRecords({
+    clientId: selectedClientId, items: qualityAdjusted.filter(i => i.type === 'replacement'),
+    days: workedDayDates, weekStart, weekEnd, trials: trialsPerSession,
+    fills: fillsForPeriod('repl', selectedClientId, weekStart),
+    userConfirmed: confirmed, autofillCompleted: true, valueOrigin: ORIGIN_ESTIMATED,
+  });
+  const maladRecs = buildMaladaptiveRecords({
+    clientId: selectedClientId, items: qualityAdjusted.filter(i => i.type === 'maladaptive'),
+    days: workedDayDates, weekStart, weekEnd,
+    fills: fillsForPeriod('malad', selectedClientId, weekStart),
+    userConfirmed: confirmed, autofillCompleted: true, valueOrigin: ORIGIN_ESTIMATED,
   });
 
   try {
@@ -2946,7 +3092,10 @@ document.getElementById('saveChartsBtn').addEventListener('click', async () => {
             weekStart,
             weekEnd,
             frequency: Math.round(pt.value),
+            // Read off Office Puzzle's own charts — a real recorded observation, not an
+            // estimate, and the RBT pressed Save on it.
             userConfirmed: true,
+            valueOrigin: ORIGIN_OBSERVED,
           });
         } else {
           replRecs.push({
@@ -2957,6 +3106,7 @@ document.getElementById('saveChartsBtn').addEventListener('click', async () => {
             observedPercentage: pt.value,
             totalTrials: 10,
             userConfirmed: true,
+            valueOrigin: ORIGIN_OBSERVED,
           });
         }
       }

@@ -141,9 +141,10 @@ function ConfirmWeekModal({
     setSaving(true);
     try {
       const endpoint = isReplacement ? "/api/replacement-data" : "/api/maladaptive-data";
+      // Typed by hand in the web UI: the value is the RBT's, and they confirmed it by saving.
       const body = isReplacement
-        ? [{ clientId, replacementSkill: name, sessionDate: week, weekStart: week, observedPercentage: num, totalTrials: 10, userConfirmed: true }]
-        : [{ clientId, behaviorName: name, sessionDate: week, weekStart: week, frequency: num, userConfirmed: true }];
+        ? [{ clientId, replacementSkill: name, sessionDate: week, weekStart: week, observedPercentage: num, totalTrials: 10, userConfirmed: true, valueOrigin: "rbt_edited" }]
+        : [{ clientId, behaviorName: name, sessionDate: week, weekStart: week, frequency: num, userConfirmed: true, valueOrigin: "rbt_edited" }];
       await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       setSaved(true);
       setTimeout(() => { onSaved(); onClose(); }, 1000);
@@ -299,10 +300,17 @@ function AnomalyModal({
         anomalyReviewed: true,
         anomalyJustification: justMsg,
         originalValue: currentValue,
+        // The RBT replaced the number, so the number is now theirs — whatever produced the
+        // value it superseded. handleJustify above deliberately does NOT set this: justifying
+        // an anomaly explains a value, it does not change where the value came from.
+        valueOrigin: "rbt_edited",
+        // Re-opens the value for the corrections flow, which selects on
+        // autofill_completed = false. The maladaptive branch could not set this until the
+        // route started accepting it, so a corrected behavior never re-entered that queue.
+        autofillCompleted: false,
       };
       if (isReplacement) {
         body.observedPercentage = num;
-        body.autofillCompleted = false;
       } else {
         body.frequency = num;
       }
