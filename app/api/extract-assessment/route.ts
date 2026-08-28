@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "File is too large (max 15 MB)." }, { status: 413 });
     }
 
-    const text = await parsePdf(buffer);
+    const text = await parsePdf(buffer, { clientId: formData.get("clientId") as string | null });
 
     if (!text.trim()) {
       return NextResponse.json(

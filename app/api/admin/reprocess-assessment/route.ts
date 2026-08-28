@@ -54,7 +54,7 @@ export async function POST(req: Request) {
   const buffer = Buffer.from(fileRow.data);
 
   try {
-    const text = await parsePdf(buffer);
+    const text = await parsePdf(buffer, { clientId });
     if (!text.trim()) return NextResponse.json({ error: "Stored PDF parsed to empty text." }, { status: 422 });
 
     // Clinical Extraction Packet — same as the live upload path (locate clinical regions across the WHOLE doc).

@@ -63,6 +63,12 @@ export type AlertType =
   // filter gap, not an outage). This is how we confirm the extension leak is still live and, after the
   // extension release, that it stopped firing.
   | 'note.save_filter_caught'
+  // An assessment PDF tripped the corrupted-extraction signature (leading-capital-split rate >= threshold) so
+  // parsePdf re-extracted with pdfjs instead of pd2json. Fires ONLY on the fallback path — a clean pd2json
+  // upload is silent — so the rate of these rows IS how often the fallback fires. Payload: { extractor
+  // ('pdfjs' | 'pdf2json' if pdfjs then failed), signature, threshold, chars, pdfjsError? }. Severity 'info'
+  // on a successful pdfjs re-extract, 'warning' when pdfjs threw and we fell back to the pd2json text.
+  | 'assessment.extractor_fallback'
 
 export interface AdminAlertInput {
   source: AlertSource

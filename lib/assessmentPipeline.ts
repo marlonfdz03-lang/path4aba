@@ -5,6 +5,9 @@
 
 import PDFParser from 'pdf2json'
 import { normalizeLigatures } from '@/lib/pdfGeometry'
+import { capSplitSignature, shouldUsePdfjs, SIGNATURE_THRESHOLD } from '@/lib/extractorSignature'
+import { extractTextWithPdfjs } from '@/lib/pdfjsExtract'
+import { emitAdminAlert } from '@/lib/adminAlerts'
 import { ExtractedAssessment } from '@/lib/extractAssessment'
 import { prisma } from '@/lib/prisma'
 import { parseReinforcers } from '@/lib/reinforcers'
@@ -19,7 +22,9 @@ function safeDecode(text: string) {
   try { return decodeURIComponent(text) } catch { return text }
 }
 
-export function parsePdf(buffer: Buffer): Promise<string> {
+// The original pd2json extractor: flatten every text run with spaces. Returns RAW text (ligature
+// normalization is applied by parsePdf on whichever extractor wins).
+function parsePdf2json(buffer: Buffer): Promise<string> {
   return new Promise((resolve, reject) => {
     const pdfParser = new PDFParser()
 
@@ -40,14 +45,7 @@ export function parsePdf(buffer: Buffer): Promise<string> {
               .join(' ')
           )
           .join('\n')
-        // Normalize typographic ligatures (ﬁ→fi, ﬀ→ff, …) on the FINAL flattened string so EVERY consumer
-        // of parsePdf — the LLM packet, the clinical-packet section anchors, and the by-name topography
-        // match in assembleRefreshProfile — sees matchable ASCII. Deterministic, position-independent
-        // (each glyph maps to fixed ASCII regardless of context) and lossless: a no-op on documents with no
-        // ligatures, and it repairs 183 occurrences on one live reassessment (Hendrex), 668 on another
-        // (Felix). Split repair ("T opography") is deliberately NOT done here — it needs fragment position,
-        // not a lexical rule (a blanket /[A-Z] [a-z]/ join corrupts clean documents). See parsePositioned.
-        resolve(normalizeLigatures(text))
+        resolve(text)
       } catch (error) {
         reject(error)
       }
@@ -55,6 +53,55 @@ export function parsePdf(buffer: Buffer): Promise<string> {
 
     pdfParser.parseBuffer(buffer)
   })
+}
+
+// PDF -> text. pd2json runs FIRST, exactly as today. We then measure the leading-capital-split signature
+// (lib/extractorSignature): below threshold the pd2json text is returned UNCHANGED — byte-identical to the
+// historical output for every clean document. At or above threshold the font fragments words in a way
+// pd2json's flat join cannot recover, so we re-extract with pdfjs (layout-aware, correct advance widths).
+//
+// FAIL-SOFT: any pdfjs error falls back to the pd2json text rather than failing the upload. normalizeLigatures
+// applies to whichever text wins (a no-op when there are no ligatures). An admin alert is emitted ONLY when
+// the fallback path is entered (the clean path stays silent), recording extractor + signature + client so we
+// can see how often it fires in production. `opts.clientId` is passed by the refresh routes; the create
+// routes have no client id at parse time and leave it null.
+export async function parsePdf(buffer: Buffer, opts: { clientId?: string | null } = {}): Promise<string> {
+  const raw = await parsePdf2json(buffer)
+  const signature = capSplitSignature(raw)
+
+  if (!shouldUsePdfjs(signature)) {
+    return normalizeLigatures(raw)
+  }
+
+  let text = raw
+  let extractor: 'pdfjs' | 'pdf2json' = 'pdf2json'
+  let failure: string | null = null
+  try {
+    text = await extractTextWithPdfjs(buffer)
+    extractor = 'pdfjs'
+  } catch (e: any) {
+    text = raw // fail-soft: keep the (imperfect) pd2json text; never fail the upload over the fallback
+    failure = e?.message || String(e)
+    console.error('[parsePdf] pdfjs fallback failed — using pd2json text:', failure)
+  }
+
+  // Observability: emitAdminAlert is fail-soft by contract (never throws, never blocks). Fires only on the
+  // fallback path, so "how often did the corrupted-document fallback trigger" is directly countable.
+  await emitAdminAlert({
+    source: 'system',
+    type: 'assessment.extractor_fallback',
+    severity: failure ? 'warning' : 'info',
+    clientId: opts.clientId ?? null,
+    payload: {
+      extractor,
+      signature: Math.round(signature * 100) / 100,
+      threshold: SIGNATURE_THRESHOLD,
+      chars: text.length,
+      ...(failure ? { pdfjsError: failure } : {}),
+    },
+  })
+
+  return normalizeLigatures(text)
 }
 
 // ── Content filtering ─────────────────────────────────────────────────────────
