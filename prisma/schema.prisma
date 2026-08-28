@@ -21,6 +21,12 @@ model clients {
   authorized_hours_weekly   Float?    @default(0)
   treatment_map_approved    Boolean?  @default(false)
   treatment_map_data        Json?
+  // Which weekdays this client has sessions: a JSON array of ISO weekday integers (1 = Mon … 7 = Sun).
+  // NULL = UNKNOWN — never "no sessions". A reader must report "schedule not set" rather than treating a
+  // NULL as an empty week, which would mark every day missed. '[]' is reserved for the deliberate "no
+  // scheduled days" statement. JSONB rather than Int[] because Prisma cannot express a nullable scalar
+  // list (`Int[]?` -> P1012), and a non-nullable Int[] defaults to '{}', collapsing UNKNOWN into "none".
+  session_days              Json?
   bcba_clients              bcba_clients[]
   client_access_codes       client_access_codes[]
   maladaptive_data          maladaptive_data[]
@@ -35,6 +41,7 @@ model clients {
   supervision_notes_97153xp     supervision_notes_97153xp[]
   clinical_timeline_entries     clinical_timeline_entries[]
   client_files                  client_files[]
+  program_config                program_config[]
 }
 
 // Stored source assessment PDFs (BYTEA). Matches migration 20260805000000_add_client_files. The model MUST
@@ -316,6 +323,10 @@ model replacement_data {
   anomaly_reviewed      Boolean   @default(false)
   is_anomaly            Boolean   @default(false)
   original_value        Float?
+  // Where the recorded value came from: 'estimated' | 'note_adjusted' | 'rbt_edited' | 'observed'.
+  // NULL = legacy row written before this marker existed (provenance unknown) — never read as 'observed'.
+  // user_confirmed cannot substitute: the autofill save path already sets it true on generated values.
+  value_origin          String?
   client                clients   @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }
 
@@ -342,6 +353,10 @@ model maladaptive_data {
   is_anomaly            Boolean   @default(false)
   original_value        Float?
   autofill_completed    Boolean   @default(false)
+  // Where the recorded value came from: 'estimated' | 'note_adjusted' | 'rbt_edited' | 'observed'.
+  // NULL = legacy row written before this marker existed (provenance unknown) — never read as 'observed'.
+  // user_confirmed cannot substitute: the autofill save path already sets it true on generated values.
+  value_origin          String?
   client                clients   @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }
 
@@ -359,6 +374,33 @@ model stos {
   created_at     DateTime? @default(now()) @db.Timestamptz(6)
   updated_at     DateTime? @default(now()) @db.Timestamptz(6)
   client         clients   @relation(fields: [client_id], references: [id], onDelete: Cascade)
+}
+
+// Per-client, per-program MEASUREMENT settings — how a program is recorded, not what it aims for.
+// Distinct from `stos`: that table holds short-term OBJECTIVES (baseline/goal/target date) and carries no
+// unique constraint because one target accumulates many objectives over time; this one is unique per
+// program because a program has exactly one trial count. Kept out of clinical_profile because the natural
+// placement (inside maladaptiveBehaviors[]/replacementBehaviors[]) is rebuilt wholesale by every
+// reassessment, and a sibling top-level key would be reverted by the profile-restore undo. See migration
+// 20260828000000_monthly_datasheet_fields.
+//
+// program_name is a SOFT reference matched by name against clinical_profile / behavior_name /
+// replacement_skill — none of which have a canonical key — so a rename orphans the config rather than
+// corrupting it. CASCADE on client delete: this is configuration, not evidence.
+model program_config {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id          String   @db.Uuid
+  program_name       String
+  program_type       String   // 'maladaptive' | 'replacement'
+  trials_per_session Int?     // NULL = not configured; the caller decides its own fallback
+  mastery_criterion  String?  // free text, e.g. '80% across 3 consecutive sessions'
+  created_at         DateTime @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  client             clients  @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  // Leading column is client_id, so this also serves every "config for this client" lookup — a separate
+  // @@index([client_id]) would be redundant.
+  @@unique([client_id, program_name, program_type])
 }
 
 model progress_reports {
