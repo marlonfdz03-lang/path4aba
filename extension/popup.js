@@ -1652,6 +1652,12 @@ document.getElementById('showSingleReplBtn')?.addEventListener('click', (e) => {
 // ── Fetch + build the OP item-data map popup-side (CORS-safe via background.js) ──
 // Same preliminary pattern as runTasksOnOP: extract buId + month from the OP tab,
 // fetch the sheets through background.js, then parse with buildOpDataMap().
+// The injected autofiller has no closure over the popup's scripts, so the shared name
+// matcher has to be put into the OP page itself before the function is injected.
+async function injectNameMatch(tabId) {
+  await chrome.scripting.executeScript({ target: { tabId }, files: ['name-match.js'], world: 'MAIN' });
+}
+
 // Returns { ok: true, opDataMap } or { ok: false, error }.
 async function fetchOpDataMapForTab(tab) {
   return { ok: true, opDataMap: {} };
@@ -1734,6 +1740,7 @@ async function runSingleAutofill(type) {
     if (!tab?.id) { setStatus(statusId, 'No Office Puzzle tab found. Open the datasheet first.', true); return; }
     const opData = await fetchOpDataMapForTab(tab);
     if (!opData.ok) { setStatus(statusId, opData.error, true); return; }
+    await injectNameMatch(tab.id);
     const result = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: officePuzzleDatasheetAutofiller, args: [tasks, opData.opDataMap], world: 'MAIN' });
     const log  = result?.[0]?.result || [];
     const errs = log.filter(l => l.startsWith('❌'));
@@ -2049,6 +2056,7 @@ async function runWeekAutofill(type) {
     // with an empty map). Maladaptives still require the map.
     if (!opData.ok && type !== 'replacement') { setStatus(statusId, opData.error, true); return; }
     const opDataMap = opData.opDataMap || {};
+    await injectNameMatch(tab.id);
     const result = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: officePuzzleDatasheetAutofiller, args: [tasks, opDataMap], world: 'MAIN' });
     const log  = result?.[0]?.result || [];
     const errs = log.filter(l => l.startsWith('❌'));
@@ -2797,45 +2805,11 @@ document.getElementById('extractChartsBtn').addEventListener('click', async () =
       ...(selectedProfile?.skillAcquisition || []),
     ].map(s => typeof s === 'string' ? s : s?.name || '').filter(Boolean);
 
+    // RESOLUTION tier — `shared2`. Two shared words rather than one, so two unrelated
+    // programs sharing a single word ("routines", "play") are not merged into one series.
     function resolveChartName(chartName, isReplacement) {
       const pool = isReplacement ? profileSkills : profileBehaviors;
-      function norm(s) {
-        return s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
-      }
-      const cn = norm(chartName);
-
-      // Exact (normalized) match — strips punctuation so "SIB" === "sib"
-      const exact = pool.find(n => norm(n) === cn);
-      if (exact) {
-        const winner = exact.length >= chartName.length ? exact : chartName;
-        return { resolvedName: winner, matched: true };
-      }
-
-      // Substring match — both directions
-      const partial = pool.find(n => {
-        const nl = norm(n);
-        return nl.includes(cn) || cn.includes(nl);
-      });
-      if (partial) {
-        const winner = partial.length >= chartName.length ? partial : chartName;
-        return { resolvedName: winner, matched: true };
-      }
-
-      // Shared meaningful word match — require AT LEAST 2 shared words (words longer
-      // than 2 chars) so two unrelated behaviors sharing a single word (e.g. "routines"
-      // or "play") don't falsely match and get merged.
-      const cnWords = cn.split(' ').filter(w => w.length > 2);
-      const wordMatch = pool.find(n => {
-        const nWords = new Set(norm(n).split(' ').filter(w => w.length > 2));
-        const sharedCount = cnWords.filter(w => nWords.has(w)).length;
-        return sharedCount >= 2;
-      });
-      if (wordMatch) {
-        const winner = wordMatch.length >= chartName.length ? wordMatch : chartName;
-        return { resolvedName: winner, matched: true };
-      }
-
-      return { resolvedName: chartName, matched: false };
+      return window.P4NameMatch.resolveName(chartName, pool, 'shared2');
     }
 
     extractedCharts = rawCharts.map(c => {
@@ -3021,6 +2995,13 @@ document.getElementById('saveChartsBtn').addEventListener('click', async () => {
 // Intercepts OP's own page-load GETs to capture item IDs + existing records, then
 // POSTs complete trial patterns directly to the OP API — no DOM clicks needed.
 async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
+  // An injected `func:` carries ONLY its own body — no closure, no imports. That is why the
+  // two h4 matchers below used to be inline copies of the normalizer. name-match.js is now
+  // injected into this page first (see injectNameMatch), so both reach the one shared
+  // implementation instead. If it is missing, fail loudly rather than silently mismatching.
+  const P4 = window.P4NameMatch;
+  if (!P4) return ['❌ Name matcher failed to load into the Office Puzzle page. Reload the tab and try again.'];
+
   // ── Helpers ──────────────────────────────────────────────────────────────────
   function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
 
@@ -3093,19 +3074,6 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
     }
 
     return targetCol;
-  }
-
-  // Fuzzy match: do two behavior/skill names refer to the same target?
-  function namesMatch(a, b) {
-    function norm(s) {
-      return s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
-    }
-    const al = norm(a), bl = norm(b);
-    if (al === bl) return true;
-    if (al.includes(bl) || bl.includes(al)) return true;
-    const aWords = al.split(' ').filter(w => w.length > 2);
-    const bWords = new Set(bl.split(' ').filter(w => w.length > 2));
-    return aWords.some(w => bWords.has(w));
   }
 
   // Return the first <table> after h4El in DOM order that has a "Days" row (cells[0] === "Days")
@@ -3185,18 +3153,12 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
         // DOM click approach — find the table for this behavior and click cells
         const orderedElements = Array.from(document.querySelectorAll('h4, table'));
         const h4Els = orderedElements.filter(el => el.tagName === 'H4');
-        const h4El = h4Els.find(h => {
-          // OP wraps the skill name in quotes — strip leading/trailing quotes first.
-          // Stricter than namesMatch for h4 lookup: exact or substring only, NO
-          // shared-word tier — otherwise "Defiant Behavior", "Off-Task Behavior",
-          // and "Self-Injurious Behavior (SIB)" all wrongly match "Disruptive
-          // Behavior" via the shared word "Behavior".
-          const raw = h.innerText.trim().replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
-          const norm = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
-          const nt = norm(raw);
-          const nn = norm(name);
-          return nt === nn || nt.includes(nn) || nn.includes(nt);
-        });
+        // APPLY tier — `strict`. Never widen this: "Defiant Behavior", "Off-Task Behavior"
+        // and "Self-Injurious Behavior (SIB)" all share the word "Behavior" with "Disruptive
+        // Behavior", and a shared-word match here writes a frequency onto the wrong target.
+        // The shared matcher also strips OP's quoting and applies the acronym layer, which is
+        // what finally lets "Self-Injurious Behavior (SIB)" match "Self-Injury Behaviors (SIB)".
+        const h4El = h4Els.find(h => P4.namesMatch(h.innerText, name, 'strict'));
         if (!h4El) {
           log.push(`❌ "${name}" day ${task.dayNumber} — h4 not found in DOM`);
           await delay(300);
@@ -3218,17 +3180,9 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
             const orderedEls = Array.from(document.querySelectorAll('h4, table'));
             let pastH4 = false;
             for (const el of orderedEls) {
-              // OP wraps the skill name in quotes — strip them before matching.
-              // Stricter than namesMatch: exact or substring only, NO shared-word
-              // tier (avoids matching the wrong behavior on a shared word).
+              // Same APPLY tier as the maladaptive lookup above — one implementation.
               if (el.tagName === 'H4') {
-                const raw = el.innerText.trim().replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
-                const norm = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
-                const nt = norm(raw);
-                const nn = norm(name);
-                if (nt === nn || nt.includes(nn) || nn.includes(nt)) {
-                  pastH4 = true; continue;
-                }
+                if (P4.namesMatch(el.innerText, name, 'strict')) { pastH4 = true; continue; }
               }
               if (pastH4 && el.tagName === 'TABLE' &&
                   el.innerText.includes('Trial 1') &&

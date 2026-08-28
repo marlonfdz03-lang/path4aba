@@ -605,17 +605,17 @@ function buildWeekCard(weekStart, items) {
 // replacement pattern. Serialized by chrome.scripting.executeScript, so it must be
 // fully self-contained: every helper it uses is declared inside it.
 async function opReadReplacementPattern(skills, days) {
+  // An injected func carries only its own body, so the shared matcher has to already be in
+  // the page — injectNameMatch() puts it there before this runs.
+  if (!window.P4NameMatch) return [];
   const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
-  function namesMatch(a, b) {
-    const norm = s => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
-    const al = norm(a), bl = norm(b);
-    if (al === bl) return true;
-    if (al.includes(bl) || bl.includes(al)) return true;
-    const aWords = al.split(' ').filter(w => w.length > 2);
-    const bWords = new Set(bl.split(' ').filter(w => w.length > 2));
-    return aWords.some(w => bWords.has(w));
-  }
+  // PREVIEW tier. This read-only pass has always used the widest tier; the APPLY path uses
+  // `strict`. That difference is a known divergence (a preview can describe a skill the apply
+  // will not find) — it is preserved here rather than silently changed, and is now visible as a
+  // named tier instead of a third copy of the algorithm. See lib/nameMatch.ts.
+  const PREVIEW_TIER = 'loose';
+  const namesMatch = (a, b) => window.P4NameMatch.namesMatch(a, b, PREVIEW_TIER);
 
   function findDayColumn(table, dayNumber) {
     const day = parseInt(dayNumber, 10);
@@ -739,6 +739,7 @@ async function readReplacementPattern(tab, corrections, workedDays) {
     dateStr,
     dayNumber: new Date(dateStr + 'T00:00:00').getDate(),
   }));
+  await injectNameMatch(tab.id);
   const [res] = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: opReadReplacementPattern,
@@ -1010,6 +1011,7 @@ async function runTasksOnOP(tasks) {
     }
     const opDataMap = {};
 
+    await injectNameMatch(tab.id);
     const result = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: officePuzzleDatasheetAutofiller,

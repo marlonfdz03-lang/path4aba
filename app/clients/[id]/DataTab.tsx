@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { buildProjection, hashStr, mulberry32 } from "@/lib/projection";
+import { namesMatch } from "@/lib/nameMatch";
 import {
   Area,
   AreaChart,
@@ -32,18 +33,12 @@ interface WeekPoint {
 
 const ANOMALY_THRESHOLD = 5;
 
-function normName(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function fuzzyNamesMatch(a: string, b: string): boolean {
-  const al = normName(a), bl = normName(b);
-  if (al === bl) return true;
-  if (al.includes(bl) || bl.includes(al)) return true;
-  const aWords = al.split(" ").filter((w) => w.length > 2);
-  const bWords = new Set(bl.split(" ").filter((w) => w.length > 2));
-  return aWords.some((w) => bWords.has(w));
-}
+// GROUPING tier. `loose` (exact / substring / >= 1 shared word) is what this tab has
+// always used to fold record groups together — it is the widest tier, so two behaviors
+// sharing a single word land in one row. Kept as-is here rather than silently narrowed;
+// see lib/nameMatch.ts for the tier definitions.
+const GROUPING_TIER = "loose" as const;
+const fuzzyNamesMatch = (a: string, b: string) => namesMatch(a, b, GROUPING_TIER);
 
 function fmtWeek(week: string): string {
   if (!week || week === "?") return "";

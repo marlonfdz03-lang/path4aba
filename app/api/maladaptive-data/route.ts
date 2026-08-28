@@ -3,40 +3,16 @@ import { getExtensionAuth } from '@/lib/extensionAuth'
 import { Pool } from 'pg'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@/lib/generated/prisma/client'
+import { canonicalName } from '@/lib/nameMatch'
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter } as any)
 
-// Normalize a program name for fuzzy comparison: lowercase, strip punctuation
-// to spaces, collapse whitespace. "Self-Injurious Behavior (SIB)" -> "self injurious behavior sib"
-function normName(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ')
-    .replace(/\s+/g, ' ').trim()
-}
-
-// If `incoming` fuzzy-matches an already-stored name, return that existing
-// (canonical) name so all data consolidates under one series. Otherwise return
-// `incoming` unchanged. Match = exact (normalized), substring, or >= 2 shared
-// words longer than 2 chars.
-function canonicalName(incoming: string, existingNames: string[]): string {
-  if (!incoming) return incoming
-  const inNorm = normName(incoming)
-  if (!inNorm) return incoming
-  const inWords = new Set(inNorm.split(' ').filter(w => w.length > 2))
-  for (const name of existingNames) {
-    const exNorm = normName(name)
-    if (!exNorm) continue
-    if (exNorm === inNorm) return name
-    if (exNorm.includes(inNorm) || inNorm.includes(exNorm)) return name
-    let shared = 0
-    for (const w of exNorm.split(' ')) {
-      if (w.length > 2 && inWords.has(w)) shared++
-    }
-    if (shared >= 2) return name
-  }
-  return incoming
-}
+// CONSOLIDATION tier: fold an incoming name onto an already-stored one so all data lands
+// on one series. `shared2` (exact / substring / >= 2 shared words) is the tier this route
+// has always used — see lib/nameMatch.ts for why the tiers are named rather than re-derived.
+const CONSOLIDATION_TIER = 'shared2' as const
 
 export async function GET(req: Request) {
   const user = await getExtensionAuth()
@@ -143,7 +119,7 @@ export async function POST(req: Request) {
 
     const results = await Promise.all(
       records.map(async (r) => {
-        const behaviorName = canonicalName(r.behaviorName, namesByClient.get(r.clientId) ?? [])
+        const behaviorName = canonicalName(r.behaviorName, namesByClient.get(r.clientId) ?? [], CONSOLIDATION_TIER)
 
         // Upsert: if a record for the same client+behavior+week already exists, update it.
         const existing = r.weekStart
