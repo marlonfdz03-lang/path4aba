@@ -70,7 +70,24 @@ export async function GET() {
   let extractedSample = "";
   let error: string | null = null;
   let pdfjsVersion = "?";
+  let workerHandler = "not-reached";
   try {
+    // Preload the worker handler for MAIN-THREAD mode, BEFORE importing pdf.mjs. pdf.mjs loads its worker via
+    // a RUNTIME VARIABLE (import(this.workerSrc)) that @vercel/nft cannot follow, so pdf.worker.mjs was pruned
+    // from the standalone build and the fake-worker setup failed. Importing it here by LITERAL specifier both
+    // (a) makes nft trace pdf.worker.mjs into the bundle, and (b) lets us hand its WorkerMessageHandler to
+    // pdfjs via globalThis.pdfjsWorker — pdfjs then runs the worker on the MAIN THREAD and never imports the
+    // external file. ??= so a real handler (if one is ever present) is never clobbered.
+    const g = globalThis as any;
+    if (g.pdfjsWorker?.WorkerMessageHandler) {
+      workerHandler = "already-present";
+    } else {
+      // @ts-ignore - pdfjs-dist ships no type declarations for this subpath.
+      const wk: any = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
+      g.pdfjsWorker ??= { WorkerMessageHandler: wk.WorkerMessageHandler };
+      workerHandler = "installed";
+    }
+
     // DYNAMIC import with a LITERAL specifier — required (a static import is hoisted ahead of the stubs above
     // by ESM, which is what caused the 500). @vercel/nft traces literal dynamic imports into the Next.js
     // standalone build the same as static ones, so pdfjs stays in the bundle; and if that ever failed, it now
@@ -109,6 +126,9 @@ export async function GET() {
     // Per stub: "installed-stub" = we added it (Azure has no canvas here); "already-present" = a real impl
     // (e.g. @napi-rs/canvas) was already on globalThis and we left it untouched.
     stubs,
+    // "installed" = we preloaded pdf.worker.mjs into globalThis.pdfjsWorker (main-thread mode);
+    // "already-present" = a handler was already there and we left it. "not-reached" = threw before this ran.
+    workerHandler,
     // Only the notices that decide the go/no-go; font notices are expected and filtered so they don't drown
     // a real failure.
     warnings: warnings.filter((x) => /worker|DOMMatrix|Path2D|canvas|font/i.test(x)),
