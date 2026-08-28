@@ -66,7 +66,11 @@ export async function extractTextWithPdfjs(data: Uint8Array | Buffer): Promise<s
   await ensurePdfjsRuntime();
   // @ts-ignore - pdfjs-dist ships no type declarations for this subpath.
   const pdfjs: any = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+  // pdfjs 5.x EXPLICITLY rejects a Node Buffer ("Please provide binary data as `Uint8Array`, rather than
+  // `Buffer`") even though Buffer IS a Uint8Array subclass — so `instanceof Uint8Array` is not enough. Coerce
+  // anything that is not a PLAIN Uint8Array (Buffer, ArrayBuffer view) into a fresh plain Uint8Array. parsePdf
+  // passes a Buffer, so without this the fallback throws and silently degrades to pd2json on every real upload.
+  const bytes = data.constructor === Uint8Array ? (data as Uint8Array) : new Uint8Array(data);
   const doc = await pdfjs.getDocument({
     data: bytes,
     useSystemFonts: true,
