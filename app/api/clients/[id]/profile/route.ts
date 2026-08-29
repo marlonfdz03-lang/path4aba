@@ -3,6 +3,7 @@ import { auth } from '@/auth'
 import { Pool } from 'pg'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@/lib/generated/prisma/client'
+import { canAccessClient } from '@/lib/clientFiles'
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 const adapter = new PrismaPg(pool)
@@ -22,10 +23,12 @@ export async function PATCH(
 ) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  // STILL OPEN (Tier 2, out of scope): session-only — no ownership check (rbt_id / bcba_clients), so any
-  // authenticated user can PATCH any client's profile fields. Consistent with the other Tier 1 routes.
 
   const { id } = await params
+
+  // Ownership gate (shared rule): the client's assigned RBT, a connected BCBA, or an admin. Fails closed.
+  if (!(await canAccessClient(session, id)))
+    return NextResponse.json({ error: 'You do not have access to this client.' }, { status: 403 })
 
   let body: any
   try {

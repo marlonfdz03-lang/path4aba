@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { canAccessClient } from '@/lib/clientFiles'
 import { filterBlockedNarrative } from '@/lib/blockedNarrativeTerms'
 import { buildBlockedFilterContext } from '@/lib/noteFilterContext'
 import { emitAdminAlert } from '@/lib/adminAlerts'
@@ -13,6 +14,8 @@ export async function GET(req: Request) {
 
   const clientId = new URL(req.url).searchParams.get('clientId')
   if (!clientId) return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
+  if (!(await canAccessClient(session, clientId)))
+    return NextResponse.json({ error: 'You do not have access to this client.' }, { status: 403 })
 
   const notes = await prisma.session_notes.findMany({
     where: { client_id: clientId },
@@ -29,6 +32,8 @@ export async function POST(req: Request) {
   const userId = (session.user as any).id as string
   const { clientId, noteText, sessionDate, behaviorsAddressed, skillsAddressed, interventionsUsed, activitiesUsed, generationContext } = await req.json()
   if (!clientId || !noteText) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+  if (!(await canAccessClient(session, clientId)))
+    return NextResponse.json({ error: 'You do not have access to this client.' }, { status: 403 })
 
   // Block duplicate: check if identical note already exists for this client
   const existing = await prisma.session_notes.findFirst({
@@ -90,6 +95,13 @@ export async function DELETE(req: Request) {
 
   const id = new URL(req.url).searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+
+  // Resolve the note's owning client from its row id, then enforce ownership before deleting. A row whose
+  // client_id is NULL is owned by nobody → DENY (never mutable by anyone). Missing row → 403, not 404 (leak
+  // nothing about which ids exist).
+  const row = await prisma.session_notes.findUnique({ where: { id }, select: { client_id: true } })
+  if (!row?.client_id || !(await canAccessClient(session, row.client_id)))
+    return NextResponse.json({ error: 'You do not have access to this note.' }, { status: 403 })
 
   await prisma.session_notes.delete({ where: { id } })
   return NextResponse.json({ ok: true })

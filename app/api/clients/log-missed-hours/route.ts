@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { canAccessClient } from '@/lib/clientFiles'
 
 
 export const dynamic = 'force-dynamic'
@@ -17,6 +18,10 @@ export async function POST(req: Request) {
   if (!client_id || !date || !reason) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
+
+  // Unconditional ownership gate — never predicated on the attacker-controlled field being present.
+  if (!(await canAccessClient(session, client_id)))
+    return NextResponse.json({ error: 'You do not have access to this client.' }, { status: 403 })
 
   await prisma.missed_hours.create({
     data: {
