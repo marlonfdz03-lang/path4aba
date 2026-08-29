@@ -84,6 +84,12 @@ export type AlertType =
   // menu extraction (Felix-class). Recorded distinctly from _read so "found but could not read safely" is
   // visible, never silent. Payload: { heading, spanChars, gate }. Severity 'warning'.
   | 'assessment.intervention_section_oversized'
+  // An extension bearer token was rejected because it had been IDLE longer than the sliding window
+  // (lib/extensionTokenExpiry). The row is NOT deleted — it stops authenticating and the extension shows its
+  // "Session expired" re-login. The rate of these tells us whether real active users are hitting the window
+  // (too aggressive) vs only abandoned/leaked tokens. Payload: { daysIdle } — NEVER the token value or hash;
+  // the user is in actor_user_id. Severity 'warning'.
+  | 'extension.token_expired'
 
 export interface AdminAlertInput {
   source: AlertSource

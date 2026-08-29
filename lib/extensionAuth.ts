@@ -1,6 +1,8 @@
 import { headers } from 'next/headers'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { isTokenExpired, tokenIdleMs } from '@/lib/extensionTokenExpiry'
+import { emitAdminAlert } from '@/lib/adminAlerts'
 import crypto from 'crypto'
 
 export interface ExtensionUser {
@@ -28,6 +30,20 @@ export async function getExtensionAuth(): Promise<ExtensionUser | null> {
           include: { user: { select: { id: true, role: true, email: true, data_tab_enabled: true } } },
         })
         if (record?.user) {
+          // SLIDING IDLE-WINDOW EXPIRY: deny a token unused for longer than the window (leaked-then-idle, or
+          // a departed user's). Checked BEFORE the last_used_at refresh so a dead token is never resurrected
+          // by bumping its timestamp. The row is NOT deleted — it simply stops authenticating (audit trail
+          // preserved). isTokenExpired fails closed on a bad date; a throw here falls to the catch below (deny).
+          if (isTokenExpired(record.last_used_at, record.created_at)) {
+            await emitAdminAlert({
+              source: 'extension',
+              type: 'extension.token_expired',
+              severity: 'warning',
+              actorUserId: record.user.id,
+              payload: { daysIdle: Math.floor(tokenIdleMs(record.last_used_at, record.created_at) / 86400000) },
+            })
+            return null
+          }
           prisma.extension_tokens
             .update({ where: { id: record.id }, data: { last_used_at: new Date() } })
             .catch(() => {})
