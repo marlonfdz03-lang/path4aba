@@ -55,6 +55,11 @@ export type AlertType =
   // has less history to rotate over. Payload: { scanned, withSignal, window }. Severity 'info'
   // (diagnostic — a note that shipped fine, not an incident).
   | 'note.rotation_window_degraded'
+  // The rotation-history READ (readGenerationHistory) threw, so preselect ran with an EMPTY history — it
+  // still assigned every axis from the approved sets (the FIREWALL held), only LRU variety was lost. This is
+  // deliberately DISTINCT from note.preselect_failed: a rotation blip must never be read as a firewall drop.
+  // Payload: { message, name }. Severity 'info' (quality degradation, not a safety event).
+  | 'note.rotation_history_failed'
   // The save-time blocked-term backstop CAUGHT something: a note POSTED to a save route still contained a
   // blocked term the client should have already filtered (the Chrome extension can leave RAW text in
   // outputNote when the __META__ tail splits across network reads). We re-filtered it server-side before

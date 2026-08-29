@@ -432,8 +432,35 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   // distribution is still reportable on the outcome record when the preselect I/O fails.
   const behaviorTiers = assignTiers(input.complianceLevel, input.behaviorsObserved.length);
   const skillTiers = assignTiers(input.complianceLevel, input.replacementSkillsAddressed.length);
+  // ROTATION HISTORY (OPTIONAL) — the recent-notes window that lets preselect ROTATE its choices for variety.
+  // It is a DB read and the ONLY I/O in this section, so it is the failure most likely to throw. It degrades
+  // to "no rotation", NEVER to a dropped firewall: on failure we keep an EMPTY history (preselect still
+  // assigns from the approved sets — lruPick returns set[0] with no history — just without LRU variety) and
+  // record a DISTINCT alert, so a rotation blip stays separable from a real firewall drop in admin_alerts.
+  let history: Awaited<ReturnType<typeof readGenerationHistory>> = [];
   try {
-    const history = await readGenerationHistory(prisma, input.clientId, { window: 3 });
+    history = await readGenerationHistory(prisma, input.clientId, { window: 3 });
+  } catch (e: any) {
+    history = [];
+    await emitAdminAlert({
+      source: 'note',
+      type: 'note.rotation_history_failed',
+      severity: 'info',
+      actorUserId: rbtId,
+      clientId: input.clientId,
+      payload: { message: e?.message || String(e), name: e?.name || null },
+    });
+  }
+
+  // PRESELECTION LOCK — THE FIREWALL, NOT best-effort. Preselect assigns every clinical axis from the client's
+  // APPROVED sets, and buildFixedAssignmentsBlock turns that into the "narrate EXACTLY this, name nothing
+  // outside it" prompt block. It is the only thing that keeps a non-approved intervention/function out of the
+  // note. Rotation history is read SEPARATELY above precisely so a history hiccup can NEVER null this lock —
+  // an empty history degrades variety, not the firewall. Only a failure of the selection logic ITSELF drops
+  // the lock; when it does, the note falls back to unconstrained generation (the gates still enforce) and
+  // records note.preselect_failed so the drop is visible and counted. (Refuse-vs-unlocked on that path is
+  // deferred until admin_alerts gives a real rate.)
+  try {
     generationContext = preselect({
       behaviors: input.behaviorsObserved.map((b) => ({
         name: b.name,
@@ -453,13 +480,12 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     });
     fixedAssignmentsBlock = buildFixedAssignmentsBlock(generationContext);
   } catch (e: any) {
-    // Preselection is best-effort: if history read or selection fails, fall back to the pre-preselection
-    // path (GPT chooses, the gates still enforce). A rotation hiccup must never cost a note.
-    // FALLBACK BEHAVIOR IS UNCHANGED — the two assignments below are exactly what this catch always did.
+    // The FIREWALL was dropped: the note will generate UNCONSTRAINED (the gates still enforce). This type
+    // means specifically "the lock was dropped" — distinct from note.rotation_history_failed above. Behavior
+    // is unchanged (deferred until we have production numbers). approvedInterventions/approvedMethod emptiness
+    // separates a config gap from a code error.
     generationContext = null;
     fixedAssignmentsBlock = '';
-    // The error used to be discarded by a bare `catch {}`, which is why notes exist with a NULL
-    // generation_context and no record of why. Observability only: the alert never alters the fallback.
     await emitAdminAlert({
       source: 'note',
       type: 'note.preselect_failed',
@@ -470,8 +496,6 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
         message: e?.message || String(e),
         name: e?.name || null,
         stack: e?.stack || null,
-        // The two locked sets preselection needs. Empty ones are the likeliest cause of a selection
-        // failure (as opposed to the history read failing), so they separate a config gap from a DB blip.
         approvedInterventionsEmpty: !(resolvedProfile.approvedInterventions ?? []).length,
         approvedMethodSetEmpty: !approvedMethodSet.length,
       },
