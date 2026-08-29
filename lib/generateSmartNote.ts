@@ -163,7 +163,7 @@ function buildContextualFactors(input: SessionInput): string {
       `- Do NOT use it as an ABC antecedent.\n` +
       `- Do NOT write "the RBT implemented Environmental Modification" — or any intervention clause — because of it.\n` +
       `- Do NOT infer or invent any effect on the client's behavior, compliance, latency, or frequency from it. Document only what the RBT reported.\n` +
-      `The rest of the note proceeds normally: the marked behaviors, their approved interventions, the skills, and the closing are unchanged.`
+      `The rest of the note proceeds normally: the marked behaviors, the interventions specified in this client's assessment, the skills, and the closing are unchanged.`
     );
   }
 

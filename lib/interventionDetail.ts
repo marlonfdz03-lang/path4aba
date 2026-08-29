@@ -91,10 +91,10 @@ export function buildInterventionDetail(approved: string[] | undefined | null): 
   if (!blocks.length) return ''
   return (
     `\n\n═══════════════════════════════════════\n` +
-    `INTERVENTION DOCUMENTATION DETAIL — ONLY the interventions THIS client's plan approves\n` +
+    `INTERVENTION DOCUMENTATION DETAIL — ONLY the interventions specified in THIS client's assessment\n` +
     `═══════════════════════════════════════\n` +
     `These are the procedures you may name. An intervention absent from this section is absent from ` +
-    `this client's approved plan: never name it, not for variety, not as an example, not even once.\n\n` +
+    `this client's documented intervention plan: never name it, not for variety, not as an example, not even once.\n\n` +
     blocks.join('\n\n')
   )
 }
