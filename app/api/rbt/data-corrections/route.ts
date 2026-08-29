@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getExtensionAuth } from '@/lib/extensionAuth'
+import { principalCanAccessClient, principalCanAccessRow } from '@/lib/clientFiles'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -11,6 +12,8 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const clientId = searchParams.get('clientId')
   if (!clientId) return NextResponse.json({ error: 'clientId required' }, { status: 400 })
+  if (!(await principalCanAccessClient({ id: user.id, role: user.role }, clientId)))
+    return NextResponse.json({ error: 'You do not have access to this client.' }, { status: 403 })
 
   try {
     const [replRows, maladRows] = await Promise.all([
@@ -84,19 +87,22 @@ export async function PATCH(req: Request) {
     const { id, type } = await req.json()
     if (!id || !type) return NextResponse.json({ error: 'id and type required' }, { status: 400 })
 
-    if (type === 'replacement') {
-      await prisma.replacement_data.update({
-        where: { id },
-        data: { autofill_completed: true },
-      })
-    } else if (type === 'maladaptive') {
-      await prisma.maladaptive_data.update({
-        where: { id },
-        data: { autofill_completed: true },
-      })
-    } else {
-      return NextResponse.json({ error: 'Invalid type' }, { status: 400 })
-    }
+    // `type` selects the table for BOTH the ownership lookup AND the mutation — resolved to ONE delegate
+    // here so they can never diverge. An unexpected/invalid type is rejected before any DB access, so a
+    // caller cannot point the ownership lookup at a table where the id happens to be theirs while the write
+    // lands on another table.
+    const model: any =
+      type === 'replacement' ? prisma.replacement_data :
+      type === 'maladaptive' ? prisma.maladaptive_data :
+      null
+    if (!model) return NextResponse.json({ error: 'Invalid type' }, { status: 400 })
+
+    // Resolve the row's owning client from the SAME table; deny on missing row / null client_id / non-owner.
+    if (!(await principalCanAccessRow({ id: user.id, role: user.role }, (rid) =>
+      model.findUnique({ where: { id: rid }, select: { client_id: true } }), id)))
+      return NextResponse.json({ error: 'You do not have access to this row.' }, { status: 403 })
+
+    await model.update({ where: { id }, data: { autofill_completed: true } })
 
     return NextResponse.json({ ok: true })
   } catch (err: any) {
