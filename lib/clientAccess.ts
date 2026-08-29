@@ -25,3 +25,24 @@ export async function principalCanAccessClient(
     return false
   }
 }
+
+// The SAME rule for an id-based mutation, where the request carries a raw row id but no clientId. The row's
+// owning client is resolved via `resolveClientId` (a table-specific one-liner supplied by the caller), then
+// the identical ownership decision applies. DENIES on: a resolver that throws (fail closed), a missing row,
+// a row whose client_id is NULL (owned by nobody → mutable by no one), or non-ownership. This keeps the
+// resolve→null-deny→ownership→fail-closed logic in ONE place across every id-based route.
+export async function principalCanAccessRow(
+  principal: { id?: string | null; role?: string | null } | null | undefined,
+  resolveClientId: (id: string) => Promise<{ client_id: string | null } | null>,
+  id: string,
+  ownsFn: (userId: string, clientId: string) => Promise<boolean>,
+): Promise<boolean> {
+  let clientId: string | null | undefined
+  try {
+    const row = await resolveClientId(id)
+    clientId = row?.client_id ?? null
+  } catch {
+    return false // fail closed: a lookup that throws must DENY
+  }
+  return principalCanAccessClient(principal, clientId, ownsFn)
+}

@@ -1,5 +1,8 @@
 import { prisma } from '@/lib/prisma'
-import { principalCanAccessClient as principalCanAccessClientCore } from '@/lib/clientAccess'
+import {
+  principalCanAccessClient as principalCanAccessClientCore,
+  principalCanAccessRow as principalCanAccessRowCore,
+} from '@/lib/clientAccess'
 
 // Shared helpers for storing/serving uploaded source assessment PDFs (client_files table).
 // ⚠️ These persist the FULL, UN-REDACTED source document (name, DOB, possibly Medicaid ID) as bytea —
@@ -33,6 +36,16 @@ export async function principalCanAccessClient(
   clientId: string | null | undefined,
 ): Promise<boolean> {
   return principalCanAccessClientCore(principal, clientId, userOwnsClient)
+}
+
+// Same rule for an id-based mutation: resolve the row's owning client via a table-specific selector, then
+// apply the shared ownership decision. Denies on throw / missing row / null client_id / non-ownership.
+export async function principalCanAccessRow(
+  principal: { id?: string | null; role?: string | null } | null | undefined,
+  resolveClientId: (id: string) => Promise<{ client_id: string | null } | null>,
+  id: string,
+): Promise<boolean> {
+  return principalCanAccessRowCore(principal, resolveClientId, id, userOwnsClient)
 }
 
 // PHI/ownership gate for a client's record (read, edit, delete). Accessible only to a user who OWNS the
