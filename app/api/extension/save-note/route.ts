@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getExtensionAuth } from '@/lib/extensionAuth'
+import { principalCanAccessClient } from '@/lib/clientFiles'
 import { prisma } from '@/lib/prisma'
 import { filterBlockedNarrative } from '@/lib/blockedNarrativeTerms'
 import { buildBlockedFilterContext } from '@/lib/noteFilterContext'
@@ -27,6 +28,8 @@ export async function POST(req: Request) {
   if (!client_id || !note_text) {
     return NextResponse.json({ error: 'Missing client_id or note_text' }, { status: 400 })
   }
+  if (!(await principalCanAccessClient({ id: user.id, role: user.role }, client_id)))
+    return NextResponse.json({ error: 'You do not have access to this client.' }, { status: 403 })
 
   // Block exact duplicate before fuzzy check
   const exactMatch = await prisma.session_notes.findFirst({

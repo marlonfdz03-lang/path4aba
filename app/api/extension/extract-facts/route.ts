@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getExtensionAuth } from '@/lib/extensionAuth'
+import { principalCanAccessClient } from '@/lib/clientFiles'
 import OpenAI from 'openai'
 import { prisma } from '@/lib/prisma'
 import { inferFunctionFromAntecedent, segmentNoteByBehavior, deriveBehaviorFunction, constrainFunctionToApproved, matrixFunctionsForBehavior } from '@/lib/functionPatterns'
@@ -250,6 +251,11 @@ export async function POST(req: Request) {
   // Undefined when never captured (the common case) — the constraint then narrows nothing.
   let capturedCatalog: { functions?: string[]; functionsByBehavior?: Record<string, string[]> } | undefined
   if (clientId) {
+    // A clientId is present → this reads that client's clinical_profile, so enforce ownership first. When
+    // clientId is ABSENT the route reads NO client data (it only processes the posted note/behaviors), so
+    // there is nothing to gate — the guard is scoped to the path that actually touches client data.
+    if (!(await principalCanAccessClient({ id: user.id, role: user.role }, clientId)))
+      return NextResponse.json({ error: 'You do not have access to this client.' }, { status: 403 })
     try {
       const client = await prisma.clients.findUnique({ where: { id: clientId }, select: { clinical_profile: true } })
       const profile = (client?.clinical_profile as any) || {}

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getExtensionAuth } from '@/lib/extensionAuth'
+import { principalCanAccessClient } from '@/lib/clientFiles'
 import { prisma } from '@/lib/prisma'
 
 export async function GET(req: Request) {
@@ -9,6 +10,8 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const clientId = searchParams.get('clientId')
   if (!clientId) return NextResponse.json({ error: 'clientId required' }, { status: 400 })
+  if (!(await principalCanAccessClient({ id: user.id, role: user.role }, clientId)))
+    return NextResponse.json({ error: 'You do not have access to this client.' }, { status: 403 })
 
   try {
     const [replCount, maladCount] = await Promise.all([

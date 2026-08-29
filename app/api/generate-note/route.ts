@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getExtensionAuth } from "@/lib/extensionAuth";
 import { generateSmartNote, SessionInput } from "@/lib/generateSmartNote";
 import { prisma } from "@/lib/prisma";
+import { principalCanAccessClient } from "@/lib/clientFiles";
 import { buildServerSessionInput, isSlimNoteRequest } from "@/lib/buildServerSessionInput";
 import { emitAdminAlert } from "@/lib/adminAlerts";
 
@@ -16,14 +17,30 @@ export async function POST(req: NextRequest) {
     // matrixFunctions / approvedInterventions are DERIVED, never client-supplied, and every entry point
     // gets the same gates. A FAT SessionInput (legacy clients, e.g. an un-updated extension in the wild)
     // is still accepted verbatim so those users don't break; deprecate once adoption is confirmed.
+    // AUTH FIRST — before any client fetch — then OWNERSHIP, then the profile fetch. This ordering also
+    // closes the pre-auth client-existence leak: the slim path used to fetch the client (404 vs 200) BEFORE
+    // authenticating, letting an unauthenticated caller probe which client ids exist. getExtensionAuth
+    // accepts a NextAuth session cookie (web) OR an extension Bearer token.
+    const authedUser = await getExtensionAuth();
+    if (!authedUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const userId: string = authedUser.id;
+
     const wasSlim = isSlimNoteRequest(body);
+    const requestedClientId: string | undefined = (body as any)?.clientId;
+    if (!requestedClientId) {
+      return NextResponse.json({ error: "clientId is required" }, { status: 400 });
+    }
+    // Ownership gate (shared rule) BEFORE the profile is read — a non-owner never reaches the DB fetch.
+    if (!(await principalCanAccessClient({ id: authedUser.id, role: authedUser.role }, requestedClientId))) {
+      return NextResponse.json({ error: "You do not have access to this client." }, { status: 403 });
+    }
+
     let input: SessionInput;
     if (wasSlim) {
-      if (!body.clientId) {
-        return NextResponse.json({ error: "clientId is required" }, { status: 400 });
-      }
       const client = await prisma.clients.findUnique({
-        where: { id: body.clientId },
+        where: { id: requestedClientId },
         select: { clinical_profile: true, diagnosis: true },
       });
       if (!client) {
@@ -75,18 +92,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error }, { status: 400 });
     }
 
-    // Authentication (Tier 1): accept a NextAuth session cookie (web) OR an extension Bearer token,
-    // and 401 when neither resolves a user — this closes the anonymous-read hole (the route previously
-    // called auth() and discarded the result). getExtensionAuth returns the user IDENTITY, so Tier 2 can
-    // add an rbt_id / bcba_clients OWNERSHIP check on authedUser.id — which is STILL MISSING here: any
-    // authenticated user can currently still generate a note for any clientId. Residual (remediation #12):
-    // extension tokens have no expiry/rotation, so this gates on a credential valid until revoked.
-    const authedUser = await getExtensionAuth();
-    if (!authedUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    const userId: string = authedUser.id;
-
+    // (Auth + ownership already enforced at the top, before the profile fetch.) Extension tokens still have
+    // no expiry/rotation (remediation #12), so this gates on a credential valid until revoked.
     const encoder = new TextEncoder();
     // Whether real note prose reached the client before a failure. A note that died before its first
     // token and one that died mid-paragraph are different incidents (the second usually means the
