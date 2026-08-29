@@ -5,6 +5,8 @@ import { extractAssessment } from "@/lib/extractAssessment";
 import { parsePdf, saveKnowledgeBase, buildAssessmentProfile } from "@/lib/assessmentPipeline";
 import { validateAssessmentProfile, buildRefreshedProfile } from "@/lib/assessmentRefresh";
 import { activeBehaviorsForSelection } from "@/lib/activePrograms";
+import { resolveInterventionSection, mergeInterventions, MAX_INTERVENTION_SPAN } from "@/lib/interventionSection";
+import { emitAdminAlert } from "@/lib/adminAlerts";
 import { assembleRefreshProfile } from "@/lib/assembleRefreshProfile";
 import { parsePositioned, clusterRows } from "@/lib/pdfGeometry";
 import { diagnosisColumn } from "@/lib/diagnosis";
@@ -63,6 +65,21 @@ export async function POST(req: Request) {
     const extracted = await extractAssessment(packet);
     saveKnowledgeBase(extracted).catch((e) => console.error("KB save error (reprocess):", e));
 
+    // DEDICATED INTERVENTIONS PASS (single call, gated on the section fitting the stable window) — see the
+    // live upload path. Reads the document's own enumerated list when small enough; large/spread sections
+    // (Felix-class) fall back to whole-packet + menu, recorded distinctly. Fail-soft.
+    let interventionSectionOversized = false;
+    try {
+      const sec = await resolveInterventionSection(text);
+      if (sec.outcome === "read") {
+        extracted.approvedInterventions = mergeInterventions(extracted.approvedInterventions || [], sec.names, text);
+        await emitAdminAlert({ source: "system", type: "assessment.intervention_section_read", severity: "info", clientId, payload: { heading: sec.heading, windowChars: sec.windowChars, dedicatedCount: sec.names.length, mergedCount: extracted.approvedInterventions.length } });
+      } else if (sec.outcome === "oversized") {
+        interventionSectionOversized = true;
+        await emitAdminAlert({ source: "system", type: "assessment.intervention_section_oversized", severity: "warning", clientId, payload: { heading: sec.heading, spanChars: sec.span, gate: MAX_INTERVENTION_SPAN } });
+      }
+    } catch { /* fail-soft: keep the whole-packet interventions */ }
+
     const llmProfile = buildAssessmentProfile(extracted);
     const geomRows = clusterRows(await parsePositioned(buffer));
     const { profile: assessmentProfile, reviewFlags, confidence } = assembleRefreshProfile(llmProfile, geomRows, existingProfile);
@@ -95,6 +112,10 @@ export async function POST(req: Request) {
     for (const b of activeBehaviorsForSelection(refreshed)) {
       if (b.incomplete) reviewFlags.push({ field: `behavior:${b.name}`, source: "behavior-incomplete", reason: `missing ${b.missing.join(" and ")}` });
     }
+
+    // INTERVENTION-SECTION-UNREAD: enumerated section found but too large to read safely — list came from
+    // the whole-packet + menu fallback; surface it to the RBT/BCBA.
+    if (interventionSectionOversized) reviewFlags.push({ field: "interventions", source: "intervention-section-unread", reason: "enumerated interventions section exceeded the safe read window; list compiled from the whole document" });
 
     (refreshed as any).reviewFlags = reviewFlags;
     // MARKER — visible which clients have been through the current pipeline (survives the refresh spread).

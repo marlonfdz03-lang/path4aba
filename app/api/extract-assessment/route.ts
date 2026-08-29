@@ -6,6 +6,8 @@ import { parsePdf, mapToLegacyFormat, saveKnowledgeBase, buildAssessmentProfile 
 import { isPdf, MAX_FILE_BYTES, storeClientFile, userOwnsClient } from "@/lib/clientFiles";
 import { validateAssessmentProfile, buildRefreshedProfile } from "@/lib/assessmentRefresh";
 import { activeBehaviorsForSelection } from "@/lib/activePrograms";
+import { resolveInterventionSection, mergeInterventions, MAX_INTERVENTION_SPAN } from "@/lib/interventionSection";
+import { emitAdminAlert } from "@/lib/adminAlerts";
 import { diagnosisColumn } from "@/lib/diagnosis";
 import { parsePositioned, clusterRows } from "@/lib/pdfGeometry";
 import { assembleRefreshProfile } from "@/lib/assembleRefreshProfile";
@@ -96,6 +98,23 @@ export async function POST(req: NextRequest) {
       // debugged and the RBT need not re-upload. STORING THE FILE DOES NOT MEAN THE PROFILE WAS UPDATED.
       await storeClientFile(clientId, (session.user as any).id, file, buffer);
 
+      // DEDICATED INTERVENTIONS PASS (single call, gated on the section fitting the stable window). When the
+      // assessment carries an enumerated interventions section small enough to read reproducibly, read the
+      // DOCUMENT'S OWN list and merge (union + source-presence filter) instead of the whole-packet extractor
+      // reciting the example menu. Large/spread sections (Felix-class) fall back to the whole-packet result
+      // unchanged, recorded distinctly (oversized alert + a reviewFlag below). Fail-soft: never blocks refresh.
+      let interventionSectionOversized = false;
+      try {
+        const sec = await resolveInterventionSection(text);
+        if (sec.outcome === "read") {
+          extracted.approvedInterventions = mergeInterventions(extracted.approvedInterventions || [], sec.names, text);
+          await emitAdminAlert({ source: "system", type: "assessment.intervention_section_read", severity: "info", clientId, payload: { heading: sec.heading, windowChars: sec.windowChars, dedicatedCount: sec.names.length, mergedCount: extracted.approvedInterventions.length } });
+        } else if (sec.outcome === "oversized") {
+          interventionSectionOversized = true;
+          await emitAdminAlert({ source: "system", type: "assessment.intervention_section_oversized", severity: "warning", clientId, payload: { heading: sec.heading, spanChars: sec.span, gate: MAX_INTERVENTION_SPAN } });
+        }
+      } catch { /* fail-soft: keep the whole-packet interventions */ }
+
       // Assessment-sourced keys, built wholesale (no cleanText/hasBlockedTerm — see buildAssessmentProfile).
       const llmProfile = buildAssessmentProfile(extracted);
       // FAST/MAS overlay (one PDF parse feeds text→LLM and positioned rows→geometry):
@@ -158,6 +177,10 @@ export async function POST(req: NextRequest) {
       for (const b of activeBehaviorsForSelection(refreshed)) {
         if (b.incomplete) reviewFlags.push({ field: `behavior:${b.name}`, source: "behavior-incomplete", reason: `missing ${b.missing.join(" and ")}` });
       }
+
+      // INTERVENTION-SECTION-UNREAD: the enumerated interventions section was found but too large to read
+      // safely (Felix-class), so the list came from the whole-packet + menu fallback — surface that to the RBT.
+      if (interventionSectionOversized) reviewFlags.push({ field: "interventions", source: "intervention-section-unread", reason: "enumerated interventions section exceeded the safe read window; list compiled from the whole document" });
 
       // reviewFlags is a non-clinical key (preserved by buildRefreshedProfile's spread) — surfaced to the
       // RBT/BCBA as a "Needs review" banner. A flagged field is an LLM fallback, never a verified read.

@@ -74,6 +74,16 @@ export type AlertType =
   // ('pdfjs' | 'pdf2json' if pdfjs then failed), signature, threshold, chars, pdfjsError? }. Severity 'info'
   // on a successful pdfjs re-extract, 'warning' when pdfjs threw and we fell back to the pd2json text.
   | 'assessment.extractor_fallback'
+  // The dedicated interventions pass READ the document's own enumerated section (heading matched and its span
+  // fit the stable single-call window), so the intervention list came from the document rather than the
+  // example menu. Payload: { heading, windowChars, dedicatedCount, mergedCount }. Severity 'info' — a good
+  // outcome; the rate of these rows is how often the dedicated read succeeds.
+  | 'assessment.intervention_section_read'
+  // The dedicated interventions pass FOUND the enumerated section (a distinctive heading matched) but its
+  // span EXCEEDED the stable window, so it was NOT read here — the profile fell back to the whole-packet +
+  // menu extraction (Felix-class). Recorded distinctly from _read so "found but could not read safely" is
+  // visible, never silent. Payload: { heading, spanChars, gate }. Severity 'warning'.
+  | 'assessment.intervention_section_oversized'
 
 export interface AdminAlertInput {
   source: AlertSource

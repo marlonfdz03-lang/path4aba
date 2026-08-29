@@ -11,7 +11,7 @@
 //   llm-fallback    · behaviors         (create path, no existing to preserve)
 //   behavior-review · behavior:<name>   (a single behavior whose name/function wasn't structural)
 
-export type ReviewFlagSource = "llm-fallback" | "guard-preserved" | "behavior-review" | "target-undefined" | "behavior-incomplete";
+export type ReviewFlagSource = "llm-fallback" | "guard-preserved" | "behavior-review" | "target-undefined" | "behavior-incomplete" | "intervention-section-unread";
 export interface ReviewFlagLike { field: string; reason?: string; source: ReviewFlagSource }
 
 const BEHAVIOR_PREFIX = "behavior:";
@@ -47,6 +47,9 @@ export function flagCopy(flag: ReviewFlagLike): string {
     return flag?.source === "llm-fallback"
       ? "The replacement-program list may be incomplete — the assessment appears to list more programs than could be read automatically. Please verify the replacement programs against the source."
       : "The replacement-program list was kept from the previous assessment because this upload's programs couldn't be read completely. Please review the replacement programs against the source.";
+
+  if (field === "interventions" && flag?.source === "intervention-section-unread")
+    return "This client's assessment has a large interventions section that couldn't be read directly — the intervention list was compiled from the whole document (the fallback method). Please verify it against the assessment.";
 
   if (field === "interventions")
     return flag?.source === "llm-fallback"
