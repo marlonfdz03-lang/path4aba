@@ -12,7 +12,7 @@ import { saveNote, getNotesByClientId, deleteNote } from "@/lib/noteStorage";
 import { DataTab } from "./DataTab";
 import { CatalogDiffPanel } from "./CatalogDiffPanel";
 import { reviewBannerLines } from "@/lib/reviewFlagCopy";
-import { activeBehaviors, activeSkills } from "@/lib/activePrograms";
+import { activeBehaviors, activeSkills, behaviorMissingFields, incompleteBehaviorReason } from "@/lib/activePrograms";
 import { splitReinforcerValue } from "@/lib/reinforcers";
 import { looksEdible, EDIBLE_WARNING } from "@/lib/edibleReinforcer";
 import { subtractMasteredFromActive } from "@/lib/skillReconcile";
@@ -1946,13 +1946,17 @@ export default function ClientProfilePage() {
                     const functions: string[] = typeof b === 'object' ? (b.functions || b.function || []) : [];
                     const funcLabel = functions.length > 0 ? functions.join(', ') : null;
                     const observedByBcba = bcbaOverlapContext?.behaviors?.includes(name);
+                    // Incomplete (no operational definition and/or function) → shown but NOT selectable; the
+                    // generator can't write its ABC. keepActiveBehaviorNames enforces the same rule server-side.
+                    const missing = behaviorMissingFields(b);
+                    const incomplete = missing.length > 0;
                     return (
                       <CheckboxRow
                         key={i}
                         name={name}
-                        description={observedByBcba ? `🔷 Observed by BCBA · Function: ${funcLabel || 'unknown'}` : funcLabel ? `Function: ${funcLabel}` : (typeof b === "object" ? b.topography : undefined)}
+                        description={incomplete ? incompleteBehaviorReason(missing) : observedByBcba ? `🔷 Observed by BCBA · Function: ${funcLabel || 'unknown'}` : funcLabel ? `Function: ${funcLabel}` : (typeof b === "object" ? b.topography : undefined)}
                         checked={selectedBehaviors.includes(name)}
-                        disabled={false}
+                        disabled={incomplete}
                         onToggle={() => toggleBehavior(name)}
                       />
                     );

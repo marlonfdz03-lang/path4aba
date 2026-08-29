@@ -11,7 +11,7 @@
 //   llm-fallback    · behaviors         (create path, no existing to preserve)
 //   behavior-review · behavior:<name>   (a single behavior whose name/function wasn't structural)
 
-export type ReviewFlagSource = "llm-fallback" | "guard-preserved" | "behavior-review" | "target-undefined";
+export type ReviewFlagSource = "llm-fallback" | "guard-preserved" | "behavior-review" | "target-undefined" | "behavior-incomplete";
 export interface ReviewFlagLike { field: string; reason?: string; source: ReviewFlagSource }
 
 const BEHAVIOR_PREFIX = "behavior:";
@@ -21,9 +21,15 @@ const TARGET_PREFIX = "target:";
 export function flagCopy(flag: ReviewFlagLike): string {
   const field = String(flag?.field || "");
 
-  // Per-behavior flag: field is "behavior:<name>" — strip the prefix and show just the name.
+  // Per-behavior flag: field is "behavior:<name>" — strip the prefix and show just the name. Two sources
+  // share this prefix, split here: 'behavior-incomplete' means the behavior WAS applied to the profile but
+  // is missing its operational definition and/or documented function, so it can't be used in a note yet;
+  // 'behavior-review' means the read itself is uncertain.
   if (field.startsWith(BEHAVIOR_PREFIX)) {
     const name = field.slice(BEHAVIOR_PREFIX.length).trim();
+    if (flag?.source === "behavior-incomplete") {
+      return `${name} was added to the profile but is missing its operational definition and/or documented function — it can't be used in a note until your BCBA completes it.`;
+    }
     return `One behavior may not have been read correctly — please verify: ${name}.`;
   }
 

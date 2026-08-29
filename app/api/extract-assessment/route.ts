@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { parsePdf, mapToLegacyFormat, saveKnowledgeBase, buildAssessmentProfile } from "@/lib/assessmentPipeline";
 import { isPdf, MAX_FILE_BYTES, storeClientFile, userOwnsClient } from "@/lib/clientFiles";
 import { validateAssessmentProfile, buildRefreshedProfile } from "@/lib/assessmentRefresh";
+import { activeBehaviorsForSelection } from "@/lib/activePrograms";
 import { diagnosisColumn } from "@/lib/diagnosis";
 import { parsePositioned, clusterRows } from "@/lib/pdfGeometry";
 import { assembleRefreshProfile } from "@/lib/assembleRefreshProfile";
@@ -150,6 +151,13 @@ export async function POST(req: NextRequest) {
       }
       if (!hasFunctionalAssessment) reviewFlags.push({ field: "functions", source: "llm-fallback", reason: "no functional-assessment (FAST/MAS) source was located — behavior functions are inferred, not documented; verify with the BCBA" });
       if (!behaviorDomainFound) reviewFlags.push({ field: "behaviors", source: "guard-preserved", reason: "the maladaptive-behavior section could not be located in this upload — behaviors were not refreshed from it" });
+
+      // PARTIAL-ACCEPT: an active behavior applied without a topography and/or function is flagged (not
+      // fatal) so the complete behaviors still refresh. Derived from the same predicate the note form and
+      // server backstop use, so a re-upload that fills the fields clears the flag automatically.
+      for (const b of activeBehaviorsForSelection(refreshed)) {
+        if (b.incomplete) reviewFlags.push({ field: `behavior:${b.name}`, source: "behavior-incomplete", reason: `missing ${b.missing.join(" and ")}` });
+      }
 
       // reviewFlags is a non-clinical key (preserved by buildRefreshedProfile's spread) — surfaced to the
       // RBT/BCBA as a "Needs review" banner. A flagged field is an LLM fallback, never a verified read.

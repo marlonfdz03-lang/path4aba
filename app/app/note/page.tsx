@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { type NoteClientProfile } from "./lib/noteProfile";
 import { consumeNoteStream } from "./lib/consumeNoteStream";
 import { extractInterventions } from "./lib/extractInterventions";
-import { activeBehaviors, activeSkills } from "@/lib/activePrograms";
+import { activeBehaviorsForSelection, activeSkills } from "@/lib/activePrograms";
 
 // ── Constants (mirror the website's note form) ──────────────────────────────
 const LOCATION_OPTIONS = [
@@ -486,7 +486,10 @@ function NoteForm() {
   // selectable (documenting it records work on a program that no longer exists). Mastered items stay in the
   // profile (progress reports / dashboard); they are only filtered out of what is selectable here. Only
   // ACTIVE skills (replacementBehaviors) are offered — skillAcquisition (mastered) is excluded.
-  const behaviors = activeBehaviors(profile.maladaptiveBehaviors || [], profile).map(getName).filter(Boolean);
+  // ACTIVE behaviors WITH completeness: an incomplete one (no operational definition and/or function) is
+  // shown but NOT selectable (Option B) — the generator has nothing to write for it until a BCBA completes
+  // it. keepActiveBehaviorNames enforces the same rule server-side.
+  const behaviors = activeBehaviorsForSelection(profile);
   const skills = activeSkills(profile.replacementBehaviors || [], profile).map(getName).filter(Boolean);
   const presentOptions = [...FIXED_PRESENT, ...savedPresent];
 
@@ -578,7 +581,26 @@ function NoteForm() {
           <p className="app-empty">No behaviors on file for this client.</p>
         ) : (
           <div className="app-check-list">
-            {behaviors.map((name) => {
+            {behaviors.map(({ name, incomplete, reason }) => {
+              // Incomplete → shown but not selectable, with the reason inline. Not a button, so it can't be
+              // toggled; the server backstop (keepActiveBehaviorNames) drops it too if it were posted anyway.
+              if (incomplete) {
+                return (
+                  <div
+                    key={name}
+                    className="app-check-row"
+                    aria-disabled="true"
+                    title={reason || undefined}
+                    style={{ opacity: 0.55, cursor: "not-allowed" }}
+                  >
+                    <span className="app-check-row__box" />
+                    <span className="app-check-row__label">
+                      {name}
+                      <span style={{ display: "block", fontSize: 12, color: "var(--text3)" }}>{reason}</span>
+                    </span>
+                  </div>
+                );
+              }
               const checked = selectedBehaviors.includes(name);
               return (
                 <button

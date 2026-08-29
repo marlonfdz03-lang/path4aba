@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { extractAssessment } from "@/lib/extractAssessment";
 import { parsePdf, saveKnowledgeBase, buildAssessmentProfile } from "@/lib/assessmentPipeline";
 import { validateAssessmentProfile, buildRefreshedProfile } from "@/lib/assessmentRefresh";
+import { activeBehaviorsForSelection } from "@/lib/activePrograms";
 import { assembleRefreshProfile } from "@/lib/assembleRefreshProfile";
 import { parsePositioned, clusterRows } from "@/lib/pdfGeometry";
 import { diagnosisColumn } from "@/lib/diagnosis";
@@ -88,6 +89,12 @@ export async function POST(req: Request) {
     }
     if (!hasFunctionalAssessment) reviewFlags.push({ field: "functions", source: "llm-fallback", reason: "no functional-assessment (FAST/MAS) source located — functions inferred, verify" });
     if (!behaviorDomainFound) reviewFlags.push({ field: "behaviors", source: "guard-preserved", reason: "maladaptive-behavior section not located — behaviors not refreshed" });
+
+    // PARTIAL-ACCEPT: applied-but-incomplete active behaviors are flagged (not fatal), same predicate the
+    // note form + server backstop use, so a re-upload that fills topography/function clears the flag.
+    for (const b of activeBehaviorsForSelection(refreshed)) {
+      if (b.incomplete) reviewFlags.push({ field: `behavior:${b.name}`, source: "behavior-incomplete", reason: `missing ${b.missing.join(" and ")}` });
+    }
 
     (refreshed as any).reviewFlags = reviewFlags;
     // MARKER — visible which clients have been through the current pipeline (survives the refresh spread).

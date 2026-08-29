@@ -31,20 +31,15 @@ export function validateAssessmentProfile(
   const problems: string[] = [];
   const behaviors = assessmentProfile.maladaptiveBehaviors ?? [];
   const mastered = assessmentProfile.masteredBehaviors ?? [];
-  // EXEMPT mastered/discontinued behaviors from the topography/function requirement: they are not active
-  // reduction targets and are captured name-only (empty topography/function), so requiring those fields
-  // would 422 the moment the extractor starts capturing the mastered/discontinued section (Commit B).
-  const isActiveTarget = (b: BuiltBehavior) => !["mastered", "discontinued"].includes(String(b.status || "").toLowerCase().trim());
+  // ZERO behaviors means the extraction FAILED → fatal. But a per-behavior gap (an active behavior missing
+  // its function and/or topography) is NO LONGER fatal: partial-accept APPLIES the complete behaviors and
+  // surfaces the incomplete ones as reviewFlags (source 'behavior-incomplete', emitted by the route via
+  // lib/activePrograms), instead of discarding the whole refresh. The incomplete behaviors are also filtered
+  // out of note selection (activeBehaviorsForSelection + keepActiveBehaviorNames), so an unusable behavior
+  // can never reach the generator. This is why (b) missing-function and (c) missing-topography were removed
+  // from the fatal set — see the assessment partial-accept change.
   if (behaviors.length === 0 && mastered.length === 0) {
     problems.push("no target behaviors found");
-  } else {
-    // Name the specific ACTIVE-TARGET behavior(s) missing a function or topography so the user knows what to check.
-    const noFunction = behaviors.filter((b) => isActiveTarget(b) && !b.functions?.length).map((b) => b.name || "(unnamed)");
-    const noTopography = behaviors.filter((b) => isActiveTarget(b) && !b.topographies?.length).map((b) => b.name || "(unnamed)");
-    if (noFunction.length) problems.push(`no function for behavior(s): ${noFunction.join(", ")}`);
-    if (noTopography.length) {
-      problems.push(`no topography / operational definition for behavior(s): ${noTopography.join(", ")}`);
-    }
   }
   if ((assessmentProfile.interventions ?? []).length === 0) problems.push("no interventions found");
   if ((assessmentProfile.reinforcers ?? []).length === 0) problems.push("no reinforcers found");
