@@ -852,7 +852,7 @@ export default function BCBAClientPage() {
 
                 {/* Section 2: Approved Interventions */}
                 <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
-                  <SectionHeader title="Approved Interventions" />
+                  <SectionHeader title="Interventions from Assessment" />
                   <div className="flex flex-wrap gap-2 mb-4">
                     {editInterventions.length === 0 && (
                       <p className="text-[13px]" style={{ color: "var(--text3)" }}>No interventions yet.</p>
@@ -949,7 +949,7 @@ export default function BCBAClientPage() {
                         {[
                           { label: "Diagnosis", value: cp.diagnosis?.join(", ") || "—" },
                           { label: "Maladaptive Behaviors", value: cp.maladaptiveBehaviors?.length || 0 },
-                          { label: "Approved Interventions", value: cp.interventions?.length || 0 },
+                          { label: "Interventions from Assessment", value: cp.interventions?.length || 0 },
                           { label: "Replacement Behaviors", value: (cp.replacementBehaviors?.length || 0) + (cp.skillAcquisition?.length || 0) },
                           { label: "Reinforcers", value: cp.reinforcers?.length || 0 },
                         ].map(({ label, value }) => (
@@ -1019,7 +1019,7 @@ export default function BCBAClientPage() {
 
                     {/* Approved Interventions */}
                     <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
-                      <SectionHeader title="Approved Interventions" />
+                      <SectionHeader title="Interventions from Assessment" />
                       {!cp.interventions?.length ? (
                         <p className="text-[13px]" style={{ color: "var(--text3)" }}>No interventions in profile.</p>
                       ) : (

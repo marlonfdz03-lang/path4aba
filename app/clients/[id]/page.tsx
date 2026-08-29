@@ -1041,7 +1041,7 @@ export default function ClientProfilePage() {
           <div className="grid grid-cols-3 gap-6" style={{ borderTop: "1px solid var(--border)", paddingTop: 20 }}>
             {[
               { label: "Behaviors", value: (client.clinicalProfile?.maladaptiveBehaviors?.length || 0) + " tracked" },
-              { label: "Interventions", value: (client.clinicalProfile?.interventions?.length || 0) + " approved" },
+              { label: "Interventions", value: (client.clinicalProfile?.interventions?.length || 0) + " from assessment" },
               { label: "Skills", value: (activePrograms.length + masteredSkills.length) + " programs" },
               { label: "Reinforcers", value: client.clinicalProfile?.reinforcers?.length || 0 },
               { label: "Notes Saved", value: dailyNotes.length },
@@ -1184,7 +1184,7 @@ export default function ClientProfilePage() {
                 </div>
                   {[
                     { label: "Maladaptive Behaviors", value: client.clinicalProfile?.maladaptiveBehaviors?.length || 0 },
-                    { label: "Approved Interventions", value: client.clinicalProfile?.interventions?.length || 0 },
+                    { label: "Interventions from Assessment", value: client.clinicalProfile?.interventions?.length || 0 },
                     { label: "Active Replacement Programs", value: activePrograms.length },
                     { label: "Mastered Skills", value: masteredSkills.length },
                     { label: "Reinforcers", value: client.clinicalProfile?.reinforcers?.length || 0 },
@@ -1198,7 +1198,7 @@ export default function ClientProfilePage() {
               </div>
 
               <div className="bg-white rounded-[10px] border p-5" style={{ borderColor: "var(--border)" }}>
-                <SectionHeader title="Active Interventions" />
+                <SectionHeader title="Interventions in Profile" />
                 <div className="flex flex-wrap gap-2">
                   {(client.clinicalProfile?.interventions || []).slice(0, 8).map((i: any, idx: number) => (
                     <span
