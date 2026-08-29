@@ -89,47 +89,60 @@ export interface SectionOutcome {
   windowChars: number
   span: number
   names: string[]
+  // The exact section window that was read (only on 'read'; '' otherwise). The caller passes THIS — not the
+  // whole document — to mergeInterventions so the source-presence filter is scoped to the section (see there).
+  sectionText: string
 }
 
 // Orchestrate: locate → if it fits, read the bounded window and extract; if the span is too large, report
 // oversized (caller falls back); no match or LLM error → 'none'. FAIL-SOFT: never throws to the caller.
 export async function resolveInterventionSection(text: string): Promise<SectionOutcome> {
   const loc = locateInterventionSection(text)
-  if (!loc.matched) return { outcome: 'none', heading: null, windowChars: 0, span: 0, names: [] }
-  if (loc.oversized) return { outcome: 'oversized', heading: loc.heading, windowChars: 0, span: loc.span, names: [] }
+  if (!loc.matched) return { outcome: 'none', heading: null, windowChars: 0, span: 0, names: [], sectionText: '' }
+  if (loc.oversized) return { outcome: 'oversized', heading: loc.heading, windowChars: 0, span: loc.span, names: [], sectionText: '' }
   try {
     const section = String(text).slice(loc.start, loc.start + READ_WINDOW)
     const names = await extractInterventionsFromSection(section)
-    return { outcome: 'read', heading: loc.heading, windowChars: section.length, span: loc.span, names }
+    return { outcome: 'read', heading: loc.heading, windowChars: section.length, span: loc.span, names, sectionText: section }
   } catch {
-    return { outcome: 'none', heading: null, windowChars: 0, span: 0, names: [] }
+    return { outcome: 'none', heading: null, windowChars: 0, span: 0, names: [], sectionText: '' }
   }
 }
 
-// ── MERGE: union the dedicated names with the main extraction, then keep only names actually present in the
-//    source document text. Drops the main pass's menu inventions (not in the document); keeps real names the
-//    dedicated window did not cover. Dedicated names come first (authoritative, document-spelled). ──
+// ── MERGE: union the dedicated names with the main extraction, then keep only names present in the SECTION
+//    TEXT (not the whole document). Scoping to the section is deliberate:
+//      • It drops the main pass's menu inventions — measured: on Hendrex the whole-document filter let 7 menu
+//        names + 2 duplicate spellings back in (Task Analysis, NET, BST, Reinforcement Systems, Choice Making,
+//        Prompt Hierarchy, Prompting; "…Alternative…" vs the section's "…Alternate…", "Response Blocking" vs
+//        "Response Block") because their words appear SOMEWHERE in the 100K document. Scoping to the section
+//        removes all 9 while keeping the real in-section names the dedicated pass omitted on a given run.
+//      • RECALL TRADE (intended): a real intervention named ONLY OUTSIDE the enumerated section is also
+//        dropped. The enumerated section is treated as the AUTHORITATIVE approved list, so a name that never
+//        appears in it is not carried. This is an accepted precision-over-recall choice, not an oversight.
+//    Near-duplicate spellings are handled by exact-phrase presence, NOT by fuzzy collapse — so DRA/DRI/DRO are
+//    never merged into one another; each survives or drops on its own presence in the section.
+//    Dedicated names come first (authoritative, document-spelled). ──
 const clean = (s: string) =>
   String(s || '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
 
-// PURE: is this intervention name present in the document? Word-boundary on the descriptive core, or the
-// parenthetical acronym as a standalone token (so "Noncontingent Reinforcement (NCR)" matches a doc "NCR").
-export function nameInDocument(name: string, docText: string): boolean {
-  const doc = ' ' + clean(docText) + ' '
+// PURE: is this intervention name present in the given text? Word-boundary on the descriptive core, or the
+// parenthetical acronym as a standalone token (so "Noncontingent Reinforcement (NCR)" matches a text "NCR").
+export function nameInDocument(name: string, text: string): boolean {
+  const hay = ' ' + clean(text) + ' '
   const core = clean(name)
-  if (core.length >= 4 && doc.includes(' ' + core + ' ')) return true
+  if (core.length >= 4 && hay.includes(' ' + core + ' ')) return true
   const acr = (String(name).match(/\(([A-Za-z]{2,6})\)/) || [])[1]
-  if (acr && new RegExp('(^| )' + acr.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '( |$)').test(doc)) return true
+  if (acr && new RegExp('(^| )' + acr.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '( |$)').test(hay)) return true
   return false
 }
 
-export function mergeInterventions(mainNames: string[], dedicatedNames: string[], docText: string): string[] {
+export function mergeInterventions(mainNames: string[], dedicatedNames: string[], sectionText: string): string[] {
   const out: string[] = []
   const seen = new Set<string>()
   for (const n of [...(dedicatedNames || []), ...(mainNames || [])]) {
     const k = clean(n)
     if (!k || seen.has(k)) continue
-    if (nameInDocument(n, docText)) { seen.add(k); out.push(String(n).trim()) }
+    if (nameInDocument(n, sectionText)) { seen.add(k); out.push(String(n).trim()) }
   }
   return out
 }

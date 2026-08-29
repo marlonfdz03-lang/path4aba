@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
       try {
         const sec = await resolveInterventionSection(text);
         if (sec.outcome === "read") {
-          extracted.approvedInterventions = mergeInterventions(extracted.approvedInterventions || [], sec.names, text);
+          extracted.approvedInterventions = mergeInterventions(extracted.approvedInterventions || [], sec.names, sec.sectionText);
           await emitAdminAlert({ source: "system", type: "assessment.intervention_section_read", severity: "info", clientId, payload: { heading: sec.heading, windowChars: sec.windowChars, dedicatedCount: sec.names.length, mergedCount: extracted.approvedInterventions.length } });
         } else if (sec.outcome === "oversized") {
           interventionSectionOversized = true;
