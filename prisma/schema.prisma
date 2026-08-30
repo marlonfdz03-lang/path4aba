@@ -103,6 +103,34 @@ model subscriptions {
   created_at                    DateTime? @default(now()) @db.Timestamptz(6)
 }
 
+// Append-only audit log of subscription changes. The subscriptions row above is a single, overwritten row
+// per user with no history — so a plan change, a status change, or a stripe_subscription_id replacement
+// (which orphans the old Stripe subscription) leaves no trace there. This table records every such event.
+// user_id is intentionally nullable and NOT a foreign key: a webhook for an orphaned/unknown customer must
+// still be recordable. Writers land in a separate commit; the table + baseline were applied manually via psql.
+model subscription_events {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                String?
+  stripe_customer_id     String?
+  stripe_subscription_id String?
+  event_type             String
+  source                 String
+  stripe_event_id        String?
+  old_plan               String?
+  new_plan               String?
+  old_status             String?
+  new_status             String?
+  old_subscription_id    String?
+  new_subscription_id    String?
+  metadata               Json?    @db.JsonB
+  created_at             DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([user_id], map: "idx_subevents_user")
+  @@index([stripe_subscription_id], map: "idx_subevents_sub")
+  @@index([created_at(sort: Desc)], map: "idx_subevents_created")
+  @@index([stripe_event_id], map: "idx_subevents_event")
+}
+
 model bcba_clients {
   id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   bcba_id      String
