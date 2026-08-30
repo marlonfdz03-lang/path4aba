@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server'
+import { auth } from '@/auth'
 import { getStripe } from '@/lib/stripe'
 import { prisma } from '@/lib/prisma'
 
-export async function POST(request: Request) {
-  const { userId } = await request.json()
-
-  if (!userId) {
-    return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
-  }
+export async function POST(_request: Request) {
+  // userId comes ONLY from the authenticated session — never the request body. Trusting a body-supplied
+  // userId let any caller open the Stripe Billing Portal (payment methods, invoices/PII, cancel) for ANY
+  // customer by guessing an id — a billing account-takeover IDOR. A caller can only ever open their own.
+  const authSession = await auth()
+  if (!authSession?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const userId = (authSession.user as any).id as string
 
   const sub = await prisma.subscriptions.findFirst({
     where: { user_id: userId },

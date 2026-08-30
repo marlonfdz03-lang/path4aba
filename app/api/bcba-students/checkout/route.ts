@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { auth } from '@/auth'
 import { getStripe, BCBA_STUDENTS_PRICES } from '@/lib/stripe'
 import { prisma } from '@/lib/prisma'
 import { resolveSubscriptionState, changePlan, STUDENTS_PRICE_IDS } from '@/lib/subscriptionState'
@@ -10,17 +11,21 @@ const SUCCESS_URL = `${ORIGIN}/bcba-students?trial=started`
 const CANCEL_URL = `${ORIGIN}/pricing`
 
 export async function POST(req: Request) {
-  let body: { userId?: string; interval?: 'month' | 'year' }
+  // userId comes ONLY from the authenticated session — never the request body. A body-supplied userId let a
+  // caller start a checkout / plan-change against ANOTHER user's Stripe customer. `interval` still comes from
+  // the body (not identity, not sensitive).
+  const authSession = await auth()
+  if (!authSession?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const userId = (authSession.user as any).id as string
+
+  let body: { interval?: 'month' | 'year' }
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   }
 
-  const { userId, interval = 'month' } = body
-  if (!userId) {
-    return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
-  }
+  const { interval = 'month' } = body
 
   const user = await prisma.users.findUnique({ where: { id: userId }, select: { email: true } })
   if (!user) {
