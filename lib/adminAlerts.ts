@@ -111,6 +111,22 @@ export type AlertType =
   // (idempotent) event. Payload: { event_id, event_type, subscription_id, customer_id, error }. Severity
   // 'critical'.
   | 'billing.webhook_write_failed'
+  // The reconcile job corrected a drifted column (a missed/mis-read webhook that the safety net caught). One
+  // per corrected column. Payload: { user_id, subscription_id, column, old_value, new_value }. Severity
+  // 'warning' (a correction means a webhook was missed — worth noticing, not an outage).
+  | 'billing.reconcile_drift'
+  // The reconcile job found one of our rows pointing at a Stripe subscription that 404s (resource_missing),
+  // BELOW the abort threshold — a genuine orphan. It is NOT auto-canceled; a human decides. Payload:
+  // { user_id, subscription_id }. Severity 'warning'.
+  | 'billing.reconcile_orphan'
+  // Heartbeat: the reconcile job ran to completion. Emitted every run — including a clean one — so "ran and
+  // corrected nothing" is a positive record, distinct from "never ran". Payload: { checked, corrected,
+  // missing, unreachable, dry_run }. Severity 'info'.
+  | 'billing.reconcile_ran'
+  // Circuit breaker: too large a fraction of rows 404'd, so the run ABORTED before any write — the signature
+  // of a misconfigured key/mode/account, not mass churn (a test-mode key makes every live sub look missing).
+  // Payload: { checked, missing, reason }. Severity 'critical'.
+  | 'billing.reconcile_aborted'
 
 export interface AdminAlertInput {
   source: AlertSource
