@@ -11,6 +11,7 @@ import { nextSessionClause } from "./nextSessionDate.ts";
 import { matrixFunctionsForBehavior } from "./functionPatterns.ts";
 import { splitReinforcerValue } from "./reinforcers.ts";
 import { looksEdible } from "./edibleReinforcer.ts";
+import { isCommunityOuting } from "./deliverableReinforcer.ts";
 import { buildActivityLists } from "./curatedActivities.ts";
 import { keepActiveBehaviorNames, keepActiveSkillNames, activeSkills } from "./activePrograms.ts";
 
@@ -87,7 +88,13 @@ export function buildServerSessionInput(
   // the tested looksEdible (conservative — "fidget toy"/"poker chip" do not false-trigger). If a client's
   // reinforcers are ALL edible, the list empties and the prompt's graceful fallback describes reinforcement by
   // category/contingency without naming an item.
-  const reinforcers = (splitReinforcerValue(asArray(p.reinforcers)) as string[]).filter((r) => !looksEdible(r));
+  // DELIVERABILITY FIREWALL, alongside the edible one: a community outing (beach/park/pool/mall/visiting
+  // family/birthday party) is a family activity the RBT cannot deliver in session — naming it as an in-session
+  // reinforcer is a false clinical record. Firewalled at selection so it reaches neither the top-3 named list
+  // nor the top-5 tangibles. Borderline (playground/outside/recess/trampoline/water) is NOT filtered here — see
+  // deliverableReinforcer.ts. Conservative like looksEdible: no legitimate in-session item false-triggers.
+  const reinforcers = (splitReinforcerValue(asArray(p.reinforcers)) as string[])
+    .filter((r) => !looksEdible(r) && !isCommunityOuting(r));
   const { homeActivities, schoolActivities } = buildActivityLists({
     home: asArray(p.homeActivities) as string[],
     school: asArray(p.schoolActivities) as string[],

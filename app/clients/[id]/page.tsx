@@ -15,6 +15,7 @@ import { reviewBannerLines } from "@/lib/reviewFlagCopy";
 import { activeBehaviors, activeSkills, behaviorMissingFields, incompleteBehaviorReason } from "@/lib/activePrograms";
 import { splitReinforcerValue } from "@/lib/reinforcers";
 import { looksEdible, EDIBLE_WARNING } from "@/lib/edibleReinforcer";
+import { isCommunityOuting, COMMUNITY_OUTING_WARNING } from "@/lib/deliverableReinforcer";
 import { subtractMasteredFromActive } from "@/lib/skillReconcile";
 import { functionDisplayLabel, functionToCanonical } from "@/lib/functionPatterns";
 import { splitNoteStream } from "@/lib/noteStream";
@@ -212,7 +213,9 @@ export default function ClientProfilePage() {
   const [savedLocations, setSavedLocations] = useState<string[]>([]);
   // Profile-overview "add reinforcer" input + advisory edible warning (shown after adding an edible).
   const [newReinforcer, setNewReinforcer] = useState("");
-  const [edibleWarning, setEdibleWarning] = useState("");
+  // Holds whichever add-time reinforcer advisory applies (edible or community-outing) — both render in the
+  // same amber slot below the add form. Inform, don't block (Marlon's ruling).
+  const [reinforcerWarning, setReinforcerWarning] = useState("");
   const [customPresent, setCustomPresent] = useState("");
   const customPresentRef = useRef<HTMLInputElement>(null);
   const [environmentalChange, setEnvironmentalChange] = useState(false);
@@ -540,8 +543,11 @@ export default function ClientProfilePage() {
   function addReinforcer(text: string) {
     const raw = text.trim();
     if (!raw) return;
-    // Advisory only — warn if it looks edible, but still add it (Marlon's ruling: inform, don't block).
-    setEdibleWarning(looksEdible(raw) ? EDIBLE_WARNING : "");
+    // Advisory only — warn if it looks edible OR like a community outing, but still add it (Marlon's ruling:
+    // inform, don't block). Edible takes precedence if somehow both; a single item is virtually never both.
+    setReinforcerWarning(
+      looksEdible(raw) ? EDIBLE_WARNING : isCommunityOuting(raw) ? COMMUNITY_OUTING_WARNING : "",
+    );
     const current = (client.clinicalProfile?.reinforcers || []) as any[];
     // Split " or " into discrete items, then de-dupe (case-insensitive) against existing names.
     const additions = splitReinforcerValue([raw]) as string[];
@@ -1356,9 +1362,9 @@ export default function ClientProfilePage() {
                     Add
                   </button>
                 </form>
-                {edibleWarning && (
+                {reinforcerWarning && (
                   <p className="mt-2 text-[12px] px-3 py-2 rounded-lg border" style={{ background: "#FFFBEB", borderColor: "#FCD34D", color: "#92400E" }}>
-                    ⚠️ {edibleWarning}
+                    ⚠️ {reinforcerWarning}
                   </p>
                 )}
               </div>
