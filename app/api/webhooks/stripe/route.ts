@@ -5,6 +5,7 @@ import { recordSubscriptionEvent, shouldAlertIdReplaced } from '@/lib/subscripti
 import { emitAdminAlert } from '@/lib/adminAlerts'
 import { mapStripeStatus, buildPriceToPlan, planFromPriceId } from '@/lib/planMapping'
 import { subCurrentPeriodEnd, invoiceSubscriptionId, epochToDate } from '@/lib/stripeEventFields'
+import { isSubscriptionInvoice, fieldMissingResponse, writeFailedResponse } from '@/lib/webhookFailure'
 import { PRICES, BCBA_STUDENTS_PRICES } from '@/lib/stripe'
 
 export const dynamic = 'force-dynamic'
@@ -17,6 +18,12 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'stripe-key-required'
 // priceId -> plan-key, so subscription.updated can write `plan` (the self-healing backstop for plan changes
 // made in the Stripe Billing Portal, or the rare case changePlan's direct local write failed).
 const PRICE_TO_PLAN = buildPriceToPlan(PRICES as any, BCBA_STUDENTS_PRICES as any)
+
+// THE LOUD-FAILURE CONTRACT (pure core + tests in lib/webhookFailure.ts). An event that IS ours but whose
+// required field cannot be resolved, or whose DB write throws, returns 500 — Stripe retries the idempotent
+// event and the endpoint error rate finally reflects the failure. An event that is NOT ours (unknown type,
+// non-subscription invoice, no matching local row) stays 200 and silent. The two *Response helpers wrap the
+// alert so the 500 is returned even if the alert write itself fails.
 
 export async function POST(req: Request) {
   try {
@@ -110,7 +117,7 @@ export async function POST(req: Request) {
             console.log('[webhook] bcba_students subscription saved for:', userId)
           } catch (err: any) {
             console.error('[webhook] bcba_students upsert error:', err.message)
-            return new Response('DB error: ' + err.message, { status: 500 })
+            return await writeFailedResponse(emitAdminAlert, event, err, { subscriptionId: session.subscription?.toString() ?? null, customerId: session.customer?.toString() ?? null })
           }
         } else {
           try {
@@ -156,7 +163,7 @@ export async function POST(req: Request) {
             console.log('Subscription saved for:', userId)
           } catch (err: any) {
             console.error('Prisma upsert error:', err.message)
-            return new Response('DB error: ' + err.message, { status: 500 })
+            return await writeFailedResponse(emitAdminAlert, event, err, { subscriptionId: session.subscription?.toString() ?? null, customerId: session.customer?.toString() ?? null })
           }
 
           // Increment promo code usage if one was applied
@@ -206,10 +213,14 @@ export async function POST(req: Request) {
           if (subscription.status === 'trialing' && bcbaTrialEnd) {
             updateData.bcba_students_trial_ends_at = bcbaTrialEnd
           }
-          await prisma.subscriptions.updateMany({
-            where: { bcba_students_subscription_id: subscription.id },
-            data: updateData,
-          }).catch(err => console.error('[webhook] bcba_students subscription.updated error:', err))
+          try {
+            await prisma.subscriptions.updateMany({
+              where: { bcba_students_subscription_id: subscription.id },
+              data: updateData,
+            })
+          } catch (err) {
+            return await writeFailedResponse(emitAdminAlert, event, err, { subscriptionId: subscription.id, customerId: (subscription as any).customer })
+          }
           // AUDIT (fail-soft): site 5 — status transition only, no id replacement.
           await recordSubscriptionEvent({
             userId: bcbaRow.user_id, subscriptionId: subscription.id,
@@ -223,6 +234,13 @@ export async function POST(req: Request) {
             where: { stripe_subscription_id: subscription.id },
             select: { user_id: true, plan: true, status: true },
           })
+          // Resolution guard: this is our row, but the period did not resolve from any known path — fail
+          // LOUD rather than write a half-update. (On dahlia the per-item read resolves; this only fires if
+          // Stripe relocates the field again — the future-proof alarm.) Not-ours (rbtRow null) skips this
+          // and the updateMany simply touches 0 rows -> 200 silent.
+          if (rbtRow && periodEnd === null) {
+            return await fieldMissingResponse(emitAdminAlert, event, 'current_period_end', { subscriptionId: subscription.id, customerId: (subscription as any).customer })
+          }
           const updateData: any = { status: mappedStatus, ...(periodEnd ? { current_period_ends_at: periodEnd } : {}) }
           // trial_end did not move in Basil, but the no-new-Date(x*1000) rule holds without exception.
           const trialEnd = epochToDate((subscription as any).trial_end)
@@ -235,10 +253,14 @@ export async function POST(req: Request) {
           // price (a primary RBT/BCBA plan); an unknown/students price leaves `plan` untouched.
           const derivedPlan = planFromPriceId((subscription as any).items?.data?.[0]?.price?.id, PRICE_TO_PLAN)
           if (derivedPlan && derivedPlan !== 'bcba_students') updateData.plan = derivedPlan
-          await prisma.subscriptions.updateMany({
-            where: { stripe_subscription_id: subscription.id },
-            data: updateData,
-          }).catch(err => console.error('[webhook] subscription.updated error:', err))
+          try {
+            await prisma.subscriptions.updateMany({
+              where: { stripe_subscription_id: subscription.id },
+              data: updateData,
+            })
+          } catch (err) {
+            return await writeFailedResponse(emitAdminAlert, event, err, { subscriptionId: subscription.id, customerId: (subscription as any).customer })
+          }
           // AUDIT (fail-soft): site 6 — status/period transition only, no id replacement.
           await recordSubscriptionEvent({
             userId: rbtRow?.user_id ?? null, subscriptionId: subscription.id,
@@ -260,10 +282,14 @@ export async function POST(req: Request) {
         })
 
         if (bcbaRow) {
-          await prisma.subscriptions.updateMany({
-            where: { bcba_students_subscription_id: subscription.id },
-            data: { bcba_students_status: 'canceled' },
-          }).catch(err => console.error('[webhook] bcba_students subscription.deleted error:', err))
+          try {
+            await prisma.subscriptions.updateMany({
+              where: { bcba_students_subscription_id: subscription.id },
+              data: { bcba_students_status: 'canceled' },
+            })
+          } catch (err) {
+            return await writeFailedResponse(emitAdminAlert, event, err, { subscriptionId: subscription.id, customerId: (subscription as any).customer })
+          }
           // AUDIT (fail-soft): site 7.
           await recordSubscriptionEvent({
             userId: bcbaRow.user_id, subscriptionId: subscription.id,
@@ -277,10 +303,14 @@ export async function POST(req: Request) {
             where: { stripe_subscription_id: subscription.id },
             select: { user_id: true, status: true },
           })
-          await prisma.subscriptions.updateMany({
-            where: { stripe_subscription_id: subscription.id },
-            data: { status: 'canceled' },
-          }).catch(err => console.error('[webhook] subscription.deleted error:', err))
+          try {
+            await prisma.subscriptions.updateMany({
+              where: { stripe_subscription_id: subscription.id },
+              data: { status: 'canceled' },
+            })
+          } catch (err) {
+            return await writeFailedResponse(emitAdminAlert, event, err, { subscriptionId: subscription.id, customerId: (subscription as any).customer })
+          }
           // AUDIT (fail-soft): site 8.
           await recordSubscriptionEvent({
             userId: rbtRow?.user_id ?? null, subscriptionId: subscription.id,
@@ -297,7 +327,14 @@ export async function POST(req: Request) {
         // (parent.subscription_details.subscription first, top-level fallback).
         const subscriptionId = invoiceSubscriptionId(invoice)
         const customerId = (invoice as any).customer as string
-        if (!subscriptionId) break
+        if (!subscriptionId) {
+          // Subscription-related invoice with no resolvable sub id -> shape changed, fail LOUD. A one-off
+          // (non-subscription) invoice legitimately has no sub id -> not ours, 200 silent.
+          if (isSubscriptionInvoice(invoice)) {
+            return await fieldMissingResponse(emitAdminAlert, event, 'invoice.subscription', { customerId, billingReason: (invoice as any).billing_reason })
+          }
+          break
+        }
 
         // Invoice line period (this path did not move in Basil); route through epochToDate so the rule
         // holds without exception, falling back to +30d only when the line has no usable period.
@@ -312,10 +349,14 @@ export async function POST(req: Request) {
         })
 
         if (existingSub) {
-          await prisma.subscriptions.update({
-            where: { id: existingSub.id },
-            data: { status: 'active', current_period_ends_at: currentPeriodEnd },
-          })
+          try {
+            await prisma.subscriptions.update({
+              where: { id: existingSub.id },
+              data: { status: 'active', current_period_ends_at: currentPeriodEnd },
+            })
+          } catch (err) {
+            return await writeFailedResponse(emitAdminAlert, event, err, { subscriptionId, customerId })
+          }
           // AUDIT (fail-soft): site 9 — status transition only (id unchanged), no replacement alert.
           await recordSubscriptionEvent({
             userId: existingSub.user_id, customerId, subscriptionId,
@@ -331,14 +372,18 @@ export async function POST(req: Request) {
             select: { id: true, user_id: true, plan: true, status: true, stripe_subscription_id: true },
           })
           if (byCustomer) {
-            await prisma.subscriptions.update({
-              where: { id: byCustomer.id },
-              data: {
-                status: 'active',
-                current_period_ends_at: currentPeriodEnd,
-                stripe_subscription_id: subscriptionId,
-              },
-            })
+            try {
+              await prisma.subscriptions.update({
+                where: { id: byCustomer.id },
+                data: {
+                  status: 'active',
+                  current_period_ends_at: currentPeriodEnd,
+                  stripe_subscription_id: subscriptionId,
+                },
+              })
+            } catch (err) {
+              return await writeFailedResponse(emitAdminAlert, event, err, { subscriptionId, customerId })
+            }
             // AUDIT (fail-soft): site 10 — sets stripe_subscription_id. Alert only if it REPLACED a different id.
             await recordSubscriptionEvent({
               userId: byCustomer.user_id, customerId, subscriptionId,
@@ -364,47 +409,56 @@ export async function POST(req: Request) {
         const customerEmail = (invoice as any).customer_email as string | null
         const customerId = invoice.customer as string | null
 
-        if (subscriptionId) {
-          // Pre-read (site 11) to capture old_status before the updateMany.
-          const failRow = await prisma.subscriptions.findFirst({
-            where: { stripe_subscription_id: subscriptionId },
-            select: { user_id: true, status: true },
-          })
+        // Resolution guard: a subscription-related failure we cannot attribute must be loud, not silently
+        // skipped. A non-subscription invoice legitimately has no sub id -> not ours, 200 silent.
+        if (!subscriptionId) {
+          if (isSubscriptionInvoice(invoice)) {
+            return await fieldMissingResponse(emitAdminAlert, event, 'invoice.subscription', { customerId, billingReason: (invoice as any).billing_reason })
+          }
+          break
+        }
+
+        // Pre-read (site 11) to capture old_status AND decide ownership.
+        const failRow = await prisma.subscriptions.findFirst({
+          where: { stripe_subscription_id: subscriptionId },
+          select: { user_id: true, status: true },
+        })
+        // Not ours (no local row) -> 200 silent: no write, and (option b) no email.
+        if (!failRow) break
+
+        try {
           await prisma.subscriptions.updateMany({
             where: { stripe_subscription_id: subscriptionId },
             data: { status: 'canceled' },
-          }).catch(err => console.error('[webhook] invoice.payment_failed status error:', err))
-          // AUDIT (fail-soft): site 11.
-          await recordSubscriptionEvent({
-            userId: failRow?.user_id ?? null, customerId, subscriptionId,
-            eventType: 'invoice.payment_failed', source: 'webhook', stripeEventId: event.id,
-            oldStatus: failRow?.status ?? null, newStatus: 'canceled',
           })
-          console.log('[webhook] invoice.payment_failed — marked canceled for subscription:', subscriptionId)
+        } catch (err) {
+          return await writeFailedResponse(emitAdminAlert, event, err, { subscriptionId, customerId })
         }
+        // AUDIT (fail-soft): site 11.
+        await recordSubscriptionEvent({
+          userId: failRow.user_id, customerId, subscriptionId,
+          eventType: 'invoice.payment_failed', source: 'webhook', stripeEventId: event.id,
+          oldStatus: failRow.status ?? null, newStatus: 'canceled',
+        })
+        console.log('[webhook] invoice.payment_failed — marked canceled for subscription:', subscriptionId)
 
+        // Email option (b): fire-and-forget, but ONLY after the status write SUCCEEDED and ONLY for a matched
+        // (ours) row. A retry re-sends nothing — a prior write failure 500'd before reaching here, and a
+        // not-ours event returned above — so a just-declined user gets exactly one email, never a duplicate.
         ;(async () => {
           try {
             let email = customerEmail
             let name = email ? email.split('@')[0] : 'there'
-
-            if (!email && customerId) {
-              const sub = await prisma.subscriptions.findFirst({
-                where: { stripe_customer_id: customerId },
-                select: { user_id: true },
+            if (!email) {
+              const u = await prisma.users.findUnique({
+                where: { id: failRow.user_id },
+                select: { email: true, name: true },
               })
-              if (sub?.user_id) {
-                const u = await prisma.users.findUnique({
-                  where: { id: sub.user_id },
-                  select: { email: true, name: true },
-                })
-                if (u?.email) {
-                  email = u.email
-                  name = u.name || u.email.split('@')[0] || 'there'
-                }
+              if (u?.email) {
+                email = u.email
+                name = u.name || u.email.split('@')[0] || 'there'
               }
             }
-
             if (email) await sendPaymentFailedEmail(email, name)
           } catch (err) {
             console.error('[webhook] payment failed email error:', err)

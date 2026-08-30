@@ -101,6 +101,16 @@ export type AlertType =
   // our DB have diverged (the user may briefly see the OLD plan/limit until the webhook plan-backstop heals
   // it). Must be visible, not silent. Payload: { subscription_id, intended_plan, error }. Severity 'critical'.
   | 'billing.local_sync_failed'
+  // A Stripe WEBHOOK event we should act on carried a required field we could not resolve from ANY known
+  // path (e.g. current_period_end / invoice.subscription after a Stripe API-version relocation). The
+  // handler returns 500 so Stripe retries and the endpoint's error rate reflects it — this is the alarm
+  // whose absence let the period freeze silently for months. Payload: { event_id, event_type, field,
+  // subscription_id, customer_id, billing_reason }. Severity 'critical'.
+  | 'billing.webhook_field_missing'
+  // A DB write inside the Stripe webhook handler THREW. The handler returns 500 so Stripe redelivers the
+  // (idempotent) event. Payload: { event_id, event_type, subscription_id, customer_id, error }. Severity
+  // 'critical'.
+  | 'billing.webhook_write_failed'
 
 export interface AdminAlertInput {
   source: AlertSource
