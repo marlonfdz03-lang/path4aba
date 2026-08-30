@@ -58,25 +58,32 @@
       return { options: [], matched: false, exact: false };
     }
 
-    const valueLower = String(value).toLowerCase().trim();
-
-    let exact = true;
-    let match = Array.from(options).find(function (opt) {
-      return opt.innerText && opt.innerText.trim().toLowerCase() === valueLower;
-    });
-    if (!match) {
-      exact = false;
+    // Match through the shared normalizer (P4NameMatch): normalized-exact wins, else a LONE strict match,
+    // else REFUSE (ambiguous) — filling the wrong behavior row is worse than blank. Falls back to the old
+    // exact-only match if name-match.js somehow did not load, which fails SAFE (blank + flag), never a guess.
+    let exact = false;
+    let ambiguous = false;
+    let candidates = [];
+    let match = null;
+    const P4 = (typeof window !== 'undefined' && window.P4NameMatch) || null;
+    if (P4 && typeof P4.resolveOption === 'function') {
+      const res = P4.resolveOption(value, optionTexts);
+      if (res.status === 'matched') {
+        const target = P4.normName(res.value);
+        match = Array.from(options).find(function (opt) {
+          return P4.normName(opt.innerText ? opt.innerText.trim() : '') === target;
+        }) || null;
+        exact = P4.normName(value) === target;
+      } else if (res.status === 'ambiguous') {
+        ambiguous = true;
+        candidates = res.candidates || [];
+      }
+    } else {
+      const valueLower = String(value).toLowerCase().trim();
       match = Array.from(options).find(function (opt) {
-        const o = opt.innerText ? opt.innerText.trim().toLowerCase() : '';
-        return o.includes(valueLower) || valueLower.includes(o);
-      });
-    }
-    if (!match) {
-      const words = valueLower.split(' ').filter(function (w) { return w.length > 3; });
-      match = Array.from(options).find(function (opt) {
-        const o = opt.innerText ? opt.innerText.trim().toLowerCase() : '';
-        return words.length > 0 && words.every(function (w) { return o.includes(w); });
-      });
+        return opt.innerText && opt.innerText.trim().toLowerCase() === valueLower;
+      }) || null;
+      exact = !!match;
     }
 
     if (match) {
@@ -97,7 +104,7 @@
       document.documentElement.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     }
     await waitMs(200);
-    return { options: optionTexts, matched: !!match, exact: exact };
+    return { options: optionTexts, matched: !!match, exact: exact, ambiguous: ambiguous, candidates: candidates };
   }
 
   window.setMatInput = setMatInput;

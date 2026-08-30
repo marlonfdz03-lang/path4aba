@@ -29,6 +29,7 @@
     {
       "matches": ["https://app.abamatrix.com/*"],
       "js": [
+        "name-match.js",
         "engine/core/scanner.js",
         "engine/core/normalizer.js",
         "engine/adapters/ABAMatrixAdapter.js",

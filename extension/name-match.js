@@ -165,6 +165,24 @@ function resolveName(name, pool, tier, options) {
   return { resolvedName: name, matched: false };
 }
 
+// Resolve a WANTED name against a pool of dropdown OPTION texts for the APPLY path, refusing to
+// guess when two genuinely-different options both match — filling the wrong row is worse than blank.
+// Returns { status: 'matched', value } | { status: 'ambiguous', candidates } | { status: 'none' }.
+//   1. a normalized-EXACT option wins outright (so "Tantrum 2" beats the "Tantrum" substring);
+//   2. else a LONE strict match wins ("Off-task behavior" -> the only "Off Task");
+//   3. else REFUSE — two strict matches, no unique exact -> caller blanks + flags AMBIGUOUS_MATCH.
+function resolveOption(wanted, optionTexts, options) {
+  const opts = Array.isArray(optionTexts) ? optionTexts : [];
+  const w = normName(stripOuterQuotes(wanted));
+  if (!w) return { status: 'none', candidates: [] };
+  const matches = opts.filter(function (o) { return namesMatch(wanted, o, 'strict', options); });
+  if (matches.length === 0) return { status: 'none', candidates: [] };
+  const exacts = matches.filter(function (o) { return normName(stripOuterQuotes(o)) === w; });
+  if (exacts.length === 1) return { status: 'matched', value: exacts[0], candidates: matches };
+  if (exacts.length === 0 && matches.length === 1) return { status: 'matched', value: matches[0], candidates: matches };
+  return { status: 'ambiguous', candidates: matches };
+}
+
 // Build the variant lookup from clinical_library rows: [{ display_name, variants[] }].
 // That column (schema.prisma clinical_library.variants) has existed since the library
 // migration and was read by nothing — this is the layer it was added for.
@@ -196,6 +214,7 @@ function buildVariantIndex(rows) {
     namesMatch: namesMatch,
     canonicalName: canonicalName,
     resolveName: resolveName,
+    resolveOption: resolveOption,
     buildVariantIndex: buildVariantIndex,
   };
   if (typeof window !== 'undefined') window.P4NameMatch = API;

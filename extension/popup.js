@@ -2432,6 +2432,10 @@ function renderFillSummary(summary) {
         const opts = Array.isArray(r.options) ? r.options : [];
         const wanted = r.intended == null ? '' : String(r.intended);
         extra = ` (wanted “${wanted}”; available: ${opts.length ? opts.join(', ') : 'none'})`;
+      } else if (r.reason === 'AMBIGUOUS_MATCH') {
+        const wanted = r.intended == null ? '' : String(r.intended);
+        const cands = Array.isArray(r.candidates) ? r.candidates : [];
+        extra = ` left blank — “${wanted}” matched more than one option (${cands.join(', ')}); refused rather than fill the wrong behavior. Select the correct row manually.`;
       } else if (r.reason === 'FUNCTION_ANTECEDENT_CONFLICT') {
         const derived = r.intended == null ? '' : String(r.intended);
         const ant = r.detail == null ? '' : String(r.detail);

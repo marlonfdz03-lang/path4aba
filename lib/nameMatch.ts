@@ -17,6 +17,7 @@ import {
   namesMatch as _namesMatch,
   canonicalName as _canonicalName,
   resolveName as _resolveName,
+  resolveOption as _resolveOption,
   buildVariantIndex as _buildVariantIndex,
 } from './nameMatch.impl.js';
 
@@ -43,5 +44,11 @@ export const TIERS: readonly MatchTier[] = _TIERS as readonly MatchTier[];
 export const namesMatch: (a: unknown, b: unknown, tier: MatchTier, options?: MatchOptions) => boolean = _namesMatch;
 export const canonicalName: (incoming: string, existingNames: readonly string[], tier: MatchTier, options?: MatchOptions) => string = _canonicalName;
 export const resolveName: (name: string, pool: readonly string[], tier: MatchTier, options?: MatchOptions) => { resolvedName: string; matched: boolean } = _resolveName;
+export type ResolveOptionResult =
+  | { status: 'matched'; value: string; candidates: string[] }
+  | { status: 'ambiguous'; candidates: string[] }
+  | { status: 'none'; candidates: string[] };
+export const resolveOption: (wanted: string, optionTexts: readonly string[], options?: MatchOptions) => ResolveOptionResult =
+  _resolveOption as (wanted: string, optionTexts: readonly string[], options?: MatchOptions) => ResolveOptionResult;
 export const buildVariantIndex: (rows: readonly LibraryRow[] | null | undefined) => VariantIndex =
   _buildVariantIndex as (rows: readonly LibraryRow[] | null | undefined) => VariantIndex;

@@ -70,15 +70,20 @@ window.FormEngineExecutor = {
     // and populating it produces junk AND is the likely trigger for ABA Matrix's own render errors
     // (a component reading `.program` off a goal that has none). The name select is emitted first
     // per instance (verified in plan-fill), so marking its section here skips its remaining fields.
-    const skipSections = new Set();
+    // Skip the rest of an instance keyed by its INSTANCE PREFIX ("BR1" / "G1"), NOT action.sectionId. The
+    // catalog capture does not reliably carry sectionId, so a sectionId-keyed skip MISSED the function field
+    // and let a phantom FUNCTION_NOT_IN_MATRIX fire on a behavior-less row (the empty-strings error). instanceKey
+    // groups an instance's name + function + other fields by the segment before _Behavior/_Goal.
+    const skipInstances = new Set();
+    const instanceKey = (fieldId) => String(fieldId || '').split(/_Behavior|_Goal/)[0];
     const isNameSelect = (fieldId) => /_GoalName$|_BehaviorName$/.test(fieldId || '');
 
     const actionOutcomes = [];
     for (const action of plan) {
       try {
-        if (skipSections.has(action.sectionId)) {
+        if (skipInstances.has(instanceKey(action.fieldId))) {
           // Counted as skipped, but no per-field review entry: the instance's name select already
-          // produced one NO_MATCHING_OPTION entry that flags the whole instance for the RBT.
+          // produced one NO_MATCHING_OPTION / AMBIGUOUS_MATCH entry that flags the whole instance.
           actionOutcomes.push({ fieldId: action.fieldId, cls: 'skipped' });
           continue;
         }
@@ -94,8 +99,9 @@ window.FormEngineExecutor = {
 
         // If this was the instance's program/name select and no option matched, skip the rest of
         // the instance (leave it program-less rather than filling a phantom goal/behavior).
-        if (isNameSelect(action.fieldId) && outcome.review && outcome.review.reason === 'NO_MATCHING_OPTION') {
-          skipSections.add(action.sectionId);
+        if (isNameSelect(action.fieldId) && outcome.review &&
+            (outcome.review.reason === 'NO_MATCHING_OPTION' || outcome.review.reason === 'AMBIGUOUS_MATCH')) {
+          skipInstances.add(instanceKey(action.fieldId));
         }
 
         let cls;
@@ -353,7 +359,9 @@ window.FormEngineExecutor = {
       const c = this._canonicalFunction(opt);
       if (c && !liveByCanon.has(c)) liveByCanon.set(c, opt);
     }
-    const approvedCanon = approved.map((a) => this._canonicalFunction(a)).filter(Boolean);
+    // DEDUPE by canonical: distinct source functions can collapse to one canonical (automatic + sensory ->
+    // automatic), which otherwise rendered "Automatic Reinforcement" twice in the review.
+    const approvedCanon = [...new Set(approved.map((a) => this._canonicalFunction(a)).filter(Boolean))];
     const approvedLabels = approvedCanon.map((c) => this._functionLabel(c));
     const approvedSet = new Set(approvedCanon);
     // PREFER THE NOTE'S STATED FUNCTION. The note already describes each behavior with a specific,
@@ -714,6 +722,18 @@ window.FormEngineExecutor = {
       status: 'skipped',
       review: { stableId: action.fieldId, label, reason: 'NO_MATCHING_OPTION', intended: action.value, options: opts },
       verification: { stableId: action.fieldId, label, intended: action.value, actual: '', dirty: false, touched: false, valid: false, ok: false, reason: 'NO_MATCHING_OPTION' },
+    };
+  },
+
+  // The wanted name matched TWO+ genuinely-different options with no unique normalized-exact. Refuse to
+  // guess — blank + flag, naming the candidates so the RBT picks the right row. Same skipped shape as
+  // noMatchingOption (the instance skip treats both identically, so no phantom function lands).
+  ambiguousMatch(action, label, candidates, options) {
+    const cands = Array.isArray(candidates) ? candidates : [];
+    return {
+      status: 'skipped',
+      review: { stableId: action.fieldId, label, reason: 'AMBIGUOUS_MATCH', intended: action.value, candidates: cands, options: Array.isArray(options) ? options : [] },
+      verification: { stableId: action.fieldId, label, intended: action.value, actual: '', dirty: false, touched: false, valid: false, ok: false, reason: 'AMBIGUOUS_MATCH' },
     };
   },
 
@@ -1165,6 +1185,12 @@ window.FormEngineExecutor = {
         await this.wait(80);
         this.captureCatalog(action, info && info.options); // passive catalog capture
         if (!info || !info.matched) {
+          // AMBIGUOUS: two genuinely-different options matched and none was a normalized-exact — REFUSE,
+          // never guess (filling the wrong behavior row is worse than blank). Same blank+flag shape as a
+          // no-match; the instance skip below treats AMBIGUOUS_MATCH identically to NO_MATCHING_OPTION.
+          if (info && info.ambiguous) {
+            return this.ambiguousMatch(action, label, info.candidates || [], info.options || []);
+          }
           // LIVE-OPTIONS NET (function fields): the planned value isn't offered, but an approved function
           // may be — fill that against the REAL dropdown instead of blanking (self-heals stale/absent
           // captures and picks up a genuine config gap from the live options). Returns null when N/A.
