@@ -5,6 +5,7 @@ import { extractAssessment } from '@/lib/extractAssessment'
 import { parsePdf, mapToLegacyFormat, saveKnowledgeBase } from '@/lib/assessmentPipeline'
 import { buildActivityLists } from '@/lib/curatedActivities'
 import { isPdf, MAX_FILE_BYTES, storeClientFile } from '@/lib/clientFiles'
+import { emitAdminAlert } from '@/lib/adminAlerts'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -64,8 +65,11 @@ export async function POST(req: Request) {
       }
     }
 
-    // Create the client, connect the BCBA, and (when a PDF was uploaded) store the SOURCE PDF — all
-    // atomically, so the file is never orphaned and the client is never half-created.
+    // Create the client and connect the BCBA atomically. The SOURCE PDF is stored AFTER this commits, NOT
+    // inside the transaction: the client commits first, so the file can never be orphaned, and a file-storage
+    // failure can never cost the client (previously storeClientFile ran in the transaction, so a bytea write
+    // failure rolled back the whole creation — the exact failure mode we now avoid). See the fail-soft store
+    // below.
     const client = await prisma.$transaction(async (tx) => {
       const c = await tx.clients.create({
         data: {
@@ -83,9 +87,22 @@ export async function POST(req: Request) {
           connected_at: new Date(),
         },
       })
-      if (pdfFile && fileBuffer) await storeClientFile(c.id, user.id, pdfFile, fileBuffer, tx)
       return c
     })
+
+    // FAIL-SOFT source-PDF store, after the client committed. The client is more valuable than the file: a
+    // storage failure only degrades reprocessing (until re-upload), it never fails the request.
+    if (pdfFile && fileBuffer) {
+      try {
+        await storeClientFile(client.id, user.id, pdfFile, fileBuffer)
+      } catch (fileErr: any) {
+        console.error('[bcba/clients/create] source PDF store failed (client kept):', fileErr?.message)
+        await emitAdminAlert({
+          source: 'system', type: 'assessment.pdf_store_failed', severity: 'warning',
+          payload: { client_id: client.id, error: fileErr?.message ?? String(fileErr), route: 'bcba/clients/create' },
+        })
+      }
+    }
 
     return NextResponse.json({ clientId: client.id, clientName, message: 'Client created' })
   } catch (err: any) {

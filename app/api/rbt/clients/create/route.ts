@@ -3,6 +3,8 @@ import { getExtensionAuth } from '@/lib/extensionAuth'
 import { prisma } from '@/lib/prisma'
 import { extractAssessment } from '@/lib/extractAssessment'
 import { parsePdf, mapToLegacyFormat, saveKnowledgeBase } from '@/lib/assessmentPipeline'
+import { storeClientFile } from '@/lib/clientFiles'
+import { emitAdminAlert } from '@/lib/adminAlerts'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -65,6 +67,19 @@ export async function POST(req: NextRequest) {
         primary_setting: extracted.setting || 'home',
       },
     })
+
+    // Store the SOURCE PDF for reprocessing — FAIL-SOFT, AFTER the client has committed. The client is more
+    // valuable than the file: a storage failure must never cost the client (it only degrades reprocessing
+    // until the RBT re-uploads). Because the client already exists, the file can never be orphaned.
+    try {
+      await storeClientFile(client.id, user.id, file, buffer)
+    } catch (fileErr: any) {
+      console.error('[rbt/clients/create] source PDF store failed (client kept):', fileErr?.message)
+      await emitAdminAlert({
+        source: 'system', type: 'assessment.pdf_store_failed', severity: 'warning',
+        payload: { client_id: client.id, error: fileErr?.message ?? String(fileErr), route: 'rbt/clients/create' },
+      })
+    }
 
     return NextResponse.json({
       success: true,

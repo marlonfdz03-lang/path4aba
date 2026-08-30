@@ -84,6 +84,11 @@ export type AlertType =
   // menu extraction (Felix-class). Recorded distinctly from _read so "found but could not read safely" is
   // visible, never silent. Payload: { heading, spanChars, gate }. Severity 'warning'.
   | 'assessment.intervention_section_oversized'
+  // The client was created but storing the SOURCE PDF failed (fail-soft — the client is more valuable than the
+  // file). The client exists and works; only reprocessing is degraded until the RBT re-uploads. Payload:
+  // { client_id, error, route }. Severity 'warning' (missing file degrades reprocessing, it does not break the
+  // client).
+  | 'assessment.pdf_store_failed'
   // An extension bearer token was rejected because it had been IDLE longer than the sliding window
   // (lib/extensionTokenExpiry). The row is NOT deleted — it stops authenticating and the extension shows its
   // "Session expired" re-login. The rate of these tells us whether real active users are hitting the window
