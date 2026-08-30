@@ -1103,12 +1103,22 @@ async function streamGenerate(endpoint, body, method = 'POST') {
         const { done, value } = await reader.read();
         if (done) break;
         raw += decoder.decode(value, { stream: true });
-        const { metaRaw, sawRegen } = splitNoteStream(raw);
+        const { note, metaRaw, sawRegen } = splitNoteStream(raw);
 
-        // Coverage retry — same calm status as before, fired once. No wipe, no live paint (UX unchanged).
+        // Coverage retry — fired once: FREEZE (stop painting), DIM, and show the calm finalizing status.
+        // Matches the web (consumeNoteStream + note page): the streamed text never wipes/restarts.
         if (sawRegen && !regenSignaled) {
           regenSignaled = true;
           streamStatus.textContent = 'Finalizing your note…';
+          outputNote.classList.add('finalizing');
+        }
+
+        // PROGRESSIVE PAINT (pass 1 only): the note types itself. Guarded by !sawRegen so once a regen begins
+        // the display FREEZES on the last pass-1 text — pass 2 accumulates invisibly and the single end-swap
+        // below reveals the finished note. This paints RAW; the end-swap to filteredText is what makes it
+        // correct. Does NOT touch the __META__ accumulate-and-reparse / verify logic below.
+        if (metaRaw === null && !sawRegen) {
+          outputNote.value = note;
         }
 
         // __META__ seen: its JSON can span several reads, so parse the ACCUMULATED tail and keep reading on
@@ -1132,7 +1142,8 @@ async function streamGenerate(endpoint, body, method = 'POST') {
       const { note: bestNote } = splitNoteStream(raw);
       const verified = filteredText != null;
       finalText = verified ? filteredText : bestNote;
-      outputNote.value = finalText;
+      outputNote.value = finalText;          // the single swap (filteredText when verified) over any painted text
+      outputNote.classList.remove('finalizing'); // un-dim on the swap
       streamStatus.style.display = 'none';
 
       if (!verified) {
@@ -1150,6 +1161,7 @@ async function streamGenerate(endpoint, body, method = 'POST') {
     streamStatus.style.display = 'none';
     showError('Network error. Make sure you are logged into Path4ABA.');
   } finally {
+    outputNote.classList.remove('finalizing'); // defensive un-dim for early-return (blocking) / error paths
     updateGenerateBtn();
   }
 }
