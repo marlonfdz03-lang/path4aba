@@ -90,6 +90,13 @@ export type AlertType =
   // (too aggressive) vs only abandoned/leaked tokens. Payload: { daysIdle } — NEVER the token value or hash;
   // the user is in actor_user_id. Severity 'warning'.
   | 'extension.token_expired'
+  // A subscription write REPLACED an existing non-null stripe_subscription_id (or bcba_students_subscription_id)
+  // with a DIFFERENT non-null id — the old Stripe subscription is now orphaned (still live in Stripe, no longer
+  // referenced by us) and may keep billing. This is the exact signal behind the double-subscription bug (a
+  // trial-declined user who re-checks-out gets a new sub; the webhook overwrites the id, orphaning the old one).
+  // Payload: { old_subscription_id, new_subscription_id, event_type } — NEVER card/PII; user in actor_user_id.
+  // Severity 'warning'.
+  | 'billing.subscription_id_replaced'
 
 export interface AdminAlertInput {
   source: AlertSource

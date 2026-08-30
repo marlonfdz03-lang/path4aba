@@ -1,6 +1,8 @@
 import Stripe from 'stripe'
 import { prisma } from '@/lib/prisma'
 import { sendPaymentConfirmationEmail, sendPaymentFailedEmail } from '@/lib/email'
+import { recordSubscriptionEvent, shouldAlertIdReplaced } from '@/lib/subscriptionEvents'
+import { emitAdminAlert } from '@/lib/adminAlerts'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -93,6 +95,18 @@ export async function POST(req: Request) {
                 },
               })
             }
+            // AUDIT (fail-soft): sites 1/2. Old from existingBcbaSub (null on create). Alert on id replacement.
+            const newBcbaSubId = session.subscription?.toString() || null
+            await recordSubscriptionEvent({
+              userId, customerId: session.customer?.toString() || null, subscriptionId: newBcbaSubId,
+              eventType: 'checkout.completed', source: 'webhook', stripeEventId: event.id,
+              oldStatus: existingBcbaSub?.bcba_students_status ?? null, newStatus: 'trialing',
+              oldSubscriptionId: existingBcbaSub?.bcba_students_subscription_id ?? null, newSubscriptionId: newBcbaSubId,
+              metadata: { channel: 'bcba_students' },
+            })
+            if (shouldAlertIdReplaced(existingBcbaSub?.bcba_students_subscription_id, newBcbaSubId)) {
+              await emitAdminAlert({ source: 'system', type: 'billing.subscription_id_replaced', severity: 'warning', actorUserId: userId, payload: { old_subscription_id: existingBcbaSub?.bcba_students_subscription_id, new_subscription_id: newBcbaSubId, event_type: 'checkout.completed', channel: 'bcba_students' } })
+            }
             console.log('[webhook] bcba_students subscription saved for:', userId)
           } catch (err: any) {
             console.error('[webhook] bcba_students upsert error:', err.message)
@@ -125,6 +139,19 @@ export async function POST(req: Request) {
                   stripe_subscription_id: session.subscription?.toString() || null,
                 },
               })
+            }
+            // AUDIT (fail-soft): sites 3/4 — the plan-change + id-replacement site (the yunymntz78 catcher).
+            // Old from existingSub (full row; null on create). Alert when the old sub id is replaced by a new one.
+            const newSubId = session.subscription?.toString() || null
+            await recordSubscriptionEvent({
+              userId, customerId: session.customer?.toString() || null, subscriptionId: newSubId,
+              eventType: 'checkout.completed', source: 'webhook', stripeEventId: event.id,
+              oldPlan: existingSub?.plan ?? null, newPlan: plan,
+              oldStatus: existingSub?.status ?? null, newStatus: 'trialing',
+              oldSubscriptionId: existingSub?.stripe_subscription_id ?? null, newSubscriptionId: newSubId,
+            })
+            if (shouldAlertIdReplaced(existingSub?.stripe_subscription_id, newSubId)) {
+              await emitAdminAlert({ source: 'system', type: 'billing.subscription_id_replaced', severity: 'warning', actorUserId: userId, payload: { old_subscription_id: existingSub?.stripe_subscription_id, new_subscription_id: newSubId, event_type: 'checkout.completed', old_plan: existingSub?.plan ?? null, new_plan: plan } })
             }
             console.log('Subscription saved for:', userId)
           } catch (err: any) {
@@ -163,10 +190,10 @@ export async function POST(req: Request) {
         const periodEnd = new Date((subscription as any).current_period_end * 1000)
         const mappedStatus = mapStripeStatus(subscription.status)
 
-        // Try updating as bcba_students subscription first
+        // Try updating as bcba_students subscription first (pre-read widened to capture old_* for the audit).
         const bcbaRow = await prisma.subscriptions.findFirst({
           where: { bcba_students_subscription_id: subscription.id },
-          select: { user_id: true },
+          select: { user_id: true, bcba_students_status: true },
         })
 
         if (bcbaRow) {
@@ -178,7 +205,19 @@ export async function POST(req: Request) {
             where: { bcba_students_subscription_id: subscription.id },
             data: updateData,
           }).catch(err => console.error('[webhook] bcba_students subscription.updated error:', err))
+          // AUDIT (fail-soft): site 5 — status transition only, no id replacement.
+          await recordSubscriptionEvent({
+            userId: bcbaRow.user_id, subscriptionId: subscription.id,
+            eventType: 'subscription.updated', source: 'webhook', stripeEventId: event.id,
+            oldStatus: bcbaRow.bcba_students_status ?? null, newStatus: mappedStatus,
+            metadata: { channel: 'bcba_students' },
+          })
         } else {
+          // Pre-read (site 6) to capture old_* before the updateMany, so each history row is self-describing.
+          const rbtRow = await prisma.subscriptions.findFirst({
+            where: { stripe_subscription_id: subscription.id },
+            select: { user_id: true, plan: true, status: true },
+          })
           const updateData: any = { status: mappedStatus, current_period_ends_at: periodEnd }
           if (subscription.status === 'trialing' && (subscription as any).trial_end) {
             updateData.trial_ends_at = new Date((subscription as any).trial_end * 1000)
@@ -187,6 +226,13 @@ export async function POST(req: Request) {
             where: { stripe_subscription_id: subscription.id },
             data: updateData,
           }).catch(err => console.error('[webhook] subscription.updated error:', err))
+          // AUDIT (fail-soft): site 6 — status/period transition only, no id replacement.
+          await recordSubscriptionEvent({
+            userId: rbtRow?.user_id ?? null, subscriptionId: subscription.id,
+            eventType: 'subscription.updated', source: 'webhook', stripeEventId: event.id,
+            oldPlan: rbtRow?.plan ?? null, newPlan: rbtRow?.plan ?? null,
+            oldStatus: rbtRow?.status ?? null, newStatus: mappedStatus,
+          })
         }
         break
       }
@@ -194,10 +240,10 @@ export async function POST(req: Request) {
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription
 
-        // Try bcba_students first
+        // Try bcba_students first (pre-read widened to capture old_status for the audit).
         const bcbaRow = await prisma.subscriptions.findFirst({
           where: { bcba_students_subscription_id: subscription.id },
-          select: { user_id: true },
+          select: { user_id: true, bcba_students_status: true },
         })
 
         if (bcbaRow) {
@@ -205,11 +251,29 @@ export async function POST(req: Request) {
             where: { bcba_students_subscription_id: subscription.id },
             data: { bcba_students_status: 'canceled' },
           }).catch(err => console.error('[webhook] bcba_students subscription.deleted error:', err))
+          // AUDIT (fail-soft): site 7.
+          await recordSubscriptionEvent({
+            userId: bcbaRow.user_id, subscriptionId: subscription.id,
+            eventType: 'subscription.deleted', source: 'webhook', stripeEventId: event.id,
+            oldStatus: bcbaRow.bcba_students_status ?? null, newStatus: 'canceled',
+            metadata: { channel: 'bcba_students' },
+          })
         } else {
+          // Pre-read (site 8) to capture old_status before the updateMany.
+          const rbtRow = await prisma.subscriptions.findFirst({
+            where: { stripe_subscription_id: subscription.id },
+            select: { user_id: true, status: true },
+          })
           await prisma.subscriptions.updateMany({
             where: { stripe_subscription_id: subscription.id },
             data: { status: 'canceled' },
           }).catch(err => console.error('[webhook] subscription.deleted error:', err))
+          // AUDIT (fail-soft): site 8.
+          await recordSubscriptionEvent({
+            userId: rbtRow?.user_id ?? null, subscriptionId: subscription.id,
+            eventType: 'subscription.deleted', source: 'webhook', stripeEventId: event.id,
+            oldStatus: rbtRow?.status ?? null, newStatus: 'canceled',
+          })
         }
         break
       }
@@ -225,10 +289,10 @@ export async function POST(req: Request) {
           ? new Date(periodEnd * 1000)
           : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
 
-        // Try by stripe_subscription_id first
+        // Try by stripe_subscription_id first (select widened to capture old_* for the audit).
         const existingSub = await prisma.subscriptions.findFirst({
           where: { stripe_subscription_id: subscriptionId },
-          select: { id: true, user_id: true },
+          select: { id: true, user_id: true, plan: true, status: true },
         })
 
         if (existingSub) {
@@ -236,12 +300,19 @@ export async function POST(req: Request) {
             where: { id: existingSub.id },
             data: { status: 'active', current_period_ends_at: currentPeriodEnd },
           })
+          // AUDIT (fail-soft): site 9 — status transition only (id unchanged), no replacement alert.
+          await recordSubscriptionEvent({
+            userId: existingSub.user_id, customerId, subscriptionId,
+            eventType: 'invoice.paid', source: 'webhook', stripeEventId: event.id,
+            oldStatus: existingSub.status ?? null, newStatus: 'active',
+          })
           console.log('[webhook] invoice.paid — marked active by subscription_id:', subscriptionId)
         } else {
-          // Fallback: try by stripe_customer_id
+          // Fallback: try by stripe_customer_id (select WIDENED to include stripe_subscription_id so we can
+          // record old_* and detect a replacement — this branch SETS stripe_subscription_id).
           const byCustomer = await prisma.subscriptions.findFirst({
             where: { stripe_customer_id: customerId },
-            select: { id: true, user_id: true },
+            select: { id: true, user_id: true, plan: true, status: true, stripe_subscription_id: true },
           })
           if (byCustomer) {
             await prisma.subscriptions.update({
@@ -252,6 +323,16 @@ export async function POST(req: Request) {
                 stripe_subscription_id: subscriptionId,
               },
             })
+            // AUDIT (fail-soft): site 10 — sets stripe_subscription_id. Alert only if it REPLACED a different id.
+            await recordSubscriptionEvent({
+              userId: byCustomer.user_id, customerId, subscriptionId,
+              eventType: 'invoice.paid', source: 'webhook', stripeEventId: event.id,
+              oldStatus: byCustomer.status ?? null, newStatus: 'active',
+              oldSubscriptionId: byCustomer.stripe_subscription_id ?? null, newSubscriptionId: subscriptionId,
+            })
+            if (shouldAlertIdReplaced(byCustomer.stripe_subscription_id, subscriptionId)) {
+              await emitAdminAlert({ source: 'system', type: 'billing.subscription_id_replaced', severity: 'warning', actorUserId: byCustomer.user_id, payload: { old_subscription_id: byCustomer.stripe_subscription_id, new_subscription_id: subscriptionId, event_type: 'invoice.paid' } })
+            }
             console.log('[webhook] invoice.paid — marked active by customer_id:', customerId)
           } else {
             console.error('[webhook] invoice.paid — no subscription found for:', subscriptionId, customerId)
@@ -267,10 +348,21 @@ export async function POST(req: Request) {
         const customerId = invoice.customer as string | null
 
         if (subscriptionId) {
+          // Pre-read (site 11) to capture old_status before the updateMany.
+          const failRow = await prisma.subscriptions.findFirst({
+            where: { stripe_subscription_id: subscriptionId },
+            select: { user_id: true, status: true },
+          })
           await prisma.subscriptions.updateMany({
             where: { stripe_subscription_id: subscriptionId },
             data: { status: 'canceled' },
           }).catch(err => console.error('[webhook] invoice.payment_failed status error:', err))
+          // AUDIT (fail-soft): site 11.
+          await recordSubscriptionEvent({
+            userId: failRow?.user_id ?? null, customerId, subscriptionId,
+            eventType: 'invoice.payment_failed', source: 'webhook', stripeEventId: event.id,
+            oldStatus: failRow?.status ?? null, newStatus: 'canceled',
+          })
           console.log('[webhook] invoice.payment_failed — marked canceled for subscription:', subscriptionId)
         }
 
