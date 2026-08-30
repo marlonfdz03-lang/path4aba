@@ -4,6 +4,7 @@ import { sendPaymentConfirmationEmail, sendPaymentFailedEmail } from '@/lib/emai
 import { recordSubscriptionEvent, shouldAlertIdReplaced } from '@/lib/subscriptionEvents'
 import { emitAdminAlert } from '@/lib/adminAlerts'
 import { mapStripeStatus, buildPriceToPlan, planFromPriceId } from '@/lib/planMapping'
+import { subCurrentPeriodEnd, invoiceSubscriptionId, epochToDate } from '@/lib/stripeEventFields'
 import { PRICES, BCBA_STUDENTS_PRICES } from '@/lib/stripe'
 
 export const dynamic = 'force-dynamic'
@@ -186,7 +187,10 @@ export async function POST(req: Request) {
 
       case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription
-        const periodEnd = new Date((subscription as any).current_period_end * 1000)
+        // current_period_end moved to the subscription item in Basil (we are on dahlia). Read via the
+        // helper (per-item first, top-level fallback); epochToDate yields null (never Invalid Date) when
+        // it cannot resolve, so we only write the column below when it actually resolved.
+        const periodEnd = epochToDate(subCurrentPeriodEnd(subscription))
         const mappedStatus = mapStripeStatus(subscription.status)
 
         // Try updating as bcba_students subscription first (pre-read widened to capture old_* for the audit).
@@ -197,8 +201,10 @@ export async function POST(req: Request) {
 
         if (bcbaRow) {
           const updateData: any = { bcba_students_status: mappedStatus }
-          if (subscription.status === 'trialing' && (subscription as any).trial_end) {
-            updateData.bcba_students_trial_ends_at = new Date((subscription as any).trial_end * 1000)
+          // trial_end did not move in Basil, but the no-new-Date(x*1000) rule holds without exception.
+          const bcbaTrialEnd = epochToDate((subscription as any).trial_end)
+          if (subscription.status === 'trialing' && bcbaTrialEnd) {
+            updateData.bcba_students_trial_ends_at = bcbaTrialEnd
           }
           await prisma.subscriptions.updateMany({
             where: { bcba_students_subscription_id: subscription.id },
@@ -217,9 +223,11 @@ export async function POST(req: Request) {
             where: { stripe_subscription_id: subscription.id },
             select: { user_id: true, plan: true, status: true },
           })
-          const updateData: any = { status: mappedStatus, current_period_ends_at: periodEnd }
-          if (subscription.status === 'trialing' && (subscription as any).trial_end) {
-            updateData.trial_ends_at = new Date((subscription as any).trial_end * 1000)
+          const updateData: any = { status: mappedStatus, ...(periodEnd ? { current_period_ends_at: periodEnd } : {}) }
+          // trial_end did not move in Basil, but the no-new-Date(x*1000) rule holds without exception.
+          const trialEnd = epochToDate((subscription as any).trial_end)
+          if (subscription.status === 'trialing' && trialEnd) {
+            updateData.trial_ends_at = trialEnd
           }
           // SELF-HEALING BACKSTOP: derive plan from the subscription's price id and write it. Historically
           // this handler never wrote `plan`, so a plan change made in the Stripe Portal (or a changePlan whose
@@ -285,14 +293,17 @@ export async function POST(req: Request) {
 
       case 'invoice.paid': {
         const invoice = event.data.object as Stripe.Invoice
-        const subscriptionId = (invoice as any).subscription as string
+        // invoice.subscription was removed in Basil (we are on dahlia); read via the helper
+        // (parent.subscription_details.subscription first, top-level fallback).
+        const subscriptionId = invoiceSubscriptionId(invoice)
         const customerId = (invoice as any).customer as string
         if (!subscriptionId) break
 
-        const periodEnd = (invoice as any).lines?.data?.[0]?.period?.end
-        const currentPeriodEnd = periodEnd
-          ? new Date(periodEnd * 1000)
-          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        // Invoice line period (this path did not move in Basil); route through epochToDate so the rule
+        // holds without exception, falling back to +30d only when the line has no usable period.
+        const currentPeriodEnd =
+          epochToDate((invoice as any).lines?.data?.[0]?.period?.end) ??
+          new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
 
         // Try by stripe_subscription_id first (select widened to capture old_* for the audit).
         const existingSub = await prisma.subscriptions.findFirst({
@@ -348,7 +359,8 @@ export async function POST(req: Request) {
 
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice
-        const subscriptionId = (invoice as any).subscription as string
+        // invoice.subscription was removed in Basil (we are on dahlia); read via the helper.
+        const subscriptionId = invoiceSubscriptionId(invoice)
         const customerEmail = (invoice as any).customer_email as string | null
         const customerId = invoice.customer as string | null
 

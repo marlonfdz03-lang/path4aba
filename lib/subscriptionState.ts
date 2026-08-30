@@ -10,6 +10,7 @@ import { emitAdminAlert } from '@/lib/adminAlerts'
 import {
   buildPriceToPlan, planFromPriceId, planDirection, mapStripeStatus, resolveStateFromLister, type SubState,
 } from '@/lib/planMapping'
+import { subCurrentPeriodEnd, epochToDate } from '@/lib/stripeEventFields'
 
 const PRICE_TO_PLAN = buildPriceToPlan(PRICES as any, BCBA_STUDENTS_PRICES as any)
 const RESOLVE_TIMEOUT_MS = 10000
@@ -77,8 +78,12 @@ export async function changePlan(params: {
   })
 
   const newStatus = mapStripeStatus(updated.status)
-  const periodEnd = updated.current_period_end ? new Date(updated.current_period_end * 1000) : undefined
-  const trialEnd = updated.status === 'trialing' && updated.trial_end ? new Date(updated.trial_end * 1000) : undefined
+  // current_period_end moved to the subscription item in Basil (we are on dahlia); read via the helper
+  // (per-item first, top-level fallback) and route through epochToDate so a missing field is null, never
+  // new Date(NaN).
+  const periodEnd = epochToDate(subCurrentPeriodEnd(updated))
+  // trial_end did not move in Basil, but the no-new-Date(x*1000) rule holds without exception.
+  const trialEnd = updated.status === 'trialing' ? epochToDate(updated.trial_end) : null
 
   // SYNCHRONOUS local write — see the doc comment above.
   let localSynced = true
