@@ -413,6 +413,8 @@
       </button>
       <div id="aiFillStatus" style="display:none; margin-top:6px; font-size:11px; padding:6px 8px; border-radius:5px; background:#f5f3ff; color:#5b21b6; white-space:pre-wrap;"></div>
       <div id="aiFillSummary" style="display:none; margin-top:6px; font-size:11px; padding:8px; border-radius:5px; background:#f8fafc; border:1px solid #e5e7eb; color:#334155;"></div>
+      <!-- Session-summary tables (Maladaptive / Replacement / Interventions), rendered after a note generates. -->
+      <div id="sessionSummary" style="display:none;"></div>
     </div>
 
     <div style="text-align:center;padding:8px 0 2px;">
@@ -422,6 +424,7 @@
   </div>
 
   <script src="name-match.js"></script>
+  <script src="extract-interventions.js"></script>
   <script src="popup.js"></script>
   <script src="data-tab-logic.js"></script>
 </body>

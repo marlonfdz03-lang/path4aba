@@ -1077,6 +1077,7 @@ async function streamGenerate(endpoint, body, method = 'POST') {
   streamStatus.style.display = '';
   streamStatus.textContent = 'Generating your note…';
   generateBtn.disabled = true;
+  clearSessionSummary(); // drop any prior note's tables while the new one streams
 
   let finalText = '';
   let blockedFlagged = [];
@@ -1145,6 +1146,7 @@ async function streamGenerate(endpoint, body, method = 'POST') {
       outputNote.value = finalText;          // the single swap (filteredText when verified) over any painted text
       outputNote.classList.remove('finalizing'); // un-dim on the swap
       streamStatus.style.display = 'none';
+      renderSessionSummary(finalText);       // the three tables under the note (matches the web)
 
       if (!verified) {
         // FAIL LOUD, NEVER SILENT: unverified text reaching the EHR unnoticed is the exact bug this commit
@@ -1164,6 +1166,69 @@ async function streamGenerate(endpoint, body, method = 'POST') {
     outputNote.classList.remove('finalizing'); // defensive un-dim for early-return (blocking) / error paths
     updateGenerateBtn();
   }
+}
+
+// ── Session-summary tables (under the generated note) ──────────────────────
+// Matches the website: three stacked cards — Maladaptive Behaviors, Replacement Skills, Interventions Used.
+// Behaviors/skills come from the RBT's selection; interventions from the SHARED parser (extract-interventions.js,
+// parity-fenced with lib/extractInterventions.impl.js) on the note text. Each card has a "✓ Copied" copy button
+// copying the same comma-joined string the web copies.
+function clearSessionSummary() {
+  const c = document.getElementById('sessionSummary');
+  if (c) { c.innerHTML = ''; c.style.display = 'none'; }
+}
+
+function renderSessionSummary(noteText) {
+  const container = document.getElementById('sessionSummary');
+  if (!container) return;
+  const interventions = (window.P4Interventions && typeof window.P4Interventions.extractInterventions === 'function')
+    ? window.P4Interventions.extractInterventions(noteText || '')
+    : [];
+  const sections = [
+    { label: 'Maladaptive Behaviors', items: selectedBehaviors.slice(), color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
+    { label: 'Replacement Skills',    items: selectedSkills.slice(),    color: '#0D9488', bg: '#F0FDF4', border: '#99F6E4' },
+    { label: 'Interventions Used',    items: interventions,             color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
+  ];
+  container.innerHTML = '';
+  for (const sec of sections) {
+    const card = document.createElement('div');
+    card.style.cssText = `border:1px solid ${sec.border}; background:${sec.bg}; border-radius:10px; padding:10px; margin-top:8px;`;
+    const head = document.createElement('div');
+    head.style.cssText = 'display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:6px;';
+    const lbl = document.createElement('span');
+    lbl.textContent = sec.label;
+    lbl.style.cssText = `font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:${sec.color};`;
+    const btn = document.createElement('button');
+    btn.textContent = 'Copy';
+    btn.style.cssText = `font-size:10px; padding:3px 8px; border-radius:7px; border:1px solid ${sec.color}; color:${sec.color}; background:white; cursor:pointer; flex-shrink:0;`;
+    btn.addEventListener('click', () => {
+      navigator.clipboard.writeText(sec.items.join(', ')).then(() => {
+        btn.textContent = '✓ Copied';
+        btn.style.borderColor = '#16A34A';
+        btn.style.color = '#16A34A';
+        setTimeout(() => { btn.textContent = 'Copy'; btn.style.borderColor = sec.color; btn.style.color = sec.color; }, 2000);
+      });
+    });
+    head.appendChild(lbl);
+    head.appendChild(btn);
+    card.appendChild(head);
+    const body = document.createElement('div');
+    if (sec.items.length) {
+      body.style.cssText = 'display:flex; flex-wrap:wrap; gap:4px;';
+      for (const item of sec.items) {
+        const chip = document.createElement('span');
+        chip.textContent = item;
+        chip.style.cssText = `font-size:11px; padding:2px 7px; border-radius:6px; background:white; border:1px solid ${sec.border}; color:${sec.color};`;
+        body.appendChild(chip);
+      }
+    } else {
+      body.textContent = 'None recorded';
+      body.style.cssText = 'font-size:11px; color:#9ca3af;';
+    }
+    card.appendChild(body);
+    container.appendChild(card);
+  }
+  container.style.display = '';
 }
 
 // ── Copy button ────────────────────────────
