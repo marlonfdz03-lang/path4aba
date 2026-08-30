@@ -44,8 +44,12 @@ const RETRY_STATES = new Set(['past_due', 'unpaid'])
 const isoDay = (d: Date | null | undefined): string | null =>
   d ? d.toISOString().slice(0, 10) : null
 
+// Compare date columns at DAY granularity (UTC calendar day), not to the millisecond. Stripe timestamps and
+// our stored ones routinely differ by seconds within the same day (e.g. trial_end); a to-the-ms comparison
+// reported "drift" every run where nothing meaningful changed, writing a phantom correction and firing an
+// alert that trains us to ignore it. A drift is a change of calendar day (or a null being filled).
 const dateDiffers = (resolved: Date, current: Date | null | undefined): boolean =>
-  current == null || resolved.getTime() !== current.getTime()
+  current == null || isoDay(resolved) !== isoDay(current)
 
 /**
  * Corrections for a row's PRIMARY subscription: status, current_period_ends_at, plan, trial_ends_at. plan is
@@ -126,4 +130,20 @@ export const ABORT_MISSING_FRACTION = 0.25
 
 export function shouldAbort(checked: number, missing: number): boolean {
   return checked >= ABORT_MIN_ROWS && missing / checked > ABORT_MISSING_FRACTION
+}
+
+// ── dryRun parsing ──────────────────────────────────────────────────────────
+// A dry-run flag that SILENTLY falls through to writing is the most dangerous possible default — it is exactly
+// how ?dryRun=1 wrote to production. So the contract is deliberate and fail-safe:
+//   - param ABSENT              -> 'write'  (the cron's normal mode; it passes no query string)
+//   - '1' | 'true' | 'yes' | '' -> 'dryrun' ('' is bare presence, e.g. ?dryRun; case/space-insensitive)
+//   - param PRESENT, anything else -> 'abort'  (an unrecognized dryRun value must NEVER mean "write")
+// The only path that writes is the total absence of the param. Any present-but-unparseable value stops the run.
+export type DryRunMode = 'write' | 'dryrun' | 'abort'
+
+export function parseDryRun(hasParam: boolean, rawValue: string | null): DryRunMode {
+  if (!hasParam) return 'write'
+  const v = (rawValue ?? '').trim().toLowerCase()
+  if (v === '1' || v === 'true' || v === 'yes' || v === '') return 'dryrun'
+  return 'abort'
 }

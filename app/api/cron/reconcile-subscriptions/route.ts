@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getStripe, PRICES, BCBA_STUDENTS_PRICES } from '@/lib/stripe'
 import { buildPriceToPlan, withTimeout } from '@/lib/planMapping'
 import { emitAdminAlert } from '@/lib/adminAlerts'
-import { reconcilePrimary, reconcileBcba, shouldAbort } from '@/lib/reconcileSubscriptions'
+import { reconcilePrimary, reconcileBcba, shouldAbort, parseDryRun } from '@/lib/reconcileSubscriptions'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -28,9 +28,18 @@ export async function GET(request: Request) {
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  // ?dryRun=true computes and returns the corrections WITHOUT writing and WITHOUT drift/orphan alerts — so a
-  // first real run (live key, in prod) shows exactly what it would change before it is trusted to change it.
-  const dryRun = new URL(request.url).searchParams.get('dryRun') === 'true'
+  // dryRun preview computes + returns the corrections WITHOUT writing and WITHOUT drift/orphan alerts. Parsing
+  // is fail-safe (see parseDryRun): only the TOTAL ABSENCE of the param writes; any present-but-unrecognized
+  // value ABORTS rather than silently falling through to a write (the ?dryRun=1 incident).
+  const url = new URL(request.url)
+  const mode = parseDryRun(url.searchParams.has('dryRun'), url.searchParams.get('dryRun'))
+  if (mode === 'abort') {
+    return NextResponse.json(
+      { aborted: true, reason: 'unrecognized_dryRun_value — use ?dryRun=1|true|yes (or omit to write)' },
+      { status: 400 },
+    )
+  }
+  const dryRun = mode === 'dryrun'
 
   let rows: any[]
   try {
