@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Path4ABA",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Clinical documentation for ABA professionals — generate session notes from any webpage.",
   "permissions": ["storage", "activeTab", "scripting", "tabs"],
   "host_permissions": [
