@@ -5,6 +5,7 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@/lib/generated/prisma/client'
 import { PLAN_LIMITS } from '@/lib/stripe'
 import { buildActivityLists } from '@/lib/curatedActivities'
+import { canAccessClient } from '@/lib/clientFiles'
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 const adapter = new PrismaPg(pool)
@@ -104,6 +105,13 @@ export async function DELETE(req: Request) {
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+
+  // OWNERSHIP GATE — this DELETE cascades ~15 tables (session_notes, client_files PHI, all data tables). It
+  // must require that the caller owns the client (assigned RBT / connected BCBA / admin), mirroring the
+  // guarded DELETE on /api/clients/[id]. Without this any authenticated user could destroy any client. 403
+  // (never 404) so a legitimate-but-unassigned user gets a clear message. Same shared rule as every other route.
+  if (!(await canAccessClient(session, id)))
+    return NextResponse.json({ error: 'Forbidden — you are not assigned to this client.' }, { status: 403 })
 
   await prisma.clients.delete({ where: { id } })
   return NextResponse.json({ success: true })
