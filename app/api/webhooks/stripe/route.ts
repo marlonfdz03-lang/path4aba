@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { sendPaymentConfirmationEmail, sendPaymentFailedEmail } from '@/lib/email'
 import { recordSubscriptionEvent, shouldAlertIdReplaced } from '@/lib/subscriptionEvents'
 import { emitAdminAlert } from '@/lib/adminAlerts'
+import { mapStripeStatus, buildPriceToPlan, planFromPriceId } from '@/lib/planMapping'
+import { PRICES, BCBA_STUDENTS_PRICES } from '@/lib/stripe'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -11,12 +13,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'stripe-key-required'
   apiVersion: '2024-06-20' as any,
 })
 
-function mapStripeStatus(status: string): 'active' | 'trialing' | 'canceled' | 'expired' {
-  if (status === 'active') return 'active'
-  if (status === 'trialing') return 'trialing'
-  if (status === 'canceled' || status === 'incomplete_expired') return 'canceled'
-  return 'expired'
-}
+// priceId -> plan-key, so subscription.updated can write `plan` (the self-healing backstop for plan changes
+// made in the Stripe Billing Portal, or the rare case changePlan's direct local write failed).
+const PRICE_TO_PLAN = buildPriceToPlan(PRICES as any, BCBA_STUDENTS_PRICES as any)
 
 export async function POST(req: Request) {
   try {
@@ -222,6 +221,12 @@ export async function POST(req: Request) {
           if (subscription.status === 'trialing' && (subscription as any).trial_end) {
             updateData.trial_ends_at = new Date((subscription as any).trial_end * 1000)
           }
+          // SELF-HEALING BACKSTOP: derive plan from the subscription's price id and write it. Historically
+          // this handler never wrote `plan`, so a plan change made in the Stripe Portal (or a changePlan whose
+          // direct local write failed) left our `plan`/limit stale forever. Only write when we recognize the
+          // price (a primary RBT/BCBA plan); an unknown/students price leaves `plan` untouched.
+          const derivedPlan = planFromPriceId((subscription as any).items?.data?.[0]?.price?.id, PRICE_TO_PLAN)
+          if (derivedPlan && derivedPlan !== 'bcba_students') updateData.plan = derivedPlan
           await prisma.subscriptions.updateMany({
             where: { stripe_subscription_id: subscription.id },
             data: updateData,

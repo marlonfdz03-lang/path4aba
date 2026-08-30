@@ -97,6 +97,10 @@ export type AlertType =
   // Payload: { old_subscription_id, new_subscription_id, event_type } — NEVER card/PII; user in actor_user_id.
   // Severity 'warning'.
   | 'billing.subscription_id_replaced'
+  // A plan change SUCCEEDED in Stripe but the synchronous local subscriptions-row write FAILED — Stripe and
+  // our DB have diverged (the user may briefly see the OLD plan/limit until the webhook plan-backstop heals
+  // it). Must be visible, not silent. Payload: { subscription_id, intended_plan, error }. Severity 'critical'.
+  | 'billing.local_sync_failed'
 
 export interface AdminAlertInput {
   source: AlertSource

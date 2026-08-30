@@ -243,6 +243,7 @@ export default function Sidebar() {
       });
       const data = await res.json();
       if (data.url) window.location.href = data.url;
+      else if (data.changed || data.unchanged) window.location.href = "/bcba-students?plan=changed";
     } catch {
       router.push("/pricing");
     }

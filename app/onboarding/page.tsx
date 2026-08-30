@@ -310,6 +310,7 @@ export default function OnboardingPage() {
         timeout,
       ]);
       const data = await (res as Response).json();
+      if (data.changed || data.unchanged) { window.location.href = "/clients?plan=changed"; return; }
       if (!data.url) {
         setPlanError(data.error || "Something went wrong, please try again.");
         setLoadingPlan(null);

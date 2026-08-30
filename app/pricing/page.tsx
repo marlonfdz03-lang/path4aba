@@ -344,9 +344,12 @@ function PricingContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan: planKey, interval, userId }),
       });
-      const { url, error } = await res.json();
-      if (error || !url) throw new Error(error || "No checkout URL");
-      window.location.href = url;
+      const data = await res.json();
+      // Contract: { url } -> checkout redirect; { changed|unchanged } -> plan changed in place (no url);
+      // { error } -> block (e.g. billing unavailable). A plan change re-navigates so subscription state re-loads.
+      if (data.url) { window.location.href = data.url; return; }
+      if (data.changed || data.unchanged) { window.location.href = "/clients?plan=changed"; return; }
+      throw new Error(data.error || "No checkout URL");
     } catch {
       setLoadingPlan(null);
     }
@@ -364,9 +367,10 @@ function PricingContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, interval }),
       });
-      const { url, error } = await res.json();
-      if (error || !url) throw new Error(error || "No checkout URL");
-      window.location.href = url;
+      const data = await res.json();
+      if (data.url) { window.location.href = data.url; return; }
+      if (data.changed || data.unchanged) { window.location.href = "/bcba-students?plan=changed"; return; }
+      throw new Error(data.error || "No checkout URL");
     } catch {
       setLoadingPlan(null);
     }

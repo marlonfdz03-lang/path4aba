@@ -3,6 +3,7 @@ import { auth } from '@/auth'
 import { getStripe, PRICES, BCBA_STUDENTS_PRICES } from '@/lib/stripe'
 import { prisma } from '@/lib/prisma'
 import { sendWelcomeEmail } from '@/lib/email'
+import { resolveSubscriptionState, changePlan, PRIMARY_PRICE_IDS, STUDENTS_PRICE_IDS } from '@/lib/subscriptionState'
 
 export async function POST(request: Request) {
   // SECURITY: always get userId from server session, never trust client
@@ -81,6 +82,21 @@ export async function POST(request: Request) {
   })
 
   let customerId = existingSub?.stripe_customer_id ?? null
+
+  // THREE-WAY BRANCH (shared resolver), scoped to the product being bought. live -> change the existing
+  // subscription; none -> checkout with a 7-day trial; lapsed -> checkout WITHOUT a trial. FAIL CLOSED -> 503.
+  const isStudentsPlan = plan === 'bcba_students_addon' || plan === 'bcba_students_standalone'
+  const relevantPriceIds = isStudentsPlan ? STUDENTS_PRICE_IDS : PRIMARY_PRICE_IDS
+  const state = await resolveSubscriptionState(customerId, relevantPriceIds)
+  if (state.state === 'unavailable') {
+    return NextResponse.json({ error: "We couldn't reach our billing provider — please try again in a moment." }, { status: 503 })
+  }
+  if (state.state === 'live') {
+    const result = await changePlan({ liveSub: state.liveSub, itemId: state.itemId, newPriceId: priceId, newPlan: plan, userId, customerId })
+    if (result.unchanged) return NextResponse.json({ unchanged: true, plan: result.plan })
+    return NextResponse.json({ changed: true, plan: result.plan })
+  }
+
   if (!customerId) {
     const customer = await getStripe().customers.create({
       email: user.email,
@@ -102,7 +118,8 @@ export async function POST(request: Request) {
     payment_method_types: ['card'],
     payment_method_collection: 'always',
     line_items: [{ price: priceId, quantity: 1 }],
-    subscription_data: { trial_period_days: 7 },
+    // Trial ONLY for a first-time customer of this product. 'lapsed' -> no repeat trial.
+    ...(state.state === 'none' ? { subscription_data: { trial_period_days: 7 } } : {}),
     success_url: successUrl,
     cancel_url: cancelUrl,
     metadata: { userId, plan, promoCode: promoCode || '' },

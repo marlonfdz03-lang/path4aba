@@ -43,9 +43,10 @@ export default function PaywallScreen() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, interval }),
       });
-      const { url, error: err } = await res.json();
-      if (err || !url) throw new Error(err || "No checkout URL");
-      window.location.href = url;
+      const data = await res.json();
+      if (data.url) { window.location.href = data.url; return; }
+      if (data.changed || data.unchanged) { window.location.href = "/bcba-students?plan=changed"; return; }
+      throw new Error(data.error || "No checkout URL");
     } catch (e: any) {
       setError(e.message || "Something went wrong");
       setLoading(false);

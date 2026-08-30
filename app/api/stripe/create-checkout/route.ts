@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { getStripe, PRICES } from '@/lib/stripe'
 import { prisma } from '@/lib/prisma'
+import { resolveSubscriptionState, changePlan, PRIMARY_PRICE_IDS } from '@/lib/subscriptionState'
 
 export async function POST(request: Request) {
   // SECURITY FIX: always get userId from server session, never trust client
@@ -30,6 +31,19 @@ export async function POST(request: Request) {
 
   let customerId = sub?.stripe_customer_id ?? null
 
+  // THREE-WAY BRANCH (shared resolver): live -> change the existing subscription (no new sub, no new trial);
+  // none -> checkout with a 7-day trial; lapsed -> checkout WITHOUT a trial (already had one). FAIL CLOSED:
+  // if Stripe is unreachable we BLOCK (503) rather than mint a second subscription.
+  const state = await resolveSubscriptionState(customerId, PRIMARY_PRICE_IDS)
+  if (state.state === 'unavailable') {
+    return NextResponse.json({ error: "We couldn't reach our billing provider — please try again in a moment." }, { status: 503 })
+  }
+  if (state.state === 'live') {
+    const result = await changePlan({ liveSub: state.liveSub, itemId: state.itemId, newPriceId: priceId, newPlan: plan, userId, customerId })
+    if (result.unchanged) return NextResponse.json({ unchanged: true, plan: result.plan })
+    return NextResponse.json({ changed: true, plan: result.plan })
+  }
+
   if (!customerId) {
     const user = await prisma.users.findUnique({
       where: { id: userId },
@@ -50,7 +64,8 @@ export async function POST(request: Request) {
     payment_method_types: ['card'],
     payment_method_collection: 'always',
     line_items: [{ price: priceId, quantity: 1 }],
-    subscription_data: { trial_period_days: 7 },
+    // Trial ONLY for a customer who has never subscribed to this product. 'lapsed' -> no repeat trial.
+    ...(state.state === 'none' ? { subscription_data: { trial_period_days: 7 } } : {}),
     success_url: `${origin}/clients?subscription=success`,
     cancel_url: `${origin}/pricing`,
     metadata: { userId, plan, promoCode: promoCode || '' },
