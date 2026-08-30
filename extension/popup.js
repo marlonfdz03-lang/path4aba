@@ -3419,16 +3419,24 @@ async function officePuzzleDatasheetAutofiller(tasks, prebuiltOpDataMap) {
           // Report what was CLICKED, not what was intended. shuffleArray(...).slice(0, diff)
           // silently yields fewer cells when there aren't enough －/＋ to flip, so the column
           // can end short of target — the old line printed |diff| and targetCorrect either way.
-          // diff === 0 is a real success (already at target); zero clicks with a non-zero diff
-          // is not, and must not count as a filled day.
+          // A day is a ✓ ONLY when OP actually reached the target; anything short must NOT ride
+          // a ✓, or the week auto-saves a value OP never received (same principle that closed the
+          // maladaptive no-click paths). diff === 0 means it was already at target — a real success.
           const reached = currentCorrect + (diff > 0 ? clickCount : -clickCount);
-          if (clickCount === 0 && diff !== 0) {
-            log.push(`❌ "${name}" day ${task.dayNumber} — needed ${Math.abs(diff)} cell(s) to reach ${targetCorrect} of ${totalTrials}, but no flippable cell was available; nothing clicked`);
+          if (reached !== targetCorrect) {
+            // Both shapes block (❌ → errs → verified false → no auto-save). The wording, not the
+            // marker, distinguishes "nothing moved" from "moved, but short" — to the gate they are
+            // the same event: OP is short of the value we would record.
+            if (clickCount === 0) {
+              log.push(`❌ "${name}" day ${task.dayNumber} — needed ${Math.abs(diff)} cell(s) to reach ${targetCorrect} of ${totalTrials}, but no flippable cell was available; nothing clicked`);
+            } else {
+              log.push(`❌ "${name}" day ${task.dayNumber} — TARGET NOT REACHED: reached ${reached} of ${totalTrials} correct, needed ${targetCorrect} (clicked ${clickCount} of ${Math.abs(diff)} cell(s)); Office Puzzle is short of the recorded value`);
+            }
             await delay(300);
             continue;
           }
           filledDays.push(task.dayNumber);
-          log.push(`✓ "${name}" day ${task.dayNumber} — ${clickCount} cell(s) changed (${currentCorrect}→${reached} of ${totalTrials} correct${reached !== targetCorrect ? `, TARGET ${targetCorrect} NOT REACHED` : (diff === 0 ? ', already at target' : '')}, ${emptyCells.length} empty cells untouched${activatedEmpty ? ', activated empty column' : ''})`);
+          log.push(`✓ "${name}" day ${task.dayNumber} — ${clickCount} cell(s) changed (${currentCorrect}→${reached} of ${totalTrials} correct${diff === 0 ? ', already at target' : ''}, ${emptyCells.length} empty cells untouched${activatedEmpty ? ', activated empty column' : ''})`);
           await delay(300);
           continue;
         }
