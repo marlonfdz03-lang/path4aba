@@ -12,7 +12,11 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'stripe-key-required', {
-  apiVersion: '2024-06-20' as any,
+  // Aligned with lib/stripe.ts (the shared getStripe()). This instance is used ONLY for constructEvent
+  // (signature verify + parse), which never reshapes the payload — webhook events always arrive in the
+  // ENDPOINT's API version — so this pin is cosmetic. Kept in sync so there is no misleading version split:
+  // the old '2024-06-20' here vs dahlia there is exactly what made the field-location bug hard to spot.
+  apiVersion: '2026-04-22.dahlia',
 })
 
 // priceId -> plan-key, so subscription.updated can write `plan` (the self-healing backstop for plan changes
