@@ -1,0 +1,25 @@
+{
+  "_comment": "HAND-BUILT, not a captured payload. Represents the pre-Basil Subscription shape where current_period_end lived at the top level and items had no per-item period. Exists solely to prove the fallback path in subCurrentPeriodEnd. Do not treat as a real dahlia payload.",
+  "object": {
+    "id": "sub_prebasil0000000000",
+    "object": "subscription",
+    "status": "active",
+    "current_period_end": 1790273860,
+    "trial_end": null,
+    "customer": "cus_prebasil000000000",
+    "items": {
+      "object": "list",
+      "data": [
+        {
+          "id": "si_prebasil0000000000",
+          "object": "subscription_item",
+          "price": {
+            "id": "price_1TfQ6m3rm4ZConVQ4qrNACgw",
+            "object": "price"
+          }
+        }
+      ]
+    }
+  },
+  "previous_attributes": null
+}

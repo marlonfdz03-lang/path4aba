@@ -1,0 +1,24 @@
+{
+  "_comment": "HAND-BUILT, not a captured payload. Represents the pre-Basil Invoice shape where the subscription id lived at the top level (invoice.subscription) and there was no invoice.parent. Exists solely to prove the fallback path in invoiceSubscriptionId. Do not treat as a real dahlia payload.",
+  "object": {
+    "id": "in_prebasil0000000000",
+    "object": "invoice",
+    "status": "paid",
+    "subscription": "sub_prebasil0000000000",
+    "customer": "cus_prebasil000000000",
+    "lines": {
+      "object": "list",
+      "data": [
+        {
+          "id": "il_prebasil0000000000",
+          "object": "line_item",
+          "period": {
+            "end": 1790217262,
+            "start": 1787538862
+          }
+        }
+      ]
+    }
+  },
+  "previous_attributes": null
+}
