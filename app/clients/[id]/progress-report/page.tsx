@@ -75,6 +75,7 @@ export default function ProgressReportPage() {
   const [previousReports, setPreviousReports] = useState<any[]>([]);
   const [expandedReport, setExpandedReport] = useState<string | null>(null);
   const [status, setStatus] = useState("");
+  const [summaryCopied, setSummaryCopied] = useState(false);
   const [clinicalProfile, setClinicalProfile] = useState<any>(null);
   const [serviceUtilization, setServiceUtilization] = useState<any>(null);
   const [behaviorWeeklyTable, setBehaviorWeeklyTable] = useState<any>({});
@@ -664,11 +665,11 @@ export default function ProgressReportPage() {
                       Reassessment Summary · {reassessStart} to {reassessEnd}
                     </p>
                     <button
-                      onClick={() => navigator.clipboard.writeText(reassessSummary)}
-                      className="text-[12px] px-3 py-1 rounded-lg border hover:opacity-70"
-                      style={{ borderColor: "var(--border)", color: "var(--text2)" }}
+                      onClick={() => { navigator.clipboard.writeText(reassessSummary); setSummaryCopied(true); setTimeout(() => setSummaryCopied(false), 2000); }}
+                      className="text-[12px] px-3 py-1 rounded-lg border hover:opacity-70 transition-colors"
+                      style={{ borderColor: summaryCopied ? "#16A34A" : "var(--border)", color: summaryCopied ? "#16A34A" : "var(--text2)" }}
                     >
-                      Copy
+                      {summaryCopied ? "✓ Copied" : "Copy"}
                     </button>
                   </div>
                   <p className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text2)" }}>{reassessSummary}</p>

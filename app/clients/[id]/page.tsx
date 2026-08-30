@@ -192,6 +192,22 @@ function NoteOutput({
   );
 }
 
+// One Session-Summary section's Copy button. Each instance owns its own copied state so the three
+// (Maladaptive / Replacement / Interventions) confirm independently. Matches the app convention:
+// "✓ Copied", green #16A34A, revert after 2s.
+function CopySection({ items, color }: { items: string[]; color: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(items.join(", ")); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+      className="text-[11px] px-2.5 py-1 rounded-lg border font-medium hover:opacity-70 transition-colors"
+      style={{ borderColor: copied ? "#16A34A" : color, color: copied ? "#16A34A" : color, background: "white" }}
+    >
+      {copied ? "✓ Copied" : "Copy"}
+    </button>
+  );
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function ClientProfilePage() {
@@ -2132,13 +2148,7 @@ export default function ClientProfilePage() {
                     <div key={section.label} className="rounded-xl border p-4" style={{ borderColor: "var(--border)", background: section.bg }}>
                       <div className="flex items-center justify-between mb-2">
                         <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: section.color }}>{section.label}</p>
-                        <button
-                          onClick={() => navigator.clipboard.writeText(section.items.join(", "))}
-                          className="text-[11px] px-2.5 py-1 rounded-lg border font-medium hover:opacity-70"
-                          style={{ borderColor: section.color, color: section.color, background: "white" }}
-                        >
-                          Copy
-                        </button>
+                        <CopySection items={section.items} color={section.color} />
                       </div>
                       {section.items.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5">
