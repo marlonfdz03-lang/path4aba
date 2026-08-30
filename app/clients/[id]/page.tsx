@@ -16,6 +16,7 @@ import { activeBehaviors, activeSkills, behaviorMissingFields, incompleteBehavio
 import { splitReinforcerValue } from "@/lib/reinforcers";
 import { looksEdible, EDIBLE_WARNING } from "@/lib/edibleReinforcer";
 import { isCommunityOuting, COMMUNITY_OUTING_WARNING } from "@/lib/deliverableReinforcer";
+import { looksLikePersonRole, PERSON_WARNING } from "@/lib/clinicalLibrary";
 import { subtractMasteredFromActive } from "@/lib/skillReconcile";
 import { functionDisplayLabel, functionToCanonical } from "@/lib/functionPatterns";
 import { splitNoteStream } from "@/lib/noteStream";
@@ -546,7 +547,10 @@ export default function ClientProfilePage() {
     // Advisory only — warn if it looks edible OR like a community outing, but still add it (Marlon's ruling:
     // inform, don't block). Edible takes precedence if somehow both; a single item is virtually never both.
     setReinforcerWarning(
-      looksEdible(raw) ? EDIBLE_WARNING : isCommunityOuting(raw) ? COMMUNITY_OUTING_WARNING : "",
+      looksEdible(raw) ? EDIBLE_WARNING
+        : isCommunityOuting(raw) ? COMMUNITY_OUTING_WARNING
+        : looksLikePersonRole(raw) ? PERSON_WARNING
+        : "",
     );
     const current = (client.clinicalProfile?.reinforcers || []) as any[];
     // Split " or " into discrete items, then de-dupe (case-insensitive) against existing names.

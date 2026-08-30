@@ -201,15 +201,36 @@ const KINSHIP = new Set([
 ]);
 const TITLED_NAME = /^(mr|mrs|ms|miss|mx|dr|sir|madam|aunt|uncle|grandma|grandpa)\.?\s+[A-Z][a-z]+/i;
 
-export function looksLikePersonReinforcer(value: string): boolean {
+// SELECTION-SAFE predicate — rules 1-2 ONLY (KINSHIP role word + titled name). It catches every real
+// person-role reinforcer ("Mother", "Parents", "Adult", "Teacher", "Ms Garcia") WITHOUT the Title-Case
+// proper-name heuristic (rule 3), which would silently false-drop legitimate Title-Case brand/show reinforcers
+// ("Hot Wheels", "Paw Patrol", "Dragon Ball Z", "Verbal Praise"). Exported for the note-selection choke point
+// (buildServerSessionInput) and the client-create path — places where a wrong call is silent and unreviewable.
+// Rule 3 lives ONLY in looksLikePersonReinforcer below, on the human-reviewed refresh/backfill path, where a
+// mistaken drop is logged and eyeballed. Do NOT add rule 3 here — the tests forbid it.
+export function looksLikePersonRole(value: string): boolean {
   const t = String(value ?? '').trim();
   if (!t) return false;
   if (KINSHIP.has(t.toLowerCase())) return true;           // relationship / role word
   if (TITLED_NAME.test(t)) return true;                    // "Ms Garcia", "Dr Smith"
+  return false;
+}
+
+// FULL guard — rules 1-2 PLUS the Title-Case proper-name heuristic (rule 3). Refresh/backfill ONLY.
+export function looksLikePersonReinforcer(value: string): boolean {
+  const t = String(value ?? '').trim();
+  if (!t) return false;
+  if (looksLikePersonRole(t)) return true;                 // rules 1-2
   const tokens = t.split(/\s+/);                            // "John Smith": 2+ tokens, all Capitalized
   if (tokens.length >= 2 && tokens.every((tok) => /^[A-Z][a-zA-Z'’.-]*$/.test(tok))) return true;
   return false;
 }
+
+// Add-time advisory (mirrors EDIBLE_WARNING / COMMUNITY_OUTING_WARNING). A person is not an item to hand over;
+// the reinforcing thing is their attention — steer the RBT to phrase it as a deliverable category.
+export const PERSON_WARNING =
+  "A person isn't a deliverable reinforcer — an RBT can't hand over a caregiver. If it's their attention that " +
+  "reinforces, add it as \"social attention\" or \"praise from [caregiver]\" instead, so it appears in notes.";
 
 export function collectLibraryEntriesFromProfile(profile: any): LibraryEntry[] {
   const e: LibraryEntry[] = [];

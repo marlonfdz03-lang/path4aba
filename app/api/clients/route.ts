@@ -5,6 +5,7 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@/lib/generated/prisma/client'
 import { PLAN_LIMITS } from '@/lib/stripe'
 import { buildActivityLists } from '@/lib/curatedActivities'
+import { looksLikePersonRole } from '@/lib/clinicalLibrary'
 import { canAccessClient } from '@/lib/clientFiles'
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
@@ -75,9 +76,16 @@ export async function POST(req: Request) {
   // clinical_profile wholesale from the request body, so applying buildActivityLists last guarantees the
   // curated home/school lists are always present (a body without activities can never wipe them) while
   // preserving any split activities the body did provide. Flat/untagged activities are not read here.
+  // PERSON FIREWALL on the create/update path — the gap that let "Mother"/"Parents"/"Adult"/"Teacher" into
+  // stored profiles (the refresh path already strips them, this one did not). Rules 1-2 only (looksLikePersonRole)
+  // so legitimate Title-Case brand reinforcers ("Hot Wheels", "Dragon Ball Z") are never dropped; a descriptive
+  // category ("Social interaction with parents") survives. Only filters an array-shaped reinforcers list.
   const withActivities = (cp: any) => ({
     name: clientName,
     ...cp,
+    ...(Array.isArray(cp?.reinforcers)
+      ? { reinforcers: cp.reinforcers.filter((r: any) => !looksLikePersonRole(String(r ?? ''))) }
+      : {}),
     ...buildActivityLists({ home: cp?.homeActivities, school: cp?.schoolActivities }),
   })
 

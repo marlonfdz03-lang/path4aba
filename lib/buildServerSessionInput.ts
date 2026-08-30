@@ -12,6 +12,7 @@ import { matrixFunctionsForBehavior } from "./functionPatterns.ts";
 import { splitReinforcerValue } from "./reinforcers.ts";
 import { looksEdible } from "./edibleReinforcer.ts";
 import { isCommunityOuting } from "./deliverableReinforcer.ts";
+import { looksLikePersonRole } from "./clinicalLibrary.ts";
 import { buildActivityLists } from "./curatedActivities.ts";
 import { keepActiveBehaviorNames, keepActiveSkillNames, activeSkills } from "./activePrograms.ts";
 
@@ -93,8 +94,13 @@ export function buildServerSessionInput(
   // reinforcer is a false clinical record. Firewalled at selection so it reaches neither the top-3 named list
   // nor the top-5 tangibles. Borderline (playground/outside/recess/trampoline/water) is NOT filtered here — see
   // deliverableReinforcer.ts. Conservative like looksEdible: no legitimate in-session item false-triggers.
+  // PERSON FIREWALL (fourth family member): a person is not a deliverable reinforcer — an RBT can't hand over a
+  // caregiver, so "Mother"/"Parents"/"Adult"/"Teacher" as an in-session reinforcer is a false record. Rules 1-2
+  // only (looksLikePersonRole) — NOT the Title-Case rule 3, which would false-drop "Hot Wheels"/"Dragon Ball Z".
+  // "Social interaction with parents" survives (a category, not a person). Rule 3 stays on the reviewed refresh
+  // path.
   const reinforcers = (splitReinforcerValue(asArray(p.reinforcers)) as string[])
-    .filter((r) => !looksEdible(r) && !isCommunityOuting(r));
+    .filter((r) => !looksEdible(r) && !isCommunityOuting(r) && !looksLikePersonRole(r));
   const { homeActivities, schoolActivities } = buildActivityLists({
     home: asArray(p.homeActivities) as string[],
     school: asArray(p.schoolActivities) as string[],
