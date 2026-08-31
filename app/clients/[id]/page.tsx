@@ -8,7 +8,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { getClientProfiles } from "@/lib/clientStorage";
 import { nextSessionClause } from "@/lib/nextSessionDate";
-import { saveNote, getNotesByClientId, deleteNote } from "@/lib/noteStorage";
+import { saveNote, getNotesByClientId, deleteNote, updateNote } from "@/lib/noteStorage";
 import { DataTab } from "./DataTab";
 import { CatalogDiffPanel } from "./CatalogDiffPanel";
 import { reviewBannerLines } from "@/lib/reviewFlagCopy";
@@ -130,17 +130,21 @@ function NoteOutput({
   note,
   onChange,
   onCopy,
-  onSave,
   onStartNew,
-  saved,
+  onBlur,
+  saveState = "idle",
+  onRetry,
   generating,
 }: {
   note: string;
   onChange: (v: string) => void;
   onCopy: () => void;
-  onSave?: () => void;
   onStartNew?: () => void;
-  saved?: boolean;
+  onBlur?: () => void;
+  // Autosave status. "saving"/"saved" are quiet spans ("saved" fades in the parent); "failed" is a persistent
+  // clickable button — never a message that disappears on its own, which is how a failed save gets missed.
+  saveState?: "idle" | "saving" | "saved" | "failed";
+  onRetry?: () => void;
   generating?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
@@ -172,13 +176,25 @@ function NoteOutput({
               Start New Note
             </button>
           )}
-          {onSave && (
+          {/* Autosave indicator (replaces the Save button). "failed" persists and is clickable to retry. */}
+          {saveState === "saving" && (
+            <span className="px-3 py-1.5 text-[13px] font-medium flex items-center gap-1.5" style={{ color: "var(--text3)" }}>
+              <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
+              </svg>
+              Saving…
+            </span>
+          )}
+          {saveState === "saved" && (
+            <span className="px-3 py-1.5 text-[13px] font-semibold" style={{ color: "#16A34A" }}>Saved ✓</span>
+          )}
+          {saveState === "failed" && (
             <button
-              onClick={onSave}
-              className="px-3 py-1.5 rounded-lg text-[13px] font-medium text-white transition-opacity hover:opacity-90"
-              style={{ background: saved ? "#16A34A" : "var(--teal)" }}
+              onClick={onRetry}
+              className="px-3 py-1.5 rounded-lg text-[13px] font-semibold border transition-colors"
+              style={{ borderColor: "#DC2626", color: "#DC2626", background: "#FEF2F2" }}
             >
-              {saved ? "Saved ✓" : "Save Note"}
+              Save failed — tap to retry
             </button>
           )}
         </div>
@@ -186,6 +202,7 @@ function NoteOutput({
       <textarea
         value={note}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         className="w-full border p-4 rounded-xl text-sm leading-7 min-h-64 resize-none focus:outline-none focus:ring-2"
         style={{ borderColor: "var(--border)", color: "var(--text1)" }}
       />
@@ -270,8 +287,29 @@ export default function ClientProfilePage() {
   const [finalizing, setFinalizing] = useState(false);
   const [status, setStatus] = useState("");
   const [similarityWarning, setSimilarityWarning] = useState(false);
-  const [noteSaved, setNoteSaved] = useState(false);
-  const [noteDuplicate, setNoteDuplicate] = useState(false);
+  // AUTOSAVE (no Save button). The note is created the moment generation finishes and updated on every
+  // re-generation and debounced edit — one server row per Start-new cycle (upsert-per-cycle).
+  //  • savedNoteIdRef  — the row this cycle writes to. null ⇒ the next save CREATES (POST) and captures the id;
+  //    set ⇒ the next save UPDATES (PATCH) that id. A ref, not state: persistNote reads/writes it synchronously
+  //    to decide create-vs-update, so a rapid create-then-edit can never race into a second create.
+  //  • saveState — drives the status indicator. "saved" fades after a moment; "failed" PERSISTS (a transient
+  //    error someone misses is how work is lost) and is clickable to retry.
+  //  • saveChainRef — serializes saves so the first create finishes (id captured) before any edit-update runs.
+  const savedNoteIdRef = useRef<string | null>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const saveChainRef = useRef<Promise<boolean>>(Promise.resolve(true));
+  const editDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The device backup for THIS cycle. backupIdRef is the localStorage record written at generation; every edit
+  // rewrites it in place (updateNote) so the backup always holds the EDITED text — the load-bearing guarantee
+  // that an edit lost inside the debounce window is never gone from both stores. pendingEditTextRef holds the
+  // latest un-flushed edit for the best-effort keepalive flush on the way out (pagehide / switch / unmount).
+  const backupIdRef = useRef<string | null>(null);
+  const pendingEditTextRef = useRef<string | null>(null);
+  // Latest client id + date in refs so the exit-flush (pagehide / client-switch / unmount) reads current
+  // values with no stale closure. Assigned during render — the documented "latest value" ref pattern.
+  const clientIdRef = useRef<string | null>(null);
+  const dateRef = useRef<string>("");
 
   // Share with BCBA state
   const [shareCode, setShareCode] = useState("");
@@ -309,6 +347,10 @@ export default function ClientProfilePage() {
     setPrevClientId(params.id);
     resetNoteForm();
   }
+  // Latest-value refs for the exit-flush. On a client switch this render still holds the OLD client's data
+  // (the new client loads async), so the switch cleanup below flushes to the correct, still-current client.
+  clientIdRef.current = client?.id ?? null;
+  dateRef.current = date;
   const [bcbaOverlapContext, setBcbaOverlapContext] = useState<{
     empty: boolean;
     behaviors?: string[];
@@ -385,6 +427,32 @@ export default function ClientProfilePage() {
     }
     load();
   }, [params.id]);
+
+  // On a client switch AND on unmount: FLUSH any pending edit for the client we're LEAVING (B, best-effort
+  // keepalive) before dropping its tracked id, then reset the per-cycle refs. The cleanup closes over the
+  // previous render, and this render still holds the old client (the new one loads async), so flushPending
+  // targets the correct client. The new-client body then clears the indicator. resetNoteForm (during render)
+  // already cleared the visible form; refs must be reset here, not during render.
+  useEffect(() => {
+    setSaveState("idle");
+    return () => {
+      flushPending();
+      if (editDebounceRef.current) clearTimeout(editDebounceRef.current);
+      if (saveFadeRef.current) clearTimeout(saveFadeRef.current);
+      savedNoteIdRef.current = null;
+      backupIdRef.current = null;
+      pendingEditTextRef.current = null;
+    };
+  }, [params.id]);
+
+  // Tab close / reload / bfcache: flush the last un-saved edit best-effort (keepalive survives teardown). The
+  // device backup (A) already holds it; this just gives the server the edit too. Registered once — flushPending
+  // reads only refs, so the first-render closure stays correct.
+  useEffect(() => {
+    const onHide = () => flushPending();
+    window.addEventListener("pagehide", onHide);
+    return () => window.removeEventListener("pagehide", onHide);
+  }, []);
 
   useEffect(() => {
     if (client?.id) loadClientFiles(client.id);
@@ -647,6 +715,8 @@ export default function ClientProfilePage() {
     setFinalizing(false);
     setStatus("");           // progress is shown by the calm card, not the red status line (which is for errors)
     setGeneratedNote("");
+    setSaveState("idle");    // the prior note's indicator must not bleed into this generation
+    if (editDebounceRef.current) clearTimeout(editDebounceRef.current);  // drop any pending edit-save for the old text
     sessionSummaryRef.current = null;
     generationContextRef.current = null;
 
@@ -719,6 +789,8 @@ export default function ClientProfilePage() {
       if (fullText.trim()) {
         const backupNote = { id: crypto.randomUUID(), clientId: client.id, date: date || new Date().toLocaleDateString(), note: fullText };
         saveNote(backupNote);
+        backupIdRef.current = backupNote.id;  // subsequent edits rewrite THIS record so the backup tracks them
+        pendingEditTextRef.current = null;    // the generated text is what we're about to autosave, not a pending edit
         setDailyNotes(prev => [backupNote, ...prev]);
         setSessionSummary({
           behaviors: selectedBehaviors,
@@ -730,6 +802,10 @@ export default function ClientProfilePage() {
           skills: selectedSkills,
           interventions: extractInterventions(fullText),
         };
+        // AUTOSAVE — the note persists the instant it exists (the local backup above already ran first, so a
+        // failed save never loses work). CREATE on a first generation, UPDATE the same row on a re-generation
+        // (savedNoteIdRef carries across the cycle). Fire-and-forget so generation-complete never blocks on it.
+        void queueSave(fullText, { withMetadata: true });
       }
     } catch {
       setStatus("Network error. Please try again.");
@@ -739,50 +815,142 @@ export default function ClientProfilePage() {
     }
   }
 
-  // Clears the whole form for a fresh note. ALWAYS confirms — this discards everything, including a
-  // note that was already saved and might still be wanted on screen, so a misclick should never be
-  // destructive. Shares resetNoteForm with the client-switch and post-save paths.
-  function handleStartNewNote() {
-    if (!confirm("Start a new note? This clears the form.")) return;
-    resetNoteForm();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  // Flip to "Saved ✓" and let it fade back to idle after a moment (a persistent green badge is noise once the
+  // note is safe). A newer save that has already moved us to "saving"/"failed" cancels the fade.
+  function markSaved() {
+    setSaveState("saved");
+    if (saveFadeRef.current) clearTimeout(saveFadeRef.current);
+    saveFadeRef.current = setTimeout(() => setSaveState((s) => (s === "saved" ? "idle" : s)), 3000);
   }
 
-  async function handleSaveNote() {
-    if (!generatedNote.trim()) { alert("Generate a note before saving."); return; }
-    if (generatedNote === lastSavedNote) { alert("This note has already been saved."); return; }
+  // The upsert. CREATE (POST) when no id is tracked yet — capturing the returned id so this cycle's later
+  // saves UPDATE (PATCH) that same row. Metadata (behaviors/skills/interventions/activities/context) is sent
+  // on a create and on an explicit generation/re-generation; a plain text edit omits it (the server preserves
+  // untouched fields). Returns true on save/adopt, false only after the ONE silent auto-retry also fails.
+  //   • POST 409 (identical note already exists) → adopt that id and show "Saved ✓" (never a duplicate error).
+  //   • PATCH 404 (tracked note gone) → drop the id and recurse into a fresh CREATE — work is re-saved, never lost.
+  async function persistNote(noteText: string, opts: { withMetadata?: boolean; attempt?: number } = {}): Promise<boolean> {
+    if (!noteText.trim() || !client?.id) return false;
+    const attempt = opts.attempt ?? 0;
+    const isCreate = !savedNoteIdRef.current;
+    const sendMeta = opts.withMetadata || isCreate;
+    setSaveState("saving");
     const today = new Date();
-    const backupNote = { id: crypto.randomUUID(), clientId: client.id, date: date || today.toLocaleDateString(), note: generatedNote };
-    saveNote(backupNote);
-    const res = await fetch("/api/session-notes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        clientId: client.id,
-        noteText: generatedNote,
-        sessionDate: date || today.toISOString().split("T")[0],
-        behaviorsAddressed: sessionSummaryRef.current?.behaviors || selectedBehaviors,
-        skillsAddressed: sessionSummaryRef.current?.skills || selectedSkills,
-        interventionsUsed: sessionSummaryRef.current?.interventions || [],
-        activitiesUsed: generationContextRef.current?.activities || [],
-        generationContext: generationContextRef.current?.generationContext || null,
-      }),
-    });
-    if (res.status === 409) {
-      setNoteDuplicate(true);
-      setTimeout(() => setNoteDuplicate(false), 4000);
-      return;
+    const meta = sendMeta ? {
+      behaviorsAddressed: sessionSummaryRef.current?.behaviors || selectedBehaviors,
+      skillsAddressed: sessionSummaryRef.current?.skills || selectedSkills,
+      interventionsUsed: sessionSummaryRef.current?.interventions || [],
+      activitiesUsed: generationContextRef.current?.activities || [],
+      generationContext: generationContextRef.current?.generationContext || null,
+    } : {};
+    try {
+      const id = savedNoteIdRef.current;
+      const body = { clientId: client.id, noteText, sessionDate: date || today.toISOString().split("T")[0], ...meta };
+      const res = id
+        ? await fetch("/api/session-notes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...body }) })
+        : await fetch("/api/session-notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+      if (id && res.status === 404) {
+        // The row we were updating no longer exists — re-create from scratch rather than losing the edit.
+        savedNoteIdRef.current = null;
+        return await persistNote(noteText, opts);
+      }
+      if (!id && res.status === 409) {
+        const data = await res.json().catch(() => ({}));
+        if (data?.id) savedNoteIdRef.current = data.id;   // adopt the existing note; edits now update it
+        setLastSavedNote(noteText);
+        if (pendingEditTextRef.current === noteText) pendingEditTextRef.current = null;  // this edit is now on the server
+        markSaved();
+        await loadNotesFromSupabase(client.id);
+        return true;
+      }
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data?.id) savedNoteIdRef.current = data.id;
+        setLastSavedNote(noteText);
+        if (pendingEditTextRef.current === noteText) pendingEditTextRef.current = null;  // this edit is now on the server
+        markSaved();
+        if (isCreate) await loadNotesFromSupabase(client.id);  // reconcile the notes list once, on first persist
+        return true;
+      }
+      throw new Error("save failed");
+    } catch {
+      if (attempt === 0) return await persistNote(noteText, { ...opts, attempt: 1 });  // one silent auto-retry
+      setSaveState("failed");  // persists until a retry or an explicit discard resolves it
+      return false;
     }
-    if (res.ok) {
-      setNoteSaved(true);
-      setTimeout(() => setNoteSaved(false), 3000);
-      await loadNotesFromSupabase(client.id);
-      setLastSavedNote(generatedNote);
-      resetNoteForm({ keepDateAndLocation: true, keepGeneratedNote: true });
-    } else {
-      setDailyNotes(prev => [backupNote, ...prev]);
+  }
+
+  // Serialize every save through one chain so the first CREATE finishes (and captures the id) before any
+  // edit-UPDATE runs — otherwise a fast edit during the create could read a null id and create a second row.
+  function queueSave(noteText: string, opts: { withMetadata?: boolean } = {}): Promise<boolean> {
+    const p = saveChainRef.current.catch(() => false).then(() => persistNote(noteText, opts));
+    saveChainRef.current = p.catch(() => false);
+    return p;
+  }
+
+  // User edits to the generated note. Progressive-paint updates call setGeneratedNote directly, so they never
+  // land here. Order matters: (A) rewrite the DEVICE BACKUP in place first — synchronous, offline, never fails,
+  // so the edited text is on the device the instant it is typed (this is what makes a lost server save
+  // recoverable); then debounce the server autosave (text only — an edit does not change metadata).
+  function handleNoteEdit(v: string) {
+    setGeneratedNote(v);
+    if (backupIdRef.current) {
+      updateNote(backupIdRef.current, v);
+      setDailyNotes(prev => prev.map(n => (n.id === backupIdRef.current ? { ...n, note: v } : n)));
     }
-    alert("Note saved successfully.");
+    pendingEditTextRef.current = v;
+    if (editDebounceRef.current) clearTimeout(editDebounceRef.current);
+    editDebounceRef.current = setTimeout(() => { void queueSave(v, { withMetadata: false }); }, 1200);
+  }
+
+  // Best-effort server flush of the latest un-saved edit on the way out (pagehide / client-switch / unmount).
+  // keepalive lets the request outlive the page teardown; it supports PATCH, which sendBeacon (POST-only) can
+  // not. Reads only refs so it is safe from any closure. The device backup (A) already holds this text, so a
+  // dropped flush loses nothing — and on a create-during-flush the server dedups identical text (409).
+  function flushPending() {
+    const text = pendingEditTextRef.current;
+    const clientId = clientIdRef.current;
+    if (!text || !text.trim() || !clientId) return;
+    if (editDebounceRef.current) { clearTimeout(editDebounceRef.current); editDebounceRef.current = null; }
+    const id = savedNoteIdRef.current;
+    const body = JSON.stringify({ ...(id ? { id } : {}), clientId, noteText: text, sessionDate: dateRef.current || new Date().toISOString().split("T")[0] });
+    try {
+      fetch("/api/session-notes", { method: id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true });
+    } catch { /* device backup already holds this edit; a failed flush loses nothing */ }
+    pendingEditTextRef.current = null;
+  }
+
+  // Leaving the textarea flushes immediately — the cheapest coverage of the common case (type, then click
+  // away). A normal serialized save (with the indicator), since the page is still alive here.
+  function handleNoteBlur() {
+    if (editDebounceRef.current) { clearTimeout(editDebounceRef.current); editDebounceRef.current = null; }
+    const text = pendingEditTextRef.current;
+    if (text && text.trim()) void queueSave(text, { withMetadata: false });
+  }
+
+  // Clears the whole form for a fresh note. GATED ON SAVE STATE — clearing unpersisted work is data loss, and
+  // Start-new is exactly the button pressed next. Clean → the plain confirm. Dirty (edited since the last save,
+  // or a save still pending) → FLUSH first: on success, the plain confirm; on failure, never clear silently —
+  // an explicit discard confirm that names the local backup. The generated note is always in the local backup
+  // (saveNote at generation), so even a discard is recoverable.
+  async function handleStartNewNote() {
+    if (editDebounceRef.current) clearTimeout(editDebounceRef.current);
+    const doClear = () => {
+      savedNoteIdRef.current = null;
+      setSaveState("idle");
+      resetNoteForm();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+    const dirty = !!generatedNote.trim() && generatedNote !== lastSavedNote;
+    if (dirty) {
+      const ok = await queueSave(generatedNote, { withMetadata: true });
+      if (!ok) {
+        if (confirm("This note could not be saved to this client's notes, so it won't appear there. The full note — including your edits — is kept as a local backup on this device, so it can still be recovered. Discard it here and start a new note anyway?")) doClear();
+        return;
+      }
+    }
+    if (confirm("Start a new note? This clears the form.")) doClear();
   }
 
 
@@ -2157,10 +2325,12 @@ export default function ClientProfilePage() {
                   <div style={{ opacity: finalizing ? 0.45 : 1, transition: "opacity .2s", pointerEvents: finalizing ? "none" : "auto" }}>
                     <NoteOutput
                       note={generatedNote}
-                      onChange={setGeneratedNote}
+                      onChange={handleNoteEdit}
                       onCopy={() => navigator.clipboard.writeText(generatedNote)}
-                      onSave={handleSaveNote}
                       onStartNew={handleStartNewNote}
+                      onBlur={handleNoteBlur}
+                      saveState={saveState}
+                      onRetry={() => { void queueSave(generatedNote, { withMetadata: true }); }}
                       generating={generating}
                     />
                   </div>
@@ -2173,16 +2343,6 @@ export default function ClientProfilePage() {
                       Finalizing your note…
                     </div>
                   )}
-                </div>
-              )}
-              {noteSaved && (
-                <div className="mt-2 px-4 py-2 rounded-lg text-[13px] font-semibold" style={{ background: "#DCFCE7", color: "#16A34A" }}>
-                  ✓ Note saved successfully
-                </div>
-              )}
-              {noteDuplicate && (
-                <div className="mt-2 px-4 py-2 rounded-lg text-[13px] font-semibold" style={{ background: "#FEF3C7", color: "#D97706" }}>
-                  ⚠ This note has already been saved
                 </div>
               )}
               {sessionSummary && (

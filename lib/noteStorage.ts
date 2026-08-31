@@ -35,3 +35,13 @@ export function deleteNote(noteId: string) {
 
   localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(updatedNotes));
 }
+
+// Overwrite the text of one already-stored backup, in place. The autosave local backup is written once at
+// generation, then kept CURRENT with every edit through this — so the device always holds the edited text, not
+// just the generated text, and a server save lost inside the debounce window is never gone from both stores.
+export function updateNote(noteId: string, note: string) {
+  const notes = getAllNotes();
+  const updatedNotes = notes.map((n) => (n.id === noteId ? { ...n, note } : n));
+
+  localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(updatedNotes));
+}
