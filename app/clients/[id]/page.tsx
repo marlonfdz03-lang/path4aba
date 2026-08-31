@@ -290,6 +290,10 @@ export default function ClientProfilePage() {
   const [fnEdit, setFnEdit] = useState<{ name: string; selected: string[] } | null>(null);
   const [fnSaving, setFnSaving] = useState(false);
   const [fnError, setFnError] = useState("");
+  // FAST tab — per-row topography editing (mirror of the function edit). topoEdit = the behavior + draft text.
+  const [topoEdit, setTopoEdit] = useState<{ name: string; text: string } | null>(null);
+  const [topoSaving, setTopoSaving] = useState(false);
+  const [topoError, setTopoError] = useState("");
 
   const [nextApptDate, setNextApptDate] = useState("");
   const [lastSavedNote, setLastSavedNote] = useState("");
@@ -952,6 +956,37 @@ export default function ClientProfilePage() {
     }
   }
 
+  // FAST tab — save one behavior's topography via the gated behavior-topography route. Mirrors
+  // saveBehaviorFunctions: the server writes `topographies` + the human-edited markers; we reflect the server's
+  // result on the matching row. Once saved, the behavior is no longer incomplete (behaviorMissingFields reads
+  // topographies) and becomes selectable in the note form.
+  async function saveBehaviorTopography(behaviorName: string, text: string) {
+    if (!client?.id) return;
+    setTopoSaving(true); setTopoError("");
+    try {
+      const res = await fetch(`/api/clients/${client.id}/behavior-topography`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ behaviorName, topography: text }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setTopoError(data?.error || "Could not save — please try again."); return; }
+      setClient((prev: any) => {
+        const behaviors = (prev?.clinicalProfile?.maladaptiveBehaviors || []).map((b: any) =>
+          (typeof b === "object" && String(b?.name || "") === String(data.behavior || behaviorName))
+            ? { ...b, topographies: data.topographies, topographySource: "human-edited", topographyEditedBy: data.editedBy, topographyEditedAt: data.editedAt }
+            : b
+        );
+        return { ...prev, clinicalProfile: { ...prev.clinicalProfile, maladaptiveBehaviors: behaviors } };
+      });
+      setTopoEdit(null);
+    } catch {
+      setTopoError("Network error — please try again.");
+    } finally {
+      setTopoSaving(false);
+    }
+  }
+
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       {/* Topbar / breadcrumb */}
@@ -1422,6 +1457,8 @@ export default function ClientProfilePage() {
                           const flagged = flaggedNames.has(String(name).trim().toLowerCase());
                           const humanEdited = typeof b === "object" && b?.functionsSource === "human-edited";
                           const isEditing = fnEdit?.name === name;
+                          const topoHumanEdited = typeof b === "object" && b?.topographySource === "human-edited";
+                          const isEditingTopo = topoEdit?.name === name;
                           return (
                             <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
                               <td className="px-4 py-3 align-top" style={{ color: "var(--text1)", fontWeight: 500 }}>
@@ -1486,7 +1523,45 @@ export default function ClientProfilePage() {
                                 )}
                               </td>
                               <td className="px-4 py-3 align-top" style={{ color: "var(--text2)", maxWidth: 420 }}>
-                                {topos.length ? topos.join(" ") : <span style={{ color: "var(--text3)" }}>—</span>}
+                                {isEditingTopo ? (
+                                  <div className="space-y-2">
+                                    <textarea
+                                      value={topoEdit!.text}
+                                      onChange={(e) => setTopoEdit((p) => p && ({ ...p, text: e.target.value }))}
+                                      rows={3}
+                                      placeholder="Operational definition — what the behavior looks like (e.g. 'any instance the client…')."
+                                      className="w-full text-[12px] p-2 rounded-lg border"
+                                      style={{ borderColor: "var(--border)", color: "var(--text1)" }}
+                                    />
+                                    <div className="flex items-center gap-2">
+                                      <button type="button" disabled={topoSaving || !topoEdit!.text.trim()} onClick={() => saveBehaviorTopography(name, topoEdit!.text)}
+                                        className="text-[12px] font-semibold px-3 py-1 rounded-lg text-white disabled:opacity-50" style={{ background: "var(--teal)" }}>
+                                        {topoSaving ? "Saving…" : "Save"}
+                                      </button>
+                                      <button type="button" disabled={topoSaving} onClick={() => { setTopoEdit(null); setTopoError(""); }}
+                                        className="text-[12px] font-medium px-3 py-1 rounded-lg border disabled:opacity-50" style={{ borderColor: "var(--border)", color: "var(--text2)" }}>
+                                        Cancel
+                                      </button>
+                                    </div>
+                                    {topoError && <p className="text-[12px]" style={{ color: "#dc2626" }}>{topoError}</p>}
+                                  </div>
+                                ) : (
+                                  <div className="space-y-1">
+                                    <div className="flex items-start gap-1.5">
+                                      <span style={{ flex: 1 }}>{topos.length ? topos.join(" ") : <span style={{ color: "var(--text3)" }}>—</span>}</span>
+                                      <button type="button"
+                                        onClick={() => { setTopoError(""); setTopoEdit({ name, text: topos.join(" ") }); }}
+                                        className="ml-1 text-[11px] font-medium underline flex-shrink-0" style={{ color: "var(--teal)" }}>
+                                        {topos.length ? "Edit" : "Add"}
+                                      </button>
+                                    </div>
+                                    {topoHumanEdited && (
+                                      <p className="text-[10px]" style={{ color: "var(--text3)" }}>
+                                        entered by {b.topographyEditedBy || "a user"}{b.topographyEditedAt ? " · " + fmtDate(b.topographyEditedAt) : ""}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
                               </td>
                               <td className="px-4 py-3 align-top">
                                 <div className="flex items-center gap-2">
