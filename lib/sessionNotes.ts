@@ -36,6 +36,9 @@ export type SupersedeAndCreateInput = {
 // prevents a duplicate). Superseding BY DATE (not a specific old id) also handles the rare multi-active-row case.
 export async function supersedeAndCreate(input: SupersedeAndCreateInput): Promise<{ id: string }> {
   return prisma.$transaction(async (tx) => {
+    // Deliberately NOT active-filtered: this checks whether the row we're about to create already exists (the
+    // idempotency guard). It must see the row REGARDLESS of superseded_at — filtering to active here would let a
+    // retry create a duplicate and break the supersede. Do not apply activeNotesWhere to this read.
     const existing = await tx.session_notes.findUnique({ where: { id: input.id }, select: { id: true } })
     if (existing) return existing // idempotent retry — same row, no dup, no re-supersede
 

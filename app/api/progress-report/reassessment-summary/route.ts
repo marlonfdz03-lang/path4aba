@@ -1,5 +1,6 @@
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { activeNotesWhere } from '@/lib/sessionNotes'
 import OpenAI from 'openai'
 
 const openai = new OpenAI({
@@ -46,7 +47,7 @@ export async function POST(req: Request) {
       select: { hours: true, reason: true },
     }),
     prisma.session_notes.findMany({
-      where: { client_id: clientId, session_date: { gte: periodStart, lte: periodEnd } },
+      where: { ...activeNotesWhere(clientId), session_date: { gte: periodStart, lte: periodEnd } },  // active only — a replaced note must not skew the reassessment summary
       select: { interventions_used: true, behaviors_addressed: true, skills_addressed: true },
     }),
     prisma.supervision_notes.findMany({

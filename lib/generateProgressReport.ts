@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import { prisma } from '@/lib/prisma'
+import { activeNotesWhere } from './sessionNotes.ts'
 
 const openai = new OpenAI({
   apiKey: process.env.AZURE_OPENAI_API_KEY || 'azure-openai',
@@ -159,7 +160,7 @@ export async function generateProgressReport(
   })
 
   const sessionNotes = await prisma.session_notes.findMany({
-    where: { client_id: clientId, session_date: { gte: periodStart, lte: periodEnd } },
+    where: { ...activeNotesWhere(clientId), session_date: { gte: periodStart, lte: periodEnd } },  // active only — a replaced note must not skew frequentlyUsedInterventions
     select: { interventions_used: true, behaviors_addressed: true, skills_addressed: true },
   })
 

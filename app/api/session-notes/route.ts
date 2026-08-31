@@ -159,7 +159,8 @@ export async function DELETE(req: Request) {
 
   // Resolve the note's owning client from its row id, then enforce ownership before deleting. A row whose
   // client_id is NULL is owned by nobody → DENY (never mutable by anyone). Missing row → 403, not 404 (leak
-  // nothing about which ids exist).
+  // nothing about which ids exist). NOT active-filtered on purpose: this is a by-id ownership lookup for a
+  // write (delete), not a corpus read — a superseded note is still a deletable row; do not add superseded_at here.
   const row = await prisma.session_notes.findUnique({ where: { id }, select: { client_id: true } })
   if (!row?.client_id || !(await canAccessClient(session, row.client_id)))
     return NextResponse.json({ error: 'You do not have access to this note.' }, { status: 403 })

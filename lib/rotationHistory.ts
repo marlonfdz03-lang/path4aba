@@ -171,7 +171,10 @@ export async function readGenerationHistory(
 ): Promise<NoteContext[]> {
   const window = opts.window ?? 3;
   const rows: SessionNoteRow[] = await prisma.session_notes.findMany({
-    where: { client_id: clientId },
+    // Active only (superseded_at: null — the same predicate as lib/sessionNotes.activeNotesWhere). Inlined
+    // rather than imported so this module stays prisma-free and unit-testable with an injected client; a
+    // replaced note must not count as "recently used" and skew rotation.
+    where: { client_id: clientId, superseded_at: null },
     orderBy: { created_at: 'desc' },
     take: ROTATION_LOOKBACK,
     select: {

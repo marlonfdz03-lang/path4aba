@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { MASTER_RBT_NOTE_PROMPT } from '@/app/prompts/masterPrompt';
 import { prisma } from '@/lib/prisma';
+import { activeNotesWhere } from './sessionNotes.ts';
 import {
   filterApprovedInterventions,
   isValidActivity,
@@ -329,7 +330,7 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
       select: { skill_description: true, vocabulary_variants: true, function_targeted: true },
     }),
     prisma.session_notes.findMany({
-      where: { client_id: input.clientId },
+      where: activeNotesWhere(input.clientId),  // active only — a replaced note must not shape the next note's similarity/context
       select: { note_text: true },
       orderBy: { created_at: 'desc' },
       take: 10,

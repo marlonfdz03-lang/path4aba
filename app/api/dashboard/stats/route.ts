@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { ACTIVE_NOTE_WHERE } from '@/lib/sessionNotes'
 
 export const dynamic = 'force-dynamic'
 
@@ -55,13 +56,16 @@ export async function GET() {
   if (clientIds.length > 0) {
     const [count, recent] = await Promise.all([
       prisma.session_notes.count({
+        // active only — a replaced note must not inflate the "notes this week" count
         where: {
           client_id: { in: clientIds },
           created_at: { gte: monday },
+          ...ACTIVE_NOTE_WHERE,
         },
       }),
       prisma.session_notes.findMany({
-        where: { client_id: { in: clientIds } },
+        // active only — the recent-notes list must not show a superseded note
+        where: { client_id: { in: clientIds }, ...ACTIVE_NOTE_WHERE },
         orderBy: { created_at: 'desc' },
         take: 5,
         select: {

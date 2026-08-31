@@ -19,6 +19,8 @@ export async function POST(request: Request) {
   }
 
 
+  // NOT active-filtered on purpose: a by-id ownership lookup for a write (the review update below), not a
+  // corpus read. A superseded note is still a real row whose review_status may be set; do not add superseded_at.
   const note = await prisma.session_notes.findFirst({
     where: { id: noteId },
     select: { client_id: true },

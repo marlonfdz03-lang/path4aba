@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { ACTIVE_NOTE_WHERE } from '@/lib/sessionNotes'
 
 export async function GET(request: Request) {
   const session = await auth()
@@ -28,7 +29,8 @@ export async function GET(request: Request) {
   console.log('[rbt-notes] querying session_notes for client_ids:', targetIds)
 
   const notes = await prisma.session_notes.findMany({
-    where: { client_id: { in: targetIds } },
+    // active only — a BCBA must not see a replaced note the RBT's own (filtered) list no longer shows
+    where: { client_id: { in: targetIds }, ...ACTIVE_NOTE_WHERE },
     select: {
       id: true,
       client_id: true,

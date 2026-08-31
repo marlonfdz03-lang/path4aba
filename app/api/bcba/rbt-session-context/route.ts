@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { activeNotesWhere } from '@/lib/sessionNotes'
 
 
 export const dynamic = 'force-dynamic'
@@ -25,7 +26,8 @@ export async function GET(request: Request) {
   if (!connection.rbt_id) return NextResponse.json({ empty: true })
 
   const note = await prisma.session_notes.findFirst({
-    where: { client_id: clientId, user_id: connection.rbt_id, session_date: date },
+    // active only — the BCBA's session context must be the CURRENT note for that date, not a superseded one
+    where: { ...activeNotesWhere(clientId, date), user_id: connection.rbt_id },
     select: {
       behaviors_addressed: true,
       skills_addressed: true,

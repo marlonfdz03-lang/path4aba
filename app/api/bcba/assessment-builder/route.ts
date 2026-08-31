@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { activeNotesWhere } from '@/lib/sessionNotes'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
       },
     }),
     prisma.session_notes.findMany({
-      where: { client_id: clientId, session_date: { gte: periodStart, lte: periodEnd } },
+      where: { ...activeNotesWhere(clientId), session_date: { gte: periodStart, lte: periodEnd } },  // active only — a replaced note must not feed assessment building
       select: {
         session_date: true,
         note_text: true,

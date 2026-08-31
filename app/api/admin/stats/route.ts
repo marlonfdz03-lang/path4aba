@@ -17,6 +17,9 @@ export async function GET() {
   const [totalUsers, totalClients, totalNotes, totalSubscriptions, recentUsers] = await Promise.all([
     prisma.users.count(),
     prisma.clients.count(),
+    // NOT filtered to active on purpose: this is a raw system row-count ("how many note rows exist"), a
+    // different question from a clinical corpus. A superseded note is still a row that was written, and this
+    // metric is operational, not clinical — so it counts every row, unlike the client-facing readers.
     prisma.session_notes.count(),
     prisma.subscriptions.count({ where: { status: 'active' } }),
     prisma.users.findMany({
