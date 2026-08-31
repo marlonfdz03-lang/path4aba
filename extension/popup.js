@@ -1148,6 +1148,22 @@ async function streamGenerate(endpoint, body, method = 'POST') {
       streamStatus.style.display = 'none';
       renderSessionSummary(finalText);       // the three tables under the note (matches the web)
 
+      // GENERATION-TIME LOCAL BACKUP (standalone data-safety fix; independent of any save/autosave). The
+      // save-success backup further down only runs AFTER a successful save — so a generated note whose save
+      // fails, or a popup closed before saving, was silently lost. Mirror the web (saveNote at generation-
+      // finish, page.tsx): persist the finished note the instant it exists, so the work is recoverable no
+      // matter what the save does. `verified` is recorded so a recovered unverified note is identifiable.
+      // Fail-soft — a backup that cannot be written must never block or discard the note.
+      if (selectedClientId && finalText) {
+        try {
+          chrome.storage.local.set({
+            [`path4aba_ext_note_${selectedClientId}_${Date.now()}`]: {
+              clientId: selectedClientId, note: finalText, generatedAt: new Date().toISOString(), verified,
+            },
+          });
+        } catch { /* best-effort backup; never interrupt the note */ }
+      }
+
       if (!verified) {
         // FAIL LOUD, NEVER SILENT: unverified text reaching the EHR unnoticed is the exact bug this commit
         // closes. Paint it so the RBT is not stuck, but warn visibly and log — never present it as clean.
