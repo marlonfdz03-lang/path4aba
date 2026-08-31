@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { parsePdf, mapToLegacyFormat, saveKnowledgeBase, buildAssessmentProfile } from "@/lib/assessmentPipeline";
 import { isPdf, MAX_FILE_BYTES, storeClientFile, userOwnsClient } from "@/lib/clientFiles";
+import { carryOverHumanEdits } from "@/lib/carryOverHumanEdits";
 import { validateAssessmentProfile, buildRefreshedProfile } from "@/lib/assessmentRefresh";
 import { activeBehaviorsForSelection } from "@/lib/activePrograms";
 import { resolveInterventionSection, mergeInterventions, MAX_INTERVENTION_SPAN } from "@/lib/interventionSection";
@@ -159,7 +160,7 @@ export async function POST(req: NextRequest) {
       // blockedNarrativeTerms, continuityContext, …), replaces assessment-sourced keys wholesale, and
       // snapshots the pre-refresh profile as `previousProfile` for one-level undo (restored by
       // /api/clients/[id]/profile/restore). A whole-profile snapshot, so it also covers any future key.
-      const refreshed = buildRefreshedProfile(existingProfile, assessmentProfile);
+      let refreshed = buildRefreshedProfile(existingProfile, assessmentProfile);
 
       // FUNCTION PROVENANCE (packet-sourced): if a FAST/MAS/functional-assessment source was located and fed
       // to extraction, functions may be documented; otherwise they are INFERRED — never stored as documented.
@@ -168,6 +169,13 @@ export async function POST(req: NextRequest) {
       for (const b of ((refreshed as any).maladaptiveBehaviors || [])) {
         if (b && b.functionsSource !== "human-edited") b.functionsEvidence = functionEvidence;
       }
+      // PRESERVE HUMAN EDITS across the wholesale behavior replacement — corrected functions today, a manual
+      // topography once we add it. Matches by name (shared resolveOption); a documented new value supersedes,
+      // an inferred/empty one does not; drops/superseded are flagged, never silent. Runs AFTER functionsEvidence
+      // so its documented-vs-inferred supersede check sees the final evidence.
+      const carried = carryOverHumanEdits(refreshed, existingProfile);
+      refreshed = carried.profile;
+      reviewFlags.push(...carried.flags);
       if (!hasFunctionalAssessment) reviewFlags.push({ field: "functions", source: "llm-fallback", reason: "no functional-assessment (FAST/MAS) source was located — behavior functions are inferred, not documented; verify with the BCBA" });
       if (!behaviorDomainFound) reviewFlags.push({ field: "behaviors", source: "guard-preserved", reason: "the maladaptive-behavior section could not be located in this upload — behaviors were not refreshed from it" });
 

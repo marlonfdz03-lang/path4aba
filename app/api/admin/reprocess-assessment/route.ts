@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { extractAssessment } from "@/lib/extractAssessment";
 import { parsePdf, saveKnowledgeBase, buildAssessmentProfile } from "@/lib/assessmentPipeline";
 import { validateAssessmentProfile, buildRefreshedProfile } from "@/lib/assessmentRefresh";
+import { carryOverHumanEdits } from "@/lib/carryOverHumanEdits";
 import { activeBehaviorsForSelection } from "@/lib/activePrograms";
 import { resolveInterventionSection, mergeInterventions, MAX_INTERVENTION_SPAN } from "@/lib/interventionSection";
 import { emitAdminAlert } from "@/lib/adminAlerts";
@@ -97,13 +98,18 @@ export async function POST(req: Request) {
     // a read-failure from a real plan shrinkage via the source region count. Mutates assessmentProfile + flags.
     const rosterProvenance = reconcileRosters(assessmentProfile, existingProfile, geomRows, reviewFlags, replacementDomainFound, interventionDomainFound, text);
 
-    const refreshed = buildRefreshedProfile(existingProfile, assessmentProfile);
+    let refreshed = buildRefreshedProfile(existingProfile, assessmentProfile);
 
     // Function provenance (see extract-assessment): FA source present → documented; absent → inferred.
     const functionEvidence = hasFunctionalAssessment ? "documented-functional-assessment" : "inferred";
     for (const b of ((refreshed as any).maladaptiveBehaviors || [])) {
       if (b && b.functionsSource !== "human-edited") b.functionsEvidence = functionEvidence;
     }
+    // Preserve human edits across the wholesale behavior replacement (see extract-assessment) — same shared
+    // carryOverHumanEdits: match by name, document-wins-over-inference, drops/superseded flagged.
+    const carried = carryOverHumanEdits(refreshed, existingProfile);
+    refreshed = carried.profile;
+    reviewFlags.push(...carried.flags);
     if (!hasFunctionalAssessment) reviewFlags.push({ field: "functions", source: "llm-fallback", reason: "no functional-assessment (FAST/MAS) source located — functions inferred, verify" });
     if (!behaviorDomainFound) reviewFlags.push({ field: "behaviors", source: "guard-preserved", reason: "maladaptive-behavior section not located — behaviors not refreshed" });
 

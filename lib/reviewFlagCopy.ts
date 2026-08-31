@@ -11,7 +11,7 @@
 //   llm-fallback    · behaviors         (create path, no existing to preserve)
 //   behavior-review · behavior:<name>   (a single behavior whose name/function wasn't structural)
 
-export type ReviewFlagSource = "llm-fallback" | "guard-preserved" | "behavior-review" | "target-undefined" | "behavior-incomplete" | "intervention-section-unread";
+export type ReviewFlagSource = "llm-fallback" | "guard-preserved" | "behavior-review" | "target-undefined" | "behavior-incomplete" | "intervention-section-unread" | "human-edit-dropped" | "human-edit-superseded";
 export interface ReviewFlagLike { field: string; reason?: string; source: ReviewFlagSource }
 
 const BEHAVIOR_PREFIX = "behavior:";
@@ -29,6 +29,12 @@ export function flagCopy(flag: ReviewFlagLike): string {
     const name = field.slice(BEHAVIOR_PREFIX.length).trim();
     if (flag?.source === "behavior-incomplete") {
       return `${name} was added to the profile but is missing its operational definition and/or documented function — it can't be used in a note until your BCBA completes it.`;
+    }
+    if (flag?.source === "human-edit-dropped") {
+      return `A manual correction you made to ${name} couldn't be carried into the refreshed assessment — the behavior was renamed or removed. Re-enter it if it still applies.`;
+    }
+    if (flag?.source === "human-edit-superseded") {
+      return `Your manual entry for ${name} was replaced by the value now documented in the updated assessment. Review it to confirm the documented version is correct.`;
     }
     return `One behavior may not have been read correctly — please verify: ${name}.`;
   }
