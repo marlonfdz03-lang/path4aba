@@ -105,6 +105,12 @@ Extract EVERY SINGLE behavior listed under ANY of these sections — DO NOT STOP
 
 There is NO limit on how many behaviors to extract. If there are 20, extract all 20. If there are 30, extract all 30.
 
+━━━ TOPOGRAPHY / OPERATIONAL DEFINITION — READ BOTH LAYOUTS ━━━
+A behavior's topography is its observable operational definition. It appears in ONE OF TWO layouts — read BOTH, do not assume one:
+1. COLUMN layout: a behavior TABLE with a column headed "Topography", "Operational Definition", or "Definition". The definition is the cell in that column on the SAME ROW as the behavior name (a row may also carry Baseline/Frequency/Intensity columns between them — the definition still belongs to that row's behavior).
+2. BLOCK-LABEL layout: a labeled block, introduced by "Topography:", "Operational Definition:", or the phrase "Defined as …". The definition is the text that follows the label, up to the next label or behavior.
+Attach each definition to the behavior it belongs to (same row for a table; the nearest behavior name for a block). Populate "topography" if a definition exists in EITHER layout. Leave it empty ONLY when the document genuinely provides none for that behavior (e.g. a name-only mastered/discontinued entry).
+
 ━━━ REPLACEMENT SKILL EXTRACTION RULES ━━━
 Extract EVERY SINGLE skill listed under ANY of these sections — DO NOT STOP EARLY, DO NOT LIMIT TO 8 OR 10:
 - "Behaviors to Increase"

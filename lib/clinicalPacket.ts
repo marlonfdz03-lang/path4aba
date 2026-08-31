@@ -20,6 +20,7 @@ export type SectionConfidence = 'strong' | 'weak' | 'none';
 export interface SectionMatch {
   key: string;
   label: string;
+  tier: 'required' | 'optional';  // so the signal can weight a missed REQUIRED domain over an optional one
   found: boolean;
   anchorMatched: string | null;   // which anchor hit (auditable)
   confidence: SectionConfidence;  // strong = heading-like; weak = mid-prose coincidental
@@ -36,6 +37,10 @@ export interface PacketResult {
   interventionDomainFound: boolean;  // the interventions domain — gates the interventions completeness guard
   hasFunctionalAssessment: boolean;  // a FAST/MAS/FA source — gates function provenance
   totalChars: number;                // packet size (must stay < 90000)
+  usedCharZeroFallback: boolean;     // TRUE = NO section located; the whole doc was read as an unstructured
+                                     // blob (text.slice(0, budget)). Must be surfaced — never silent.
+  topographyMarkers: number;         // distinct operational-definition windows found across the whole doc
+  topographyCaptured: number;        // how many fit the cap; captured < markers ⇒ TRUNCATED (must be signaled)
 }
 
 export const PACKET_BUDGET = 80000; // hard ceiling, under the old 90K
@@ -71,7 +76,15 @@ const SECTIONS: SectionDef[] = [
     anchors: [/approved interventions?/i, /interventions? (summary|used|list)/i, /treatment procedure/i, /teaching procedure/i, /\bintervention/i] },
   // ── OPTIONAL — detail / enrichment (fills only the remaining budget) ──
   { key: 'behaviorDetail', label: 'Detailed behavior programs', tier: 'optional', priority: 2, cap: 24000,
-    anchors: [/operational definition/i, /reduction target/i, /behavior program/i] },
+    // \bbehavior\s+reduction\b APPENDED (not inserted) so it never overrides an earlier anchor's window —
+    // which also means, measured against the six stored docs, it is INERT: 4/6 contain the phrase but all of
+    // those already match an earlier anchor, and the 2 that don't (Hendrex, cb3d0695) lack the phrase too, so
+    // no document's behaviorDetail window changes. It is a forward-compat safety net for a future doc whose
+    // ONLY behavior-detail heading is "Behavior Reduction …". Being appended, its wrong-region occurrences
+    // (proximity to replacement headings in 3 docs) can never become the returned hit. The anchor is NOT the
+    // fix for Jenny — see the report; the real fixes are the label read (extractAssessment.ts) and the
+    // no-silent-miss signal (sectionLocatorSignal), and a remaining gap is documented there.
+    anchors: [/operational definition/i, /reduction target/i, /behavior program/i, /\bbehavior\s+reduction\b/i] },
   { key: 'replacementDetail', label: 'Detailed replacement programs', tier: 'optional', priority: 3, cap: 24000,
     anchors: [/replacement program/i, /alternative behavior/i, /replacement behavior/i, /skill acquisition/i] },
   { key: 'reinforcers', label: 'Reinforcers', tier: 'optional', priority: 5, cap: 3000,
@@ -159,6 +172,33 @@ function mergeRanges(ranges: Array<[number, number]>): Array<[number, number]> {
   return out;
 }
 
+// TOPOGRAPHY WINDOWS — capture a small window around EVERY operational-definition marker across the WHOLE doc,
+// the way statusWindows captures DISCONTINUED/MASTERED. This is the load-bearing fix for the class of documents
+// where the definitions span far more than any single behaviorDetail window (Jenny: 15 definitions across ~95K
+// chars) or sit under an unrecognized detail heading, so a single anchored window captured ~8%. Windowing each
+// marker guarantees every definition reaches the packet regardless of span/heading; the LLM then attaches them
+// (extractAssessment reads BOTH the column and the "Topography:"/"Defined as" block layout). Measured: a real
+// definition is ≤500 chars and markers sit >1,300 apart, so PRE 60 / POST 700 captures a full definition without
+// bleeding into the next behavior; short clustered definitions (Hendrex ~178 apart) merge cleanly.
+const TOPO_MARK = /\b(topography|operational definition|defined as)\b\s*:?/gi;
+const TOPO_CAP = 24000;        // matches behaviorDetail's cap; ~34 definition windows. Truncation IS signaled.
+const TOPO_PRE = 60;
+const TOPO_POST = 700;
+function topographyWindows(text: string): { ranges: Array<[number, number]>; markers: number; captured: number } {
+  const pos: number[] = [];
+  let m: RegExpExecArray | null;
+  TOPO_MARK.lastIndex = 0;
+  while ((m = TOPO_MARK.exec(text)) !== null) { pos.push(m.index); if (m.index === TOPO_MARK.lastIndex) TOPO_MARK.lastIndex++; }
+  const merged = mergeRanges(pos.map((x) => [Math.max(0, x - TOPO_PRE), Math.min(text.length, x + TOPO_POST)] as [number, number]));
+  const ranges: Array<[number, number]> = [];
+  let total = 0;
+  for (const w of merged) {
+    if (total + (w[1] - w[0]) > TOPO_CAP) break;   // cap — the overflow is truncated and surfaced (captured < markers)
+    ranges.push(w); total += w[1] - w[0];
+  }
+  return { ranges, markers: merged.length, captured: ranges.length };
+}
+
 export function buildClinicalPacket(fullText: string): PacketResult {
   const text = String(fullText ?? '');
   const manifest: SectionMatch[] = [];
@@ -178,9 +218,9 @@ export function buildClinicalPacket(fullText: string): PacketResult {
         const start = Math.max(0, sig - 300);
         const end = Math.min(sig + s.cap, text.length);
         ranges.push({ range: [start, end], priority: s.priority, tier: s.tier });
-        manifest.push({ key: s.key, label: s.label, found: true, anchorMatched: 'function-column-signature', confidence: 'strong', start, end, chars: end - start });
+        manifest.push({ key: s.key, label: s.label, tier: s.tier, found: true, anchorMatched: 'function-column-signature', confidence: 'strong', start, end, chars: end - start });
       } else {
-        manifest.push({ key: s.key, label: s.label, found: false, anchorMatched: null, confidence: 'none', start: -1, end: -1, chars: 0 });
+        manifest.push({ key: s.key, label: s.label, tier: s.tier, found: false, anchorMatched: null, confidence: 'none', start: -1, end: -1, chars: 0 });
       }
       continue;
     }
@@ -195,11 +235,16 @@ export function buildClinicalPacket(fullText: string): PacketResult {
       end = Math.min(hit.index + s.cap, nextBoundary);
       ranges.push({ range: [start, end], priority: s.priority, tier: s.tier });
     }
-    manifest.push({ key: s.key, label: s.label, found, anchorMatched: found ? hit.anchor : null, confidence: found ? (hit.confidence === 'none' ? 'strong' : hit.confidence) : 'none', start: found ? start : -1, end: found ? end : -1, chars: found ? end - start : 0 });
+    manifest.push({ key: s.key, label: s.label, tier: s.tier, found, anchorMatched: found ? hit.anchor : null, confidence: found ? (hit.confidence === 'none' ? 'strong' : hit.confidence) : 'none', start: found ? start : -1, end: found ? end : -1, chars: found ? end - start : 0 });
   }
 
   // Status windows across the whole doc — REQUIRED (never lose a late DISCONTINUED block).
   for (const w of statusWindows(text)) ranges.push({ range: w, priority: 0, tier: 'required' });
+
+  // Topography windows across the whole doc — REQUIRED (never lose a behavior's operational definition to a
+  // span/heading the anchored behaviorDetail window misses). Capped; overflow is truncated and signaled below.
+  const topo = topographyWindows(text);
+  for (const w of topo.ranges) ranges.push({ range: w, priority: 0, tier: 'required' });
 
   // RESERVED-BUDGET ASSEMBLY. Phase 1: include EVERY required range first (guaranteed minimum coverage of each
   // mandatory domain — identity/summary + FA + status). Phase 2: fill the remaining budget with optional detail
@@ -215,6 +260,7 @@ export function buildClinicalPacket(fullText: string): PacketResult {
   const finalRanges = mergeRanges(chosen).sort((a, b) => a[0] - b[0]);
 
   // Fail-safe: located nothing → bounded fallback slice (never worse than today), flagged behaviorDomainFound=false.
+  const usedCharZeroFallback = finalRanges.length === 0;
   let packet = finalRanges.length ? finalRanges.map(([a, b]) => text.slice(a, b)).join(SEP) : text.slice(0, PACKET_BUDGET);
   if (packet.length > PACKET_BUDGET) packet = packet.slice(0, PACKET_BUDGET); // defensive; greedy already fits
 
@@ -229,5 +275,41 @@ export function buildClinicalPacket(fullText: string): PacketResult {
   const REQUIRED_LABELS: Record<string, string> = { behaviorSummary: 'Behavior summary', replacementSummary: 'Replacement-program summary', interventions: 'Interventions', functionalAssessment: 'Functional assessment' };
   const missing = Object.keys(REQUIRED_LABELS).filter((k) => !has(k)).map((k) => REQUIRED_LABELS[k]);
 
-  return { packet, manifest, missing, behaviorDomainFound, replacementDomainFound, interventionDomainFound, hasFunctionalAssessment, totalChars: packet.length };
+  return { packet, manifest, missing, behaviorDomainFound, replacementDomainFound, interventionDomainFound, hasFunctionalAssessment, totalChars: packet.length, usedCharZeroFallback, topographyMarkers: topo.markers, topographyCaptured: topo.captured };
+}
+
+// ── The no-silent-miss signal (applies to EVERY anchored section, not just behaviors) ───────────────────────
+// A section locator that misses must never continue silently. This turns the packet manifest into (a) RBT/BCBA
+// reviewFlags naming each clinically-load-bearing section that could not be located, and (b) ONE admin alert
+// per upload listing every unlocated section — so we see it happening ACROSS clients, not only when an RBT
+// complains. usedCharZeroFallback (nothing located at all) is the loudest case and is surfaced first.
+// Emitted by both callers (extract-assessment + reprocess) right after buildClinicalPacket.
+const SIGNAL_SECTIONS = new Set(['behaviorSummary', 'behaviorDetail', 'replacementSummary', 'replacementDetail', 'interventions', 'functionalAssessment']);
+export interface SectionLocatorSignal {
+  reviewFlags: Array<{ field: string; source: 'section-unlocated'; reason: string }>;
+  alert: null | { unlocated: Array<{ key: string; label: string; tier: string }>; usedCharZeroFallback: boolean; topographyMarkers?: number; topographyCaptured?: number };
+}
+export function sectionLocatorSignal(pk: PacketResult): SectionLocatorSignal {
+  const unlocated = pk.manifest.filter((m) => !m.found);
+  const reviewFlags: SectionLocatorSignal['reviewFlags'] = [];
+  if (pk.usedCharZeroFallback) {
+    reviewFlags.push({ field: 'document', source: 'section-unlocated', reason: `No sections could be located in this document — it was read as unstructured text (first ${PACKET_BUDGET.toLocaleString()} characters). An unrecognized layout/headings; verify ALL extracted data against the source.` });
+  }
+  for (const m of unlocated) {
+    if (!SIGNAL_SECTIONS.has(m.key)) continue; // background sections (reinforcers/diagnosis/changes) → alert only, no RBT flag
+    reviewFlags.push({ field: m.key, source: 'section-unlocated', reason: `The "${m.label}" section could not be located in this document (unrecognized heading) — its content may be missing from what was read. Verify it against the source, or enter it manually.` });
+  }
+  // TOPOGRAPHY TRUNCATION — the coupling to the locator state. When more operational definitions exist in the
+  // document than fit the read window, the overflow was NOT read. This distinguishes "extractor couldn't read
+  // some definitions" (a locator/window limit) from "the document has no definition" (genuinely absent) — the
+  // exact ambiguity that let Jenny's failure look like a missing-definition case. Never silent.
+  const topoTruncated = pk.topographyCaptured < pk.topographyMarkers;
+  if (topoTruncated) {
+    const missed = pk.topographyMarkers - pk.topographyCaptured;
+    reviewFlags.push({ field: 'topography-truncated', source: 'section-unlocated', reason: `${missed} of ${pk.topographyMarkers} operational-definition blocks were too many to fit the read window and were NOT read — some behaviors' topographies may be missing because they weren't read, not because the document lacks them. Verify against the source.` });
+  }
+  const alert = (unlocated.length || pk.usedCharZeroFallback || topoTruncated)
+    ? { unlocated: unlocated.map((m) => ({ key: m.key, label: m.label, tier: m.tier })), usedCharZeroFallback: pk.usedCharZeroFallback, topographyMarkers: pk.topographyMarkers, topographyCaptured: pk.topographyCaptured }
+    : null;
+  return { reviewFlags, alert };
 }

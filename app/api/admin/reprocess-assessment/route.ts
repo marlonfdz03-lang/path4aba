@@ -11,7 +11,7 @@ import { emitAdminAlert } from "@/lib/adminAlerts";
 import { assembleRefreshProfile } from "@/lib/assembleRefreshProfile";
 import { parsePositioned, clusterRows } from "@/lib/pdfGeometry";
 import { diagnosisColumn } from "@/lib/diagnosis";
-import { buildClinicalPacket } from "@/lib/clinicalPacket";
+import { buildClinicalPacket, sectionLocatorSignal } from "@/lib/clinicalPacket";
 import { reconcileRosters } from "@/lib/rosterReconcile";
 
 export const runtime = "nodejs";
@@ -62,7 +62,10 @@ export async function POST(req: Request) {
     if (!text.trim()) return NextResponse.json({ error: "Stored PDF parsed to empty text." }, { status: 422 });
 
     // Clinical Extraction Packet — same as the live upload path (locate clinical regions across the WHOLE doc).
-    const { packet, hasFunctionalAssessment, behaviorDomainFound, replacementDomainFound, interventionDomainFound, manifest } = buildClinicalPacket(text);
+    const packetResult = buildClinicalPacket(text);
+    const { packet, hasFunctionalAssessment, behaviorDomainFound, replacementDomainFound, interventionDomainFound, manifest } = packetResult;
+    const locator = sectionLocatorSignal(packetResult);  // no-silent-miss signal (all anchored sections)
+    if (locator.alert) await emitAdminAlert({ source: "system", type: "assessment.section_unlocated", severity: locator.alert.usedCharZeroFallback ? "critical" : "warning", clientId, payload: locator.alert });
     const extracted = await extractAssessment(packet);
     saveKnowledgeBase(extracted).catch((e) => console.error("KB save error (reprocess):", e));
 
@@ -112,11 +115,23 @@ export async function POST(req: Request) {
     reviewFlags.push(...carried.flags);
     if (!hasFunctionalAssessment) reviewFlags.push({ field: "functions", source: "llm-fallback", reason: "no functional-assessment (FAST/MAS) source located — functions inferred, verify" });
     if (!behaviorDomainFound) reviewFlags.push({ field: "behaviors", source: "guard-preserved", reason: "maladaptive-behavior section not located — behaviors not refreshed" });
+    reviewFlags.push(...locator.reviewFlags);  // NO-SILENT-MISS: name every unlocated anchored section
 
     // PARTIAL-ACCEPT: applied-but-incomplete active behaviors are flagged (not fatal), same predicate the
     // note form + server backstop use, so a re-upload that fills topography/function clears the flag.
+    let missingTopoCount = 0;
     for (const b of activeBehaviorsForSelection(refreshed)) {
-      if (b.incomplete) reviewFlags.push({ field: `behavior:${b.name}`, source: "behavior-incomplete", reason: `missing ${b.missing.join(" and ")}` });
+      if (b.incomplete) {
+        reviewFlags.push({ field: `behavior:${b.name}`, source: "behavior-incomplete", reason: `missing ${b.missing.join(" and ")}` });
+        if (b.missing.includes("topography")) missingTopoCount++;
+      }
+    }
+    // MARKER-LESS GUARD (closes the last silent path): behaviors missing operational definitions AND ZERO
+    // definition markers anywhere in the document → the definitions may be in an unrecognized format, not
+    // genuinely absent. Same shape as the truncation flag; distinguished from "document lacks them".
+    if (missingTopoCount > 0 && packetResult.topographyMarkers === 0) {
+      reviewFlags.push({ field: "topography-unmarked", source: "section-unlocated", reason: `${missingTopoCount} behavior(s) have no operational definition, and NO definition markers were found anywhere in the document — the definitions may be in an unrecognized format, not absent. Verify against the source.` });
+      await emitAdminAlert({ source: "system", type: "assessment.section_unlocated", severity: "warning", clientId, payload: { topographyUnmarked: missingTopoCount, topographyMarkers: 0 } });
     }
 
     // INTERVENTION-SECTION-UNREAD: enumerated section found but too large to read safely — list came from

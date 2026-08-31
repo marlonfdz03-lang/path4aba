@@ -11,7 +11,7 @@
 //   llm-fallback    · behaviors         (create path, no existing to preserve)
 //   behavior-review · behavior:<name>   (a single behavior whose name/function wasn't structural)
 
-export type ReviewFlagSource = "llm-fallback" | "guard-preserved" | "behavior-review" | "target-undefined" | "behavior-incomplete" | "intervention-section-unread" | "human-edit-dropped" | "human-edit-superseded";
+export type ReviewFlagSource = "llm-fallback" | "guard-preserved" | "behavior-review" | "target-undefined" | "behavior-incomplete" | "intervention-section-unread" | "section-unlocated" | "human-edit-dropped" | "human-edit-superseded";
 export interface ReviewFlagLike { field: string; reason?: string; source: ReviewFlagSource }
 
 const BEHAVIOR_PREFIX = "behavior:";
@@ -44,6 +44,27 @@ export function flagCopy(flag: ReviewFlagLike): string {
   if (field.startsWith(TARGET_PREFIX)) {
     const name = field.slice(TARGET_PREFIX.length).trim();
     return `${name} is listed as a target behavior but has no operational definition or baseline data — please verify with your BCBA.`;
+  }
+
+  // A section locator missed (unrecognized heading) — named so the RBT/BCBA knows WHICH section may be missing,
+  // never a silent gap. field is the section key (or "document" for the whole-doc char-zero fallback).
+  if (flag?.source === "section-unlocated") {
+    if (field === "document")
+      return "This assessment's layout wasn't recognized, so it was read as plain text — some information may be missing. Please verify all extracted data against the source, or enter it manually.";
+    if (field === "topography-truncated")
+      return "This assessment has more behavior definitions than could be read in one pass — some behaviors' operational definitions may be missing because they weren't read, not because the document lacks them. Please verify each behavior's definition against the source.";
+    if (field === "topography-unmarked")
+      return "Some behaviors have no operational definition, and no definition labels (“Topography” / “Operational Definition” / “Defined as”) were found anywhere in this assessment — the definitions may be written in a format we didn't recognize, not missing. Please check the source and enter them if present.";
+    const names: Record<string, string> = {
+      behaviorSummary: "The behavior list",
+      behaviorDetail: "The behavior operational-definitions (topography) section",
+      replacementSummary: "The replacement-program list",
+      replacementDetail: "The replacement-program details",
+      interventions: "The interventions section",
+      functionalAssessment: "The functional-assessment (FAST/MAS) section",
+    };
+    const what = names[field] || `The ${field} section`;
+    return `${what} couldn't be located in this upload (its heading wasn't recognized), so its content may be missing from what was read. Please verify it against the source, or enter it manually.`;
   }
 
   if (field === "functions")

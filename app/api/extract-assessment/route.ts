@@ -12,7 +12,7 @@ import { emitAdminAlert } from "@/lib/adminAlerts";
 import { diagnosisColumn } from "@/lib/diagnosis";
 import { parsePositioned, clusterRows } from "@/lib/pdfGeometry";
 import { assembleRefreshProfile } from "@/lib/assembleRefreshProfile";
-import { buildClinicalPacket } from "@/lib/clinicalPacket";
+import { buildClinicalPacket, sectionLocatorSignal } from "@/lib/clinicalPacket";
 import { reconcileRosters } from "@/lib/rosterReconcile";
 
 export const maxDuration = 60;
@@ -57,7 +57,9 @@ export async function POST(req: NextRequest) {
     // CLINICAL EXTRACTION PACKET — locate the clinically relevant regions across the WHOLE document (behaviors,
     // status blocks, FAST/MAS, replacement, reinforcers, …) instead of the first 90K chars, which never reached
     // the late FAST/MAS tables or late DISCONTINUED blocks in large assessments. Stays under 90K.
-    const { packet, hasFunctionalAssessment, behaviorDomainFound, replacementDomainFound, interventionDomainFound } = buildClinicalPacket(text);
+    const packetResult = buildClinicalPacket(text);
+    const { packet, hasFunctionalAssessment, behaviorDomainFound, replacementDomainFound, interventionDomainFound } = packetResult;
+    const locator = sectionLocatorSignal(packetResult);  // no-silent-miss signal (all anchored sections)
     const extracted = await extractAssessment(packet);
 
     saveKnowledgeBase(extracted).catch(err =>
@@ -178,12 +180,29 @@ export async function POST(req: NextRequest) {
       reviewFlags.push(...carried.flags);
       if (!hasFunctionalAssessment) reviewFlags.push({ field: "functions", source: "llm-fallback", reason: "no functional-assessment (FAST/MAS) source was located — behavior functions are inferred, not documented; verify with the BCBA" });
       if (!behaviorDomainFound) reviewFlags.push({ field: "behaviors", source: "guard-preserved", reason: "the maladaptive-behavior section could not be located in this upload — behaviors were not refreshed from it" });
+      // NO-SILENT-MISS: name every anchored section the locator could not find (unrecognized heading), and log
+      // one admin alert per upload so a locator gap is visible across clients — never only when an RBT complains.
+      reviewFlags.push(...locator.reviewFlags);
+      if (locator.alert) await emitAdminAlert({ source: "system", type: "assessment.section_unlocated", severity: locator.alert.usedCharZeroFallback ? "critical" : "warning", clientId, payload: locator.alert });
 
       // PARTIAL-ACCEPT: an active behavior applied without a topography and/or function is flagged (not
       // fatal) so the complete behaviors still refresh. Derived from the same predicate the note form and
       // server backstop use, so a re-upload that fills the fields clears the flag automatically.
+      let missingTopoCount = 0;
       for (const b of activeBehaviorsForSelection(refreshed)) {
-        if (b.incomplete) reviewFlags.push({ field: `behavior:${b.name}`, source: "behavior-incomplete", reason: `missing ${b.missing.join(" and ")}` });
+        if (b.incomplete) {
+          reviewFlags.push({ field: `behavior:${b.name}`, source: "behavior-incomplete", reason: `missing ${b.missing.join(" and ")}` });
+          if (b.missing.includes("topography")) missingTopoCount++;
+        }
+      }
+      // MARKER-LESS GUARD (closes the last silent path): behaviors are missing operational definitions AND the
+      // document had ZERO definition markers anywhere (Topography / Operational Definition / Defined as). The
+      // definitions may be written in a format we don't recognize (an unlabeled column, narrative prose) — NOT
+      // genuinely absent. Distinguished from "document lacks them" so the next BCBA who writes unlabeled
+      // definitions doesn't silently reproduce the manual re-entry. Same shape as the truncation flag.
+      if (missingTopoCount > 0 && packetResult.topographyMarkers === 0) {
+        reviewFlags.push({ field: "topography-unmarked", source: "section-unlocated", reason: `${missingTopoCount} behavior(s) have no operational definition, and NO definition markers were found anywhere in the document — the definitions may be in an unrecognized format, not absent. Verify against the source.` });
+        await emitAdminAlert({ source: "system", type: "assessment.section_unlocated", severity: "warning", clientId, payload: { topographyUnmarked: missingTopoCount, topographyMarkers: 0 } });
       }
 
       // INTERVENTION-SECTION-UNREAD: the enumerated interventions section was found but too large to read

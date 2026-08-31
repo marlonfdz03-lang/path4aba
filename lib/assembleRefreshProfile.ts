@@ -17,7 +17,7 @@ import { tokenSubsetMatch } from './skillReconcile.ts'
 import { reconcileBehaviors, assessLlmBehaviorCredibility } from './llmBehaviorCredibility.ts'
 import { readObjectivesFormat, objMatch } from './objectivesFormat.ts'
 
-export interface ReviewFlag { field: string; reason: string; source: 'llm-fallback' | 'guard-preserved' | 'behavior-review' | 'target-undefined' | 'behavior-incomplete' | 'intervention-section-unread' | 'human-edit-dropped' | 'human-edit-superseded' }
+export interface ReviewFlag { field: string; reason: string; source: 'llm-fallback' | 'guard-preserved' | 'behavior-review' | 'target-undefined' | 'behavior-incomplete' | 'intervention-section-unread' | 'section-unlocated' | 'human-edit-dropped' | 'human-edit-superseded' }
 
 const CODE = (s: string) => (String(s).match(/[A-Za-z]\d{2}(?:\.\d+)?/) || [])[0]?.toUpperCase()
 const norm = (s: string) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
