@@ -310,6 +310,14 @@ export default function ClientProfilePage() {
   // values with no stale closure. Assigned during render — the documented "latest value" ref pattern.
   const clientIdRef = useRef<string | null>(null);
   const dateRef = useRef<string>("");
+  // Live compliance-calendar prompt (feature 2): occupiedDates = dates with an ACTIVE note (the PHI-free set,
+  // checked when a date is picked). dateConflict drives the View/Replace/Cancel dialog. replaceDateRef arms the
+  // next generation's autosave to SUPERSEDE that date's note. savedNoteCycleDateRef is this cycle's own note's
+  // date, excluded from the prompt so the RBT is never warned about their own just-created note.
+  const [occupiedDates, setOccupiedDates] = useState<Set<string>>(new Set());
+  const [dateConflict, setDateConflict] = useState<{ date: string; previous: string; noteText?: string | null; loadingView?: boolean } | null>(null);
+  const replaceDateRef = useRef<string | null>(null);
+  const savedNoteCycleDateRef = useRef<string | null>(null);
 
   // Share with BCBA state
   const [shareCode, setShareCode] = useState("");
@@ -392,6 +400,19 @@ export default function ClientProfilePage() {
     }
   }
 
+  // The calendar occupancy set — PHI-free dates that have an active note. Refreshed on client load and after
+  // each autosave create/supersede, so a date just filled reads as occupied on the next pick.
+  async function refreshOccupiedDates(clientId?: string) {
+    const cid = clientId || client?.id;
+    if (!cid) return;
+    try {
+      const res = await fetch(`/api/session-notes/dates?clientId=${cid}`);
+      if (!res.ok) return;
+      const { dates } = await res.json();
+      setOccupiedDates(new Set(Array.isArray(dates) ? dates : []));
+    } catch { /* non-fatal: the prompt just won't fire until the next refresh */ }
+  }
+
   useEffect(() => {
     async function load() {
       const id = params.id as string;
@@ -401,6 +422,7 @@ export default function ClientProfilePage() {
         const data = await res.json();
         const found = { id: data.id, clientName: data.clinical_profile?.name || data.internal_code || "Unnamed Client", clinicalProfile: data.clinical_profile, authorized_hours_weekly: data.authorized_hours_weekly ?? null, treatmentMapApproved: data.treatment_map_approved ?? false };
         setClient(found);
+        refreshOccupiedDates(found.id);  // calendar occupancy for the replace prompt
         const loadedFromDB = await loadNotesFromSupabase(found.id);
         if (!loadedFromDB) setDailyNotes(getNotesByClientId(found.id));
         if (data.clinical_profile?.whoWasPresent?.length) {
@@ -442,6 +464,10 @@ export default function ClientProfilePage() {
       savedNoteIdRef.current = null;
       backupIdRef.current = null;
       pendingEditTextRef.current = null;
+      // Calendar state belongs to one client too — drop the replace-intent, this cycle's date, and the dialog.
+      replaceDateRef.current = null;
+      savedNoteCycleDateRef.current = null;
+      setDateConflict(null);
     };
   }, [params.id]);
 
@@ -845,7 +871,12 @@ export default function ClientProfilePage() {
     } : {};
     try {
       const id = savedNoteIdRef.current;
-      const body = { clientId: client.id, noteText, sessionDate: date || today.toISOString().split("T")[0], ...meta };
+      const sessionDate = date || today.toISOString().split("T")[0];
+      const body: any = { clientId: client.id, noteText, sessionDate, ...meta };
+      // REPLACE: the RBT picked an occupied date and chose Replace (replaceDateRef). The first create of this
+      // cycle supersedes that date's existing note atomically (client-generated id → idempotent, skips dup).
+      const replacing = !id && replaceDateRef.current === sessionDate;
+      if (replacing) { body.supersede = true; body.id = crypto.randomUUID(); }
       const res = id
         ? await fetch("/api/session-notes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...body }) })
         : await fetch("/api/session-notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -860,8 +891,10 @@ export default function ClientProfilePage() {
         if (data?.id) savedNoteIdRef.current = data.id;   // adopt the existing note; edits now update it
         setLastSavedNote(noteText);
         if (pendingEditTextRef.current === noteText) pendingEditTextRef.current = null;  // this edit is now on the server
+        savedNoteCycleDateRef.current = sessionDate;      // this cycle's note is for this date — don't self-prompt on it
         markSaved();
         await loadNotesFromSupabase(client.id);
+        await refreshOccupiedDates();
         return true;
       }
       if (res.ok) {
@@ -869,8 +902,12 @@ export default function ClientProfilePage() {
         if (data?.id) savedNoteIdRef.current = data.id;
         setLastSavedNote(noteText);
         if (pendingEditTextRef.current === noteText) pendingEditTextRef.current = null;  // this edit is now on the server
+        if (isCreate) {
+          savedNoteCycleDateRef.current = sessionDate;    // this cycle's note is for this date — don't self-prompt on it
+          if (replaceDateRef.current === sessionDate) replaceDateRef.current = null;  // replace consumed
+        }
         markSaved();
-        if (isCreate) await loadNotesFromSupabase(client.id);  // reconcile the notes list once, on first persist
+        if (isCreate) { await loadNotesFromSupabase(client.id); await refreshOccupiedDates(); }  // reconcile list + occupancy once
         return true;
       }
       throw new Error("save failed");
@@ -938,6 +975,8 @@ export default function ClientProfilePage() {
     if (editDebounceRef.current) clearTimeout(editDebounceRef.current);
     const doClear = () => {
       savedNoteIdRef.current = null;
+      savedNoteCycleDateRef.current = null;  // fresh cycle — no own-note date to exclude yet
+      replaceDateRef.current = null;
       setSaveState("idle");
       resetNoteForm();
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -951,6 +990,51 @@ export default function ClientProfilePage() {
       }
     }
     if (confirm("Start a new note? This clears the form.")) doClear();
+  }
+
+  // Live compliance calendar — fires when the RBT PICKS the date (before any generation, so it never races the
+  // autosave create). If the date already has an ACTIVE note (and it isn't this cycle's own note), open the
+  // View/Replace/Cancel dialog. A new pick clears any prior replace-intent; the dialog re-arms it.
+  function handleDatePick(picked: string) {
+    const previous = date;
+    replaceDateRef.current = null;
+    setDate(picked);
+    fetchBcbaOverlapContext(picked);
+    if (picked && occupiedDates.has(picked) && picked !== savedNoteCycleDateRef.current) {
+      setDateConflict({ date: picked, previous });
+    }
+  }
+
+  // Cancel = "I'll pick a different date": REVERT the date so generation can never land on the occupied date
+  // without a decision. The only way onto an occupied date is Replace → supersede.
+  function cancelDateConflict() {
+    if (!dateConflict) return;
+    setDate(dateConflict.previous);
+    fetchBcbaOverlapContext(dateConflict.previous);
+    setDateConflict(null);
+  }
+
+  // Replace: arm the next generation's autosave to supersede this date's note (atomic supersede-create), keep
+  // the picked date, close.
+  function replaceDateConflict() {
+    if (!dateConflict) return;
+    replaceDateRef.current = dateConflict.date;
+    setDateConflict(null);
+  }
+
+  // View: fetch the existing note's text (PHI, on demand only) and show it read-only inside the dialog, so the
+  // RBT decides informed rather than blind.
+  async function viewDateConflict() {
+    if (!dateConflict || !client?.id) return;
+    const forDate = dateConflict.date;
+    setDateConflict((c) => (c ? { ...c, loadingView: true } : c));
+    try {
+      const res = await fetch(`/api/session-notes/by-date?clientId=${client.id}&date=${forDate}`);
+      const { note } = await res.json();
+      setDateConflict((c) => (c && c.date === forDate ? { ...c, noteText: note?.text ?? "(This note is empty.)", loadingView: false } : c));
+    } catch {
+      setDateConflict((c) => (c && c.date === forDate ? { ...c, noteText: "Could not load the existing note.", loadingView: false } : c));
+    }
   }
 
 
@@ -1941,6 +2025,39 @@ export default function ClientProfilePage() {
         {activeTab === "generate" && (
           <div className="space-y-5 max-w-[780px]">
 
+            {/* Live compliance calendar — replace prompt. Fires on date pick (never at generation). */}
+            {dateConflict && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.4)" }}>
+                <div className="bg-white rounded-2xl border shadow-xl w-full max-w-[520px] p-6" style={{ borderColor: "var(--border)" }}>
+                  <p className="text-[15px] font-semibold" style={{ color: "var(--text1)" }}>You already have a note for this day</p>
+                  <p className="mt-1 text-[13px]" style={{ color: "var(--text3)" }}>
+                    A note already exists for {dateConflict.date}. View it, replace it, or cancel and pick a different date.
+                  </p>
+                  {dateConflict.noteText != null && (
+                    <div className="mt-3 rounded-xl border p-3 text-[13px] leading-6 max-h-64 overflow-y-auto whitespace-pre-wrap" style={{ borderColor: "var(--border)", background: "#F8FAFC", color: "var(--text1)" }}>
+                      {dateConflict.noteText}
+                    </div>
+                  )}
+                  <div className="mt-5 flex justify-end gap-2">
+                    {dateConflict.noteText == null && (
+                      <button onClick={viewDateConflict} disabled={dateConflict.loadingView}
+                        className="px-3 py-1.5 rounded-lg text-[13px] font-medium border disabled:opacity-40" style={{ borderColor: "var(--border)", color: "var(--text2)" }}>
+                        {dateConflict.loadingView ? "Loading…" : "View"}
+                      </button>
+                    )}
+                    <button onClick={cancelDateConflict}
+                      className="px-3 py-1.5 rounded-lg text-[13px] font-medium border" style={{ borderColor: "var(--border)", color: "var(--text2)" }}>
+                      Cancel
+                    </button>
+                    <button onClick={replaceDateConflict}
+                      className="px-3 py-1.5 rounded-lg text-[13px] font-semibold text-white" style={{ background: "#D97706" }}>
+                      Replace
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
 
             {/* Form header */}
             <div className="bg-white rounded-[10px] border p-6 flex items-start justify-between" style={{ borderColor: "var(--border)" }}>
@@ -1965,7 +2082,7 @@ export default function ClientProfilePage() {
               <div className="mb-4">
                 <label className="block text-[12px] font-semibold mb-1.5" style={{ color: "var(--text3)" }}>DATE</label>
                 <input
-                  type="date" value={date} onChange={(e) => { setDate(e.target.value); fetchBcbaOverlapContext(e.target.value); }}
+                  type="date" value={date} onChange={(e) => handleDatePick(e.target.value)}
                   className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2"
                   style={{ borderColor: "var(--border)", color: "var(--text1)" }}
                 />
