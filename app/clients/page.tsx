@@ -157,10 +157,10 @@ function ClientCard({
               e.stopPropagation();
               onDelete(client.id);
             }}
-            className="px-3 py-2 rounded-lg text-[13px] font-semibold border transition-colors hover:bg-red-50"
-            style={{ borderColor: "#FCA5A5", color: "#EF4444" }}
+            className="px-3 py-2 rounded-lg text-[13px] font-semibold border transition-colors hover:opacity-80"
+            style={{ borderColor: "var(--border)", color: "var(--text2)" }}
           >
-            Delete
+            Archive
           </button>
         </div>
       </div>
@@ -182,11 +182,15 @@ export default function ClientsPage() {
   const [newClientError, setNewClientError] = useState("");
   const [newClientSuccess, setNewClientSuccess] = useState(false);
 
-  async function handleDeleteClient(clientId: string) {
-    const confirmDelete = window.confirm(
-      "Are you sure you want to delete this client profile?"
+  async function handleArchiveClient(clientId: string) {
+    // Archive = reversible soft-delete on the server (the row + all notes/PDFs/data are retained and restorable
+    // via scripts/restore-client.ts). The wording reflects that nothing is lost — the old "delete" copy implied
+    // permanence it no longer has. The local cache eviction below just drops it from THIS device's list; the
+    // authoritative source is the server GET, which now hides archived clients, so the two agree.
+    const confirmArchive = window.confirm(
+      "Archive this client? They'll be removed from your active client list. Their session notes, data, and assessment files are kept and can be restored later. Continue?"
     );
-    if (!confirmDelete) return;
+    if (!confirmArchive) return;
     deleteClientProfile(clientId);
     await fetch(`/api/clients?id=${clientId}`, { method: "DELETE" });
     setClients((prev) => prev.filter((client) => client.id !== clientId));
@@ -357,7 +361,7 @@ export default function ClientsPage() {
                 key={client.id}
                 client={client}
                 index={i}
-                onDelete={handleDeleteClient}
+                onDelete={handleArchiveClient}
               />
             ))}
           </div>

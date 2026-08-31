@@ -70,6 +70,10 @@ export async function DELETE(
   if (!(await canAccessClient(session, id)))
     return NextResponse.json({ error: 'Forbidden — you are not assigned to this client.' }, { status: 403 })
 
-  await prisma.clients.delete({ where: { id } })
+  // SOFT DELETE (archive), not a hard delete — see /api/clients DELETE. A hard delete cascade-destroyed the
+  // client's billing records (session_notes, incl. superseded), PDFs, and data. Retain the row + children,
+  // hidden from reads by the lib/prisma extension; restore via scripts/restore-client.ts.
+  const userId = (session.user as any).id as string
+  await prisma.clients.update({ where: { id }, data: { deleted_at: new Date(), deleted_by: userId } })
   return NextResponse.json({ ok: true })
 }

@@ -20,7 +20,11 @@ export async function GET() {
       where: { bcba_id: userId },
       select: { client_id: true },
     })
-    clientIds = bcbaClients.map((bc) => bc.client_id)
+    // A bcba_clients row SURVIVES a client archive (no cascade), so its client_ids can include archived clients.
+    // Intersect through the soft-delete-filtered clients read so an archived client's notes don't inflate stats.
+    const ids = bcbaClients.map((bc) => bc.client_id)
+    const activeClients = await prisma.clients.findMany({ where: { id: { in: ids } }, select: { id: true } })
+    clientIds = activeClients.map((c) => c.id)
   } else {
     // RBT / admin
     const clients = await prisma.clients.findMany({

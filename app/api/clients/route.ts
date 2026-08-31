@@ -114,13 +114,17 @@ export async function DELETE(req: Request) {
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
-  // OWNERSHIP GATE — this DELETE cascades ~15 tables (session_notes, client_files PHI, all data tables). It
-  // must require that the caller owns the client (assigned RBT / connected BCBA / admin), mirroring the
-  // guarded DELETE on /api/clients/[id]. Without this any authenticated user could destroy any client. 403
-  // (never 404) so a legitimate-but-unassigned user gets a clear message. Same shared rule as every other route.
+  // OWNERSHIP GATE — mirrors the guarded DELETE on /api/clients/[id]. 403 (never 404) for a legitimate-but-
+  // unassigned user. canAccessClient reads the client (now soft-delete-filtered), so an already-archived client
+  // is not re-archivable through here.
   if (!(await canAccessClient(session, id)))
     return NextResponse.json({ error: 'Forbidden — you are not assigned to this client.' }, { status: 403 })
 
-  await prisma.clients.delete({ where: { id } })
+  // SOFT DELETE (archive), not a hard delete: a hard DELETE cascade-destroyed the client's session notes
+  // (billing records, incl. superseded), assessment PDFs, and every data table. Set deleted_at/deleted_by; the
+  // row and all children are retained and hidden from every read by the lib/prisma extension. Restore via
+  // scripts/restore-client.ts.
+  const userId = (session.user as any).id as string
+  await prisma.clients.update({ where: { id }, data: { deleted_at: new Date(), deleted_by: userId } })
   return NextResponse.json({ success: true })
 }

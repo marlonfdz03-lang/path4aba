@@ -27,6 +27,12 @@ model clients {
   // scheduled days" statement. JSONB rather than Int[] because Prisma cannot express a nullable scalar
   // list (`Int[]?` -> P1012), and a non-nullable Int[] defaults to '{}', collapsing UNKNOWN into "none".
   session_days              Json?
+  // Soft-delete (migration 20260831000000). NULL = active; a timestamp = archived (row + all children retained,
+  // nothing cascades). Hidden from every read by the model-scoped extension in lib/prisma.ts. deleted_by = who
+  // archived it. A hard DELETE would irreversibly cascade-destroy a client's billing records (session_notes,
+  // incl. superseded), PDFs, and data — soft-delete is what preserves them.
+  deleted_at                DateTime?                   @db.Timestamptz(6)
+  deleted_by                String?
   bcba_clients              bcba_clients[]
   client_access_codes       client_access_codes[]
   maladaptive_data          maladaptive_data[]
