@@ -402,7 +402,10 @@
       <div class="output-header">
         <span class="field-label">Generated Note</span>
         <div class="output-actions">
-          <button id="saveBtn" class="btn-sm">Save</button>
+          <!-- Autosave indicator (replaces the Save button). "Saved ✓" fades; "Save failed — tap to retry"
+               persists and is clickable. See saveStatus handling in popup.js. -->
+          <span id="saveStatus" class="save-status" style="display:none"></span>
+          <button id="startNewBtn" class="btn-sm">Start new note</button>
           <button id="copyBtn" class="btn-sm btn-teal">Copy</button>
         </div>
       </div>

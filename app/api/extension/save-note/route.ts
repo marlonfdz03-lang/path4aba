@@ -37,7 +37,8 @@ export async function POST(req: Request) {
     select: { id: true },
   })
   if (exactMatch) {
-    return NextResponse.json({ error: 'This note has already been saved.', duplicate: true }, { status: 409 })
+    // Return the id so the client ADOPTS this row (upsert-per-cycle) and shows "Saved ✓" — edits then PATCH it.
+    return NextResponse.json({ error: 'This note has already been saved.', duplicate: true, id: exactMatch.id }, { status: 409 })
   }
 
   // Similarity check against the last 10 notes for this client
@@ -86,12 +87,65 @@ export async function POST(req: Request) {
       user_id: userId,
       note_text: cleanText,
       session_date: session_date || new Date().toISOString().split('T')[0],
-      // Saved by the extension = the note pushed into the EHR for this session — the authoritative
-      // "used" record, the strongest answer to "which note was used for this date".
-      status: 'used',
+      // 'saved' (kept), NOT 'used'. Autosave now creates this row at GENERATION — before any EHR push, and for
+      // notes that may be abandoned via Start-new — so 'used' (per the schema: "pushed into the EHR by the
+      // extension") would over-claim. Nothing reads status === 'used' today; a precise 'used'-on-EHR-fill
+      // marker is a separate follow-up. Matches the web create path.
+      status: 'saved',
     },
     select: { id: true },
   })
 
   return NextResponse.json({ success: true, id: inserted.id })
+}
+
+// PATCH /api/extension/save-note — UPDATE one existing note in place (the upsert-per-cycle path: autosave
+// creates once via POST, then re-generations and debounced/blur/teardown edits update THAT row by id).
+// Update-only — it never creates. DELIBERATELY skips the similarity and exact-duplicate checks: those are
+// create-time admission gates, and re-running them on an update would compare the row to its OWN prior stored
+// version and 422 the note against itself. Same blocked-narrative backstop as POST.
+export async function PATCH(req: Request) {
+  const user = await getExtensionAuth()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const userId = user.id
+
+  const body = await req.json()
+  const { id, client_id, note_text, session_date } = body
+  if (!id || !client_id || !note_text) {
+    return NextResponse.json({ error: 'Missing id, client_id or note_text' }, { status: 400 })
+  }
+  if (!(await principalCanAccessClient({ id: user.id, role: user.role }, client_id)))
+    return NextResponse.json({ error: 'You do not have access to this client.' }, { status: 403 })
+
+  // Same fail-soft blocked-narrative backstop as POST (create and update must store clean text identically).
+  let cleanText = note_text
+  try {
+    const { learnedBlockedTerms, authorizedNames } = await buildBlockedFilterContext(client_id)
+    const filtered = filterBlockedNarrative(note_text, learnedBlockedTerms, authorizedNames)
+    if (filtered.text !== note_text) {
+      cleanText = filtered.text
+      await emitAdminAlert({
+        source: 'extension',
+        type: 'note.save_filter_caught',
+        severity: 'warning',
+        actorUserId: userId,
+        clientId: client_id,
+        payload: { surface: 'extension', substituted: filtered.substituted, flagged: filtered.flagged },
+      })
+    }
+  } catch { /* fail-soft: store what we have rather than blocking the save */ }
+
+  // UPDATE-ONLY, ownership-SCOPED. updateMany over { id, client_id } updates the row IFF it exists AND belongs
+  // to this caller-owned client. A stale id (deleted) or another client's id matches ZERO rows — never a stray
+  // create, never a cross-client write; the client re-creates on the { recreate: true } signal. status is left
+  // untouched.
+  const data: any = { note_text: cleanText }
+  if (session_date) data.session_date = session_date
+  const { count } = await prisma.session_notes.updateMany({ where: { id, client_id }, data })
+
+  if (count === 0) {
+    return NextResponse.json({ error: 'This note no longer exists — save it as a new note.', recreate: true }, { status: 404 })
+  }
+
+  return NextResponse.json({ success: true, id })
 }

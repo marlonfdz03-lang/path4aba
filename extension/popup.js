@@ -366,6 +366,15 @@ function setupMainScreen() {
 
 // ── Client selection ───────────────────────
 document.getElementById('clientSelect').addEventListener('change', async (e) => {
+  // A tracked note id / local backup belong to ONE client. FLUSH any pending edit for the client we're LEAVING
+  // first — while selectedClientId + savedNoteId still point at it — then drop them so an edit never PATCHes or
+  // overwrites the previous client's note.
+  flushExtPending();
+  savedNoteId = null;
+  backupKey = null;
+  backupRecord = null;
+  pendingEditText = null;
+  setSaveStateExt('idle');
   selectedClientId = e.target.value || null;
   selectedBehaviors = [];
   selectedSkills = [];
@@ -1078,6 +1087,11 @@ async function streamGenerate(endpoint, body, method = 'POST') {
   streamStatus.textContent = 'Generating your note…';
   generateBtn.disabled = true;
   clearSessionSummary(); // drop any prior note's tables while the new one streams
+  // Reset the autosave indicator + any pending edit for the OLD note. savedNoteId is deliberately KEPT so a
+  // re-generation UPDATEs the same server row (upsert-per-cycle); it is cleared only by Start-new / client switch.
+  setSaveStateExt('idle');
+  if (editDebounceTimer) { clearTimeout(editDebounceTimer); editDebounceTimer = null; }
+  pendingEditText = null;
 
   let finalText = '';
   let blockedFlagged = [];
@@ -1148,20 +1162,20 @@ async function streamGenerate(endpoint, body, method = 'POST') {
       streamStatus.style.display = 'none';
       renderSessionSummary(finalText);       // the three tables under the note (matches the web)
 
-      // GENERATION-TIME LOCAL BACKUP (standalone data-safety fix; independent of any save/autosave). The
-      // save-success backup further down only runs AFTER a successful save — so a generated note whose save
-      // fails, or a popup closed before saving, was silently lost. Mirror the web (saveNote at generation-
-      // finish, page.tsx): persist the finished note the instant it exists, so the work is recoverable no
-      // matter what the save does. `verified` is recorded so a recovered unverified note is identifiable.
-      // Fail-soft — a backup that cannot be written must never block or discard the note.
+      // GENERATION-TIME LOCAL BACKUP + AUTOSAVE. The backup persists the finished note the instant it exists
+      // (recoverable no matter what the save does); `verified` is recorded so a recovered unverified note is
+      // identifiable. backupKey is STABLE for this cycle so subsequent edits rewrite THIS record (the backup
+      // then tracks edits, not just the generated text). Then autosave CREATES the server row (or UPDATEs it
+      // on a re-generation — savedNoteId carries across the cycle). Fail-soft — a backup write must never
+      // block or discard the note.
       if (selectedClientId && finalText) {
         try {
-          chrome.storage.local.set({
-            [`path4aba_ext_note_${selectedClientId}_${Date.now()}`]: {
-              clientId: selectedClientId, note: finalText, generatedAt: new Date().toISOString(), verified,
-            },
-          });
+          backupKey = `path4aba_ext_note_${selectedClientId}_${Date.now()}`;
+          backupRecord = { clientId: selectedClientId, note: finalText, generatedAt: new Date().toISOString(), verified };
+          chrome.storage.local.set({ [backupKey]: backupRecord });
         } catch { /* best-effort backup; never interrupt the note */ }
+        pendingEditText = null;  // the generated text is what we're about to autosave, not a pending edit
+        queueSaveExt(finalText); // create (or update the same row on a re-generation)
       }
 
       if (!verified) {
@@ -1296,86 +1310,169 @@ function resetAfterSave() {
   updateGenerateBtn();
 }
 
-// ── Save button ────────────────────────────
-let lastSavedNoteText = null;
+// ── Autosave (no Save button) ──────────────────────────────────────────────
+// The note persists automatically: created when generation finishes, updated on every re-generation, debounced
+// edit, blur, and popup teardown (upsert-per-cycle). Durability, given the popup closes constantly:
+//  • the local backup TRACKS EDITS (rewritten on every keystroke) — the edit is on the device instantly;
+//  • the server save runs through the background service worker's FETCH proxy, which owns completion — so a
+//    save DISPATCHED at teardown (visibilitychange→hidden / pagehide / blur) finishes even after the popup dies.
+let lastSavedNoteText = null;   // the last text confirmed on the server (the "clean" marker for Start-new)
 let lastSavedClientId = null;
+let savedNoteId = null;         // the server row this cycle writes to (null ⇒ next save CREATEs; set ⇒ PATCHes)
+let pendingEditText = null;     // latest un-flushed edit, for the teardown/blur flush
+let backupKey = null;           // stable chrome.storage key for THIS cycle's backup (edits rewrite it)
+let backupRecord = null;        // the backup value, so an edit can rewrite `note` while keeping generatedAt/verified
+let saveState = 'idle';         // 'idle' | 'saving' | 'saved' | 'failed' — drives the indicator
+let editDebounceTimer = null;
+let saveFadeTimer = null;
+let extSaveChain = Promise.resolve(true);  // serializes saves so a create finishes (id captured) before an edit-update
 
-document.getElementById('saveBtn').addEventListener('click', async () => {
-  const text = document.getElementById('outputNote').value;
-  if (!text || !selectedClientId) return;
-
-  // Block duplicate save: same note + same client
-  if (text === lastSavedNoteText && selectedClientId === lastSavedClientId) {
-    const btn = document.getElementById('saveBtn');
-    btn.textContent = 'Already saved';
-    btn.style.background = '#f59e0b';
-    setTimeout(() => {
-      btn.textContent = 'Save';
-      btn.style.background = '';
-    }, 2000);
-    return;
+function renderSaveState() {
+  const el = document.getElementById('saveStatus');
+  if (!el) return;
+  el.onclick = null;
+  el.style.cursor = '';
+  if (saveState === 'saving') {
+    el.style.display = ''; el.textContent = 'Saving…'; el.style.color = '#6b7280';
+  } else if (saveState === 'saved') {
+    el.style.display = ''; el.textContent = 'Saved ✓'; el.style.color = '#16a34a';
+  } else if (saveState === 'failed') {
+    // Persists until resolved (a message that vanishes is how a failed save gets missed) and is clickable to retry.
+    el.style.display = ''; el.textContent = 'Save failed — tap to retry'; el.style.color = '#dc2626'; el.style.cursor = 'pointer';
+    el.onclick = () => { const t = document.getElementById('outputNote').value; if (t && t.trim()) queueSaveExt(t); };
+  } else {
+    el.style.display = 'none'; el.textContent = '';
   }
+}
 
-  const btn = document.getElementById('saveBtn');
-  btn.disabled = true;
-  document.querySelectorAll('.save-error').forEach(e => e.remove());
+function setSaveStateExt(s) { saveState = s; renderSaveState(); }
 
+function markSavedExt() {
+  setSaveStateExt('saved');
+  if (saveFadeTimer) clearTimeout(saveFadeTimer);
+  saveFadeTimer = setTimeout(() => { if (saveState === 'saved') setSaveStateExt('idle'); }, 3000);
+}
+
+// The upsert. CREATE (POST) when no id is tracked, capturing the id so later saves UPDATE (PATCH) that row.
+//  • POST 409 (identical note exists) → adopt that id, "Saved ✓" (never a duplicate error).
+//  • POST 422 (too similar / create-time guard) → surface the message, "failed" — the RBT varies + regenerates.
+//  • PATCH 404 (row gone) → drop the id and re-create — work re-saved, never lost.
+// One silent auto-retry precedes the persistent "failed". Returns true on save/adopt, false otherwise.
+async function persistExtNote(noteText, opts = {}) {
+  if (!noteText || !noteText.trim() || !selectedClientId) return false;
+  const attempt = opts.attempt || 0;
+  setSaveStateExt('saving');
+  const sessionDate = (document.getElementById('genDate') && document.getElementById('genDate').value) || new Date().toISOString().split('T')[0];
   try {
-    const res = await api('/api/extension/save-note', {
-      method: 'POST',
-      body: JSON.stringify({
-        note_text: text,
-        client_id: selectedClientId,
-        session_date: document.getElementById('genDate').value || new Date().toISOString().split('T')[0],
-      }),
-    });
-
+    const id = savedNoteId;
+    const payload = id
+      ? { id, client_id: selectedClientId, note_text: noteText, session_date: sessionDate }
+      : { client_id: selectedClientId, note_text: noteText, session_date: sessionDate };
+    const res = await api('/api/extension/save-note', { method: id ? 'PATCH' : 'POST', body: JSON.stringify(payload) });
     const data = await res.json().catch(() => ({}));
 
-    if (!res.ok) {
-      const warn = document.createElement('p');
-      warn.className = 'error-msg save-error';
-      warn.textContent = data.message || data.error || 'Save failed. Please try again.';
-      document.getElementById('outputSection').appendChild(warn);
-      btn.disabled = false;
+    if (id && res.status === 404) { savedNoteId = null; return await persistExtNote(noteText, opts); }  // re-create
+    if (!id && res.status === 422) {
+      // Create-time similarity guard — a content issue, not a transient failure. Surface it; do not retry.
+      setSaveStateExt('failed');
+      showError(data.message || data.error || 'Note is too similar to a previous session. Please vary your session details.');
+      return false;
+    }
+    if (!id && res.status === 409) {
+      if (data.id) savedNoteId = data.id;  // adopt the existing note; edits now update it
+      lastSavedNoteText = noteText; lastSavedClientId = selectedClientId;
+      if (pendingEditText === noteText) pendingEditText = null;
+      markSavedExt();
+      return true;
+    }
+    if (res.ok) {
+      if (data.id) savedNoteId = data.id;
+      lastSavedNoteText = noteText; lastSavedClientId = selectedClientId;
+      if (pendingEditText === noteText) pendingEditText = null;
+      markSavedExt();
+      return true;
+    }
+    throw new Error('save failed');
+  } catch {
+    if (attempt === 0) return await persistExtNote(noteText, { attempt: 1 });  // one silent auto-retry
+    setSaveStateExt('failed');
+    return false;
+  }
+}
+
+// Serialize saves so the first CREATE finishes (id captured) before any edit-UPDATE runs — else a fast edit
+// during the create could read a null id and create a second row.
+function queueSaveExt(noteText) {
+  const p = extSaveChain.catch(() => false).then(() => persistExtNote(noteText));
+  extSaveChain = p.catch(() => false);
+  return p;
+}
+
+// Best-effort server flush of the latest un-saved edit at teardown (visibilitychange→hidden / pagehide) or on
+// a client switch. api() posts the FETCH message to the background service worker SYNCHRONOUSLY, and the SW
+// owns completion (its keep-alive) — so the save finishes even as this popup tears down. The device backup
+// already holds this text, so a dropped flush loses nothing.
+function flushExtPending() {
+  if (!pendingEditText || !pendingEditText.trim() || !selectedClientId) return;
+  if (editDebounceTimer) { clearTimeout(editDebounceTimer); editDebounceTimer = null; }
+  const id = savedNoteId;
+  const sessionDate = (document.getElementById('genDate') && document.getElementById('genDate').value) || new Date().toISOString().split('T')[0];
+  const payload = id
+    ? { id, client_id: selectedClientId, note_text: pendingEditText, session_date: sessionDate }
+    : { client_id: selectedClientId, note_text: pendingEditText, session_date: sessionDate };
+  try {
+    api('/api/extension/save-note', { method: id ? 'PATCH' : 'POST', body: JSON.stringify(payload) }).catch(() => {});
+  } catch { /* device backup already holds this edit; a failed flush loses nothing */ }
+  pendingEditText = null;
+}
+
+// User edits to the generated note. (A) rewrite the DEVICE BACKUP in place first — synchronous, offline, never
+// fails, so the edited text is on the device the instant it is typed; then debounce the server autosave.
+(function wireNoteEditing() {
+  const outputNoteEl = document.getElementById('outputNote');
+  if (!outputNoteEl) return;
+  outputNoteEl.addEventListener('input', () => {
+    const v = outputNoteEl.value;
+    if (backupKey && backupRecord) {
+      backupRecord = { ...backupRecord, note: v, editedAt: new Date().toISOString() };
+      try { chrome.storage.local.set({ [backupKey]: backupRecord }); } catch { /* best-effort */ }
+    }
+    pendingEditText = v;
+    if (editDebounceTimer) clearTimeout(editDebounceTimer);
+    editDebounceTimer = setTimeout(() => { queueSaveExt(v); }, 1200);
+  });
+  // Leaving the textarea flushes immediately — the cheapest coverage of type-then-click-away.
+  outputNoteEl.addEventListener('blur', () => {
+    if (editDebounceTimer) { clearTimeout(editDebounceTimer); editDebounceTimer = null; }
+    if (pendingEditText && pendingEditText.trim()) queueSaveExt(pendingEditText);
+  });
+})();
+
+// The popup closes constantly (any click outside), so teardown is the NORMAL path, not an edge case.
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushExtPending(); });
+window.addEventListener('pagehide', flushExtPending);
+
+// ── Start new note (gated on save state) ────────────────────────────────────
+// Clean → the plain confirm. Dirty (edited since the last save, or a save pending) → FLUSH first: on success
+// the plain confirm; on failure never clear silently — an explicit discard confirm that names the local backup
+// (which holds the edits). Mirrors the web Start-new gating.
+document.getElementById('startNewBtn').addEventListener('click', async () => {
+  if (editDebounceTimer) { clearTimeout(editDebounceTimer); editDebounceTimer = null; }
+  const text = document.getElementById('outputNote').value;
+  const doClear = () => {
+    savedNoteId = null; pendingEditText = null; backupKey = null; backupRecord = null;
+    setSaveStateExt('idle');
+    resetAfterSave();
+  };
+  const dirty = !!(text && text.trim()) && text !== lastSavedNoteText;
+  if (dirty) {
+    const ok = await queueSaveExt(text);
+    if (!ok) {
+      if (confirm("This note could not be saved to this client's notes, so it won't appear there. The full note — including your edits — is kept as a local backup on this device, so it can still be recovered. Discard it here and start a new note anyway?")) doClear();
       return;
     }
-
-    // Track saved note to block duplicates
-    lastSavedNoteText = text;
-    lastSavedClientId = selectedClientId;
-
-    // Local backup
-    chrome.storage.local.set({
-      [`path4aba_ext_note_${selectedClientId}_${Date.now()}`]: {
-        clientId: selectedClientId, note: text, savedAt: new Date().toISOString(),
-      },
-    });
-
-    // Green feedback
-    btn.textContent = '✓ Saved';
-    btn.style.background = '#16a34a';
-    btn.style.color = '#fff';
-    btn.style.borderColor = '#16a34a';
-
-    // Reset form selections after save
-    resetAfterSave();
-
-    setTimeout(() => {
-      btn.textContent = 'Save';
-      btn.style.background = '';
-      btn.style.color = '';
-      btn.style.borderColor = '';
-      btn.disabled = false;
-    }, 2500);
-
-  } catch {
-    const warn = document.createElement('p');
-    warn.className = 'error-msg save-error';
-    warn.textContent = 'Network error. Make sure you are logged into Path4ABA.';
-    document.getElementById('outputSection').appendChild(warn);
-    btn.disabled = false;
   }
+  if (confirm('Start a new note? This clears the form.')) doClear();
 });
 
 // ── Auth screen buttons ────────────────────
