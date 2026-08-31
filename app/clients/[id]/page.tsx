@@ -2340,47 +2340,29 @@ export default function ClientProfilePage() {
               ) : (
                 <div>
                   {(() => {
-                    // Get functions of selected behaviors
+                    // Functions of selected behaviors — used ONLY to BADGE functionally-equivalent skills (a
+                    // non-demoting FCT hint). We deliberately do NOT reorder or demote by function match:
+                    // replacement programs are taught proactively, so a skill whose function doesn't match a
+                    // selected behavior — including general programs with no single function (empty
+                    // targetFunction) — must stay equally visible and in its natural order.
                     const selectedFunctions = selectedBehaviors.flatMap(bName => {
                       const b = behaviors.find((bx: any) => getName(bx) === bName);
                       return (typeof b === 'object' && b?.functions) ? b.functions : [];
                     });
 
-                    // Sort skills: functionally equivalent first
-                    const sorted = [...skills].sort((a: any, b: any) => {
-                      const aFunc = typeof a === 'object' ? (a.targetFunction || '') : '';
-                      const bFunc = typeof b === 'object' ? (b.targetFunction || '') : '';
-                      const aMatch = selectedFunctions.includes(aFunc) ? 0 : 1;
-                      const bMatch = selectedFunctions.includes(bFunc) ? 0 : 1;
-                      return aMatch - bMatch;
-                    });
-
-                    // Find where non-matching starts
-                    const firstNonMatch = sorted.findIndex((s: any) => {
-                      const func = typeof s === 'object' ? (s.targetFunction || '') : '';
-                      return !selectedFunctions.includes(func);
-                    });
-
-                    return sorted.map((s: any, i: number) => {
+                    return skills.map((s: any, i: number) => {
                       const name = getName(s);
                       const func = typeof s === 'object' ? (s.targetFunction || '') : '';
                       const isMatch = selectedFunctions.length > 0 && selectedFunctions.includes(func);
-                      const showDivider = selectedFunctions.length > 0 && i === firstNonMatch && firstNonMatch > 0;
                       return (
-                        <div key={i}>
-                          {showDivider && (
-                            <div className="px-4 py-2 text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--text3)", background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
-                              Other Skills
-                            </div>
-                          )}
-                          <CheckboxRow
-                            name={name}
-                            description={isMatch ? `✦ Functionally equivalent` : undefined}
-                            checked={selectedSkills.includes(name)}
-                            disabled={false}
-                            onToggle={() => toggleSkill(name)}
-                          />
-                        </div>
+                        <CheckboxRow
+                          key={i}
+                          name={name}
+                          description={isMatch ? `✦ Functionally equivalent` : undefined}
+                          checked={selectedSkills.includes(name)}
+                          disabled={false}
+                          onToggle={() => toggleSkill(name)}
+                        />
                       );
                     });
                   })()}

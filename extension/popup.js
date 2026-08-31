@@ -561,30 +561,17 @@ function renderSkills() {
 
   grid.innerHTML = '';
 
-  // Get functions of selected behaviors
+  // Functions of selected behaviors — used ONLY to BADGE functionally-equivalent skills (a non-demoting FCT
+  // hint). We deliberately do NOT reorder or demote by function match: replacement programs are taught
+  // proactively, so a skill whose function doesn't match a selected behavior — including general programs with
+  // no single function (empty targetFunction) — stays equally visible and in its natural order.
   const selectedFunctions = selectedBehaviors.flatMap(bName => {
     const b = (selectedProfile?.maladaptiveBehaviors || []).find(bx => (typeof bx === 'string' ? bx : bx?.name) === bName);
     return (typeof b === 'object' && b?.functions) ? b.functions : [];
   });
 
-  // Sort: functionally equivalent first
-  const sorted = [...skills].sort((a, b) => {
-    const aMatch = selectedFunctions.includes(a.targetFunction) ? 0 : 1;
-    const bMatch = selectedFunctions.includes(b.targetFunction) ? 0 : 1;
-    return aMatch - bMatch;
-  });
-
-  const firstNonMatch = sorted.findIndex(s => !selectedFunctions.includes(s.targetFunction));
-
-  sorted.forEach(({ name, targetFunction }, i) => {
+  skills.forEach(({ name, targetFunction }, i) => {
     const isMatch = selectedFunctions.length > 0 && selectedFunctions.includes(targetFunction);
-
-    if (selectedFunctions.length > 0 && i === firstNonMatch && firstNonMatch > 0) {
-      const divider = document.createElement('div');
-      divider.className = 'skills-divider';
-      divider.textContent = 'Other Skills';
-      grid.appendChild(divider);
-    }
 
     const item = document.createElement('div');
     item.className = 'check-item';
