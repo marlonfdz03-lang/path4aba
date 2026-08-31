@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { filterBlockedNarrative } from '@/lib/blockedNarrativeTerms'
 import { buildBlockedFilterContext } from '@/lib/noteFilterContext'
 import { emitAdminAlert } from '@/lib/adminAlerts'
+import { activeNotesWhere, supersedeAndCreate } from '@/lib/sessionNotes'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,16 +25,41 @@ export async function POST(req: Request) {
   const userId = user.id
 
   const body = await req.json()
-  const { note_text, client_id, session_date } = body
+  const { note_text, client_id, session_date, supersede, id } = body
   if (!client_id || !note_text) {
     return NextResponse.json({ error: 'Missing client_id or note_text' }, { status: 400 })
   }
   if (!(await principalCanAccessClient({ id: user.id, role: user.role }, client_id)))
     return NextResponse.json({ error: 'You do not have access to this client.' }, { status: 403 })
 
-  // Block exact duplicate before fuzzy check
+  // REPLACE an existing date's note (calendar replace flow). Supersede-and-create, atomic and idempotent on the
+  // client-generated id; skips BOTH the exact-dup and similarity gates (the RBT explicitly chose to replace, and
+  // those create-time gates would otherwise trip the note against the note it is replacing). Filter first.
+  if (supersede && id) {
+    let cleanReplaceText = note_text
+    try {
+      const { learnedBlockedTerms, authorizedNames } = await buildBlockedFilterContext(client_id)
+      const filtered = filterBlockedNarrative(note_text, learnedBlockedTerms, authorizedNames)
+      if (filtered.text !== note_text) {
+        cleanReplaceText = filtered.text
+        await emitAdminAlert({
+          source: 'extension', type: 'note.save_filter_caught', severity: 'warning',
+          actorUserId: userId, clientId: client_id,
+          payload: { surface: 'extension', substituted: filtered.substituted, flagged: filtered.flagged },
+        })
+      }
+    } catch { /* fail-soft */ }
+    const res = await supersedeAndCreate({
+      id, clientId: client_id, sessionDate: session_date || new Date().toISOString().split('T')[0],
+      userId, noteText: cleanReplaceText,
+    })
+    return NextResponse.json({ success: true, id: res.id })
+  }
+
+  // Block exact duplicate before fuzzy check — against ACTIVE notes only (a superseded/replaced note must never
+  // block a legitimate new save).
   const exactMatch = await prisma.session_notes.findFirst({
-    where: { client_id, note_text },
+    where: { ...activeNotesWhere(client_id), note_text },
     select: { id: true },
   })
   if (exactMatch) {
@@ -41,9 +67,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'This note has already been saved.', duplicate: true, id: exactMatch.id }, { status: 409 })
   }
 
-  // Similarity check against the last 10 notes for this client
+  // Similarity check against the last 10 ACTIVE notes for this client
   const prevNotes = await prisma.session_notes.findMany({
-    where: { client_id },
+    where: activeNotesWhere(client_id),
     select: { note_text: true },
     orderBy: { created_at: 'desc' },
     take: 10,

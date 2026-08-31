@@ -84,6 +84,11 @@ model session_notes {
   // narrative). NULL for legacy rows — the reader derives function from note_text and treats axes the
   // legacy save path never stored as UNKNOWN. See migration 20260819100000_add_generation_context.
   generation_context  Json?     @db.JsonB
+  // Soft-supersede: a note is a billing record, never destroyed. NULL = active/current; a timestamp = when it
+  // was REPLACED (row retained). superseded_by is the id of the replacing note (old->new link). "Active" =
+  // superseded_at IS NULL — defined once in lib/sessionNotes.ts. See migration 20260830000000.
+  superseded_at       DateTime? @db.Timestamptz(6)
+  superseded_by       String?   @db.Uuid
   created_at          DateTime? @default(now()) @db.Timestamptz(6)
   client              clients?  @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }

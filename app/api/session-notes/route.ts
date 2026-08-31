@@ -5,6 +5,7 @@ import { canAccessClient } from '@/lib/clientFiles'
 import { filterBlockedNarrative } from '@/lib/blockedNarrativeTerms'
 import { buildBlockedFilterContext } from '@/lib/noteFilterContext'
 import { emitAdminAlert } from '@/lib/adminAlerts'
+import { activeNotesWhere, supersedeAndCreate } from '@/lib/sessionNotes'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,7 +42,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'You do not have access to this client.' }, { status: 403 })
 
   const notes = await prisma.session_notes.findMany({
-    where: { client_id: clientId },
+    where: activeNotesWhere(clientId),  // active only — superseded (replaced) notes never appear in the list
     select: { id: true, note_text: true, created_at: true, status: true },
     orderBy: { created_at: 'desc' },
   })
@@ -53,17 +54,28 @@ export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const userId = (session.user as any).id as string
-  const { clientId, noteText, sessionDate, behaviorsAddressed, skillsAddressed, interventionsUsed, activitiesUsed, generationContext } = await req.json()
+  const { clientId, noteText, sessionDate, behaviorsAddressed, skillsAddressed, interventionsUsed, activitiesUsed, generationContext, supersede, id } = await req.json()
   if (!clientId || !noteText) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
   if (!(await canAccessClient(session, clientId)))
     return NextResponse.json({ error: 'You do not have access to this client.' }, { status: 403 })
 
-  // Block duplicate: check if identical note already exists for this client
+  // REPLACE an existing date's note (the calendar's replace flow). Supersede-and-create, atomic and idempotent
+  // on the client-generated id; skips the exact-dup 409 (the RBT explicitly chose to replace). Same clean-text
+  // backstop as the plain create.
+  if (supersede && id) {
+    const cleanText = await filterNoteForSave(clientId, userId, noteText)
+    const res = await supersedeAndCreate({
+      id, clientId, sessionDate: sessionDate || new Date().toISOString().split('T')[0], userId,
+      noteText: cleanText, behaviorsAddressed, skillsAddressed, interventionsUsed, activitiesUsed,
+      generationContext,
+    })
+    return NextResponse.json({ ok: true, id: res.id })
+  }
+
+  // Block duplicate: check if an identical ACTIVE note already exists for this client (a superseded/replaced
+  // note must never 409-block a legitimate new save).
   const existing = await prisma.session_notes.findFirst({
-    where: {
-      client_id: clientId,
-      note_text: noteText,
-    },
+    where: { ...activeNotesWhere(clientId), note_text: noteText },
     select: { id: true },
   })
 
