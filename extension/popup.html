@@ -426,6 +426,20 @@
 
   </div>
 
+  <!-- Live compliance calendar — replace prompt. Fires on date pick (never at generation). Hidden by default. -->
+  <div id="dateConflictModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;padding:12px;">
+    <div style="background:#fff;border-radius:12px;padding:16px;max-width:320px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,0.2);">
+      <p style="font-size:14px;font-weight:600;margin:0 0 4px;color:#111827;">You already have a note for this day</p>
+      <p id="dateConflictMsg" style="font-size:12px;color:#6b7280;margin:0 0 10px;"></p>
+      <div id="dateConflictPreview" style="display:none;font-size:12px;line-height:1.5;white-space:pre-wrap;max-height:180px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:8px;padding:8px;background:#f8fafc;color:#111827;margin-bottom:10px;"></div>
+      <div style="display:flex;justify-content:flex-end;gap:6px;">
+        <button id="dcViewBtn" class="btn-sm">View</button>
+        <button id="dcCancelBtn" class="btn-sm">Cancel</button>
+        <button id="dcReplaceBtn" class="btn-sm" style="background:#D97706;color:#fff;border-color:#D97706;">Replace</button>
+      </div>
+    </div>
+  </div>
+
   <script src="name-match.js"></script>
   <script src="extract-interventions.js"></script>
   <script src="popup.js"></script>

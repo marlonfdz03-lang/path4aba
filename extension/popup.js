@@ -354,6 +354,7 @@ function setupMainScreen() {
 
   // Set today's date
   document.getElementById('genDate').value = new Date().toISOString().split('T')[0];
+  lastGenDate = document.getElementById('genDate').value;  // baseline for the calendar prompt's revert-on-cancel
 
   // Check for daily suggestion banner if any client is pre-selected
   checkSuggestionBanner();
@@ -374,8 +375,11 @@ document.getElementById('clientSelect').addEventListener('change', async (e) => 
   backupKey = null;
   backupRecord = null;
   pendingEditText = null;
+  replaceDateExt = null;
+  savedNoteCycleDateExt = null;
   setSaveStateExt('idle');
   selectedClientId = e.target.value || null;
+  refreshOccupiedDatesExt();  // calendar occupancy for the new client
   selectedBehaviors = [];
   selectedSkills = [];
   selectedProfile = null;
@@ -1301,6 +1305,7 @@ function resetAfterSave() {
   // Reset date to today
   const genDate = document.getElementById('genDate');
   if (genDate) genDate.value = new Date().toISOString().split('T')[0];
+  lastGenDate = genDate ? genDate.value : lastGenDate;  // keep the calendar-prompt baseline in sync
   // Clear generated note and hide output area
   const outputNote = document.getElementById('outputNote');
   if (outputNote) outputNote.value = '';
@@ -1326,6 +1331,13 @@ let saveState = 'idle';         // 'idle' | 'saving' | 'saved' | 'failed' — dr
 let editDebounceTimer = null;
 let saveFadeTimer = null;
 let extSaveChain = Promise.resolve(true);  // serializes saves so a create finishes (id captured) before an edit-update
+// Live compliance calendar (feature 2, extension): occupancy set + replace-intent, mirroring the web.
+let occupiedDatesExt = new Set();     // dates with an ACTIVE note (PHI-free), checked when the date is picked
+let replaceDateExt = null;            // arms the next generation's create to SUPERSEDE that date's note
+let savedNoteCycleDateExt = null;     // this cycle's own note's date — excluded from the prompt
+let lastGenDate = null;               // previous genDate value, to revert on Cancel
+let dateConflictPicked = null;        // the date the dialog is about
+let dateConflictPrev = null;          // the value to revert to on Cancel
 
 function renderSaveState() {
   const el = document.getElementById('saveStatus');
@@ -1365,9 +1377,14 @@ async function persistExtNote(noteText, opts = {}) {
   const sessionDate = (document.getElementById('genDate') && document.getElementById('genDate').value) || new Date().toISOString().split('T')[0];
   try {
     const id = savedNoteId;
+    // REPLACE: the RBT picked an occupied date and chose Replace. The first create of this cycle supersedes
+    // that date's existing note atomically (client-generated id → idempotent, skips dup/similarity).
+    const replacing = !id && replaceDateExt && replaceDateExt === sessionDate;
     const payload = id
       ? { id, client_id: selectedClientId, note_text: noteText, session_date: sessionDate }
-      : { client_id: selectedClientId, note_text: noteText, session_date: sessionDate };
+      : (replacing
+          ? { supersede: true, id: crypto.randomUUID(), client_id: selectedClientId, note_text: noteText, session_date: sessionDate }
+          : { client_id: selectedClientId, note_text: noteText, session_date: sessionDate });
     const res = await api('/api/extension/save-note', { method: id ? 'PATCH' : 'POST', body: JSON.stringify(payload) });
     const data = await res.json().catch(() => ({}));
 
@@ -1382,14 +1399,19 @@ async function persistExtNote(noteText, opts = {}) {
       if (data.id) savedNoteId = data.id;  // adopt the existing note; edits now update it
       lastSavedNoteText = noteText; lastSavedClientId = selectedClientId;
       if (pendingEditText === noteText) pendingEditText = null;
+      savedNoteCycleDateExt = sessionDate;  // this cycle's note is for this date — don't self-prompt on it
       markSavedExt();
+      refreshOccupiedDatesExt();
       return true;
     }
     if (res.ok) {
       if (data.id) savedNoteId = data.id;
       lastSavedNoteText = noteText; lastSavedClientId = selectedClientId;
       if (pendingEditText === noteText) pendingEditText = null;
+      savedNoteCycleDateExt = sessionDate;  // this cycle's note is for this date — don't self-prompt on it
+      if (replaceDateExt === sessionDate) replaceDateExt = null;  // replace consumed
       markSavedExt();
+      refreshOccupiedDatesExt();
       return true;
     }
     throw new Error('save failed');
@@ -1461,6 +1483,7 @@ document.getElementById('startNewBtn').addEventListener('click', async () => {
   const text = document.getElementById('outputNote').value;
   const doClear = () => {
     savedNoteId = null; pendingEditText = null; backupKey = null; backupRecord = null;
+    savedNoteCycleDateExt = null; replaceDateExt = null;  // fresh cycle
     setSaveStateExt('idle');
     resetAfterSave();
   };
@@ -1473,6 +1496,73 @@ document.getElementById('startNewBtn').addEventListener('click', async () => {
     }
   }
   if (confirm('Start a new note? This clears the form.')) doClear();
+});
+
+// ── Live compliance calendar — replace prompt (feature 2) ───────────────────
+// PHI-free occupancy set, refreshed on client select and after each create/supersede.
+async function refreshOccupiedDatesExt() {
+  if (!selectedClientId) { occupiedDatesExt = new Set(); return; }
+  try {
+    const res = await api(`/api/extension/note-dates?clientId=${selectedClientId}`);
+    const data = await res.json().catch(() => ({}));
+    occupiedDatesExt = new Set(Array.isArray(data.dates) ? data.dates : []);
+  } catch { /* non-fatal: the prompt just won't fire until the next refresh */ }
+}
+
+// Fires when the RBT PICKS the date (before generation, so it never races autosave). If the date has an ACTIVE
+// note that isn't this cycle's own, open the View/Replace/Cancel dialog. A new pick clears any prior intent.
+function handleDatePickExt(e) {
+  const picked = e.target.value;
+  const previous = lastGenDate;
+  lastGenDate = picked;
+  replaceDateExt = null;
+  if (picked && occupiedDatesExt.has(picked) && picked !== savedNoteCycleDateExt) {
+    dateConflictPicked = picked;
+    dateConflictPrev = previous;
+    const msg = document.getElementById('dateConflictMsg');
+    if (msg) msg.textContent = `A note already exists for ${picked}. View it, replace it, or cancel and pick a different date.`;
+    const preview = document.getElementById('dateConflictPreview');
+    if (preview) { preview.style.display = 'none'; preview.textContent = ''; }
+    const viewBtn = document.getElementById('dcViewBtn');
+    if (viewBtn) viewBtn.style.display = '';
+    document.getElementById('dateConflictModal').style.display = 'flex';
+  }
+}
+function closeDateConflict() {
+  const m = document.getElementById('dateConflictModal');
+  if (m) m.style.display = 'none';
+}
+document.getElementById('genDate').addEventListener('change', handleDatePickExt);
+
+// Cancel = "I'll pick a different date": revert the date so a plain create can never land on the occupied date.
+document.getElementById('dcCancelBtn')?.addEventListener('click', () => {
+  const genDate = document.getElementById('genDate');
+  if (genDate) genDate.value = dateConflictPrev || '';
+  lastGenDate = dateConflictPrev || '';
+  updateGenerateBtn();
+  closeDateConflict();
+});
+// Replace: arm the next generation to supersede this date's note.
+document.getElementById('dcReplaceBtn')?.addEventListener('click', () => {
+  replaceDateExt = dateConflictPicked;
+  closeDateConflict();
+});
+// View: fetch the existing note's text (PHI, on demand only) and show it read-only in the dialog.
+document.getElementById('dcViewBtn')?.addEventListener('click', async () => {
+  const btn = document.getElementById('dcViewBtn');
+  const forDate = dateConflictPicked;
+  btn.disabled = true; btn.textContent = 'Loading…';
+  const preview = document.getElementById('dateConflictPreview');
+  try {
+    const res = await api(`/api/extension/note-by-date?clientId=${selectedClientId}&date=${forDate}`);
+    const data = await res.json().catch(() => ({}));
+    if (preview) { preview.textContent = (data.note && data.note.text) || '(This note is empty.)'; preview.style.display = ''; }
+    btn.style.display = 'none';
+  } catch {
+    if (preview) { preview.textContent = 'Could not load the existing note.'; preview.style.display = ''; }
+  } finally {
+    btn.disabled = false; btn.textContent = 'View';
+  }
 });
 
 // ── Auth screen buttons ────────────────────
