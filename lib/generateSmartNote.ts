@@ -261,14 +261,31 @@ function buildContextualFactors(input: SessionInput): string {
 // Skills split cleanly (18/18) but get the same override for symmetry and safety. (A blocking coverage check
 // was prototyped and dropped: name-matching on description-style ABC prose false-fired on 61-84% of real
 // notes — untrustworthy. The split itself is the fix; verifiable coverage would need structured name tags.)
-function sectionScope(kind: 'behavior' | 'skill', n: number): string {
+//
+// OPENING and CLOSING ownership (never orphaned, never duplicated): the note's opening line belongs to the
+// FIRST section that runs, and the mandatory closing (observable-participation sentence + service-level
+// medical-necessity statement + next-session date) belongs to the LAST section that runs. The caller wires
+// includeOpening/includeClosing so exactly one section owns each — see the call site.
+function sectionScope(
+  kind: 'behavior' | 'skill', n: number,
+  opts: { includeOpening: boolean; includeClosing: boolean },
+): string {
+  const closingClause = opts.includeClosing
+    ? ' Then END THE NOTE with the CLOSING exactly as the master prompt specifies: the observable-participation sentence, the ONE service-level medical-necessity statement (with the setting matched to this session), and the next-session date if one was provided in the session data.'
+    : ' Do NOT write a closing, a medical-necessity statement, or a next-session date; a separate call writes the closing.';
+  const header = '\n\n=== SCOPE FOR THIS CALL (COMPLETENESS IS MANDATORY) ===\n';
   if (kind === 'behavior') {
-    return '\n\n=== SCOPE FOR THIS CALL (COMPLETENESS IS MANDATORY) ===\n'
-      + `Output ONLY the note opening line and the ABC (antecedent-behavior-consequence) entries — one for EACH of the ${n} maladaptive behaviors in the FIXED ASSIGNMENTS block, in that order. Do NOT write the skill-acquisition / replacement-program section and do NOT write a closing summary; a separate call writes those.\n`
+    const openClause = opts.includeOpening ? 'the note opening line and ' : '';
+    return header
+      + `Output ONLY ${openClause}the ABC (antecedent-behavior-consequence) entries — one for EACH of the ${n} maladaptive behaviors in the FIXED ASSIGNMENTS block, in that order. Do NOT write the skill-acquisition / replacement-program section.${closingClause}\n`
       + `Write EXACTLY ${n} ABCs, one per behavior. The depth-variation, brevity, and reinforcer-realism guidance above governs WORDING ONLY — it NEVER permits omitting, merging, or summarizing away any behavior. Dropping or combining any of the ${n} behaviors is a hard error.`;
   }
-  return '\n\n=== SCOPE FOR THIS CALL (COMPLETENESS IS MANDATORY) ===\n'
-    + `Output ONLY the skill-acquisition / replacement-program section — one progress entry for EACH of the ${n} replacement skills in the FIXED ASSIGNMENTS block, documented by name. Do NOT write ABCs for maladaptive behaviors and do NOT repeat the opening; a separate call wrote those.\n`
+  const openClause = opts.includeOpening
+    ? 'Begin with the note opening line, then output '
+    : 'Output ONLY ';
+  const noRepeatOpen = opts.includeOpening ? '' : ' Do NOT repeat the opening; a separate call wrote it.';
+  return header
+    + `${openClause}the skill-acquisition / replacement-program section — one progress entry for EACH of the ${n} replacement skills in the FIXED ASSIGNMENTS block, documented by name. Do NOT write ABCs for maladaptive behaviors.${noRepeatOpen}${closingClause}\n`
     + `Document EXACTLY ${n} skills, one entry each. Do NOT omit or merge any skill for brevity.`;
 }
 
@@ -647,8 +664,14 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   const nB = behaviorNames.length;
   const nS = skillNames.length;
   const SECTION_MAX_TOKENS = 4000;
-  const behaviorScope = nB ? sectionScope('behavior', nB) : '';
-  const skillScope = nS ? sectionScope('skill', nS) : '';
+  // Opening → the FIRST section that runs (behavior if any, else skill). Closing → the LAST section that runs
+  // (skill if any, else behavior). This guarantees the closing is owned by exactly one section and always ends
+  // the assembled note: never orphaned (the last section always includes it) and never duplicated (only the
+  // last section does — behavior includes it ONLY when there is no skill call, so the two are mutually
+  // exclusive). The regression that dropped the closing came from telling behavior "a separate call writes it"
+  // when no call did.
+  const behaviorScope = nB ? sectionScope('behavior', nB, { includeOpening: true, includeClosing: nS === 0 }) : '';
+  const skillScope = nS ? sectionScope('skill', nS, { includeOpening: nB === 0, includeClosing: true }) : '';
   const assertNotTruncated = (r: { finishReason: string | null }, section: string): void => {
     if (r.finishReason === 'length') {
       throw new Error(`NOTE_TRUNCATED: the ${section} section hit the output length cap and the note was not completed — please regenerate.`);
