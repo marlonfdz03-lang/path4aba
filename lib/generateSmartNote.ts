@@ -479,11 +479,11 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   // COLD-START TIE-BREAK OFFSET — the client's active note count. Read separately from (and tolerant like) the
   // history read: it is the ONLY input that varies when rotation history is empty/UNKNOWN, so it is what lets a
   // frozen axis (reinforcer, activity, prompt/response on a no-history client) rotate instead of sticking on
-  // set[0]. superseded_at:null mirrors activeNotesWhere; failure degrades to 0 (legacy set-order pick), never
-  // throws. session_notes has no soft-delete extension, so this predicate is explicit and complete.
+  // set[0]. superseded_at/deleted_at NULL mirrors activeNotesWhere; failure degrades to 0 (legacy set-order
+  // pick), never throws. session_notes filters explicitly (no $extends interceptor), so this is spelled out.
   let rotationOffset = 0;
   try {
-    rotationOffset = await prisma.session_notes.count({ where: { client_id: input.clientId, superseded_at: null } });
+    rotationOffset = await prisma.session_notes.count({ where: { client_id: input.clientId, superseded_at: null, deleted_at: null } });
   } catch { rotationOffset = 0; }
 
   let history: Awaited<ReturnType<typeof readGenerationHistory>> = [];

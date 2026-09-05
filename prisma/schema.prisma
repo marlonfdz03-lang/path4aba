@@ -95,6 +95,12 @@ model session_notes {
   // superseded_at IS NULL — defined once in lib/sessionNotes.ts. See migration 20260830000000.
   superseded_at       DateTime? @db.Timestamptz(6)
   superseded_by       String?   @db.Uuid
+  // Soft-delete: a note is a billing record, never destroyed — the DELETE button now MARKS instead of dropping
+  // the row (mirrors client archive + note supersede). NULL = live; a timestamp = when it was deleted (row
+  // retained, recoverable via scripts/restore-note.ts). "Active" = superseded_at IS NULL AND deleted_at IS NULL
+  // — defined once in lib/sessionNotes.ts. See migration 20260905000000_softdelete_session_notes.
+  deleted_at          DateTime? @db.Timestamptz(6)
+  deleted_by          String?
   created_at          DateTime? @default(now()) @db.Timestamptz(6)
   client              clients?  @relation(fields: [client_id], references: [id], onDelete: Cascade)
 }

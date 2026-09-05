@@ -1051,7 +1051,9 @@ export default function ClientProfilePage() {
   }
 
   async function handleDeleteNote(noteId: string, fromSupabase?: boolean) {
-    if (!window.confirm("Are you sure you want to delete this note?")) return;
+    // The note is kept on file (soft-deleted), not destroyed — it leaves the list but is recoverable, so the
+    // copy no longer implies permanence (same reasoning as the client Archive change).
+    if (!window.confirm("Delete this note? It will be removed from the list but kept on file, and can be restored if you need it.")) return;
     if (fromSupabase) {
       await fetch(`/api/session-notes?id=${noteId}`, { method: "DELETE" });
     } else {

@@ -165,6 +165,11 @@ export async function DELETE(req: Request) {
   if (!row?.client_id || !(await canAccessClient(session, row.client_id)))
     return NextResponse.json({ error: 'You do not have access to this note.' }, { status: 403 })
 
-  await prisma.session_notes.delete({ where: { id } })
+  // SOFT-DELETE, not destroy. A note is a CPT-97153 billing record — the old prisma.session_notes.delete
+  // dropped the row permanently, with no server trace (admin_alerts stores no id/text). Mark it instead: it
+  // leaves every active-note reader (they all filter deleted_at via activeNotesWhere) and is recoverable via
+  // scripts/restore-note.ts. This is the delete-path twin of the note supersede + the client archive.
+  const deletedBy = (session.user as any)?.id ?? session.user?.email ?? null
+  await prisma.session_notes.update({ where: { id }, data: { deleted_at: new Date(), deleted_by: deletedBy } })
   return NextResponse.json({ ok: true })
 }
