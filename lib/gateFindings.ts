@@ -28,6 +28,9 @@ import type { ComplianceState } from './complianceGate.ts'
 export type GateName =
   | 'intervention' | 'approved-function' | 'coverage' | 'teaching-method'
   | 'coherence' | 'red-flag' | 'similarity' | 'blocked-term' | 'data-integrity'
+  // Admin-only diagnostic: the per-behavior segmentation was unsound, so coverage + validity were suppressed
+  // (record-only — never a repair, never surfaced to the RBT). See generateSmartNote + lib/segmentSoundness.ts.
+  | 'segmentation_unsound'
 
 export type GateSeverity = 'critical' | 'warning' | 'info'
 
@@ -81,7 +84,12 @@ export function collectGateFindings(params: {
         context: { behavior: v.name, wrote: v.wrote, approved: v.approved },
       })
     }
-    if (s.coverage.segmentable) {
+    // SUPPRESSED coverage is an untrustworthy reading (segmentation unsound): file NO coverage finding — the
+    // caller records a single 'segmentation_unsound' diagnostic instead, so this neither reports a false defect
+    // nor duplicates that record. Only judge coverage when it was NOT suppressed.
+    if (s.coverage.suppressed) {
+      // intentionally nothing
+    } else if (s.coverage.segmentable) {
       for (const m of s.coverage.missing) {
         out.push({
           gate: 'coverage', severity: 'warning',

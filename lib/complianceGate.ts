@@ -27,6 +27,11 @@ export interface FunctionValidityViolation {
 export interface CoverageResult {
   segmentable: boolean;
   missing: { name: string }[];
+  // SUPPRESSED is a THIRD state, distinct from clean (no missing) and defective (missing present): the caller
+  // determined the per-behavior segmentation was unsound, so this reading is untrustworthy and must not drive a
+  // repair or a flag. The reason is carried for the admin record. When set, `segmentable`/`missing` still hold
+  // the raw (untrusted) reading — they are NOT fabricated — but every consumer ignores them.
+  suppressed?: 'unsegmentable' | 'degenerate' | 'sparse' | null;
 }
 
 // Everything the combined instruction needs, produced by running the four detectors on one note.
@@ -64,19 +69,26 @@ export interface SurvivingViolations {
   teachingMethod: string[]
   coverageMissing: string[]
   unsegmentable: boolean
+  // SUPPRESSED coverage reason (segmentation unsound) or null. Its own field so a suppressed note is
+  // distinguishable from both a clean one and a defective one; it does NOT count toward `clean`/defective.
+  coverageSuppressed: 'unsegmentable' | 'degenerate' | 'sparse' | null
 }
 
 export function summarizeSurvivingViolations(
   state: ComplianceState,
 ): { clean: boolean; violations: SurvivingViolations } {
+  const suppressed = state.coverage.suppressed ?? null
   const violations: SurvivingViolations = {
     prohibited: state.intervention.prohibited,
     unapproved: state.intervention.unapproved,
     skillAsReduction: state.intervention.skillAsReduction,
     approvedFunction: state.functionViolations.map((v) => v.name),
     teachingMethod: state.methodViolations,
-    coverageMissing: state.coverage.segmentable ? state.coverage.missing.map((m) => m.name) : [],
-    unsegmentable: !state.coverage.segmentable,
+    // When suppressed, coverage was not judged: report no missing and no unsegmentable — the suppression is
+    // surfaced separately via coverageSuppressed, never conflated with a real defect or a real clean pass.
+    coverageMissing: suppressed ? [] : (state.coverage.segmentable ? state.coverage.missing.map((m) => m.name) : []),
+    unsegmentable: suppressed ? false : !state.coverage.segmentable,
+    coverageSuppressed: suppressed,
   }
   const clean =
     !violations.prohibited.length &&
@@ -98,7 +110,7 @@ export function summarizeSurvivingViolations(
 export function buildComplianceRegenInstruction(state: ComplianceState): string | null {
   const parts: string[] = [];
 
-  if (state.coverage.segmentable && state.coverage.missing.length > 0) {
+  if (!state.coverage.suppressed && state.coverage.segmentable && state.coverage.missing.length > 0) {
     const missingNames = state.coverage.missing.map((m) => m.name).filter(Boolean).join(', ');
     parts.push(`FUNCTION COVERAGE: these ABCs do not name their documented function in the correct position — ${missingNames}. EVERY ABC must NAME its documented function (escape/attention/tangible/automatic-reinforcement) immediately after the behavior/topography and BEFORE the intervention clause — never attached to the client's response and never at the end of the ABC (RULE A, no exceptions). Do not drop the function name for the sake of variety.`);
   }
