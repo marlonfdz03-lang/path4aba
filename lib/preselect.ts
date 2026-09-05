@@ -66,20 +66,55 @@ const responseSet = (c?: string) => (c && RESPONSE_KEYS_BY_COMPLIANCE[c]) || ALL
 // Pick the member of `set` whose most-recent use in `recentKnownUses` (newest-first) is furthest back — a
 // never-used member wins outright; ties break by set order. GUARANTEE: the result is always a member of
 // `set` (or undefined only when `set` is empty). LRU reorders; it never adds.
-export function lruPick(set: string[], recentKnownUses: string[]): string | undefined {
+export function lruPick(set: string[], recentKnownUses: string[], rotationOffset = 0): string | undefined {
   if (!set.length) return undefined;
   if (set.length === 1) return set[0];
   const age = (v: string): number => {
     const i = recentKnownUses.indexOf(v);
     return i === -1 ? Infinity : i; // never used => Infinity (most preferable)
   };
-  let best = set[0];
-  let bestAge = age(set[0]);
-  for (const v of set) {
-    const a = age(v);
-    if (a > bestAge) { best = v; bestAge = a; }
+  // The equally-oldest candidates. At a COLD START every member ties at Infinity, and the old code broke that
+  // tie by set order — so an empty/UNKNOWN history froze the pick on set[0] FOREVER: a rotation that never
+  // rotates (Dragon Ball Z in 8/9 notes; every un-derivable axis for a no-history client). We now rotate
+  // WITHIN the oldest-tie by a caller-supplied offset (the client's note count + a per-item salt) so a cold
+  // start still varies. As real history accrues the tie shrinks to the genuinely-oldest and ordinary LRU takes
+  // over. rotationOffset default 0 reproduces the legacy set-order pick, so existing callers/tests are
+  // unchanged until they pass an offset.
+  let oldest = -1;
+  for (const v of set) { const a = age(v); if (a > oldest) oldest = a; }
+  const tied = set.filter((v) => age(v) === oldest);
+  if (tied.length === 1) return tied[0];
+  const idx = ((rotationOffset % tied.length) + tied.length) % tied.length; // guard negative offsets
+  return tied[idx];
+}
+
+// Full LRU ordering of `set`: least-recently-used first, ties rotated by offset. Built by repeatedly taking the
+// lruPick winner and feeding it back as "just used", so it shares lruPick's exact policy (cold-start tie-break
+// included). Used for the note-level reinforcer axis, where the note names SEVERAL items and we want the whole
+// short list reordered, not a single pick.
+export function lruOrder(set: string[], recentKnownUses: string[], rotationOffset = 0): string[] {
+  const out: string[] = [];
+  let pool = [...set];
+  let recent = [...recentKnownUses];
+  let k = 0;
+  while (pool.length) {
+    const pick = lruPick(pool, recent, rotationOffset + k);
+    if (pick === undefined) break;
+    out.push(pick);
+    pool = pool.filter((x) => x !== pick);
+    recent = [pick, ...recent];
+    k++;
   }
-  return best;
+  return out;
+}
+
+// Stable, well-distributed non-negative salt from a string, so two items sharing an identical locked set AND an
+// empty history don't both land on the same cold-start tie-break index within one note. Deterministic (no RNG)
+// so a note stays reproducible. NOT security-sensitive.
+function saltHash(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
 }
 
 // KNOWN uses of one behavior axis across history, newest-first. UNKNOWN (undefined) entries are dropped —
@@ -112,6 +147,14 @@ export interface PreselectInput {
   behaviorTiers?: OutcomeTier[];
   skillTiers?: OutcomeTier[];
   history: NoteContext[];          // readGenerationHistory(clientId, { window: 3 })
+  // Cold-start tie-break offset for lruPick — the client's ACTIVE note count. Distinct from history.length
+  // (which is 0 exactly when rotation is broken): this increments on every saved note regardless of whether it
+  // recorded generation_context, so it varies even for a no-history client, letting the tie-break rotate a
+  // frozen axis. Optional; default 0 = legacy set-order pick.
+  rotationOffset?: number;
+  // The FULL edible/outing/person-filtered reinforcer survivor list (buildServerSessionInput). The note-level
+  // reinforcer axis rotates over THIS, not the pre-sliced top-3, so every survivor gets airtime across sessions.
+  reinforcerSurvivors?: string[];
 }
 
 // How the intervention was selected. 'function-matched': the client's approved list contained an
@@ -156,11 +199,23 @@ export interface PreselectResult {
   // the tiers. 'approved-global-fallback' marks a behavior whose function had no approved intervention that
   // fits the general map — so admins can see which selections are NOT function-matched.
   interventionFit: Record<string, InterventionFit>;
+  // NOTE-LEVEL REINFORCER AXIS (the Dragon Ball Z fixation fix). `reinforcers` is the top-3 actually offered to
+  // the note — the axis the history reader reads back (NoteContext.reinforcers) so the next note can rotate
+  // against it. `reinforcersOrder` is the FULL LRU-rotated survivor list, so the caller builds both naming
+  // channels — reinforcersUsed(3) and the tangibles(5) context list — from ONE rotated order (otherwise
+  // tangibles would still lead with the frozen set[0] item and the model would re-name it).
+  reinforcers: string[];
+  reinforcersOrder: string[];
 }
 
 // ── The selector ──────────────────────────────────────────────────────────────────────────────────────
 export function preselect(input: PreselectInput): PreselectResult {
   const { history } = input;
+  const rot = input.rotationOffset ?? 0;
+  // Per-(item, axis) tie-break offset: note count + a stable salt so two items with an identical locked set and
+  // an empty history don't collide on the same cold-start pick. Only matters when that axis's history is
+  // empty/tied; once real history exists lruPick ignores it (the oldest tie is a singleton).
+  const boff = (name: string, key: string): number => rot + saltHash(name + '|' + key);
   const activityLockedSet = input.location === 'school' ? input.schoolActivities : input.homeActivities;
 
   const perBehavior: Record<string, BehaviorAssignment> = {};
@@ -178,7 +233,7 @@ export function preselect(input: PreselectInput): PreselectResult {
 
     // 1. FUNCTION — LRU within this behavior's approved set. Single-function behaviors always use theirs.
     if (b.allowedFunctions?.length) {
-      a.function = lruPick(b.allowedFunctions, behaviorAxis(history, b.name, 'function'));
+      a.function = lruPick(b.allowedFunctions, behaviorAxis(history, b.name, 'function'), boff(b.name, 'function'));
     } else {
       // C6: no documented function — do not guess, do not omit silently.
       integrityFlags.push(`"${b.name}" has no documented function in the assessment — verify the assessment.`);
@@ -195,10 +250,10 @@ export function preselect(input: PreselectInput): PreselectResult {
       ? input.approvedInterventions.filter((i) => fitIds.includes(canonicalIntervention(i)))
       : [];
     if (fitting.length) {
-      a.interventionName = lruPick(fitting, behaviorAxis(history, b.name, 'interventionName'));
+      a.interventionName = lruPick(fitting, behaviorAxis(history, b.name, 'interventionName'), boff(b.name, 'interventionName'));
       a.interventionFit = 'function-matched';
     } else {
-      a.interventionName = lruPick(input.approvedInterventions, behaviorAxis(history, b.name, 'interventionName'));
+      a.interventionName = lruPick(input.approvedInterventions, behaviorAxis(history, b.name, 'interventionName'), boff(b.name, 'interventionName'));
       a.interventionFit = 'approved-global-fallback';
       if (a.function) {
         integrityFlags.push(`"${b.name}" (${a.function}): no approved intervention fits this function in Path's general map — selected "${a.interventionName ?? ''}" from the approved list as a non-function-matched fallback.`);
@@ -207,21 +262,21 @@ export function preselect(input: PreselectInput): PreselectResult {
 
     // 3. ANTECEDENT — the chosen function's own pool (skipped when function is unknown).
     if (a.function && FUNCTION_ANTECEDENTS[a.function]?.length) {
-      a.antecedentKey = lruPick(FUNCTION_ANTECEDENTS[a.function], behaviorAxis(history, b.name, 'antecedentKey'));
+      a.antecedentKey = lruPick(FUNCTION_ANTECEDENTS[a.function], behaviorAxis(history, b.name, 'antecedentKey'), boff(b.name, 'antecedentKey'));
     }
 
     // 4. ACTIVITY — the setting's authorized list.
-    a.activity = lruPick(activityLockedSet, behaviorAxis(history, b.name, 'activity'));
+    a.activity = lruPick(activityLockedSet, behaviorAxis(history, b.name, 'activity'), boff(b.name, 'activity'));
     if (a.activity) activities.add(a.activity);
 
     // 5. TOPOGRAPHY — the assessment's set for this behavior (replaces the old Math.random pick).
     if (b.topographies?.length) {
-      a.topography = lruPick(b.topographies, behaviorAxis(history, b.name, 'topography'));
+      a.topography = lruPick(b.topographies, behaviorAxis(history, b.name, 'topography'), boff(b.name, 'topography'));
     }
 
     // 6/7. PROMPT + RESPONSE — the tier's vocab subset (or compliance-gated fallback), LRU-rotated.
-    a.promptKey = lruPick(promptVocab, behaviorAxis(history, b.name, 'promptKey'));
-    a.responseKey = lruPick(responseVocab, behaviorAxis(history, b.name, 'responseKey'));
+    a.promptKey = lruPick(promptVocab, behaviorAxis(history, b.name, 'promptKey'), boff(b.name, 'promptKey'));
+    a.responseKey = lruPick(responseVocab, behaviorAxis(history, b.name, 'responseKey'), boff(b.name, 'responseKey'));
 
     perBehavior[b.name] = a;
   });
@@ -232,11 +287,11 @@ export function preselect(input: PreselectInput): PreselectResult {
     if (tier) a.tier = tier;
     const promptVocab = tier ? TIER_PROMPTS[tier] : promptSet(input.complianceLevel);
     const responseVocab = tier ? TIER_RESPONSES[tier] : responseSet(input.complianceLevel);
-    a.method = lruPick(input.approvedMethods, skillAxis(history, s.name, 'method'));
-    a.activity = lruPick(activityLockedSet, skillAxis(history, s.name, 'activity'));
+    a.method = lruPick(input.approvedMethods, skillAxis(history, s.name, 'method'), boff(s.name, 'method'));
+    a.activity = lruPick(activityLockedSet, skillAxis(history, s.name, 'activity'), boff(s.name, 'activity'));
     if (a.activity) activities.add(a.activity);
-    a.promptKey = lruPick(promptVocab, skillAxis(history, s.name, 'promptKey'));
-    a.responseKey = lruPick(responseVocab, skillAxis(history, s.name, 'responseKey'));
+    a.promptKey = lruPick(promptVocab, skillAxis(history, s.name, 'promptKey'), boff(s.name, 'promptKey'));
+    a.responseKey = lruPick(responseVocab, skillAxis(history, s.name, 'responseKey'), boff(s.name, 'responseKey'));
     perSkill[s.name] = a;
   });
 
@@ -249,7 +304,15 @@ export function preselect(input: PreselectInput): PreselectResult {
   const interventionFit: Record<string, InterventionFit> = {};
   for (const [name, a] of Object.entries(perBehavior)) if (a.interventionFit) interventionFit[name] = a.interventionFit;
 
-  return { perBehavior, perSkill, activities: [...activities], integrityFlags, behaviorTiers, skillTiers, interventionFit };
+  // NOTE-LEVEL REINFORCER AXIS. History = the reinforcers named in recent notes (newest-first, flattened).
+  // lruOrder rotates the survivor list so the PRIMARY reinforcer changes session-to-session instead of freezing
+  // on the first survivor (Dragon Ball Z in 5/8 notes). Record only the top-3 as the axis — what the note
+  // actually names — so the next note sees a rotatable signal rather than "every survivor used every time".
+  const reinforcerHistory = history.flatMap((h) => h.reinforcers ?? []);
+  const reinforcersOrder = lruOrder(input.reinforcerSurvivors ?? [], reinforcerHistory, rot);
+  const reinforcers = reinforcersOrder.slice(0, 3);
+
+  return { perBehavior, perSkill, activities: [...activities], integrityFlags, behaviorTiers, skillTiers, interventionFit, reinforcers, reinforcersOrder };
 }
 
 // Render the assignments as the FIXED ASSIGNMENTS block handed to GPT. Every value here came from a locked

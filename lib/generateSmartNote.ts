@@ -92,6 +92,9 @@ export interface SessionInput {
     item: string;
     deliveredWhen: string;
   }[];
+  // The FULL edible/outing/person-filtered reinforcer survivor list (order as stored). The reinforcer rotation
+  // axis rotates over THIS; reinforcersUsed above is only the fallback top-3 for when preselection is skipped.
+  reinforcerSurvivors?: string[];
   clinicalEvents?: string;
   complianceLevel?: 'typical' | 'below_typical' | 'poor';
   environmentalChangeDescription?: string;
@@ -438,6 +441,16 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   // to "no rotation", NEVER to a dropped firewall: on failure we keep an EMPTY history (preselect still
   // assigns from the approved sets — lruPick returns set[0] with no history — just without LRU variety) and
   // record a DISTINCT alert, so a rotation blip stays separable from a real firewall drop in admin_alerts.
+  // COLD-START TIE-BREAK OFFSET — the client's active note count. Read separately from (and tolerant like) the
+  // history read: it is the ONLY input that varies when rotation history is empty/UNKNOWN, so it is what lets a
+  // frozen axis (reinforcer, activity, prompt/response on a no-history client) rotate instead of sticking on
+  // set[0]. superseded_at:null mirrors activeNotesWhere; failure degrades to 0 (legacy set-order pick), never
+  // throws. session_notes has no soft-delete extension, so this predicate is explicit and complete.
+  let rotationOffset = 0;
+  try {
+    rotationOffset = await prisma.session_notes.count({ where: { client_id: input.clientId, superseded_at: null } });
+  } catch { rotationOffset = 0; }
+
   let history: Awaited<ReturnType<typeof readGenerationHistory>> = [];
   try {
     history = await readGenerationHistory(prisma, input.clientId, { window: 3 });
@@ -478,8 +491,24 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
       behaviorTiers,
       skillTiers,
       history,
+      rotationOffset,
+      reinforcerSurvivors: input.reinforcerSurvivors ?? input.reinforcersUsed.map((r) => r.item),
     });
     fixedAssignmentsBlock = buildFixedAssignmentsBlock(generationContext);
+    // Apply the rotated reinforcer order to BOTH naming channels the prompt reads — reinforcersUsed(3) and the
+    // clientProfile tangibles(5) context list — so the note's primary reinforcer rotates instead of always
+    // leading with the first survivor. Only on preselect success; the catch path leaves input's order intact.
+    if (generationContext.reinforcersOrder.length) {
+      const order = generationContext.reinforcersOrder;
+      sessionContext.reinforcersUsed = order.slice(0, 3).map((item) => ({
+        type: 'non-edible' as const, // survivors already passed the edible filter in buildServerSessionInput
+        item, deliveredWhen: '',
+      }));
+      sessionContext.clientProfile.reinforcers = {
+        ...sessionContext.clientProfile.reinforcers,
+        tangibles: order.slice(0, 5).join(', '),
+      };
+    }
   } catch (e: any) {
     // The FIREWALL was dropped: the note will generate UNCONSTRAINED (the gates still enforce). This type
     // means specifically "the lock was dropped" — distinct from note.rotation_history_failed above. Behavior

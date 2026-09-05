@@ -45,6 +45,10 @@ export interface NoteContext {
   interventions?: string[];
   behaviors?: string[];
   skills?: string[];
+  // Note-level reinforcer axis. The reinforcers the note actually named (the preselector's top-3). KNOWN only
+  // on an authoritative row — a legacy/derived row cannot reconstruct which reinforcer was named from prose,
+  // so it stays undefined (contributes nothing), never an empty list that would read as "none used".
+  reinforcers?: string[];
 }
 
 // The session_notes fields the reader needs (injected directly in tests; selected from prisma at runtime).
@@ -81,7 +85,7 @@ export function buildNoteContext(row: SessionNoteRow): NoteContext {
 
   // Authoritative path: a note the preselector wrote. Every axis it recorded is KNOWN.
   if (gc && typeof gc === 'object') {
-    const g = gc as { perBehavior?: unknown; perSkill?: unknown; activities?: unknown };
+    const g = gc as { perBehavior?: unknown; perSkill?: unknown; activities?: unknown; reinforcers?: unknown };
     const perBehavior = asSelectionMap(g.perBehavior);
     // Interventions the note used = the per-behavior interventionNames it chose (fall back to the stored
     // flat list only if the context carried none).
@@ -97,6 +101,7 @@ export function buildNoteContext(row: SessionNoteRow): NoteContext {
       interventions: fromContext.length ? [...new Set(fromContext)] : asStringArray(row.interventions_used),
       behaviors: asStringArray(row.behaviors_addressed),
       skills: asStringArray(row.skills_addressed),
+      reinforcers: asStringArray(g.reinforcers),
     };
   }
 

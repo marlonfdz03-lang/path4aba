@@ -207,6 +207,9 @@ export function buildServerSessionInput(
       type: looksEdible(item) ? ("edible" as const) : ("non-edible" as const),
       item, deliveredWhen: "",
     })),
+    // FULL survivor list (not sliced) so the reinforcer rotation axis can rotate over every survivor across
+    // sessions; the slice(0,3) above is only the no-preselect fallback.
+    reinforcerSurvivors: reinforcers,
 
     clinicalEvents: [
       // HIPAA-conservative med handling (decided during consolidation): state THAT a medication change
