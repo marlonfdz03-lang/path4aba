@@ -22,7 +22,7 @@ import { stripInvalidNextSession } from '@/lib/nextSessionDate';
 import { findRedFlagFlags } from '@/lib/redFlagPhrases';
 import { decideUniqueness } from '@/lib/noteSimilarity';
 import {
-  runCombinedComplianceGate, summarizeSurvivingViolations, type ComplianceState,
+  runCombinedComplianceGate, summarizeSurvivingViolations, interventionViolationNames, type ComplianceState,
 } from '@/lib/complianceGate';
 import { buildInterventionDetail } from '@/lib/interventionDetail';
 import { preselect, buildFixedAssignmentsBlock, type PreselectResult } from '@/lib/preselect';
@@ -252,6 +252,23 @@ function buildContextualFactors(input: SessionInput): string {
     blocks.join('\n\n') +
     `\n\nIMPORTANT: Do not list these factors as a separate section. Integrate them into the narrative of the note naturally. The note must still contain one ABC per documented behavior, still be one paragraph, and still read as professional clinical documentation.`
   );
+}
+
+// SCOPE DIRECTIVE appended to the master prompt for one section call. The completeness override is
+// load-bearing for BEHAVIORS: validated that a bare scope directive lets the master prompt's own
+// depth-variation/brevity guidance suppress behaviors to ~12/15, while this override pulls it to ~15/15.
+// Skills split cleanly (18/18) but get the same override for symmetry and safety. (A blocking coverage check
+// was prototyped and dropped: name-matching on description-style ABC prose false-fired on 61-84% of real
+// notes — untrustworthy. The split itself is the fix; verifiable coverage would need structured name tags.)
+function sectionScope(kind: 'behavior' | 'skill', n: number): string {
+  if (kind === 'behavior') {
+    return '\n\n=== SCOPE FOR THIS CALL (COMPLETENESS IS MANDATORY) ===\n'
+      + `Output ONLY the note opening line and the ABC (antecedent-behavior-consequence) entries — one for EACH of the ${n} maladaptive behaviors in the FIXED ASSIGNMENTS block, in that order. Do NOT write the skill-acquisition / replacement-program section and do NOT write a closing summary; a separate call writes those.\n`
+      + `Write EXACTLY ${n} ABCs, one per behavior. The depth-variation, brevity, and reinforcer-realism guidance above governs WORDING ONLY — it NEVER permits omitting, merging, or summarizing away any behavior. Dropping or combining any of the ${n} behaviors is a hard error.`;
+  }
+  return '\n\n=== SCOPE FOR THIS CALL (COMPLETENESS IS MANDATORY) ===\n'
+    + `Output ONLY the skill-acquisition / replacement-program section — one progress entry for EACH of the ${n} replacement skills in the FIXED ASSIGNMENTS block, documented by name. Do NOT write ABCs for maladaptive behaviors and do NOT repeat the opening; a separate call wrote those.\n`
+    + `Document EXACTLY ${n} skills, one entry each. Do NOT omit or merge any skill for brevity.`;
 }
 
 export async function generateSmartNote(input: SessionInput, rbtId?: string, onChunk?: (text: string) => void): Promise<GeneratedNote> {
@@ -542,13 +559,21 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     : '';
   const userPrompt = `Generate a clinical ABA session note using this session data:\n\n${JSON.stringify(sessionContext, null, 2)}${behaviorScopeConstraint}${approvedFunctionConstraint}${approvedMethodConstraint}\n\nRemember: ONE continuous paragraph, EXACTLY ${abcCount} ABC${abcCount === 1 ? '' : 's'} (one per documented behavior), no mentalistic language, no prohibited interventions, all activities in parentheses format, every behavior must have an intervention.`;
 
-  async function callOpenAI(systemContent: string): Promise<string> {
-    if (onChunk) {
+  // Returns BOTH the text and the finish_reason. finish_reason is load-bearing now: a 'length' stop is the
+  // silent output-cap truncation the sectioned design exists to prevent, so callers throw on it rather than
+  // ship a cut-off note. `forwardStream` streams tokens live to onChunk (the behavior section, which the RBT
+  // watches write); the skill section runs non-streamed in parallel and is revealed with the assembled note.
+  async function callOpenAI(
+    systemContent: string,
+    opts: { maxTokens?: number; forwardStream?: boolean } = {},
+  ): Promise<{ text: string; finishReason: string | null }> {
+    const maxTokens = opts.maxTokens ?? 2000;
+    if (opts.forwardStream && onChunk) {
       const stream = await openai.chat.completions.create({
         model: 'gpt-4o',
         temperature: 0.85,
         seed: Math.floor(Math.random() * 1000000),
-        max_tokens: 2000,
+        max_tokens: maxTokens,
         stream: true,
         messages: [
           { role: 'system', content: systemContent },
@@ -556,23 +581,26 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
         ]
       });
       let text = '';
+      let finishReason: string | null = null;
       for await (const chunk of stream) {
         const delta = chunk.choices[0]?.delta?.content || '';
         if (delta) { text += delta; onChunk(delta); }
+        const fr = chunk.choices[0]?.finish_reason;
+        if (fr) finishReason = fr;
       }
-      return text;
+      return { text, finishReason };
     }
     const resp = await openai.chat.completions.create({
       model: 'gpt-4o',
       temperature: 0.85,
       seed: Math.floor(Math.random() * 1000000),
-      max_tokens: 1500,
+      max_tokens: maxTokens,
       messages: [
         { role: 'system', content: systemContent },
         { role: 'user', content: userPrompt }
       ]
     });
-    return resp.choices[0].message.content || '';
+    return { text: resp.choices[0].message.content || '', finishReason: resp.choices[0].finish_reason ?? null };
   }
 
   // ONE system prompt, built once and reused by the regeneration below so the two can never drift.
@@ -584,7 +612,40 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     + contextualFactors
     + fixedAssignmentsBlock;
 
-  let note = await callOpenAI(systemPrompt);
+  // ── SECTIONED GENERATION (two calls) ───────────────────────────────────────────────────────────────
+  // One combined call rendering all ABCs + all skills self-truncates the tail past ~2,000 output tokens
+  // (measured: 15 behaviors + 18 skills ≈ 2,750 tokens, over the cap; the model stops on `length` OR, worse,
+  // self-truncates and stops on `stop`, dropping the last items). Split into a BEHAVIOR call and a SKILL call,
+  // each section-scoped and generated whole at max_tokens 4,000 (validated: skills 18/18, behaviors 15/15 with
+  // the completeness override). finish_reason is checked on EVERY call — a 'length' stop throws (→ blocking),
+  // never ships truncated. The behavior section streams live (the RBT watches it write); the skill section runs
+  // in parallel, invisibly, and is revealed with the assembled note via __META__ filteredText (existing
+  // contract, unchanged). Generating each section whole is what prevents the tail-drop — there is no separate
+  // coverage gate (see sectionScope note above on why name-based coverage was measured untrustworthy).
+  const behaviorNames = input.behaviorsObserved.map((b) => b.name).filter(Boolean);
+  const skillNames = input.replacementSkillsAddressed.map((s) => s.name).filter(Boolean);
+  const nB = behaviorNames.length;
+  const nS = skillNames.length;
+  const SECTION_MAX_TOKENS = 4000;
+  const behaviorScope = nB ? sectionScope('behavior', nB) : '';
+  const skillScope = nS ? sectionScope('skill', nS) : '';
+  const assertNotTruncated = (r: { finishReason: string | null }, section: string): void => {
+    if (r.finishReason === 'length') {
+      throw new Error(`NOTE_TRUNCATED: the ${section} section hit the output length cap and the note was not completed — please regenerate.`);
+    }
+  };
+  const [behaviorRes, skillRes] = await Promise.all([
+    nB ? callOpenAI(systemPrompt + behaviorScope, { maxTokens: SECTION_MAX_TOKENS, forwardStream: true })
+       : Promise.resolve({ text: '', finishReason: null as string | null }),
+    nS ? callOpenAI(systemPrompt + skillScope, { maxTokens: SECTION_MAX_TOKENS, forwardStream: false })
+       : Promise.resolve({ text: '', finishReason: null as string | null }),
+  ]);
+  assertNotTruncated(behaviorRes, 'behavior');
+  assertNotTruncated(skillRes, 'skill');
+  let behaviorText = behaviorRes.text;
+  let skillText = skillRes.text;
+  const assembleNote = (): string => [behaviorText, skillText].map((s) => s.trim()).filter(Boolean).join('\n\n');
+  let note = assembleNote();
 
   // Step 7: Similarity — WARN, NEVER REGENERATE (Bug 6, Option C). Uniqueness is cosmetic; after the
   // function phrasing became uniform by clinical requirement, same-client notes legitimately share more
@@ -689,10 +750,42 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   const gate = await runCombinedComplianceGate({
     initialNote: note,
     detect: detectCompliance,
-    regenerate: (instruction) => callOpenAI(systemPrompt + instruction).then(applyBlockedFilter),
+    // SECTION-AWARE repair: the existing combined compliance gate detects on the ASSEMBLED note (unchanged),
+    // but when it regenerates we rewrite ONLY the offending section(s) — never the whole note, which would
+    // reintroduce the truncation this design fixes. A clean section is left untouched (regenerating it risks
+    // an occasional drop). Every section regen re-checks finish_reason. Runs at most once (regenCount ∈ {0,1}).
+    // Attribute defects to a section by TYPE (detected on the ASSEMBLED note, where segmentation works — a
+    // section fragment alone is not segmentable). Behavior side: function coverage/validity + an out-of-plan
+    // reduction intervention in an ABC. Skill side: teaching-method + a skill documented as a reduction
+    // intervention. If nothing attributes (e.g. an unsegmentable note), regenerate the behavior section as the
+    // safe default so the gate always makes progress. A clean section is left untouched.
+    regenerate: async (instruction) => {
+      const st = detectCompliance(assembleNote());
+      const behaviorDefect = nB > 0 && (
+        (st.coverage.segmentable && st.coverage.missing.length > 0) ||
+        st.functionViolations.length > 0 ||
+        interventionViolationNames(st.intervention).length > 0
+      );
+      const skillDefect = nS > 0 && (
+        st.methodViolations.length > 0 ||
+        st.intervention.skillAsReduction.length > 0
+      );
+      const jobs: Promise<void>[] = [];
+      if (behaviorDefect || (!behaviorDefect && !skillDefect && nB > 0)) {
+        jobs.push(callOpenAI(systemPrompt + behaviorScope + instruction, { maxTokens: SECTION_MAX_TOKENS })
+          .then((r) => { assertNotTruncated(r, 'behavior'); behaviorText = r.text; }));
+      }
+      if (skillDefect) {
+        jobs.push(callOpenAI(systemPrompt + skillScope + instruction, { maxTokens: SECTION_MAX_TOKENS })
+          .then((r) => { assertNotTruncated(r, 'skill'); skillText = r.text; }));
+      }
+      await Promise.all(jobs);
+      return applyBlockedFilter(assembleNote());
+    },
     onRegen: onChunk ? () => onChunk('\n__REGEN__\n') : undefined,
   });
   note = gate.note;
+
   const functionViolations = gate.state.functionViolations;
   const methodViolations = gate.state.methodViolations;
 
