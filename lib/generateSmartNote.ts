@@ -24,6 +24,7 @@ import { decideUniqueness } from '@/lib/noteSimilarity';
 import {
   runCombinedComplianceGate, summarizeSurvivingViolations, interventionViolationNames, type ComplianceState,
 } from '@/lib/complianceGate';
+import { isWithholdResponseIntervention, allowsWithholdResponse, classifyBehaviorSafety } from '@/lib/behaviorSafety';
 import { buildInterventionDetail } from '@/lib/interventionDetail';
 import { preselect, buildFixedAssignmentsBlock, type PreselectResult } from '@/lib/preselect';
 import { readGenerationHistory } from '@/lib/rotationHistory';
@@ -548,6 +549,25 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
       },
     });
   }
+
+  // CLINICAL-SAFETY BACKSTOP (defense-in-depth) — OUTSIDE the preselect try so its throw reaches the route as a
+  // blocking error, never the preselect catch (which would swallow it and degrade to unconstrained generation).
+  // preselect already excludes withhold-response interventions for unsafe behaviors, so this should never fire —
+  // but a note documenting Planned Ignoring / Extinction for a flight / self-harm / aggression behavior must
+  // NEVER ship. It checks the structured ASSIGNMENT, not prose (a prose scan false-fires on legitimate ignoring
+  // of a co-occurring tantrum). Runs BEFORE generation so it fails fast without burning LLM calls. Only when
+  // preselect succeeded — the failed path has no assignment to check (its risk is the pre-existing unconstrained
+  // fallback, already alerted above).
+  if (generationContext) {
+    for (const b of input.behaviorsObserved) {
+      const iv = generationContext.perBehavior?.[b.name]?.interventionName;
+      const topo = (b.topographies?.join(' ') || b.topography || '');
+      if (iv && isWithholdResponseIntervention(iv) && !allowsWithholdResponse(b.name, topo)) {
+        throw new Error(`UNSAFE_INTERVENTION: "${iv}" was assigned to "${b.name}" (${classifyBehaviorSafety(b.name, topo)}) — withholding a response is unsafe for this behavior; not shipping the note.`);
+      }
+    }
+  }
+
   // The ABC count IS the number of behaviors the RBT documented — never a fixed target. A fixed
   // "exactly 5" forced the model to invent ABCs for behaviors the RBT never marked, sourcing them
   // from the client's treatment-plan behavior list, which put behaviors that did not occur into a
@@ -847,6 +867,18 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
       coherenceFlags.push(
         `"${b.name}" has no documented function in the assessment — verify the assessment.`,
       );
+    }
+  }
+  // CLINICAL SAFETY: surface any behavior where the safety filter emptied the intervention pool (all approved
+  // options were withhold-response, unsafe for it) as a REVIEW FLAG the RBT/BCBA sees — the note documented a
+  // general redirection/blocking response instead of a named intervention, and the plan needs a safe one added.
+  if (generationContext) {
+    for (const [name, a] of Object.entries(generationContext.perBehavior)) {
+      if (a.noSafeIntervention) {
+        coherenceFlags.push(
+          `No safe approved intervention was available for "${name}" — its approved options are all withhold-response (Planned Ignoring / Extinction), which is unsafe for this behavior. The note documents a general redirection/blocking response; please add a safe intervention to the plan.`,
+        );
+      }
     }
   }
 

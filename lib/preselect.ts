@@ -12,6 +12,7 @@
 import type { NoteContext } from './rotationHistory.ts';
 import { TIER_PROMPTS, TIER_RESPONSES, type OutcomeTier } from './complianceTiers.ts';
 import { canonicalIntervention } from './interventionCanonical.ts';
+import { filterUnsafeInterventions, classifyBehaviorSafety } from './behaviorSafety.ts';
 
 // ── Clinical data maps ────────────────────────────────────────────────────────────────────────────────
 // These NARROW a choice WITHIN an already-approved set (or ARE the locked set, for antecedents). They are a
@@ -168,6 +169,10 @@ export interface BehaviorAssignment {
   antecedentKey?: string;
   interventionName?: string;
   interventionFit?: InterventionFit;
+  // Set when the clinical-safety filter emptied the candidate set (every approved option for this behavior is
+  // withhold-response, unsafe for it). interventionName is left undefined and the note documents a general
+  // safety response instead of a named plan intervention. See buildFixedAssignmentsBlock + behaviorSafety.ts.
+  noSafeIntervention?: boolean;
   activity?: string;
   topography?: string;
   tier?: OutcomeTier;
@@ -245,19 +250,36 @@ export function preselect(input: PreselectInput): PreselectResult {
     //    so pick from the full approved list, but MARK it 'approved-global-fallback' — it is NOT presented as
     //    function-matched (the old code silently used the full list and passed a coincidental pick off as a
     //    function match; that is the bug being removed). The result is always a member of approvedInterventions.
+    // CLINICAL SAFETY (fail-safe): strip withhold-response interventions (Planned Ignoring / any Extinction)
+    // from the candidate set for any behavior NOT positively classified attention-maintained-non-harmful —
+    // BEFORE selection, independent of function match and independent of approval. Applied to BOTH the
+    // function-matched set and the global-approved fallback, so an unsafe intervention can never be picked for
+    // a flight / self-harm / aggression (or unclassified) behavior. The reported live bug was Planned Ignoring
+    // paired with Elopement — approved and attention-function-matched, but unsafe for a child at a door.
+    const topoText = (b.topographies || []).join(' ');
     const fitIds = a.function ? GENERAL_ABA_FUNCTION_INTERVENTIONS[a.function] : undefined;
-    const fitting = fitIds
-      ? input.approvedInterventions.filter((i) => fitIds.includes(canonicalIntervention(i)))
-      : [];
+    const fitting = filterUnsafeInterventions(
+      fitIds ? input.approvedInterventions.filter((i) => fitIds.includes(canonicalIntervention(i))) : [],
+      b.name, topoText,
+    );
+    const safeApproved = filterUnsafeInterventions(input.approvedInterventions, b.name, topoText);
     if (fitting.length) {
       a.interventionName = lruPick(fitting, behaviorAxis(history, b.name, 'interventionName'), boff(b.name, 'interventionName'));
       a.interventionFit = 'function-matched';
-    } else {
-      a.interventionName = lruPick(input.approvedInterventions, behaviorAxis(history, b.name, 'interventionName'), boff(b.name, 'interventionName'));
+    } else if (safeApproved.length) {
+      a.interventionName = lruPick(safeApproved, behaviorAxis(history, b.name, 'interventionName'), boff(b.name, 'interventionName'));
       a.interventionFit = 'approved-global-fallback';
       if (a.function) {
         integrityFlags.push(`"${b.name}" (${a.function}): no approved intervention fits this function in Path's general map — selected "${a.interventionName ?? ''}" from the approved list as a non-function-matched fallback.`);
       }
+    } else {
+      // The safety filter emptied BOTH pools — every approved option for this behavior is withhold-response,
+      // which is unsafe for it. Do NOT fall through and pick one anyway: leave the intervention unset, flag it
+      // for the BCBA, and let the note document a general safety response (redirection/blocking) without naming
+      // a plan intervention (rendered by buildFixedAssignmentsBlock).
+      a.interventionName = undefined;
+      a.noSafeIntervention = true;
+      integrityFlags.push(`"${b.name}": no SAFE approved intervention is available — the client's approved options for this behavior are all withhold-response (Planned Ignoring / Extinction), unsafe for a ${classifyBehaviorSafety(b.name, topoText)} behavior. The note will document a general redirection/blocking response; verify the treatment plan.`);
     }
 
     // 3. ANTECEDENT — the chosen function's own pool (skipped when function is unknown).
@@ -325,6 +347,7 @@ export function buildFixedAssignmentsBlock(result: PreselectResult): string {
     if (a.function) parts.push(`function: ${a.function}`);
     if (a.antecedentKey) parts.push(`antecedent: ${a.antecedentKey}`);
     if (a.interventionName) parts.push(`intervention: ${a.interventionName}`);
+    else if (a.noSafeIntervention) parts.push(`intervention: describe the RBT's general safety response (redirection, response blocking, or proximity) in observable terms — do NOT name a plan intervention for this behavior`);
     if (a.activity) parts.push(`activity: ${a.activity}`);
     if (a.topography) parts.push(`topography: ${a.topography}`);
     if (a.tier) parts.push(`outcome tier: ${a.tier}`);
