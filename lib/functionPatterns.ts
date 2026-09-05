@@ -315,13 +315,16 @@ export type FunctionCoverage = {
 // results, the subset missing a function, and whether the note could be segmented at all. `skillNames`
 // marks where the ABC body ends (the skill-acquisition paragraph) — pass
 // input.replacementSkillsAddressed[].name plus activePrograms.replacementSkills.
-export function findMissingFunctionABCs(note: string, behaviors: any[], skillNames: string[] = []): FunctionCoverage {
-  const empty: FunctionCoverage = { segmentable: false, missing: [], results: [] }
-  if (!note || !Array.isArray(behaviors) || !behaviors.length) return empty
-
+// Anchor each behavior to where its ABC begins, and find the boundary where the skill/replacement section
+// starts. SHARED by findMissingFunctionABCs (which windows each ABC) and the whole-note drift record (which
+// bounds its scan to the ABC section, before the skill prose). Returns null when the note can't be anchored or
+// the ABC-section end can't be located — the coverage check treats that as unsegmentable ("fail loud").
+export interface AbcSegmentation { anchored: { i: number; pos: number }[]; skillBoundary: number }
+export function abcSegmentation(note: string, behaviors: any[], skillNames: string[] = []): AbcSegmentation | null {
+  if (!note || !Array.isArray(behaviors) || !behaviors.length) return null
   const noteL = note.toLowerCase()
   const sents = splitSentences(note)
-  if (!sents.length) return empty
+  if (!sents.length) return null
 
   // Sentence offsets in the original note (splitSentences trims/filters, so recover positions by scan).
   let cursor = 0
@@ -354,7 +357,7 @@ export function findMissingFunctionABCs(note: string, behaviors: any[], skillNam
     .sort((a, b) => a.pos - b.pos)
 
   // No behavior could be located at all → degenerate, fail loud.
-  if (!anchored.length) return empty
+  if (!anchored.length) return null
 
   // ABC_N end = first skill-name occurrence AFTER the last behavior anchor (raw substring; skill names are
   // mandated verbatim). Fallback to the transition-marker whitelist; else unsegmentable (fail loud).
@@ -370,7 +373,21 @@ export function findMissingFunctionABCs(note: string, behaviors: any[], skillNam
     const m = SKILL_TRANSITION_MARKERS.exec(note.slice(lastAnchor + 1))
     if (m) skillBoundary = lastAnchor + 1 + m.index
   }
-  if (skillBoundary === Infinity) return empty // could not find ABC_N end → fail loud, never scan to end
+  if (skillBoundary === Infinity) return null // could not find ABC_N end → fail loud, never scan to end
+  return { anchored, skillBoundary }
+}
+
+// The char index where the ABC section ends and the skill/replacement section begins, or null when the note
+// can't be segmented. Thin accessor over abcSegmentation for callers that only need the boundary.
+export function abcSectionBoundary(note: string, behaviors: any[], skillNames: string[] = []): number | null {
+  return abcSegmentation(note, behaviors, skillNames)?.skillBoundary ?? null
+}
+
+export function findMissingFunctionABCs(note: string, behaviors: any[], skillNames: string[] = []): FunctionCoverage {
+  const empty: FunctionCoverage = { segmentable: false, missing: [], results: [] }
+  const seg = abcSegmentation(note, behaviors, skillNames)
+  if (!seg) return empty
+  const { anchored, skillBoundary } = seg
 
   // Window each anchored behavior and check the PROSE for a documented function that is CORRECTLY PLACED —
   // present AND before the intervention clause (Problem 2). A function absent, or relocated after the
