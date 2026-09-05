@@ -99,8 +99,12 @@ export function buildServerSessionInput(
   // only (looksLikePersonRole) — NOT the Title-Case rule 3, which would false-drop "Hot Wheels"/"Dragon Ball Z".
   // "Social interaction with parents" survives (a category, not a person). Rule 3 stays on the reviewed refresh
   // path.
+  // EDIBLES ARE PERMITTED (Marlon's ruling): the app advises against food reinforcers at add-time but never
+  // strips them — if a clinician put food on the plan, the note must document what was actually delivered, not
+  // substitute it. So looksEdible is NOT a filter here. The community-outing and person firewalls stay: a
+  // community trip or a caregiver is not a deliverable in-session reinforcer, regardless of the food policy.
   const reinforcers = (splitReinforcerValue(asArray(p.reinforcers)) as string[])
-    .filter((r) => !looksEdible(r) && !isCommunityOuting(r) && !looksLikePersonRole(r));
+    .filter((r) => !isCommunityOuting(r) && !looksLikePersonRole(r));
   const { homeActivities, schoolActivities } = buildActivityLists({
     home: asArray(p.homeActivities) as string[],
     school: asArray(p.schoolActivities) as string[],

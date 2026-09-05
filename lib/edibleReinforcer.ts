@@ -1,11 +1,12 @@
-// Advisory edible-reinforcer check. Notes NEVER document edibles (the master prompt ignores/substitutes
-// food), so an edible reinforcer added to a profile simply won't appear in generated notes. This surfaces a
-// WARNING at add time so the RBT knows the consequence — it never blocks the add (Marlon's ruling: inform,
-// don't override judgment).
+// Advisory edible-reinforcer check. Edibles ARE now documented in notes (Marlon's ruling: if a clinician puts
+// food on the plan, the note records what was actually delivered — see buildServerSessionInput, where edibles
+// are no longer filtered out). This check no longer gates anything; it only powers an ADD-TIME GUIDANCE note
+// letting the RBT know food isn't generally recommended for skill-building. It never blocks the add.
 //
-// CONSERVATIVE by design: a false warning on a real non-edible ("fidget toy", "tablet") is more annoying
-// than missing an obscure edible, so this lists only clear food/drink words and deliberately omits ambiguous
-// ones (chip/bar/pop/gum/ice/tablet, which collide with poker chip, monkey bars, bubble pop, iPad, etc.).
+// Because it is now purely advisory, it should be OVER-inclusive rather than under-inclusive: a false hit on a
+// real non-edible costs a harmless guidance line, but a MISS makes the guidance a lie — silent on exactly the
+// items it claims to flag (the live "Vanilla flavor sweets" / "Fruits" miss). We still omit words that collide
+// with common non-edibles (chip/bar/pop/gum/ice/tablet → poker chip, monkey bars, bubble pop, iPad).
 
 const EDIBLE_KEYWORDS = [
   // original set
@@ -15,6 +16,8 @@ const EDIBLE_KEYWORDS = [
   'strawberry', 'strawberries', 'grapes', 'raisins', 'marshmallow', 'marshmallows',
   'lollipop', 'lollipops', 'skittles', 'jellybean', 'yogurt', 'applesauce', 'pizza',
   'cheese', 'milk', 'food', 'drink', 'consumable', 'consumables',
+  // gap fix (live miss): "Vanilla flavor sweets" matched nothing; "Fruits" (plural) slipped \bfruit\b.
+  'sweet', 'sweets', 'fruits', 'dessert', 'desserts',
   // savory / fast food — added after a live miss ("French fries", "chicken nuggets" reached a note).
   // NOTE (regression-guarded, do not re-add as bare words): "chip"/"chips" would flag "poker chip(s)",
   // "egg"/"eggs" would flag "egg shaker"/"plastic eggs", bare "chicken" would flag "chicken dance song".
@@ -46,5 +49,9 @@ export function looksEdible(text: unknown): boolean {
   );
 }
 
+// Add-time GUIDANCE (not a filter warning — edibles now appear in notes). English + Spanish; both shown under
+// the reinforcer input so the copy matches what Marlon wants users to see.
 export const EDIBLE_WARNING =
-  "This looks like an edible reinforcer. Path4ABA notes never document food, so if you add it, it won't appear in generated notes.";
+  "Edible reinforcers aren't generally recommended for skill-building, but you can add one if it's part of this client's plan.";
+export const EDIBLE_WARNING_ES =
+  "No se recomiendan los reforzadores comestibles para la enseñanza de habilidades, pero puedes agregarlos si son parte del plan de este cliente.";

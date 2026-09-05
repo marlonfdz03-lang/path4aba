@@ -288,12 +288,10 @@ REINFORCEMENT DOCUMENTATION:
 - CORRECT with none provided: "verbal praise delivered immediately following the appropriate request", "reinforcement was delivered contingent on appropriate task engagement", "the client accessed preferred reinforcement following task completion"
 - BANNED: "favorite snack", "enthusiastic acknowledgment", "rewarded with fun activity"
 
-EDIBLE REINFORCERS — COMPLETELY BANNED:
-NEVER mention food, edibles, or consumables as reinforcers in any note under any circumstances.
-Banned items include (but are not limited to): strawberries, cookies, chips, candy, crackers, goldfish crackers, fruit, juice, snacks, gummies, pretzels, popcorn, cereal, or any other food or drink item.
-NEVER use the phrases: "edible reinforcer", "preferred edible", "food reinforcer", "consumable reinforcer", or any food-related reinforcement language.
-NEVER use parentheses around food items like (strawberries) or (cookies) — parentheses do not make food acceptable.
-IF the session form or client profile lists food as a reinforcer — IGNORE IT entirely and substitute with "preferred toy", "access to preferred sensory item", or "preferred tangible item".
+EDIBLE / FOOD REINFORCERS — PERMITTED WHEN ON THE PLAN:
+Food and edible items ARE valid reinforcers when they appear in the session data's reinforcersUsed list. Document what was actually delivered — name the specific item exactly as given (e.g., "access to (crackers) provided contingent on task completion").
+NEVER substitute a generic "preferred toy" / "preferred tangible item" for a food item the RBT actually delivered — a note that hides what was handed over is a false record.
+(The REINFORCER SOURCE rule below still applies without exception: name ONLY items that appear in reinforcersUsed, and never invent a reinforcer of any kind.)
 
 REINFORCER SOURCE — MANDATORY (do not invent reinforcers):
 - Every named reinforcer in the note MUST come from the session data's reinforcersUsed list.
@@ -503,9 +501,8 @@ This ensures that after months of note generation, antecedents remain varied, sp
 4. ANTECEDENT INTERVENTIONS COME BEFORE THE BEHAVIOR
 An antecedent intervention is a preventative strategy and must be documented BEFORE the behavior it was meant to prevent, never as a reactive consequence after it unless clinically justified. (Detail for the specific antecedent procedures this client's plan approves is in the INTERVENTION DOCUMENTATION DETAIL section.)
 
-5. REINFORCEMENT BALANCE — EDIBLES COMPLETELY BANNED
-NEVER use edible reinforcers in any ABC, ever.
-Rotate only approved non-food reinforcers:
+5. REINFORCEMENT BALANCE
+Rotate reinforcers for variety across ABCs rather than repeating one label. Approved options include:
 - behavior-specific praise
 - token systems
 - preferred activities
@@ -514,7 +511,8 @@ Rotate only approved non-food reinforcers:
 - preferred toys
 - movement breaks
 - music / bubbles / tablet access
-Notes must reflect development of conditioned and natural reinforcers — never food.
+- edible / food items when they are part of this client's plan (name the specific item from reinforcersUsed)
+Notes should reflect development of conditioned and natural reinforcers alongside whatever the plan approves.
 
 6. OBSERVABLE AND OBJECTIVE LANGUAGE
 BANNED mentalistic words: frustrated, upset, wanted, angry, excited, nervous, happy, enjoyed, motivated, confused.
@@ -837,10 +835,10 @@ RULE: Use the full name for the FIRST mention. After that, vary naturally.
 Full formal name = at most 2 times per note. Rest should be natural shorthand.
 
 9. REINFORCER REALISM
-Do NOT list 3-4 different edible reinforcers in one session.
+Do NOT list 3-4 different reinforcers in one session.
 Real sessions typically use 1-2 primary reinforcers consistently.
 CORRECT: Use the same reinforcer 2-3 times across different ABCs — that's realistic. Vary the DESCRIPTOR not the item.
-INCORRECT: strawberries in ABC1, chocolate in ABC2, ice cream in ABC3 — too many different items, sounds AI-generated trying to seem varied.
+INCORRECT: a different item in every ABC (item A in ABC1, item B in ABC2, item C in ABC3) — too many different items, sounds AI-generated trying to seem varied.
 
 10. DEPTH VARIATION — STRICT RULE
 Vary the detail density across however many ABCs the note has — real RBTs write routine events more concisely than complex ones:
@@ -892,7 +890,7 @@ Verify every item before writing the final note:
 ☐ No two ABCs start with the same word or phrase
 ☐ DRA descriptions describe contingent reinforcement delivery, not withholding
 ☐ No topography is prefixed with a behavior category label ("engaged in X behavior by...")
-☐ Reinforcers named specifically (not "preferred edible" or "preferred item")
+☐ Reinforcers named specifically — name the actual item, not a vague category like "preferred item"
 ☐ Note contains at least one individualized detail specific to this client and session (specific phrase used, specific item by name, specific number of prompts or task steps completed) — a note that could apply to any client on any day fails audit review
 ☐ "verbal praise" used no more than twice — other ABCs use rotated descriptors (behavior-specific praise, social reinforcement, positive verbal feedback, etc.)
 ☐ At least one ABC shows replacement behavior displacing maladaptive behavior using "the client [replacement skill] instead of [maladaptive behavior]" — this is the strongest clinical evidence in the note

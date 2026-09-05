@@ -14,7 +14,7 @@ import { CatalogDiffPanel } from "./CatalogDiffPanel";
 import { reviewBannerLines } from "@/lib/reviewFlagCopy";
 import { activeBehaviors, activeSkills, behaviorMissingFields, incompleteBehaviorReason } from "@/lib/activePrograms";
 import { splitReinforcerValue } from "@/lib/reinforcers";
-import { looksEdible, EDIBLE_WARNING } from "@/lib/edibleReinforcer";
+import { looksEdible, EDIBLE_WARNING, EDIBLE_WARNING_ES } from "@/lib/edibleReinforcer";
 import { isCommunityOuting, COMMUNITY_OUTING_WARNING } from "@/lib/deliverableReinforcer";
 import { looksLikePersonRole, PERSON_WARNING } from "@/lib/clinicalLibrary";
 import { extractInterventions } from "@/lib/extractInterventions";
@@ -1620,7 +1620,7 @@ export default function ClientProfilePage() {
                     <p className="text-[13px]" style={{ color: "var(--text3)" }}>No reinforcers recorded.</p>
                   )}
                 </div>
-                {/* Add a reinforcer. Non-edible per the clinical rules; " or " is split into discrete items. */}
+                {/* Add a reinforcer. Edibles are allowed (advisory only, EN+ES below); " or " splits into items. */}
                 <form
                   className="flex gap-2 mt-3"
                   onSubmit={(e) => { e.preventDefault(); addReinforcer(newReinforcer); setNewReinforcer(""); }}
@@ -1629,7 +1629,7 @@ export default function ClientProfilePage() {
                     type="text"
                     value={newReinforcer}
                     onChange={(e) => setNewReinforcer(e.target.value)}
-                    placeholder="Add a reinforcer (non-edible)…"
+                    placeholder="Add a reinforcer…"
                     className="flex-1 border rounded-lg px-3 py-2 text-[13px]"
                     style={{ borderColor: "var(--border)", color: "var(--text1)" }}
                   />
@@ -1643,9 +1643,17 @@ export default function ClientProfilePage() {
                   </button>
                 </form>
                 {reinforcerWarning && (
-                  <p className="mt-2 text-[12px] px-3 py-2 rounded-lg border" style={{ background: "#FFFBEB", borderColor: "#FCD34D", color: "#92400E" }}>
-                    ⚠️ {reinforcerWarning}
-                  </p>
+                  reinforcerWarning === EDIBLE_WARNING ? (
+                    // Edibles are allowed now — this is GUIDANCE, not a filter warning. Neutral tone, EN + ES.
+                    <div className="mt-2 text-[12px] px-3 py-2 rounded-lg border" style={{ borderColor: "var(--border)", color: "var(--text2)" }}>
+                      <p>ℹ️ {EDIBLE_WARNING}</p>
+                      <p className="mt-1">{EDIBLE_WARNING_ES}</p>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-[12px] px-3 py-2 rounded-lg border" style={{ background: "#FFFBEB", borderColor: "#FCD34D", color: "#92400E" }}>
+                      ⚠️ {reinforcerWarning}
+                    </p>
+                  )
                 )}
               </div>
             </div>
