@@ -1134,7 +1134,19 @@ async function streamGenerate(endpoint, body, method = 'POST') {
           try {
             const meta = JSON.parse(metaRaw);
             // Only a BLOCKING stop discards the note. An advisory is shown and the note is kept.
-            if (meta.error) { showError(meta.error); if (meta.blocking !== false) { streamStatus.style.display = 'none'; return; } }
+            // CLEAN DISCARD on blocking: the progressive paint above may have already shown a partial section
+            // (e.g. behaviors streamed, then the skill section blocked on a truncation/failure). Clear the
+            // textarea and hide the output so no partial note can be copied or filled into the EHR — matching
+            // the web (client page setGeneratedNote(''); app page hides the output under the error).
+            if (meta.error) {
+              showError(meta.error);
+              if (meta.blocking !== false) {
+                streamStatus.style.display = 'none';
+                outputNote.value = '';
+                outputSection.style.display = 'none';
+                return;
+              }
+            }
             if (Array.isArray(meta.blockedFlagged)) blockedFlagged = meta.blockedFlagged;
             if (typeof meta.filteredText === 'string') filteredText = meta.filteredText;
             metaParsed = true;
