@@ -130,7 +130,7 @@ export function buildComplianceRegenInstruction(state: ComplianceState): string 
     const approvedClause = state.approvedInterventions.length
       ? `ONLY these approved interventions: ${state.approvedInterventions.join(', ')}`
       : `ONLY interventions named in the session data's approved list`;
-    parts.push(`APPROVED INTERVENTIONS: the note documented ${badInterventions.join(', ')}, which ${badInterventions.length === 1 ? 'is' : 'are'} NOT permitted as documented for this client.${roleNote} An RBT may only document reduction interventions the BCBA has approved. Rewrite the entire note using ${approvedClause}. Never mention response interruption and redirection (RIRD) or any intervention outside the approved list.`);
+    parts.push(`APPROVED INTERVENTIONS: the note documented ${badInterventions.join(', ')}, which ${badInterventions.length === 1 ? 'is' : 'are'} NOT permitted as documented for this client.${roleNote} An RBT may only document reduction interventions the BCBA has approved. In the text you produce, document ${approvedClause}. Never mention response interruption and redirection (RIRD) or any intervention outside the approved list.`);
   }
 
   if (state.methodViolations.length > 0) {
@@ -141,7 +141,7 @@ export function buildComplianceRegenInstruction(state: ComplianceState): string 
   }
 
   if (!parts.length) return null;
-  return `\n\nCOMPLIANCE — REGENERATE: the previous note has the following issue(s); fix ALL of them in one rewrite:\n- ${parts.join('\n- ')}`;
+  return `\n\nCOMPLIANCE — the text you are producing has the following issue(s); fix ALL of them:\n- ${parts.join('\n- ')}`;
 }
 
 // Run the combined gate: detect on the initial note; if ANY check fails, emit ONE regen and rewrite ONCE
