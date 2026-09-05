@@ -16,7 +16,7 @@ import {
   findFunctionAntecedentContradictions,
   segmentNoteByBehavior, deriveBehaviorFunction, functionToCanonical,
   normalizeApprovedFunctions, functionDisplayLabel, effectiveAllowedFunctions,
-  findMissingFunctionABCs,
+  findMissingFunctionABCs, abcSectionBoundary, functionsOutsideAssignedSet,
 } from '@/lib/functionPatterns';
 import { stripInvalidNextSession } from '@/lib/nextSessionDate';
 import { findRedFlagFlags } from '@/lib/redFlagPhrases';
@@ -957,6 +957,34 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
       },
     };
     await recordGateFindings({ findings: [segFinding], clientId: input.clientId, userId: rbtId, source: 'generate', regenCount: gate.regenCount });
+  }
+
+  // Step 7h: DRIFT RECORD (admin-only, record-only — never a repair, never an RBT flag). The segmentation-FREE
+  // replacement signal for the demoted validity check: an ABC named a function outside the set preselect
+  // assigned for this note. Reuses FUNCTION_PATTERNS + functionToCanonical, bounded to the ABC section (before
+  // the skill prose) via the boundary findMissingFunctionABCs computes. See functionsOutsideAssignedSet for the
+  // three limitations (all-four blind spot, ~85% precision, note-level).
+  if (generationContext) {
+    const assigned = new Set<string>();
+    for (const a of Object.values(generationContext.perBehavior)) {
+      const f = functionToCanonical(a?.function);
+      if (f) assigned.add(f);
+    }
+    // Skip the all-four case: the union covers every function, so an out-of-set word can never exist (blind spot).
+    if (assigned.size && assigned.size < 4) {
+      const boundary = abcSectionBoundary(note, input.behaviorsObserved, coverageSkillNames);
+      const scanned = boundary != null ? note.slice(0, boundary) : note;
+      const outOfSet = functionsOutsideAssignedSet(scanned, [...assigned]);
+      if (outOfSet.length) {
+        const driftFinding: GateFinding = {
+          gate: 'function_outside_assigned_set',
+          severity: 'info',
+          detail: `Note prose names function word(s) outside the assigned set: ${outOfSet.join(', ')} (assigned: ${[...assigned].join(', ')}).`,
+          context: { outOfSet, assigned: [...assigned] },
+        };
+        await recordGateFindings({ findings: [driftFinding], clientId: input.clientId, userId: rbtId, source: 'generate', regenCount: gate.regenCount });
+      }
+    }
   }
 
   // Step 8: NO auto-save. Generation (and every regeneration) used to persist a row here, so a single

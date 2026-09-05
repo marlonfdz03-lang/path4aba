@@ -408,6 +408,31 @@ export function findMissingFunctionABCs(note: string, behaviors: any[], skillNam
   return { segmentable: true, missing, results }
 }
 
+// DRIFT RECORD signal — admin-only, record-only. Which canonical functions are NAMED in `text` but are NOT in
+// the set preselect ASSIGNED for this note. Reuses FUNCTION_PATTERNS (the note's own function vocabulary) and
+// functionToCanonical — NO new patterns. The caller bounds `text` to the ABC section (note.slice(0,
+// abcSectionBoundary)) so skill-section prose ("initiated appropriate attention-seeking interactions") is
+// excluded — that boundary is what removes the prosocial false positives.
+//
+// THREE LIMITATIONS — read before reading the number:
+//  - BLIND SPOT: 17% of notes assign all four functions, so the check can never fire on them. The union grows
+//    with behavior count (avg 1.4 at 1-2 behaviors, 3.7 at 7+), so this UNDERCOUNTS systematically on large
+//    notes — exactly where drift is worst. A future drop in this metric may mean notes got bigger, not that
+//    drift improved.
+//  - PRECISION: ~85%, from 13 hits hand-classified on 2026-09-05. Indicative, not a measurement.
+//  - NOTE-LEVEL, not per-behavior: it does not attribute drift to a specific behavior.
+export function functionsOutsideAssignedSet(text: string, assigned: string[]): string[] {
+  const set = new Set(assigned)
+  const out = new Set<string>()
+  for (const { re, label } of FUNCTION_PATTERNS) {
+    if (re.test(text)) {
+      const c = functionToCanonical(label)
+      if (c && !set.has(c)) out.add(c)
+    }
+  }
+  return [...out]
+}
+
 // Assessment stores functions as lowercase canonical ('attention'|'escape'|'tangible'|'automatic').
 // FUNCTION_PATTERNS / the ABA-Matrix form use display labels. Map between them.
 export function functionToCanonical(label: string | null | undefined): string | null {

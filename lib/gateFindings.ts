@@ -31,6 +31,9 @@ export type GateName =
   // Admin-only diagnostic: the per-behavior segmentation was unsound, so coverage + validity were suppressed
   // (record-only — never a repair, never surfaced to the RBT). See generateSmartNote + lib/segmentSoundness.ts.
   | 'segmentation_unsound'
+  // Admin-only drift baseline: an ABC named a function outside the set preselect assigned for the note
+  // (record-only — never a repair, never surfaced). See functionsOutsideAssignedSet in lib/functionPatterns.ts.
+  | 'function_outside_assigned_set'
 
 export type GateSeverity = 'critical' | 'warning' | 'info'
 
