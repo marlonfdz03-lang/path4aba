@@ -11,6 +11,7 @@ import {
 import { filterBlockedNarrative } from '@/lib/blockedNarrativeTerms';
 import { buildBlockedFilterContext } from '@/lib/noteFilterContext';
 import { redactText } from '@/lib/pdfGeometry';
+import { functionTagFindings, buildFunctionReadPrompt } from '@/lib/functionTag';
 import { findInterventionViolations } from '@/lib/interventionPolicy';
 import { findTeachingMethodViolations, approvedTeachingMethods } from '@/lib/teachingMethods';
 import {
@@ -387,8 +388,8 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     await recordGateFindings({
       findings: [{
         gate: 'phi_no_client_name', severity: 'warning',
-        detail: 'Client has no name on file — topographies were not scrubbed for the client\'s own name before the prompt. Add the client name so the PHI scrub can run.',
-        context: { caregiverScrubApplied: knownNames.length > 0 },
+        detail: 'Client has no name on file — topographies were not scrubbed for the client\'s own name before the prompt. Add the client name so the PHI scrub can run. NOTE: post-gate function-drift measurement is also SKIPPED for this client (no knownNames to scrub the read prompt), so this client is absent from the function_tag metric until a name is added.',
+        context: { caregiverScrubApplied: knownNames.length > 0, functionDriftMeasurementSkipped: true },
       }],
       clientId: input.clientId, userId: rbtId, source: 'generate',
     });
@@ -1073,6 +1074,43 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
       hasGenerationContext: generationContext !== null,
     },
   });
+
+  // ── FUNCTION-DRIFT MEASUREMENT (admin-only, MEASUREMENT ONLY) ────────────────────────────────────────
+  // A post-gate, non-streamed model call reads the FINAL note and reports which function each behavior's ABC
+  // STATES; functionTagFindings compares it to the ASSIGNED function and records BOTH per behavior. It NEVER
+  // repairs, flags to the RBT, or blocks — the source is the same model reading its own prose (a signal, not
+  // proof); see lib/functionTag.ts for why and for the "do not make this a gate without corroboration" note.
+  //
+  // OFF THE RBT'S PATH: this is FIRE-AND-FORGET — we do NOT await it. `note` is fully built and is returned
+  // below immediately, so the RBT waits ZERO extra ms; the read + record resolve on the event loop after the
+  // response. On a process recycle the detached call may be dropped — a lost MEASUREMENT is acceptable; the
+  // NOTE is already returned and is unaffected (this block never touches `note`, so the returned note is
+  // byte-identical whether the read succeeds or fails). Fully fail-soft: any error → function_tag_unavailable.
+  //
+  // PHI: the note prose sent to the read is name-scrubbed with the SAME knownNames the generation prompt used.
+  // Skipped when knownNames is empty (a name-less client, already recorded above) so no unverifiable prose is
+  // sent to an extra call.
+  if (generationContext && knownNames.length) {
+    const finalNote = note;
+    const gc = generationContext;
+    const rc = gate.regenCount;
+    void (async () => {
+      let raw: string | null = null;
+      try {
+        const scrubbed = redactText(finalNote, knownNames, { namesOnly: true });
+        const { system, user } = buildFunctionReadPrompt(scrubbed, Object.keys(gc.perBehavior));
+        const resp = await openai.chat.completions.create({
+          model: 'gpt-4o', temperature: 0, max_tokens: 600,
+          messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+        });
+        raw = resp.choices[0]?.message?.content ?? null;
+      } catch { raw = null; }
+      try {
+        const findings = functionTagFindings(gc.perBehavior, raw);
+        if (findings.length) await recordGateFindings({ findings, clientId: input.clientId, userId: rbtId, source: 'generate', regenCount: rc });
+      } catch { /* recordGateFindings is already fail-soft; this guard stops a detached rejection from surfacing */ }
+    })().catch(() => {});
+  }
 
   return {
     note,

@@ -37,6 +37,12 @@ export type GateName =
   // Admin-only PHI data gap: the client has no name on file, so the prompt-path name scrub could not run for the
   // client's own name. The note still generates; this records the gap so the name gets added. See generateSmartNote.
   | 'phi_no_client_name'
+  // Admin-only function-drift MONITORING: a post-gate, non-streamed model read of the FINAL note reports the
+  // function each behavior's ABC states; recorded against the assigned function. MEASUREMENT ONLY — never a
+  // repair, flag, or gate (same model reading its own prose = a signal, not proof). See lib/functionTag.ts.
+  | 'function_tag'
+  // The post-gate read failed / returned unparseable JSON — drift not measured for this note. Record-only.
+  | 'function_tag_unavailable'
 
 export type GateSeverity = 'critical' | 'warning' | 'info'
 
