@@ -1,18 +1,4 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/trial-reminder",
-      "schedule": "0 10 * * *"
-    },
-    {
-      "path": "/api/cron/fieldwork-reminders",
-      "schedule": "0 10 * * *"
-    },
-    {
-      "path": "/api/cron/reconcile-subscriptions",
-      "schedule": "0 4 * * *"
-    }
-  ],
   "functions": {
     "app/api/webhooks/stripe/route.ts": {
       "maxDuration": 30
