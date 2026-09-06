@@ -5,9 +5,12 @@ import { sendTrialEndingEmail } from '@/lib/email'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
-  // Vercel cron injects Authorization: Bearer <CRON_SECRET>
+  // The scheduled GitHub Actions workflow injects Authorization: Bearer <CRON_SECRET>.
+  // FAIL CLOSED: if CRON_SECRET is unset, reject everything — never fall through to comparing against
+  // `Bearer undefined`, a value an unauthenticated caller could send verbatim.
+  const secret = process.env.CRON_SECRET
   const authHeader = request.headers.get('Authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!secret || authHeader !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

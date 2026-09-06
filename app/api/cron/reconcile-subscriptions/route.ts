@@ -23,9 +23,12 @@ const RETRIEVE_TIMEOUT_MS = 10000
 type Job = { id: string; user_id: string; sub_id: string; kind: 'primary' | 'bcba'; row: any }
 
 export async function GET(request: Request) {
-  // Vercel cron injects Authorization: Bearer <CRON_SECRET>
+  // The scheduled GitHub Actions workflow injects Authorization: Bearer <CRON_SECRET>.
+  // FAIL CLOSED: if CRON_SECRET is unset, reject everything — never fall through to comparing against
+  // `Bearer undefined`, a value an unauthenticated caller could send verbatim.
+  const secret = process.env.CRON_SECRET
   const authHeader = request.headers.get('Authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!secret || authHeader !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   // dryRun preview computes + returns the corrections WITHOUT writing and WITHOUT drift/orphan alerts. Parsing

@@ -22,9 +22,12 @@ function wrap(content: string): string {
 }
 
 export async function GET(req: Request) {
-  // Verify cron secret
+  // The scheduled GitHub Actions workflow injects Authorization: Bearer <CRON_SECRET>.
+  // FAIL CLOSED: if CRON_SECRET is unset, reject everything — never fall through to comparing against
+  // `Bearer undefined`, a value an unauthenticated caller could send verbatim.
+  const secret = process.env.CRON_SECRET
   const authHeader = req.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!secret || authHeader !== `Bearer ${secret}`) {
     return new Response('Unauthorized', { status: 401 })
   }
 
