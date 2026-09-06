@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { canAccessClient } from '@/lib/clientFiles'
 
 function randomCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -22,6 +23,16 @@ export async function POST(request: Request) {
   const { clientId } = body
   if (!clientId) {
     return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
+  }
+
+  // OWNERSHIP GATE: only a user who OWNS this client (assigned RBT via rbt_id, connected/creating BCBA via
+  // bcba_clients, or admin) may mint an invite code for it. Without this, any authenticated user could mint a
+  // code for ANOTHER tenant's client id and redeem it via connect-with-code into a permanent bcba_clients
+  // connection — full cross-tenant access. canAccessClient fails closed (no session / not owner / throw → 403).
+  // The legitimate invite flows still pass: an RBT owns via rbt_id; a BCBA who created the client owns via the
+  // bcba_clients row written at creation (bcba/clients/create).
+  if (!(await canAccessClient(session, clientId))) {
+    return NextResponse.json({ error: 'Forbidden — you are not assigned to this client.' }, { status: 403 })
   }
 
   const code = randomCode()
