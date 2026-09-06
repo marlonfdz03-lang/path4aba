@@ -398,25 +398,15 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     if (Array.isArray(b.topographies)) b.topographies = b.topographies.map((t) => redactText(t, knownNames, { namesOnly: true }));
   }
 
-  // Steps 2, 3, 5: Run all DB queries in parallel
-  const [topographies, replacementSkills, previousNotes] = await Promise.all([
-    prisma.topographies.findMany({
-      where: {
-        behavior_id: {
-          in: [
-            '00000000-0000-0000-0000-000000000001',
-            '00000000-0000-0000-0000-000000000002',
-            '00000000-0000-0000-0000-000000000003',
-            '00000000-0000-0000-0000-000000000004',
-            '00000000-0000-0000-0000-000000000005',
-          ],
-        },
-      },
-      select: { description: true, vocabulary_variants: true, behavior_id: true },
-    }),
-    prisma.replacement_skills.findMany({
-      select: { skill_description: true, vocabulary_variants: true, function_targeted: true },
-    }),
+  // CROSS-CLIENT FIREWALL: the shared KB tables (topographies / replacement_skills) were UNSCOPED — keyed by
+  // shared behavior ids with NO client_id — so reading them fed OTHER clients' operational definitions into this
+  // client's prompt (a firewall breach: nothing clinical may appear in a note unless it traces to THIS client's
+  // approved assessment). The fields they populated (behaviorsObserved[].topographyVariants,
+  // replacementSkillsAddressed[].vocabularyVariants, and the whole knowledgeBase block) were also referenced by
+  // NO prompt instruction. Removed. The client's OWN approved topographies still reach the prompt via
+  // behaviorsObserved below. The KB table + saveKnowledgeBase are LEFT INTACT for the admin clinical library;
+  // this removes only the PROMPT read.
+  const [previousNotes] = await Promise.all([
     prisma.session_notes.findMany({
       where: activeNotesWhere(input.clientId),  // active only — a replaced note must not shape the next note's similarity/context
       select: { note_text: true },
@@ -444,37 +434,19 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
       reinforcers: resolvedProfile.reinforcers || {},
       activePrograms: resolvedProfile.activePrograms || {},
     },
-    behaviorsObserved: input.behaviorsObserved.map(b => ({
-      ...b,
-      topographyVariants: topographies
-        .filter(t => t.description?.toLowerCase().includes(b.name.toLowerCase()))
-        .map(t => t.vocabulary_variants)
-        .flat()
-        .slice(0, 4)
-    })),
-    replacementSkillsAddressed: input.replacementSkillsAddressed.map(s => ({
-      ...s,
-      vocabularyVariants: replacementSkills
-        .find(r => r.skill_description?.toLowerCase().includes(s.name.toLowerCase().split(' ')[0]))
-        ?.vocabulary_variants || []
-    })),
+    // The client's OWN approved behaviors (with their scrubbed topography/topographies) — no cross-client KB
+    // variants are attached (removed: the vocabulary_variants came from the shared, unscoped KB).
+    behaviorsObserved: input.behaviorsObserved,
+    // The client's OWN replacement skills — no cross-client KB vocabularyVariants attached (same reason).
+    replacementSkillsAddressed: input.replacementSkillsAddressed,
     activitiesUsed: input.activitiesUsed,
     reinforcersUsed: input.reinforcersUsed,
     // Server-side guard: drop any "Next scheduled appointment:" clause whose date is not strictly
     // after the session date, so a past/equal next-session date never reaches the note regardless
     // of which form (or future caller) built clinicalEvents.
     clinicalEvents: stripInvalidNextSession(input.clinicalEvents || '', input.sessionInfo.date),
-    knowledgeBase: {
-      topographyVariants: topographies.map(t => ({
-        description: t.description,
-        variants: t.vocabulary_variants
-      })),
-      replacementSkillVariants: replacementSkills.map(r => ({
-        skill: r.skill_description,
-        variants: r.vocabulary_variants,
-        function: r.function_targeted
-      }))
-    }
+    // knowledgeBase removed: it dumped the shared, unscoped KB (other clients' descriptions) into every prompt
+    // and no instruction ever referenced it. See the CROSS-CLIENT FIREWALL note above.
   };
 
   // Step 6: Generate the note using the master prompt + contextual clinical factors

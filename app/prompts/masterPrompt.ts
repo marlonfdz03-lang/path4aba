@@ -762,7 +762,7 @@ WHAT YOU WILL RECEIVE AS INPUT
 You will receive a structured JSON object containing:
 - sessionInfo: date, time range, location, caregiver present, RBT name
 - clientProfile: diagnosis, setting, approved interventions, prohibited interventions, reinforcers
-- behaviorsObserved: list of behaviors with frequency, topography variants, function, antecedent context
+- behaviorsObserved: list of behaviors with frequency, topography, function, antecedent context
 - replacementSkillsAddressed: list of programs worked on with prompt level and client response
 - activitiesUsed: preferred and non-preferred activities used during session
 - reinforcersUsed: specific reinforcers delivered during session
