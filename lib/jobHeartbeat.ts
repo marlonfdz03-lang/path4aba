@@ -14,6 +14,11 @@
 //      that went unnoticed for months — is caught by something OUTSIDE our infrastructure. The monitor
 //      alerts when an expected ping fails to ARRIVE; that is why the watcher cannot die our death.
 //
+// The ping fires UNCONDITIONALLY, not only when the upsert succeeds — deliberately. Collapsing the two
+// would let a DB blip silence the scheduler-liveness alarm, which is the alarm we most need. Instead, if
+// the upsert fails we raise a distinct admin_alert (system.job_heartbeat_write_failed) so the state "the
+// job ran but left no record" is visible without gating the ping. See the catch block below.
+//
 // expected_interval is written on first INSERT and LEFT ALONE on CONFLICT (see the migration), so an
 // operator can retune a job's tolerance with a single UPDATE and the next success will not clobber it.
 //
@@ -50,8 +55,27 @@ export async function recordJobHeartbeat(
         updated_at      = EXCLUDED.updated_at
     `
   } catch (e) {
-    // Fail-soft, but leave a log line: a lost heartbeat is a lost staleness signal.
+    // The upsert failed: the job RAN but left NO durable record. This is the previously-invisible state —
+    // the ping below still fires on success, so the external monitor goes GREEN while the staleness table
+    // we actually query stays EMPTY, and nothing notices the gap. The console.error stays (kept below), but
+    // it reaches nobody on its own: Azure stdout is not read day to day. So we ALSO route this to the
+    // surfaced admin feed, the one channel a human reviews.
     console.error(`[job-heartbeat] db upsert failed for ${jobName} (job unaffected):`, (e as Error)?.message)
+    // CONTAINMENT: emitAdminAlert is fail-soft by contract (its whole body is a try/catch that returns on
+    // every path — it cannot throw). We STILL wrap the call and its dynamic import here, so that nothing —
+    // not even a module-load error — can escape recordJobHeartbeat and reach the job. A heartbeat/alert
+    // failure must never turn a completed job into a failed HTTP response.
+    try {
+      const { emitAdminAlert } = await import('@/lib/adminAlerts')
+      await emitAdminAlert({
+        source: 'system',
+        type: 'system.job_heartbeat_write_failed',
+        severity: 'warning',
+        payload: { job: jobName, error: (e as Error)?.message ?? String(e) },
+      })
+    } catch (alertErr) {
+      console.error(`[job-heartbeat] admin alert emit failed for ${jobName} (job unaffected):`, (alertErr as Error)?.message)
+    }
   }
 
   // 2) External dead-man's-switch ping — the watcher that lives OUTSIDE our infra.

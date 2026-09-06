@@ -138,6 +138,13 @@ export type AlertType =
   // of a misconfigured key/mode/account, not mass churn (a test-mode key makes every live sub look missing).
   // Payload: { checked, missing, reason }. Severity 'critical'.
   | 'billing.reconcile_aborted'
+  // A scheduled job COMPLETED successfully but its job_heartbeats upsert FAILED — it ran but left no durable
+  // record. Previously invisible: the external dead-man's switch still goes green (the job pings on success
+  // regardless of the DB write), while the staleness table we actually query stays empty — so nothing would
+  // notice the record is missing. The console.error alone reaches no one (Azure logs are not read day to day),
+  // so this routes that state to the surfaced admin feed. Payload: { job, error }. Severity 'warning'. See
+  // lib/jobHeartbeat.ts.
+  | 'system.job_heartbeat_write_failed'
 
 export interface AdminAlertInput {
   source: AlertSource
