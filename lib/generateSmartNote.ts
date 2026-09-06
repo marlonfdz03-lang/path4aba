@@ -10,6 +10,7 @@ import {
 } from '@/lib/clinicalFilters';
 import { filterBlockedNarrative } from '@/lib/blockedNarrativeTerms';
 import { buildBlockedFilterContext } from '@/lib/noteFilterContext';
+import { redactText } from '@/lib/pdfGeometry';
 import { findInterventionViolations } from '@/lib/interventionPolicy';
 import { findTeachingMethodViolations, approvedTeachingMethods } from '@/lib/teachingMethods';
 import {
@@ -347,6 +348,54 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
         isValidSkillForLocation(s, input.sessionInfo.location)
       );
     skillsDropped = beforeSkills - resolvedProfile.activePrograms.replacementSkills.length;
+  }
+
+  // ── PHI FIREWALL — PROMPT PATH ──────────────────────────────────────────────────────────────────────
+  // Some assessments store operational definitions that BEGIN with the client's name ("Any instance when
+  // <name> climbs furniture…"). Those topographies flow verbatim into BOTH the user JSON
+  // (sessionContext.behaviorsObserved, built just below) AND the system block (buildFixedAssignmentsBlock,
+  // via preselect further down) — the two places names were found reaching the model. input.behaviorsObserved
+  // is the single array both read from, so scrubbing it HERE, before either consumer runs, is the one chokepoint
+  // that covers both. Uses the EXISTING redactText in names-only mode (pronoun/caregiver substitutions are not
+  // PHI under our rule and would damage the clinical definition).
+  //
+  // RESIDUAL RISK (read before trusting this):
+  //   • redactText has NO common-word guard. Today ZERO roster names collide with ordinary English words, but
+  //     that is a property of the current 14 names, not of the scrubber. A future client named "Grace", "May",
+  //     or "Hope" will have those words stripped out of clinical definitions silently.
+  //   • This covers the PROMPT path ONLY. It does NOT clean the 35 stored topographies, nor the 139 stored
+  //     notes that already contain names. Those are a separate backfill.
+  //
+  // A FAILED profile read fails closed (blocks); a client legitimately WITHOUT a name still generates and the
+  // gap is recorded — see the nameStatus branch below.
+  //
+  // knownNames = clinical_profile.name + caregivers, from buildBlockedFilterContext (the same shared builder the
+  // output filter uses below — one DB read, one source of names). The two no-name cases are NOT the same and are
+  // handled differently (a name-less client is legitimate; a failed read is not):
+  //   • nameStatus 'error' (the profile read/parse THREW) → FAIL CLOSED. We cannot verify a topography is
+  //     name-free, so we refuse rather than send a prompt that might carry PHI. This blocks the note — correct,
+  //     because a read failure is an outage condition, not a client state.
+  //   • nameStatus 'absent' (read OK, client genuinely has no name on file) → GENERATE. Record the gap to
+  //     gate_findings so it is visible, and proceed: the scrub is a no-op for a name that does not exist (any
+  //     caregivers still get scrubbed). Blocking here would trade a PHI leak for an outage on a valid client.
+  const filterContext = await buildBlockedFilterContext(input.clientId);
+  const knownNames = filterContext.personalNames;
+  if (filterContext.nameStatus === 'error') {
+    throw new Error(`PHI_SCRUB_READ_FAILED: could not read client identifiers for ${input.clientId}; refusing to assemble a prompt that cannot be verified name-free.`);
+  }
+  if (filterContext.nameStatus === 'absent') {
+    await recordGateFindings({
+      findings: [{
+        gate: 'phi_no_client_name', severity: 'warning',
+        detail: 'Client has no name on file — topographies were not scrubbed for the client\'s own name before the prompt. Add the client name so the PHI scrub can run.',
+        context: { caregiverScrubApplied: knownNames.length > 0 },
+      }],
+      clientId: input.clientId, userId: rbtId, source: 'generate',
+    });
+  }
+  for (const b of input.behaviorsObserved) {
+    if (b.topography) b.topography = redactText(b.topography, knownNames, { namesOnly: true });
+    if (Array.isArray(b.topographies)) b.topographies = b.topographies.map((t) => redactText(t, knownNames, { namesOnly: true }));
   }
 
   // Steps 2, 3, 5: Run all DB queries in parallel
@@ -707,8 +756,9 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   // intervention gate (Step 7c) can re-clean a regenerated note.
   // learnedBlockedTerms (shared table, per-client fallback) + authorizedNames (plan content protected from
   // substitution) come from the SHARED builder so the generation path and the save-time backstop
-  // (extension/save-note, session-notes) can never block a different set or protect different names.
-  const { learnedBlockedTerms, authorizedNames } = await buildBlockedFilterContext(input.clientId);
+  // (extension/save-note, session-notes) can never block a different set or protect different names. Reuse the
+  // context already fetched for the PHI prompt scrub above — one DB read, one authoritative source of names.
+  const { learnedBlockedTerms, authorizedNames } = filterContext;
   let blockedFlagged: string[] = [];
   const applyBlockedFilter = (text: string): string => {
     const result = filterBlockedNarrative(text, learnedBlockedTerms, authorizedNames);

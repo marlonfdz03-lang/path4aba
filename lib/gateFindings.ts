@@ -34,6 +34,9 @@ export type GateName =
   // Admin-only drift baseline: an ABC named a function outside the set preselect assigned for the note
   // (record-only — never a repair, never surfaced). See functionsOutsideAssignedSet in lib/functionPatterns.ts.
   | 'function_outside_assigned_set'
+  // Admin-only PHI data gap: the client has no name on file, so the prompt-path name scrub could not run for the
+  // client's own name. The note still generates; this records the gap so the name gets added. See generateSmartNote.
+  | 'phi_no_client_name'
 
 export type GateSeverity = 'critical' | 'warning' | 'info'
 

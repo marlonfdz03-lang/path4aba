@@ -60,7 +60,12 @@ const CAREGIVER = /\b(mom|dad|mother|father|grandmother|grandfather|grandma|gran
 const PRONOUN = /\b(he|him|his|she|her|hers)\b/gi
 function escapeRe(s: string): string { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
 
-export function redactText(text: string, names: string[] = []): string {
+// `opts.namesOnly` redacts ONLY the supplied identifiers, leaving pronouns and caregiver-relation words in
+// place. It exists for the note-generation prompt path (lib/generateSmartNote), where those substitutions are
+// NOT PHI under our firewall rule and where mapping them turns a clinical operational definition into damaged
+// text ("related to her hygiene" → "related to the client hygiene"). The DEFAULT (opts omitted) is unchanged —
+// full de-identification, so the existing caller (fastMasTranscribe, assessment STRIP-BEFORE-LLM) is unaffected.
+export function redactText(text: string, names: string[] = [], opts: { namesOnly?: boolean } = {}): string {
   let t = text
   // Strip each known identifier token (full names AND their individual name-words, e.g. "Alexandra").
   // Tokenize full names + their word-parts, but skip short particles (de, la, del…) and <3-char words so a
@@ -74,6 +79,7 @@ export function redactText(text: string, names: string[] = []): string {
   for (const tok of tokens.sort((a, b) => b.length - a.length)) {
     t = t.replace(new RegExp(`\\b${escapeRe(tok)}\\b(?:'s)?`, 'gi'), (m) => (m.endsWith("'s") ? "the client's" : 'the client'))
   }
+  if (opts.namesOnly) return t
   return t.replace(CAREGIVER, 'caregiver').replace(PRONOUN, 'the client')
 }
 export function redactFragments(frags: Fragment[], names: string[] = []): Fragment[] {
