@@ -8,7 +8,7 @@
 // structure only. (Behaviors are NOT touched in Commit 1 — that is the guarded refresh in Commit 2.)
 
 import type { Row } from './pdfGeometry.ts'
-import { readConfirmedDiagnosis, readMasteredSkills, readBehaviorFunctions, readTargetList } from './pdfGeometry.ts'
+import { readConfirmedDiagnosis, readMasteredSkills, readBehaviorFunctions, readTargetList, redactText } from './pdfGeometry.ts'
 import { assessConfidence } from './fastMasConfidence.ts'
 import { normalizeDiagnosis } from './diagnosis.ts'
 import { subtractMasteredFromActive } from './skillReconcile.ts'
@@ -192,6 +192,26 @@ export function assembleRefreshProfile(
           reviewFlags.push({ field: `target:${t}`, source: 'target-undefined', reason: `${t} is listed as a target behavior but has no operational definition or baseline data` })
       }
     }
+  }
+  // PHI FIREWALL (write side) — THE GUARANTEE for the refresh/reprocess paths. Every branch above sets
+  // profile.maladaptiveBehaviors from the assessment (geometry/LLM re-derivation) or preserves the prior set;
+  // any of those can carry the client's name in a topography. Scrub deterministically HERE, once, over the final
+  // array, with the same redactText (names-only). knownNames = the EXISTING client's name + caregivers (refresh
+  // always runs on an existing client, so the name is available) plus any caregivers the LLM read. FAILS OPEN if
+  // no name is available (existingProfile absent — only in tests / a create-fallback with no prior profile): the
+  // prompt-path firewall in generateSmartNote remains the hard guarantee at the model boundary. The soft LLM
+  // redaction in extractAssessment.ts is left in place; this deterministic scrub is the real guarantee.
+  const scrubNames = [
+    String(existingProfile?.name || ''),
+    ...(((existingProfile?.caregivers || []) as any[]).map((c: any) => (typeof c === 'string' ? c : c?.name || ''))),
+    ...(((llmProfile?.caregivers || []) as any[]).map((c: any) => (typeof c === 'string' ? c : c?.name || ''))),
+  ].filter(Boolean)
+  if (Array.isArray(profile.maladaptiveBehaviors)) {
+    profile.maladaptiveBehaviors = profile.maladaptiveBehaviors.map((b: any) =>
+      b && Array.isArray(b.topographies)
+        ? { ...b, topographies: b.topographies.map((t: any) => (typeof t === 'string' ? redactText(t, scrubNames, { namesOnly: true }) : t)) }
+        : b,
+    )
   }
   return { profile, reviewFlags, confidence: conf }
 }

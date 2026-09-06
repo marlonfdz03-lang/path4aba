@@ -3,6 +3,8 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { canAccessClient } from "@/lib/clientFiles";
 import { filterBlockedNarrative } from "@/lib/blockedNarrativeTerms";
+import { redactText } from "@/lib/pdfGeometry";
+import { recordGateFindings } from "@/lib/gateFindings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -71,7 +73,26 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const editedById = (session.user as any).id;
   const editedAt = new Date().toISOString();
   const from = Array.isArray(target.topographies) ? target.topographies : (target.topography ? [target.topography] : []);
-  const topographies = [topographyText];
+  // PHI FIREWALL (write side) — an RBT typing the client's real name into an operational definition is the same
+  // ingress as the note editor. Scrub it out DETERMINISTICALLY with the same redactText (names-only: pronouns and
+  // clinical vocabulary survive). knownNames = the client's name + caregivers from the profile just loaded (an
+  // existing client always has a name, so the scrub runs). FAILS OPEN if somehow name-less: the prompt-path
+  // firewall in generateSmartNote is the hard guarantee at the model boundary. Stored value = the scrubbed text.
+  const scrubNames = [
+    String(profile.name || ""),
+    ...(((profile.caregivers || []) as any[]).map((c: any) => (typeof c === "string" ? c : c?.name || ""))),
+  ].filter(Boolean);
+  const scrubbedTopography = redactText(topographyText, scrubNames, { namesOnly: true });
+  // NON-SILENT fail-open: if the client has no name on file, the scrub could not run for the client's own name.
+  // The edit still writes (fail-open is right at the write; the prompt firewall is the hard guarantee), but the
+  // gap is recorded admin-only so an unscrubbed write is visible, not invisible.
+  if (!String(profile.name || "").trim()) {
+    await recordGateFindings({
+      findings: [{ gate: "phi_no_client_name", severity: "warning", detail: "behavior-topography write: no client name on file — the human-entered operational definition was not scrubbed for the client's own name.", context: { path: "behavior-topography" } }],
+      clientId: id, userId: editedById, source: "profile-write",
+    });
+  }
+  const topographies = [scrubbedTopography];
 
   // Mutate ONLY the target behavior; preserve every other behavior + key.
   const updatedBehaviors = behaviors.map((b) =>

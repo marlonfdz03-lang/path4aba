@@ -59,7 +59,7 @@ export async function POST(req: Request) {
         saveKnowledgeBase(extracted).catch(err =>
           console.error('[bcba/clients/create] kb save error:', err)
         )
-        const mapped = mapToLegacyFormat(extracted)
+        const mapped = mapToLegacyFormat(extracted, [clientName])
         clinicalProfile = { ...(mapped as any), name: clientName }
         internalCode = extracted.clientCode || internalCode
       }

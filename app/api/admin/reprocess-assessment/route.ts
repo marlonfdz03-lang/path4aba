@@ -8,6 +8,7 @@ import { carryOverHumanEdits } from "@/lib/carryOverHumanEdits";
 import { activeBehaviorsForSelection } from "@/lib/activePrograms";
 import { resolveInterventionSection, mergeInterventions, MAX_INTERVENTION_SPAN } from "@/lib/interventionSection";
 import { emitAdminAlert } from "@/lib/adminAlerts";
+import { recordGateFindings } from "@/lib/gateFindings";
 import { assembleRefreshProfile } from "@/lib/assembleRefreshProfile";
 import { parsePositioned, clusterRows } from "@/lib/pdfGeometry";
 import { diagnosisColumn } from "@/lib/diagnosis";
@@ -84,7 +85,15 @@ export async function POST(req: Request) {
       }
     } catch { /* fail-soft: keep the whole-packet interventions */ }
 
-    const llmProfile = buildAssessmentProfile(extracted);
+    const llmProfile = buildAssessmentProfile(extracted, [existingProfile?.name]);
+    // NON-SILENT fail-open (same as extract-assessment): if the existing client has no name on file, topographies
+    // are re-derived scrubbed only for caregivers, not the client name. Record it admin-only; the write proceeds.
+    if (!String(existingProfile?.name || "").trim()) {
+      await recordGateFindings({
+        findings: [{ gate: "phi_no_client_name", severity: "warning", detail: "reprocess-assessment write: no client name on file — topographies were not scrubbed for the client's own name.", context: { path: "reprocess-assessment" } }],
+        clientId, userId: (session.user as any).id, source: "profile-write",
+      });
+    }
     const geomRows = clusterRows(await parsePositioned(buffer));
     const { profile: assessmentProfile, reviewFlags, confidence } = assembleRefreshProfile(llmProfile, geomRows, existingProfile);
 

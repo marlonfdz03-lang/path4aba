@@ -9,6 +9,7 @@ import { validateAssessmentProfile, buildRefreshedProfile } from "@/lib/assessme
 import { activeBehaviorsForSelection } from "@/lib/activePrograms";
 import { resolveInterventionSection, mergeInterventions, MAX_INTERVENTION_SPAN } from "@/lib/interventionSection";
 import { emitAdminAlert } from "@/lib/adminAlerts";
+import { recordGateFindings } from "@/lib/gateFindings";
 import { diagnosisColumn } from "@/lib/diagnosis";
 import { parsePositioned, clusterRows } from "@/lib/pdfGeometry";
 import { assembleRefreshProfile } from "@/lib/assembleRefreshProfile";
@@ -119,7 +120,17 @@ export async function POST(req: NextRequest) {
       } catch { /* fail-soft: keep the whole-packet interventions */ }
 
       // Assessment-sourced keys, built wholesale (no cleanText/hasBlockedTerm — see buildAssessmentProfile).
-      const llmProfile = buildAssessmentProfile(extracted);
+      const llmProfile = buildAssessmentProfile(extracted, [existingProfile?.name]);
+      // NON-SILENT fail-open: name source for this refresh write = the EXISTING profile's name (the extractor
+      // returns no name). If it is absent, topographies are written scrubbed only for caregivers, not the client
+      // name. Record it admin-only so the unscrubbed write is visible; the write still proceeds (prompt firewall
+      // is the hard guarantee at the model).
+      if (!String(existingProfile?.name || "").trim()) {
+        await recordGateFindings({
+          findings: [{ gate: "phi_no_client_name", severity: "warning", detail: "extract-assessment refresh write: no client name on file — topographies were not scrubbed for the client's own name.", context: { path: "extract-assessment" } }],
+          clientId, userId, source: "profile-write",
+        });
+      }
       // FAST/MAS overlay (one PDF parse feeds text→LLM and positioned rows→geometry):
       //  • Commit 1 — diagnosis + mastered-skills GEOMETRY-AUTHORITATIVE (F82/differentials excluded at
       //    source); LLM kept as a FLAGGED fallback where no structure is located.

@@ -4,7 +4,7 @@
 // Do not add route-specific logic here.
 
 import PDFParser from 'pdf2json'
-import { normalizeLigatures } from '@/lib/pdfGeometry'
+import { normalizeLigatures, redactText } from '@/lib/pdfGeometry'
 import { capSplitSignature, shouldUsePdfjs, SIGNATURE_THRESHOLD } from '@/lib/extractorSignature'
 import { extractTextWithPdfjs } from '@/lib/pdfjsExtract'
 import { emitAdminAlert } from '@/lib/adminAlerts'
@@ -147,14 +147,31 @@ export function cleanText(text: string): string {
 
 // ── Normalized profile builder ────────────────────────────────────────────────
 
-export function mapToLegacyFormat(extracted: ExtractedAssessment) {
+// PHI FIREWALL (write side): operational definitions frequently begin with the client's name ("Any instance
+// when <name> climbs…"). This is a topography WRITE site, so scrub the name out DETERMINISTICALLY here with the
+// same redactText (names-only: pronouns and clinical vocabulary are preserved). `knownNames` = the client's name
+// + caregivers; the client name is NOT in `extracted`, so it is passed by the caller (the create FORM supplies
+// it even on a first upload where no clinical_profile row exists yet). Caregivers come from `extracted`.
+// FAILS OPEN at this write: if `knownNames` is empty (e.g. the no-clientId preview return, which is never
+// persisted and never sent to a model), the client name may remain in the returned object — the PROMPT-path
+// firewall in generateSmartNote is the hard guarantee at the model boundary and stays fail-CLOSED there.
+// The soft LLM redaction instruction in extractAssessment.ts is intentionally LEFT in place; it is harmless,
+// but THIS deterministic scrub — not the prompt — is now the real guarantee. Do not remove it.
+// NAME SOURCES: create passes the FORM name; the extractor returns NO name field (only clientCode = initials-DOB),
+// so there is nothing document-derived to union. RESIDUAL GAP: if the form name is shorter than the document's
+// (form "Damian" vs a topography reading "Damian R. Gorrin"), redactText strips only the tokens it is given, so a
+// surname/middle absent from the form name survives — and the extractor's own stripIdentifiers regex misses a
+// lone capitalized token too. Unbridgeable by tokenization; it needs a fuller stored legal name or NER.
+export function mapToLegacyFormat(extracted: ExtractedAssessment, knownNames: string[] = []) {
+  const scrubNames = [...knownNames, ...((extracted.caregivers || []) as any[]).map((c: any) => (typeof c === 'string' ? c : c?.name || ''))].filter(Boolean)
+  const scrubTopo = (t: string) => redactText(t, scrubNames, { namesOnly: true })
   return {
     maladaptiveBehaviors: extracted.maladaptiveBehaviors
       .filter(b => !hasBlockedTerm(b.name))
       .map(b => ({
         name: cleanText(b.name),
         status: 'active',
-        topographies: [cleanText(b.topography)].filter(t => t && !hasBlockedTerm(t)),
+        topographies: [cleanText(b.topography)].filter(t => t && !hasBlockedTerm(t)).map(scrubTopo),
         functions: Array.isArray(b.function) ? b.function : b.function ? [b.function] : [],
       })),
     interventions: extracted.approvedInterventions
@@ -207,7 +224,14 @@ const behaviorStatus = (item: { status?: string }): string => {
   return ['mastered', 'maintenance', 'active', 'discontinued'].includes(s) ? s : 'unknown'
 }
 
-export function buildAssessmentProfile(extracted: ExtractedAssessment) {
+// PHI FIREWALL (write side), same rule as mapToLegacyFormat: scrub the client's name out of every topography
+// deterministically. `knownNames` (client name + caregivers) is passed by the caller from the EXISTING profile
+// (refresh/reprocess always run on an existing client, so the name is available). The final refresh output is
+// re-scrubbed in assembleRefreshProfile (which reconciles/re-derives topographies) — this is defense-in-depth
+// so buildAssessmentProfile's output is name-free even if ever written directly. Fails open like the sibling.
+export function buildAssessmentProfile(extracted: ExtractedAssessment, knownNames: string[] = []) {
+  const scrubNames = [...knownNames, ...((extracted.caregivers || []) as any[]).map((c: any) => (typeof c === 'string' ? c : c?.name || ''))].filter(Boolean)
+  const scrubTopo = (t: string) => redactText(t, scrubNames, { namesOnly: true })
   const behaviors: any[] = (extracted.maladaptiveBehaviors || []).filter(b => b && b.name)
   // Fold masteredBehaviors[] into the SAME list: create a name-only mastered entry for any mastered name
   // that has no behavior row. Never override an EXISTING entry's per-item status (status stays the source).
@@ -223,7 +247,7 @@ export function buildAssessmentProfile(extracted: ExtractedAssessment) {
     maladaptiveBehaviors: active.map(b => ({
       name: b.name.trim(),
       status: behaviorStatus(b), // carry the REAL status (active/maintenance/unknown/discontinued) — never hardcoded
-      topographies: b.topography && String(b.topography).trim() ? [String(b.topography).trim()] : [],
+      topographies: b.topography && String(b.topography).trim() ? [scrubTopo(String(b.topography).trim())] : [],
       functions: Array.isArray(b.function) ? b.function : (b.function ? [b.function] : []),
     })),
     // Derived from the ONE source (status), so it can never disagree with the items' status.

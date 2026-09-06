@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     // Extract + normalize — identical to extract-assessment/route.ts
     const extracted = await extractAssessment(text.slice(0, 90000))
     saveKnowledgeBase(extracted).catch(err => console.error('[rbt/clients/create] kb save error:', err))
-    const clinicalProfile = mapToLegacyFormat(extracted)
+    const clinicalProfile = mapToLegacyFormat(extracted, [clientName])
 
     // Generate internal code
     const internalCode = extracted.clientCode || `RBT-${Date.now()}`

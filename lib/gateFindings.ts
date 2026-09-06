@@ -152,10 +152,11 @@ export async function recordGateFindings(params: {
   clientId?: string | null
   userId?: string | null
   noteId?: string | null
-  // Only 'generate' remains — the refiner is gone. The COLUMN stays permissive text so a future
-  // second generation path can record without a migration; the type is narrow so today's callers
-  // cannot invent a source value that nothing reads.
-  source: 'generate'
+  // 'generate' = the note-generation path. 'profile-write' = a clinical_profile WRITE (assessment extract /
+  // refresh / reprocess / human topography edit) recording that it could not scrub the client's own name from a
+  // topography because no name was available. The COLUMN stays permissive text so a new source needs no
+  // migration; the type stays narrow so callers cannot invent a value nothing reads.
+  source: 'generate' | 'profile-write'
   regenCount?: number
 }): Promise<void> {
   if (!params.findings.length) return
