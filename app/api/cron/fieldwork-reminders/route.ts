@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Resend } from 'resend'
+import { recordJobHeartbeat } from '@/lib/jobHeartbeat'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,7 +52,11 @@ export async function GET(req: Request) {
     select: { user_id: true },
   })
 
-  if (!subs.length) return NextResponse.json({ ok: true, processed: 0 })
+  if (!subs.length) {
+    // No active BCBA-student subs is a SUCCESS, not a no-op — heartbeat so an empty roster stays green.
+    await recordJobHeartbeat('fieldwork-reminders', '1 day', 'processed 0 (no active subs)')
+    return NextResponse.json({ ok: true, processed: 0 })
+  }
 
   let processed = 0
 
@@ -167,5 +172,6 @@ export async function GET(req: Request) {
     }
   }
 
+  await recordJobHeartbeat('fieldwork-reminders', '1 day', `processed ${processed}`)
   return NextResponse.json({ ok: true, processed })
 }

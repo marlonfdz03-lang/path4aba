@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendTrialEndingEmail } from '@/lib/email'
+import { recordJobHeartbeat } from '@/lib/jobHeartbeat'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,6 +34,8 @@ export async function GET(request: Request) {
   }
 
   if (!subs.length) {
+    // A run with nobody in the window is a SUCCESS, not a no-op — heartbeat so a quiet day stays green.
+    await recordJobHeartbeat('trial-reminder', '1 day', 'sent 0 (no trials in window)')
     return NextResponse.json({ sent: 0 })
   }
 
@@ -61,5 +64,6 @@ export async function GET(request: Request) {
   }
 
   console.log(`[trial-reminder] sent ${sent}/${subs.length} reminders`)
+  await recordJobHeartbeat('trial-reminder', '1 day', `sent ${sent}/${subs.length}`)
   return NextResponse.json({ sent, errors: errors.length > 0 ? errors : undefined })
 }

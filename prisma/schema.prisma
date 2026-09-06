@@ -620,3 +620,17 @@ model admin_alerts {
   @@index([severity, read_at])
   @@index([type, created_at(sort: Desc)])
 }
+
+// job_heartbeats — the scheduler's "I succeeded" record, one row per job. Written ONLY on a job's
+// successful completion (see lib/jobHeartbeat.ts) so a job that throws leaves last_success_at untouched
+// and the staleness query / external dead-man's switch fire. expected_interval lives in the row so the
+// staleness check is pure SQL (last_success_at < now() - expected_interval) and an operator can retune
+// a job's tolerance without a deploy; the per-success upsert leaves it alone on conflict. See migration
+// 20260906000000_job_heartbeats. All access is via $executeRaw, so this model is documentation + parity.
+model job_heartbeats {
+  job_name          String   @id
+  last_success_at   DateTime @db.Timestamptz(6)
+  expected_interval Unsupported("interval")
+  last_run_note     String?
+  updated_at        DateTime @default(now()) @db.Timestamptz(6)
+}

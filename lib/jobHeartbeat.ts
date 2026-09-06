@@ -1,0 +1,75 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// JOB HEARTBEAT — the scheduler's "I succeeded" signal. One writer, called ONLY from a job's
+// successful-completion path: never at the start, never in a catch. A job that starts and throws must
+// leave NO heartbeat, so both the in-DB staleness query and the external dead-man's switch fire.
+//
+// A run that legitimately did nothing (zero users in a reminder window) is still a SUCCESS and MUST
+// still call this — otherwise a quiet day looks identical to a dead job and the switch false-alarms.
+// So callers place it on every success exit, including the empty-population early returns.
+//
+// TWO effects, both FAIL-SOFT (never throw, never block the job, never cause a retry): a heartbeat is
+// bookkeeping, and bookkeeping must not turn a completed job into a failed HTTP response.
+//   1. UPSERT job_heartbeats.last_success_at = now() — our own DB record, queryable from psql / admin.
+//   2. PING the external monitor (Healthchecks.io) so an outage of OUR scheduler — the failure mode
+//      that went unnoticed for months — is caught by something OUTSIDE our infrastructure. The monitor
+//      alerts when an expected ping fails to ARRIVE; that is why the watcher cannot die our death.
+//
+// expected_interval is written on first INSERT and LEFT ALONE on CONFLICT (see the migration), so an
+// operator can retune a job's tolerance with a single UPDATE and the next success will not clobber it.
+//
+// PHI: `note` is a short success summary (counts) only — never note text, never client-identifying data.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// jobName -> the Azure app setting holding that job's Healthchecks ping URL. The ping runs server-side
+// in the route, so the URL is an app env var, not a GitHub secret. An unset var degrades to DB-only
+// heartbeat (logged once), never an error.
+const PING_ENV: Record<string, string> = {
+  'reconcile-subscriptions': 'HEARTBEAT_URL_RECONCILE',
+  'trial-reminder': 'HEARTBEAT_URL_TRIAL_REMINDER',
+  'fieldwork-reminders': 'HEARTBEAT_URL_FIELDWORK',
+  'monthly-progress-reports': 'HEARTBEAT_URL_MONTHLY',
+}
+
+const PING_TIMEOUT_MS = 5000
+
+export async function recordJobHeartbeat(
+  jobName: string,
+  expectedInterval: string, // Postgres interval literal, e.g. '1 day' | '1 month' — the SLA for this job
+  note?: string,            // short success summary (counts), NEVER PHI
+): Promise<void> {
+  // 1) DB upsert — self-seeding. expected_interval is set on insert and NOT touched on conflict, so a
+  //    hand-tuned tolerance survives every subsequent success.
+  try {
+    const { prisma } = await import('@/lib/prisma')
+    await prisma.$executeRaw`
+      INSERT INTO job_heartbeats (job_name, last_success_at, expected_interval, last_run_note, updated_at)
+      VALUES (${jobName}, now(), ${expectedInterval}::interval, ${note ?? null}, now())
+      ON CONFLICT (job_name) DO UPDATE SET
+        last_success_at = EXCLUDED.last_success_at,
+        last_run_note   = EXCLUDED.last_run_note,
+        updated_at      = EXCLUDED.updated_at
+    `
+  } catch (e) {
+    // Fail-soft, but leave a log line: a lost heartbeat is a lost staleness signal.
+    console.error(`[job-heartbeat] db upsert failed for ${jobName} (job unaffected):`, (e as Error)?.message)
+  }
+
+  // 2) External dead-man's-switch ping — the watcher that lives OUTSIDE our infra.
+  const envName = PING_ENV[jobName]
+  const url = envName ? process.env[envName] : undefined
+  if (!url) {
+    console.warn(`[job-heartbeat] no ping URL for ${jobName} (${envName ?? 'unmapped'} unset) — DB heartbeat only`)
+    return
+  }
+  try {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), PING_TIMEOUT_MS)
+    try {
+      await fetch(url, { method: 'POST', signal: ctrl.signal })
+    } finally {
+      clearTimeout(timer)
+    }
+  } catch (e) {
+    console.error(`[job-heartbeat] monitor ping failed for ${jobName} (job unaffected):`, (e as Error)?.message)
+  }
+}

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateProgressReport } from '@/lib/generateProgressReport'
 import { sendProgressReportReadyEmail } from '@/lib/email'
+import { recordJobHeartbeat } from '@/lib/jobHeartbeat'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -100,5 +101,8 @@ export async function GET(req: Request) {
     }
   }
 
+  // Monthly cadence. Per-client errors are counted (errors) but do not fail the run — the job completed,
+  // so it heartbeats. A thrown/500 before here (none today) would skip this and let the switch fire.
+  await recordJobHeartbeat('monthly-progress-reports', '1 month', `generated ${generated}, errors ${errors}, period ${periodLabel}`)
   return NextResponse.json({ generated, errors, period: periodLabel })
 }

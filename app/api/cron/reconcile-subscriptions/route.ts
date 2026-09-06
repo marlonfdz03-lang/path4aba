@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getStripe, PRICES, BCBA_STUDENTS_PRICES } from '@/lib/stripe'
 import { buildPriceToPlan, withTimeout } from '@/lib/planMapping'
 import { emitAdminAlert } from '@/lib/adminAlerts'
+import { recordJobHeartbeat } from '@/lib/jobHeartbeat'
 import { reconcilePrimary, reconcileBcba, shouldAbort, parseDryRun } from '@/lib/reconcileSubscriptions'
 
 export const dynamic = 'force-dynamic'
@@ -145,6 +146,13 @@ export async function GET(request: Request) {
     source: 'system', type: 'billing.reconcile_ran', severity: 'info',
     payload: { checked: jobs.length, corrected, missing: orphans.length, unreachable, dry_run: dryRun },
   })
+
+  // Scheduler heartbeat + external dead-man's-switch ping. Only on the REAL scheduled run, never a dryRun
+  // preview (a manual preview must not reset the switch as if the write path had run). The circuit-breaker
+  // abort above returns earlier and deliberately does NOT ping — an abort is an incident, already alerted.
+  if (!dryRun) {
+    await recordJobHeartbeat('reconcile-subscriptions', '1 day', `checked ${jobs.length}, corrected ${corrected}, missing ${orphans.length}`)
+  }
 
   return NextResponse.json({ checked: jobs.length, corrected, missing: orphans.length, unreachable, dryRun, report })
 }
