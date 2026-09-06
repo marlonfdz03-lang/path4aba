@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import type * as Prisma from '@/lib/generated/prisma/internal/prismaNamespace'
 import OpenAI from 'openai'
 import { build97153XPPrompt } from '@/app/prompts/supervision97153xpPrompt'
+import { redactText } from '@/lib/pdfGeometry'
 
 
 const openai = new OpenAI({
@@ -70,21 +71,36 @@ export async function POST(request: Request) {
 
   if (!connection) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+  // PHI FIREWALL (97153xp prompt): scrub the CLIENT's own name from every client-originated free-text field
+  // BEFORE it reaches the pure prompt builder (kept pure — the scrub lives here where the client name is
+  // available). Client name only (supervision does not name the caregiver by design); names-only; fail-open if
+  // no name on file. Same redactText as the note firewall.
+  const xpRow = await prisma.clients.findUnique({ where: { id: clientId }, select: { clinical_profile: true } })
+  const clientName = String((xpRow?.clinical_profile as any)?.name || '')
+  const scrub = (s: string) => (clientName ? redactText(s, [clientName], { namesOnly: true }) : s)
+  const scrubArr = (a?: string[]) => (a || []).map(scrub)
+  const scrubbedIntegrity = integrityReview ? {
+    prompting: scrub(integrityReview.prompting || ''),
+    reinforcement: scrub(integrityReview.reinforcement || ''),
+    behaviorReduction: scrub(integrityReview.behaviorReduction || ''),
+    dataCollection: scrub(integrityReview.dataCollection || ''),
+  } : integrityReview
+
   const { systemPrompt, userPrompt } = build97153XPPrompt({
     sessionDate,
     location: location || '',
     rbtSessionContext: rbtSessionContext ?? null,
-    rbtBehaviorsReported: rbtBehaviorsReported || [],
-    rbtInterventionsUsed: rbtInterventionsUsed || [],
-    rbtProgramsWorked: rbtProgramsWorked || [],
-    bcbaObservedPrograms: bcbaObservedPrograms || [],
-    bcbaObservedBehaviors: bcbaObservedBehaviors || [],
-    supervisionFocus: supervisionFocus || [],
-    integrityReview,
-    bcbaActionsPerformed: bcbaActionsPerformed || [],
-    feedbackToRbt: feedbackToRbt || [],
-    clientResponseDuringOverlap: clientResponseDuringOverlap || [],
-    recommendations: recommendations || [],
+    rbtBehaviorsReported: scrubArr(rbtBehaviorsReported),
+    rbtInterventionsUsed: scrubArr(rbtInterventionsUsed),
+    rbtProgramsWorked: scrubArr(rbtProgramsWorked),
+    bcbaObservedPrograms: scrubArr(bcbaObservedPrograms),
+    bcbaObservedBehaviors: scrubArr(bcbaObservedBehaviors),
+    supervisionFocus: scrubArr(supervisionFocus),
+    integrityReview: scrubbedIntegrity,
+    bcbaActionsPerformed: scrubArr(bcbaActionsPerformed),
+    feedbackToRbt: scrubArr(feedbackToRbt),
+    clientResponseDuringOverlap: scrubArr(clientResponseDuringOverlap),
+    recommendations: scrubArr(recommendations),
     narrativeStyle: narrativeStyle || 'Insurance-Friendly',
   })
 

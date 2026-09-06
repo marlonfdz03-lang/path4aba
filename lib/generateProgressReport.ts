@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
 import { prisma } from '@/lib/prisma'
 import { activeNotesWhere } from './sessionNotes.ts'
+import { redactText } from '@/lib/pdfGeometry'
 
 const openai = new OpenAI({
   apiKey: process.env.AZURE_OPENAI_API_KEY || 'azure-openai',
@@ -143,6 +144,11 @@ export async function generateProgressReport(
     select: { clinical_profile: true },
   })
   const clinicalProfile = (client?.clinical_profile as any) || {}
+  // PHI FIREWALL (progress-report prompt): scrub the CLIENT's own name from client-originated free-text that
+  // reaches the prompt — missed-hour reasons and profile-sourced barriers. Client name only, names-only,
+  // fail-open if absent. The trend tables / program name-lists are structured. No caregiver named in this report.
+  const clientName = String(clinicalProfile?.name || '')
+  const scrub = (s: string) => (clientName ? redactText(String(s || ''), [clientName], { namesOnly: true }) : s)
 
   const maladaptiveData = await prisma.maladaptive_data.findMany({
     where: { client_id: clientId, week_start: { gte: periodStart, lte: periodEnd } },
@@ -170,7 +176,7 @@ export async function generateProgressReport(
   })
 
   const totalMissedHours = missedHoursData.reduce((sum, m) => sum + (m.hours || 0), 0)
-  const missedReasons = [...new Set(missedHoursData.map(m => m.reason).filter(Boolean))] as string[]
+  const missedReasons = ([...new Set(missedHoursData.map(m => m.reason).filter(Boolean))] as string[]).map(scrub)
 
   const authorizedHoursPerWeek = (clinicalProfile as any)?.authorizedHoursPerWeek || 0
   const weeksInPeriod = Math.round(
@@ -320,7 +326,7 @@ export async function generateProgressReport(
   if (totalMissedHours > 0) clinicalBarriers.push('Missed treatment hours during reporting period')
   if (attendanceRate !== null && attendanceRate < 80) clinicalBarriers.push('Reduced treatment exposure may have impacted progress')
   if (missedReasons.length > 0) missedReasons.forEach(r => clinicalBarriers.push(r))
-  const profileBarriers = (clinicalProfile as any)?.commonBarriers || []
+  const profileBarriers = ((clinicalProfile as any)?.commonBarriers || []).map(scrub)
   profileBarriers.forEach((b: string) => { if (!clinicalBarriers.includes(b)) clinicalBarriers.push(b) })
 
   const systemPrompt = `You are a licensed BCBA generating a monthly ABA therapy progress report. This report serves as clinical documentation of treatment response and medical necessity. Write a narrative that clearly answers: WHY does this client still need ABA services?

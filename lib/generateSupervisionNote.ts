@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
 import { MASTER_SUPERVISION_PROMPT } from '@/app/prompts/supervisionPrompt'
 import { prisma } from '@/lib/prisma'
+import { redactText } from '@/lib/pdfGeometry'
 
 const openai = new OpenAI({
   apiKey: process.env.AZURE_OPENAI_API_KEY || 'azure-openai',
@@ -124,6 +125,14 @@ export async function generateSupervisionNote(input: SupervisionNoteInput, onChu
   const contactTypeSection = buildContactTypeSection(input.sessionInfo.contactType)
   const systemPrompt = MASTER_SUPERVISION_PROMPT + contactTypeSection
 
+  // PHI FIREWALL (supervision prompt): scrub the CLIENT's own name from every client-originated free-text field
+  // before it enters the prompt. Supervision notes do NOT name the caregiver by design, so client name only is
+  // the correct target; names-only preserves clinical vocabulary. Fail-open if no name on file. Same redactText.
+  const supRow = await prisma.clients.findUnique({ where: { id: input.clientId }, select: { clinical_profile: true } })
+  const clientName = String((supRow?.clinical_profile as any)?.name || '')
+  const scrub = (s: string) => (clientName ? redactText(s, [clientName], { namesOnly: true }) : s)
+  const scrubArr = (a?: string[]) => (a || []).map(scrub)
+
   // Build user prompt based on contact type
   let userPrompt: string
 
@@ -135,16 +144,16 @@ Contact Type: Group Supervision
 Number of Participants: ${input.groupSupervision.participantCount}
 
 --- TOPICS REVIEWED ---
-${input.groupSupervision.topicsReviewed.join(', ')}
+${scrubArr(input.groupSupervision.topicsReviewed).join(', ')}
 
 --- GENERAL CLINICAL TRENDS DISCUSSED ---
-${input.groupSupervision.clinicalTrends}
+${scrub(input.groupSupervision.clinicalTrends)}
 
 --- GENERAL RECOMMENDATIONS ---
-${input.groupSupervision.recommendations || 'Not specified'}
+${input.groupSupervision.recommendations ? scrub(input.groupSupervision.recommendations) : 'Not specified'}
 
 --- FOLLOW-UP PLAN ---
-${input.groupSupervision.followUpPlan.join(', ') || 'Continue monitoring'}
+${scrubArr(input.groupSupervision.followUpPlan).join(', ') || 'Continue monitoring'}
 
 Write the note now. 300–500 words, one paragraph, third person.
 Do NOT reference any specific client. Document general clinical topics only.
@@ -156,34 +165,34 @@ Location: ${input.sessionInfo.location}
 Contact Type: ${input.sessionInfo.contactType}
 
 --- REASON FOR BCBA CLINICAL INVOLVEMENT ---
-${input.reason97155?.join(', ') || 'Not specified'}
+${scrubArr(input.reason97155).join(', ') || 'Not specified'}
 
 --- DATA REVIEWED ---
-${input.dataReviewed?.join(', ') || 'Not specified'}
+${scrubArr(input.dataReviewed).join(', ') || 'Not specified'}
 
 --- PROGRAMS / BEHAVIORS REVIEWED ---
-Maladaptive behaviors: ${input.programsReviewed?.maladaptive?.join(', ') || 'None selected'}
-Replacement programs: ${input.programsReviewed?.replacement?.join(', ') || 'None selected'}
-Skill acquisition: ${input.programsReviewed?.skillAcquisition?.join(', ') || 'None selected'}
-${input.programsReviewed?.manual ? `Additional: ${input.programsReviewed.manual}` : ''}
+Maladaptive behaviors: ${scrubArr(input.programsReviewed?.maladaptive).join(', ') || 'None selected'}
+Replacement programs: ${scrubArr(input.programsReviewed?.replacement).join(', ') || 'None selected'}
+Skill acquisition: ${scrubArr(input.programsReviewed?.skillAcquisition).join(', ') || 'None selected'}
+${input.programsReviewed?.manual ? `Additional: ${scrub(input.programsReviewed.manual)}` : ''}
 
 --- CLINICAL FINDINGS ---
-${input.clinicalFindings?.join(', ') || 'Not specified'}
+${scrubArr(input.clinicalFindings).join(', ') || 'Not specified'}
 
 --- PROTOCOL MODIFICATION MADE ---
-${input.protocolModifications?.join(', ') || 'Not specified'}
+${scrubArr(input.protocolModifications).join(', ') || 'Not specified'}
 
 --- CLINICAL RATIONALE ---
-${input.clinicalRationale || 'Not provided'}
+${input.clinicalRationale ? scrub(input.clinicalRationale) : 'Not provided'}
 
 --- EXPECTED OUTCOME ---
-${input.expectedOutcome || 'Not provided'}
+${input.expectedOutcome ? scrub(input.expectedOutcome) : 'Not provided'}
 
 --- CLIENT RESPONSE ---
-${input.clientResponse?.join(', ') || 'Not observed'}
+${scrubArr(input.clientResponse).join(', ') || 'Not observed'}
 
 --- FOLLOW-UP PLAN ---
-${input.followUpPlan?.join(', ') || 'Continue monitoring'}
+${scrubArr(input.followUpPlan).join(', ') || 'Continue monitoring'}
 
 Write the note now. 300–500 words, one paragraph, third person, objective ABA language. Answer all required questions.`
   }

@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
 import { MASTER_PARENT_TRAINING_PROMPT } from '@/app/prompts/parentTrainingPrompt'
 import { prisma } from '@/lib/prisma'
+import { redactText } from '@/lib/pdfGeometry'
 
 const openai = new OpenAI({
   apiKey: process.env.AZURE_OPENAI_API_KEY || 'azure-openai',
@@ -84,9 +85,17 @@ export async function generateParentTrainingNote(input: ParentTrainingNoteInput,
   })
   const previousTexts = previousNotes.map(r => r.note_text as string).filter(Boolean)
 
+  // PHI FIREWALL (parent-training prompt): EVERY client-originated free-text field can carry the CLIENT's name.
+  // Scrub the client's own name (names-only) from all of them before they enter the prompt. Scrub the CLIENT name
+  // ONLY — this note type LEGITIMATELY names the caregiver (see the Caregiver: line), so caregiver names survive
+  // (only the client name is passed to redactText). Fail-open if no name on file. Same redactText; no 2nd scrubber.
+  const cnameRow = await prisma.clients.findUnique({ where: { id: input.clientId }, select: { clinical_profile: true } })
+  const clientName = String((cnameRow?.clinical_profile as any)?.name || '')
+  const scrub = (s: string) => (clientName ? redactText(s, [clientName], { namesOnly: true }) : s)
+  const scrubArr = (a?: string[]) => (a || []).map(scrub)
   const allPTGoals = [
-    ...(input.parentTrainingGoals || []),
-    input.manualPTGoal ? `${input.manualPTGoal} (manually added)` : '',
+    ...scrubArr(input.parentTrainingGoals),
+    input.manualPTGoal ? `${scrub(input.manualPTGoal)} (manually added)` : '',
   ].filter(Boolean).join(', ') || 'Not specified'
 
   const userPrompt = `Generate a 97156 Parent Training note for:
@@ -99,32 +108,32 @@ Client Present: ${input.clientPresent || 'not specified'}
 ${allPTGoals}
 
 --- TRAINING TOPICS ---
-${input.trainingTopics?.join(', ') || 'Not specified'}
+${scrubArr(input.trainingTopics).join(', ') || 'Not specified'}
 
 --- PROCEDURES TRAINED ---
-${input.proceduresTrained?.join(', ') || 'Not specified'}
+${scrubArr(input.proceduresTrained).join(', ') || 'Not specified'}
 
 --- BST COMPONENTS USED ---
-${input.bstComponents?.join(', ') || 'Not specified'}
+${scrubArr(input.bstComponents).join(', ') || 'Not specified'}
 
 --- CAREGIVER PERFORMANCE ---
-${input.caregiverPerformance || 'Not specified'}
-${input.didNotPracticeReason ? `Reason did not practice: ${input.didNotPracticeReason}` : ''}
+${input.caregiverPerformance ? scrub(input.caregiverPerformance) : 'Not specified'}
+${input.didNotPracticeReason ? `Reason did not practice: ${scrub(input.didNotPracticeReason)}` : ''}
 
 --- FEEDBACK PROVIDED TO CAREGIVER ---
-${input.feedbackProvided?.join(', ') || 'Not specified'}
+${scrubArr(input.feedbackProvided).join(', ') || 'Not specified'}
 
 --- CLIENT RESPONSE ---
-${input.clientPresent === 'no' ? 'Client was not present during this session.' : input.clientResponse?.join(', ') || 'Not observed'}
+${input.clientPresent === 'no' ? 'Client was not present during this session.' : scrubArr(input.clientResponse).join(', ') || 'Not observed'}
 
 --- BARRIERS IDENTIFIED ---
-${input.barriersIdentified?.join(', ') || 'None identified'}
+${scrubArr(input.barriersIdentified).join(', ') || 'None identified'}
 
 --- HOME IMPLEMENTATION PLAN ---
-${input.homeImplementationPlan || 'Not provided'}
+${input.homeImplementationPlan ? scrub(input.homeImplementationPlan) : 'Not provided'}
 
 --- FOLLOW-UP PLAN ---
-${input.followUpPlan?.join(', ') || 'Continue monitoring'}
+${scrubArr(input.followUpPlan).join(', ') || 'Continue monitoring'}
 
 Write the note now. 300–500 words, one paragraph, third person, objective ABA language. Caregiver must appear as active practitioner. Answer all 9 required questions.`
 
