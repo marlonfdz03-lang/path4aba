@@ -1,0 +1,75 @@
+# Scheduled jobs — replaces the dead vercel.json crons (they stopped firing at the Vercel->Azure move
+# and nothing noticed for ~3 months). Each step curls a cron endpoint with the shared CRON_SECRET.
+#
+# THIS SCHEDULER CAN ALSO DIE SILENTLY: GitHub disables scheduled workflows after ~60 days of no repo
+# activity, and does not guarantee on-time (or any) execution of `schedule` triggers. That is why each
+# job also pings an external Healthchecks.io dead-man's switch on success (see lib/jobHeartbeat.ts) —
+# the switch alerts when an expected ping fails to ARRIVE, so this workflow going dark is itself caught.
+#
+# curl -fsS: -f makes a 4xx/5xx (e.g. a 401 from a missing/rotated CRON_SECRET) fail the step, so a
+# broken endpoint shows up as a red workflow run in the Actions tab.
+#
+# All cron times are UTC. The two daily schedules mirror the old vercel.json. monthly-progress-reports is
+# manual-only for now (see the note in the `on:` block) — it is offered as a workflow_dispatch choice but
+# has no schedule until a real run's output has been reviewed.
+#
+# REQUIRED: repo secret CRON_SECRET (Settings -> Secrets and variables -> Actions), matching the value
+# in the Azure app settings. The four HEARTBEAT_URL_* live in Azure app settings, not here — the ping
+# fires server-side inside each route.
+
+name: Scheduled jobs
+
+on:
+  schedule:
+    - cron: '0 4 * * *'    # reconcile-subscriptions — daily 04:00 UTC
+    - cron: '0 10 * * *'   # trial-reminder + fieldwork-reminders — daily 10:00 UTC
+    # monthly-progress-reports is deliberately NOT scheduled. Its first real run generates and emails
+    # ~14 LLM-authored clinical reports that no human has reviewed. So it runs BY HAND once
+    # (workflow_dispatch -> job: monthly-progress-reports), we read what it produced, and only then does
+    # it earn a schedule. If you are adding `- cron: '0 6 1 * *'` back here: confirm someone has read a
+    # real run's output first — that review is the whole reason this line is absent.
+  workflow_dispatch:
+    inputs:
+      job:
+        description: 'Which job to run manually'
+        required: true
+        default: reconcile-subscriptions
+        type: choice
+        options:
+          - reconcile-subscriptions
+          - trial-reminder
+          - fieldwork-reminders
+          - monthly-progress-reports   # WARNING: a manual run generates + emails reports for the prior month
+
+concurrency:
+  group: scheduled-jobs-${{ github.event.schedule || github.event.inputs.job || 'manual' }}
+  cancel-in-progress: false
+
+jobs:
+  cron:
+    runs-on: ubuntu-latest
+    steps:
+      - name: reconcile-subscriptions
+        if: github.event.schedule == '0 4 * * *' || github.event.inputs.job == 'reconcile-subscriptions'
+        run: |
+          curl -fsS -X GET "https://path4aba.app/api/cron/reconcile-subscriptions" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+      - name: trial-reminder
+        if: github.event.schedule == '0 10 * * *' || github.event.inputs.job == 'trial-reminder'
+        run: |
+          curl -fsS -X GET "https://path4aba.app/api/cron/trial-reminder" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+      - name: fieldwork-reminders
+        if: github.event.schedule == '0 10 * * *' || github.event.inputs.job == 'fieldwork-reminders'
+        run: |
+          curl -fsS -X GET "https://path4aba.app/api/cron/fieldwork-reminders" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+      - name: monthly-progress-reports
+        # Manual (workflow_dispatch) only — never on a schedule. See the note in the `on:` block above.
+        if: github.event.inputs.job == 'monthly-progress-reports'
+        run: |
+          curl -fsS -X GET "https://path4aba.app/api/cron/monthly-progress-reports" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
