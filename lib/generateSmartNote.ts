@@ -16,9 +16,8 @@ import { findInterventionViolations } from '@/lib/interventionPolicy';
 import { findTeachingMethodViolations, approvedTeachingMethods } from '@/lib/teachingMethods';
 import {
   findFunctionAntecedentContradictions,
-  segmentNoteByBehavior, deriveBehaviorFunction, functionToCanonical,
-  normalizeApprovedFunctions, functionDisplayLabel, effectiveAllowedFunctions,
-  findMissingFunctionABCs, abcSectionBoundary, functionsOutsideAssignedSet,
+  functionToCanonical, functionDisplayLabel, effectiveAllowedFunctions,
+  abcSectionBoundary, functionsOutsideAssignedSet,
 } from '@/lib/functionPatterns';
 import { stripInvalidNextSession } from '@/lib/nextSessionDate';
 import { findRedFlagFlags } from '@/lib/redFlagPhrases';
@@ -27,7 +26,6 @@ import {
   runCombinedComplianceGate, summarizeSurvivingViolations, interventionViolationNames, type ComplianceState,
 } from '@/lib/complianceGate';
 import { isWithholdResponseIntervention, allowsWithholdResponse, classifyBehaviorSafety } from '@/lib/behaviorSafety';
-import { segmentationIsUnsound } from '@/lib/segmentSoundness';
 import { buildInterventionDetail } from '@/lib/interventionDetail';
 import { preselect, buildFixedAssignmentsBlock, type PreselectResult } from '@/lib/preselect';
 import { readGenerationHistory } from '@/lib/rotationHistory';
@@ -753,19 +751,21 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   };
   note = applyBlockedFilter(note);
 
-  // Step 7c: COMBINED COMPLIANCE GATE (consolidated). Four independent compliance checks —
-  // approved-intervention, approved-function (validity), function-coverage (Bug 3), and teaching-method —
-  // each used to run as its own sequential gate that regenerated on its own violation, so a note defective
-  // in N ways cost N full LLM calls (the 3-4x regeneration RBTs saw). They are consolidated here: run ALL
-  // FOUR checks, COLLECT every violation, and if ANY fail, regenerate ONCE with a single combined
-  // instruction naming every defect, then re-run ALL FOUR on the regenerated note. This changes WHEN they
-  // regenerate (once, combined) — never WHAT each requires. Worst case drops from 5 LLM calls to 2; a clean
-  // note still costs 1, a single-defect note still 2. Every guarantee is preserved: an intervention
-  // survivor still THROWS (an unapproved/prohibited procedure must NEVER ship), and approved-function,
-  // coverage, and teaching-method survivors are still surfaced as coherence flags (never auto-rewritten).
-  // Re-checking the intervention gate AFTER the combined regen also closes a latent hole in the old
-  // sequential design, where a later gate's regen could reintroduce an out-of-plan intervention that the
-  // first-only intervention gate never re-checked — the combined design is strictly safer.
+  // Step 7c: COMBINED COMPLIANCE GATE (consolidated). Two WHOLE-NOTE compliance checks —
+  // approved-intervention and teaching-method — run here: COLLECT every violation, and if ANY fail,
+  // regenerate ONCE with a single combined instruction naming every defect, then re-run BOTH on the
+  // regenerated note. A clean note costs 1 LLM call, a defective note 2 — never more. Every guarantee is
+  // preserved: an intervention survivor still THROWS (an unapproved/prohibited procedure must NEVER ship),
+  // and teaching-method survivors are surfaced as coherence flags (never auto-rewritten). Re-checking the
+  // intervention gate AFTER the combined regen also closes a latent hole where a later gate's regen could
+  // reintroduce an out-of-plan intervention that a first-only intervention check never re-checked.
+  //
+  // REMOVED 2026-09-06: two further checks — approved-function (validity) and function-coverage (Bug 3) —
+  // used to drive this gate. Both read a per-behavior segmentation (segmentNoteByBehavior) that misattributes
+  // ABC boundaries, so they fired on CORRECT notes and drove a spurious 2nd/3rd regeneration. They are gone
+  // from the repair AND from the RBT-facing flags. Function drift is now MONITORED post-gate by function_tag
+  // (Step 7g below) and function_outside_assigned_set (Step 7h) — signals, not repairs. See
+  // lib/complianceGate.ts (buildComplianceRegenInstruction header) for the full probe evidence.
   //
   // The approved-intervention detail: an RBT may document ONLY interventions in the client's approved
   // assessment — an out-of-plan procedure records work outside scope, bills against an authorization that
@@ -778,49 +778,18 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   // skill being taught, but INVALID documented as a behavior-reduction intervention unless it is also
   // an approved reduction intervention.
   const skillPrograms: string[] = resolvedProfile.activePrograms?.replacementSkills || [];
-  // Skill names mark where an ABC body ends so skill-paragraph prose can never satisfy an ABC's function.
+  // Skill names still mark where an ABC body ends; retained because the post-gate drift record (Step 7h)
+  // uses abcSectionBoundary to bound its scan to the ABC section.
   const coverageSkillNames = [
     ...input.replacementSkillsAddressed.map((s) => s.name),
     ...(resolvedProfile.activePrograms?.replacementSkills || []),
   ].filter(Boolean);
-  // Approved-function (validity) check: the function written for each behavior must be a member of that
-  // behavior's assessment-approved set (allowedFunctions). Derives the written function per behavior; a
-  // behavior asserting a function the assessment did NOT approve for it (e.g. "Throwing Objects" written as
-  // Automatic when only Escape/Tangible/Attention were approved) is a violation. Distinct from the coverage
-  // check below: validity asks "is the stated function APPROVED?" and is blind to an ABSENT function; a note
-  // with only 1/5 ABCs naming a function passes validity but fails coverage. With no approved set captured
-  // for a behavior, it is not constrained (we enforce only what the assessment specifies).
-  // Takes the already-computed segments (detectCompliance computes them ONCE per note and passes them in) so we
-  // never re-segment the same note twice per detect.
-  const findFunctionViolations = (segments: string[]): { name: string; wrote: string; approved: string[] }[] => {
-    const gated = input.behaviorsObserved.filter((b) => Array.isArray(b.allowedFunctions) && b.allowedFunctions.length);
-    if (!gated.length) return [];
-    const out: { name: string; wrote: string; approved: string[] }[] = [];
-    input.behaviorsObserved.forEach((b, i) => {
-      const approved = b.allowedFunctions || [];
-      if (!approved.length) return;
-      const wrote = deriveBehaviorFunction(segments[i], b).resolved;
-      const canonical = functionToCanonical(wrote);
-      if (canonical && !normalizeApprovedFunctions(approved).has(canonical)) {
-        out.push({ name: b.name, wrote, approved });
-      }
-    });
-    return out;
-  };
 
-  // Detect all four compliance checks on one note. Passed to the combined gate, which runs it on the
-  // initial note and once more on the (single) regenerated note.
-  // SEGMENTATION SOUNDNESS. The coverage + validity checks both read per-behavior segments; when the split is
-  // unsound (measured: SOUND on ≤53% of notes at any behavior count, 0% at 7+) they report false defects that
-  // drive a spurious repair. When unsound we SUPPRESS both: coverage is marked `suppressed` with the reason
-  // (its raw reading retained, never fabricated) and validity is dropped, so neither contributes to the regen
-  // decision or the RBT-facing flags. The whole-note checks (intervention, teaching-method) are unaffected —
-  // they never segment. The suppression is recorded to gate_findings after the gate.
+  // Detect the two WHOLE-NOTE compliance checks on one note. Passed to the combined gate, which runs it on
+  // the initial note and once more on the (single) regenerated note. Neither check segments the note, so
+  // both are always trusted — the segmentation-dependent coverage + validity checks were removed 2026-09-06
+  // (see the Step 7c header) and detectCompliance no longer computes them.
   const detectCompliance = (text: string): ComplianceState => {
-    // Compute the per-behavior split and the coverage read ONCE, then reuse both for soundness + validity.
-    const segments = segmentNoteByBehavior(text, input.behaviorsObserved);
-    const coverage = findMissingFunctionABCs(text, input.behaviorsObserved, coverageSkillNames);
-    const soundness = segmentationIsUnsound(text, segments, coverage.segmentable);
     return {
       intervention: findInterventionViolations(text, approvedInterventions, skillPrograms, {
         // The RBT reported an environmental change in the form's Session Conditions. The prompt now
@@ -829,11 +798,6 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
         // with no reported change, the intervention is gated exactly as before.
         reportedEnvironmentalChange: !!input.environmentalChangeDescription?.trim(),
       }),
-      // Segmentation-DEPENDENT: dropped/suppressed when the split is unsound (an untrustworthy reading must
-      // not repair or flag). Coverage keeps its raw values but carries the suppressed reason.
-      functionViolations: soundness.unsound ? [] : findFunctionViolations(segments),
-      coverage: soundness.unsound ? { ...coverage, suppressed: soundness.reason } : coverage,
-      // Segmentation-INDEPENDENT: whole-note scans, always trusted.
       methodViolations: findTeachingMethodViolations(text, resolvedProfile.approvedInterventions),
       approvedInterventions,
       approvedMethodSet,
@@ -841,25 +805,21 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   };
 
   // ONE combined regeneration: collect every violation → one instruction naming all of them → regenerate
-  // ONCE → re-check all four. regenCount is 0 (clean note) or 1 (any defect) — never the old 3-4. The
+  // ONCE → re-check both. regenCount is 0 (clean note) or 1 (any defect) — never the old 3-4. The
   // __REGEN__ marker signals the client to hold + calmly finalize the streamed note (presentation only).
   const gate = await runCombinedComplianceGate({
     initialNote: note,
     detect: detectCompliance,
-    // SECTION-AWARE repair: the existing combined compliance gate detects on the ASSEMBLED note (unchanged),
-    // but when it regenerates we rewrite ONLY the offending section(s) — never the whole note, which would
-    // reintroduce the truncation this design fixes. A clean section is left untouched (regenerating it risks
-    // an occasional drop). Every section regen re-checks finish_reason. Runs at most once (regenCount ∈ {0,1}).
-    // Attribute defects to a section by TYPE (detected on the ASSEMBLED note, where segmentation works — a
-    // section fragment alone is not segmentable). Behavior side: function coverage/validity + an out-of-plan
-    // reduction intervention in an ABC. Skill side: teaching-method + a skill documented as a reduction
-    // intervention. If nothing attributes (e.g. an unsegmentable note), regenerate the behavior section as the
-    // safe default so the gate always makes progress. A clean section is left untouched.
+    // SECTION-AWARE repair: the combined compliance gate detects on the ASSEMBLED note (unchanged), but when
+    // it regenerates we rewrite ONLY the offending section(s) — never the whole note, which would reintroduce
+    // the truncation this design fixes. A clean section is left untouched (regenerating it risks an occasional
+    // drop). Every section regen re-checks finish_reason. Runs at most once (regenCount ∈ {0,1}).
+    // Attribute defects to a section by TYPE. Behavior side: an out-of-plan reduction intervention in an ABC.
+    // Skill side: teaching-method + a skill documented as a reduction intervention. If nothing attributes,
+    // regenerate the behavior section as the safe default so the gate always makes progress.
     regenerate: async (instruction) => {
       const st = detectCompliance(assembleNote());
       const behaviorDefect = nB > 0 && (
-        (!st.coverage.suppressed && st.coverage.segmentable && st.coverage.missing.length > 0) ||
-        st.functionViolations.length > 0 ||
         interventionViolationNames(st.intervention).length > 0
       );
       const skillDefect = nS > 0 && (
@@ -882,7 +842,6 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   });
   note = gate.note;
 
-  const functionViolations = gate.state.functionViolations;
   const methodViolations = gate.state.methodViolations;
 
   // NO CLINICAL BLOCK. An intervention violation that survived the regeneration used to THROW here,
@@ -905,31 +864,16 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
   // Medicaid documentation red flags any auditor scans for. We SURFACE them like the coherence flags
   // for the RBT to rewrite — never auto-strip, since a vague phrase needs a human's observable detail.
   const redFlags = findRedFlagFlags(note);
-  // Any approved-function violation that survived the regeneration is surfaced (not auto-corrected).
-  for (const v of functionViolations) {
-    coherenceFlags.push(
-      `"${v.name}" was written as ${v.wrote}, which the assessment did not approve for it (approved: ${v.approved.map(functionDisplayLabel).join(', ')}) — verify before using.`,
-    );
-  }
   // Any teaching-method violation that survived the regeneration is surfaced (not auto-corrected).
   for (const m of methodViolations) {
     coherenceFlags.push(
       `Teaching method "${m}" was named but the assessment does not approve it for this client — verify before using.`,
     );
   }
-  // Function-coverage flags, recomputed on the FINAL note. SUPPRESSED when segmentation is unsound: a coverage
-  // reading off a broken split is a false flag, so it is recorded to gate_findings (below), never shown to the
-  // RBT. When segmentation IS sound, an ABC missing its documented function is surfaced as before.
-  const finalCoverage = findMissingFunctionABCs(note, input.behaviorsObserved, coverageSkillNames);
-  const finalSegs = segmentNoteByBehavior(note, input.behaviorsObserved);
-  const finalSoundness = segmentationIsUnsound(note, finalSegs, finalCoverage.segmentable);
-  if (!finalSoundness.unsound) {
-    for (const m of finalCoverage.missing) {
-      coherenceFlags.push(
-        `The ABC for "${m.name}" does not state a documented function — verify before using.`,
-      );
-    }
-  }
+  // NOTE: approved-function ("verify before using") and function-coverage ("does not state a documented
+  // function") RBT-facing flags were REMOVED here on 2026-09-06 along with their gate checks — both read the
+  // per-behavior segmentation that misattributes ABC boundaries, so they surfaced false warnings on correct
+  // notes. Function drift is now recorded admin-side only (function_tag, function_outside_assigned_set below).
   // C6 DATA INTEGRITY: a behavior with NO documented function in the assessment cannot have a function
   // written for it or gated — surface it for assessment review rather than guessing one or silently
   // omitting the behavior. The note still generates for every other behavior. This should not happen
@@ -975,31 +919,16 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     regenCount: gate.regenCount,
   });
 
-  // Step 7g: ADMIN-ONLY diagnostic (never surfaced to the RBT; never triggers a repair). Filed when the
-  // per-behavior split was untrustworthy, so the coverage + validity checks were suppressed above — this is why
-  // they did NOT flag/repair on this note. Fail-soft (recordGateFindings never throws).
-  if (finalSoundness.unsound) {
-    const segFinding: GateFinding = {
-      gate: 'segmentation_unsound',
-      severity: 'info',
-      detail: `Per-behavior segmentation unsound (${finalSoundness.reason}); function-coverage + function-validity checks suppressed for this note.`,
-      context: {
-        reason: finalSoundness.reason,
-        behaviorCount: finalSoundness.stats.behaviorCount,
-        degenerateSegments: finalSoundness.stats.degenerateSegments,
-        sparseSegments: finalSoundness.stats.sparseSegments,
-        unsegmentable: finalSoundness.stats.unsegmentable,
-        suppressed: ['function_coverage', 'function_validity'],
-      },
-    };
-    await recordGateFindings({ findings: [segFinding], clientId: input.clientId, userId: rbtId, source: 'generate', regenCount: gate.regenCount });
-  }
+  // Step 7g REMOVED 2026-09-06: the 'segmentation_unsound' diagnostic recorded WHY coverage + validity were
+  // suppressed on a note. Those checks no longer run at all (removed from the gate — segmenter misattributes
+  // ABC boundaries), so there is nothing to suppress and nothing to explain. Function drift is now recorded by
+  // Step 7h (function_outside_assigned_set) and the post-gate function_tag read — both segmentation-free.
 
   // Step 7h: DRIFT RECORD (admin-only, record-only — never a repair, never an RBT flag). The segmentation-FREE
   // replacement signal for the demoted validity check: an ABC named a function outside the set preselect
   // assigned for this note. Reuses FUNCTION_PATTERNS + functionToCanonical, bounded to the ABC section (before
-  // the skill prose) via the boundary findMissingFunctionABCs computes. See functionsOutsideAssignedSet for the
-  // three limitations (all-four blind spot, ~85% precision, note-level).
+  // the skill prose) via abcSectionBoundary. See functionsOutsideAssignedSet for the three limitations
+  // (all-four blind spot, ~85% precision, note-level).
   if (generationContext) {
     const assigned = new Set<string>();
     for (const a of Object.values(generationContext.perBehavior)) {
@@ -1061,7 +990,8 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
       regenCount: gate.regenCount,
       gateClean,
       // Present ONLY when something survived, so a clean note's payload stays small and "has the key"
-      // is itself the signal. See summarizeSurvivingViolations for why unsegmentable is not clean.
+      // is itself the signal. gateClean now reflects only the two whole-note checks — see
+      // summarizeSurvivingViolations for why the metric is not comparable across 2026-09-06.
       ...(gateClean ? {} : { survivingViolations }),
       similarityWarning,
       coherenceFlagCount: coherenceFlags.length,

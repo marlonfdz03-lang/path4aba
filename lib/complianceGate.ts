@@ -1,16 +1,19 @@
-// Combined compliance gate (consolidation). The four note-compliance checks — approved-intervention,
-// approved-function (validity), function-coverage (Bug 3), and teaching-method — used to run as four
-// sequential gates, each regenerating on its own violation, so a note defective in N ways cost N full LLM
-// calls (the 3-4x regeneration RBTs saw). This module consolidates the ORCHESTRATION: run all four checks,
-// build ONE combined instruction naming every defect, regenerate ONCE, re-run all four. It is extracted
-// pure (no prisma/openai deps) so the "exactly one combined regeneration" contract is unit-testable — the
-// caller passes plain detection functions and a regenerate callback; the counter proves the consolidation.
+// Combined compliance gate (consolidation). Two whole-note compliance checks — approved-intervention and
+// teaching-method — drive this gate: build ONE combined instruction naming every defect, regenerate ONCE,
+// re-run both. It is extracted pure (no prisma/openai deps) so the "exactly one combined regeneration"
+// contract is unit-testable — the caller passes plain detection functions and a regenerate callback; the
+// counter proves the consolidation.
+//
+// HISTORY: two further checks — approved-function (validity) and function-coverage (Bug 3) — used to drive
+// this gate too. Both were REMOVED on 2026-09-06 because they read a per-behavior segmentation that
+// misattributes ABC boundaries and therefore fired on CORRECT notes (full evidence in the header of
+// buildComplianceRegenInstruction). Do not reinstate them. Function drift is now MONITORED post-gate by
+// function_tag (a signal, not a repair).
 //
 // This module owns WHEN a regeneration happens (once, combined) — never WHAT each check requires (the
 // detectors and the caller own that) and never the persistence policy (the caller still THROWS on a
 // surviving intervention violation and FLAGS the other survivors).
 
-import { functionDisplayLabel } from './functionPatterns.ts';
 
 export interface InterventionViolations {
   prohibited: string[];
@@ -18,27 +21,14 @@ export interface InterventionViolations {
   skillAsReduction: string[];
 }
 
-export interface FunctionValidityViolation {
-  name: string;
-  wrote: string;
-  approved: string[];
-}
-
-export interface CoverageResult {
-  segmentable: boolean;
-  missing: { name: string }[];
-  // SUPPRESSED is a THIRD state, distinct from clean (no missing) and defective (missing present): the caller
-  // determined the per-behavior segmentation was unsound, so this reading is untrustworthy and must not drive a
-  // repair or a flag. The reason is carried for the admin record. When set, `segmentable`/`missing` still hold
-  // the raw (untrusted) reading — they are NOT fabricated — but every consumer ignores them.
-  suppressed?: 'unsegmentable' | 'degenerate' | 'sparse' | null;
-}
-
-// Everything the combined instruction needs, produced by running the four detectors on one note.
+// What the combined instruction needs. ONLY the WHOLE-NOTE checks — intervention and teaching-method — drive
+// the gate. The approved-function (validity) and function-coverage checks were REMOVED on 2026-09-06 (the
+// per-behavior segmenter misattributes ABC boundaries; see buildComplianceRegenInstruction's header). Their
+// state fields (functionViolations, coverage) and their result types (FunctionValidityViolation, CoverageResult)
+// are DELETED, not deprecated — a caller that still passes them must fail to compile rather than receive a
+// reassuring zero that the metric would read as "no defects".
 export interface ComplianceState {
   intervention: InterventionViolations;
-  functionViolations: FunctionValidityViolation[];
-  coverage: CoverageResult;
   methodViolations: string[];
   approvedInterventions: string[];
   approvedMethodSet: string[];
@@ -55,72 +45,60 @@ export function interventionViolationNames(v: InterventionViolations): string[] 
 // pass-rate metric — if its definition drifts, every number computed from the feed drifts silently
 // with it. Pinned by tests in complianceGate.test.mjs.
 //
-// UNSEGMENTABLE COUNTS AS NOT CLEAN, deliberately. An unsegmentable note is not known-defective — it
-// is UNVERIFIABLE, because coverage could not be checked at all. Folding it into `clean` would
-// overstate the pass rate by counting unchecked notes as passed, so the metric stays conservative and
-// `unsegmentable` is reported as its own key, letting "actually defective" be separated from "could
-// not verify" downstream.
+// This carries ONLY the survivors of the two whole-note checks. The approvedFunction / coverageMissing /
+// unsegmentable / coverageSuppressed fields were DELETED on 2026-09-06 along with their checks — they are not
+// zeroed, because a hardcoded empty/false/null is a "no check ran" masquerading as "no defect", and this is the
+// exact object gateClean is computed from. Function drift is now recorded post-gate via function_tag, not here.
 export interface SurvivingViolations {
   prohibited: string[]
   unapproved: string[]
   skillAsReduction: string[]
-  // Behavior names only — the full triples live in gate_findings; this is a summary, not a duplicate.
-  approvedFunction: string[]
   teachingMethod: string[]
-  coverageMissing: string[]
-  unsegmentable: boolean
-  // SUPPRESSED coverage reason (segmentation unsound) or null. Its own field so a suppressed note is
-  // distinguishable from both a clean one and a defective one; it does NOT count toward `clean`/defective.
-  coverageSuppressed: 'unsegmentable' | 'degenerate' | 'sparse' | null
 }
 
 export function summarizeSurvivingViolations(
   state: ComplianceState,
 ): { clean: boolean; violations: SurvivingViolations } {
-  const suppressed = state.coverage.suppressed ?? null
   const violations: SurvivingViolations = {
     prohibited: state.intervention.prohibited,
     unapproved: state.intervention.unapproved,
     skillAsReduction: state.intervention.skillAsReduction,
-    approvedFunction: state.functionViolations.map((v) => v.name),
     teachingMethod: state.methodViolations,
-    // When suppressed, coverage was not judged: report no missing and no unsegmentable — the suppression is
-    // surfaced separately via coverageSuppressed, never conflated with a real defect or a real clean pass.
-    coverageMissing: suppressed ? [] : (state.coverage.segmentable ? state.coverage.missing.map((m) => m.name) : []),
-    unsegmentable: suppressed ? false : !state.coverage.segmentable,
-    coverageSuppressed: suppressed,
   }
+  // gateClean METRIC — MEANING CHANGED 2026-09-06, NOT COMPARABLE ACROSS THAT DATE. Before, `clean` also
+  // required approved-function + function-coverage to pass; both were removed (segmenter misattributes ABC
+  // boundaries — see buildComplianceRegenInstruction), so `clean` now means ONLY "no intervention and no
+  // teaching-method violation survived". A note that would have been marked NOT clean by those two checks is
+  // now counted clean. Any pass-rate trend that straddles 2026-09-06 is measuring two different definitions —
+  // segment the series at that date. This is a genuine loosening of the metric, not a bug: the removed checks
+  // produced false negatives on correct notes, so their contribution to `clean` was itself untrustworthy.
   const clean =
     !violations.prohibited.length &&
     !violations.unapproved.length &&
     !violations.skillAsReduction.length &&
-    !violations.approvedFunction.length &&
-    !violations.teachingMethod.length &&
-    !violations.coverageMissing.length &&
-    !violations.unsegmentable
+    !violations.teachingMethod.length
   return { clean, violations }
 }
 
 // Build ONE combined regeneration instruction from ONLY the checks that failed, or null when the note is
-// clean. Order: function coverage + approved function first (both about the function — name it, and from the
-// approved set — so they reinforce rather than conflict), then interventions, then teaching methods. Each
-// clause preserves its original gate's instruction language. Nothing here pulls toward less specificity or
-// more variety (the uniqueness "vary the phrasing" instruction was removed in Bug 6), so there is no
-// Bug-3-style conflict between "name the function" and "vary the wording".
+// clean. Order: interventions, then teaching methods. Each clause preserves its original gate's instruction
+// language. Nothing here pulls toward less specificity or more variety (the uniqueness "vary the phrasing"
+// instruction was removed in Bug 6).
+//
+// COVERAGE + APPROVED-FUNCTION WERE REMOVED FROM THE REPAIR (2026-09-06). Do NOT reinstate them thinking the
+// segmenter was fixed. Both read a per-behavior split (segmentNoteByBehavior) that misattributes ABC BOUNDARIES,
+// so they fired on CORRECT notes. Evidence (probe, worst-case client, N=6): the repair fired on all 6 runs; on
+// the runs judged SOUND by the length thresholds (segments min 189–234 chars vs the SPARSE floor of 120, and
+// max segment 0.14–0.22 of the note vs the DEGENERATE cut-off of 0.90 — i.e. comfortably inside, not borderline)
+// EVERY flagged behavior's function was actually PRESENT but mis-bounded (its function sentence fell in the
+// neighbor's segment, or the segment pointed at unrelated skill prose), and EVERY validity "violation" was
+// clinically impossible and contradicted by the post-gate function_tag read — e.g. "Physical Aggression wrote=
+// automatic" (aggression is never automatic; the word came from Mouthing's sentence bleeding into the segment).
+// Length thresholds cannot catch this: the failure is BOUNDARY MISATTRIBUTION, not segment length, so no
+// DEGENERATE/SPARSE tuning detects it. Function drift is now MONITORED post-gate by function_tag (per-behavior
+// model read, segmentation-free) — a signal, not a repair. Only the WHOLE-NOTE checks below drive the gate.
 export function buildComplianceRegenInstruction(state: ComplianceState): string | null {
   const parts: string[] = [];
-
-  if (!state.coverage.suppressed && state.coverage.segmentable && state.coverage.missing.length > 0) {
-    const missingNames = state.coverage.missing.map((m) => m.name).filter(Boolean).join(', ');
-    parts.push(`FUNCTION COVERAGE: these ABCs do not name their documented function in the correct position — ${missingNames}. EVERY ABC must NAME its documented function (escape/attention/tangible/automatic-reinforcement) immediately after the behavior/topography and BEFORE the intervention clause — never attached to the client's response and never at the end of the ABC (RULE A, no exceptions). Do not drop the function name for the sake of variety.`);
-  }
-
-  if (state.functionViolations.length > 0) {
-    const detail = state.functionViolations
-      .map((v) => `${v.name} (written as ${v.wrote}; approved: ${v.approved.map(functionDisplayLabel).join(', ')})`)
-      .join('; ');
-    parts.push(`APPROVED FUNCTION: the note assigned a behavior a function the assessment did NOT approve for it — ${detail}. For EACH behavior, assign ONLY a function from its approved set, and write an antecedent consistent with that approved function. Never write a function outside a behavior's approved set.`);
-  }
 
   const badInterventions = interventionViolationNames(state.intervention);
   if (badInterventions.length > 0) {

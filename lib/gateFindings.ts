@@ -26,11 +26,8 @@
 import type { ComplianceState } from './complianceGate.ts'
 
 export type GateName =
-  | 'intervention' | 'approved-function' | 'coverage' | 'teaching-method'
+  | 'intervention' | 'teaching-method'
   | 'coherence' | 'red-flag' | 'similarity' | 'blocked-term' | 'data-integrity'
-  // Admin-only diagnostic: the per-behavior segmentation was unsound, so coverage + validity were suppressed
-  // (record-only — never a repair, never surfaced to the RBT). See generateSmartNote + lib/segmentSoundness.ts.
-  | 'segmentation_unsound'
   // Admin-only drift baseline: an ABC named a function outside the set preselect assigned for the note
   // (record-only — never a repair, never surfaced). See functionsOutsideAssignedSet in lib/functionPatterns.ts.
   | 'function_outside_assigned_set'
@@ -89,32 +86,9 @@ export function collectGateFindings(params: {
         context: { intervention: name, kind: 'skill-as-reduction' },
       })
     }
-    for (const v of s.functionViolations) {
-      out.push({
-        gate: 'approved-function', severity: 'warning',
-        detail: `"${v.name}" written as ${v.wrote}, not approved for it`,
-        context: { behavior: v.name, wrote: v.wrote, approved: v.approved },
-      })
-    }
-    // SUPPRESSED coverage is an untrustworthy reading (segmentation unsound): file NO coverage finding — the
-    // caller records a single 'segmentation_unsound' diagnostic instead, so this neither reports a false defect
-    // nor duplicates that record. Only judge coverage when it was NOT suppressed.
-    if (s.coverage.suppressed) {
-      // intentionally nothing
-    } else if (s.coverage.segmentable) {
-      for (const m of s.coverage.missing) {
-        out.push({
-          gate: 'coverage', severity: 'warning',
-          detail: `ABC for "${m.name}" does not state a documented function`,
-          context: { behavior: m.name },
-        })
-      }
-    } else {
-      out.push({
-        gate: 'coverage', severity: 'info',
-        detail: 'Note could not be segmented per ABC to verify function coverage',
-      })
-    }
+    // approved-function + coverage findings were REMOVED on 2026-09-06 — the per-behavior segmenter they read
+    // misattributes ABC boundaries, so both produced false findings on correct notes (see complianceGate.ts,
+    // buildComplianceRegenInstruction header). Function drift is now recorded post-gate via 'function_tag'.
     for (const m of s.methodViolations) {
       out.push({
         gate: 'teaching-method', severity: 'warning',
