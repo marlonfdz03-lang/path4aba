@@ -28,6 +28,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       'Content-Type': file.mime_type || 'application/pdf',
       'Content-Disposition': `inline; filename="${(file.filename || 'assessment.pdf').replace(/["\r\n]/g, '')}"`,
       'Content-Length': String(file.size_bytes),
+      // PHI at rest in the client: this is an un-redacted assessment PDF (name/DOB/possibly Medicaid ID). It must
+      // not linger in a browser disk cache or any shared/proxy cache after viewing. no-store forbids writing it to
+      // any cache; private + max-age=0 are belt-and-suspenders for intermediaries that ignore no-store.
+      'Cache-Control': 'private, no-store, max-age=0, must-revalidate',
     },
   })
 }
