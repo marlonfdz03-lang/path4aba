@@ -43,6 +43,15 @@ export async function POST(req: Request) {
   // Check if this is a new client (upsert create path) — skip limit check for updates
   const existingClient = await prisma.clients.findUnique({ where: { id }, select: { id: true } })
 
+  // OWNERSHIP GATE on the UPDATE path — mirrors the guarded DELETE below. Creating a NEW client is allowed for
+  // any authenticated user (subject to the plan limit); OVERWRITING an EXISTING client's profile requires that
+  // the caller OWN it (assigned RBT / connected BCBA / admin), exactly like DELETE. Without this, any
+  // authenticated user could replace another tenant's clinical_profile (and display name) wholesale by
+  // supplying its id — a cross-tenant write. canAccessClient fails closed (no session / not owner / throw → 403).
+  if (existingClient && !(await canAccessClient(session, id))) {
+    return NextResponse.json({ error: 'Forbidden — you are not assigned to this client.' }, { status: 403 })
+  }
+
   if (!existingClient && userEmail !== 'marlonfdz03@gmail.com') {
     const sub = await prisma.subscriptions.findFirst({
       where: { user_id: userId },
