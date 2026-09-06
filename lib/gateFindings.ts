@@ -40,6 +40,10 @@ export type GateName =
   | 'function_tag'
   // The post-gate read failed / returned unparseable JSON — drift not measured for this note. Record-only.
   | 'function_tag_unavailable'
+  // Admin-only NAMING baseline: deterministic verbatim check of whether the finished note contains each
+  // selected behavior's plan name (record-only — never a repair, flag, or gate). VERBATIM ONLY; it does NOT
+  // distinguish a paraphrased behavior from an undocumented one. See lib/behaviorNaming.ts.
+  | 'behavior_naming'
 
 export type GateSeverity = 'critical' | 'warning' | 'info'
 

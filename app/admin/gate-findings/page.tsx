@@ -43,6 +43,7 @@ const GATE_LABEL: Record<string, string> = {
   "similarity": "Note similarity",
   "blocked-term": "Host-EHR blocked term",
   "data-integrity": "Assessment data integrity",
+  "behavior_naming": "Behavior naming (verbatim)",
 };
 
 export default function AdminGateFindingsPage() {

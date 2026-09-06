@@ -31,6 +31,7 @@ import { preselect, buildFixedAssignmentsBlock, type PreselectResult } from '@/l
 import { readGenerationHistory } from '@/lib/rotationHistory';
 import { assignTiers, tierCounts } from '@/lib/complianceTiers';
 import { collectGateFindings, recordGateFindings, type GateFinding } from '@/lib/gateFindings';
+import { behaviorNamingFindings } from '@/lib/behaviorNaming';
 import { emitAdminAlert } from '@/lib/adminAlerts';
 
 const openai = new OpenAI({
@@ -949,6 +950,19 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
         };
         await recordGateFindings({ findings: [driftFinding], clientId: input.clientId, userId: rbtId, source: 'generate', regenCount: gate.regenCount });
       }
+    }
+  }
+
+  // Step 7i: BEHAVIOR-NAMING BASELINE (admin-only, record-only — never a repair, never an RBT flag).
+  // Deterministic verbatim check: does the FINAL note contain each selected behavior's plan name? No model,
+  // no second call — a pure string test, so it runs inline without adding an LLM round-trip. Recorded on
+  // EVERY note (not just when some are unnamed) so the rate has a denominator. VERBATIM ONLY, and it does
+  // NOT distinguish a paraphrased behavior from an undocumented one — see lib/behaviorNaming.ts. This is the
+  // pre-change baseline for the behavior-naming prompt fix; re-measured with the same instrument afterward.
+  {
+    const namingFindings = behaviorNamingFindings(note, input.behaviorsObserved.map((b) => b.name));
+    if (namingFindings.length) {
+      await recordGateFindings({ findings: namingFindings, clientId: input.clientId, userId: rbtId, source: 'generate', regenCount: gate.regenCount });
     }
   }
 
