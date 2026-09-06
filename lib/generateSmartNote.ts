@@ -397,6 +397,19 @@ export async function generateSmartNote(input: SessionInput, rbtId?: string, onC
     if (b.topography) b.topography = redactText(b.topography, knownNames, { namesOnly: true });
     if (Array.isArray(b.topographies)) b.topographies = b.topographies.map((t) => redactText(t, knownNames, { namesOnly: true }));
   }
+  // Same firewall, same knownNames, same fail-closed(error) + record(absent) behavior already handled above —
+  // extend the scrub to the note prompt's OTHER client free-text fields: session events (clinicalEvents), the
+  // RBT's environmental-change report, and profile setting details. These do NOT get their own path: a failed
+  // profile read already threw before here, and a name-less client already recorded phi_no_client_name and left
+  // knownNames empty (so redactText is a no-op = fail-open), exactly like the topography scrub.
+  //
+  // clinicalEvents is scrubbed HERE, BEFORE stripInvalidNextSession runs on it during sessionContext assembly.
+  // The order is safe because the two transforms are orthogonal: redactText only rewrites the client's name
+  // tokens to "the client" and never touches the "Next scheduled appointment: <date>" clause stripInvalidNextSession
+  // keys on (and that strip never re-introduces a name), so the assembled value is both name-free and date-valid.
+  if (input.clinicalEvents) input.clinicalEvents = redactText(input.clinicalEvents, knownNames, { namesOnly: true });
+  if (input.environmentalChangeDescription) input.environmentalChangeDescription = redactText(input.environmentalChangeDescription, knownNames, { namesOnly: true });
+  if (resolvedProfile.settingDetails) resolvedProfile.settingDetails = redactText(String(resolvedProfile.settingDetails), knownNames, { namesOnly: true });
 
   // CROSS-CLIENT FIREWALL: the shared KB tables (topographies / replacement_skills) were UNSCOPED — keyed by
   // shared behavior ids with NO client_id — so reading them fed OTHER clients' operational definitions into this
